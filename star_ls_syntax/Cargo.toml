@@ -1,0 +1,13 @@
+[package]
+name = "star_ls_syntax"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tree-sitter = "0.20.9"
+tree-sitter-starlark = "1.0.0"
+
+[build-dependencies]
+cc = "*"

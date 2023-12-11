@@ -61,9 +61,10 @@ impl Server {
     }
 
     fn next_event(&self) -> Option<Event> {
-        select! {
+        let event = select! {
             recv(self.connection.receiver) -> req => req.ok().map(Event::Message),
-        }
+        };
+        event
     }
 
     fn handle_event(&mut self, event: Event) -> anyhow::Result<()> {

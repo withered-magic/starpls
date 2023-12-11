@@ -13,7 +13,7 @@
       ],
       "preLaunchTask": "${defaultBuildTask}",
       "env": {
-        "__STAR_LS_SERVER_DEBUG": "${workspaceFolder}/target/debug/star_ls"
+        "__STAR_LS_SERVER_DEBUG": "${workspaceFolder}/target/debug/star-ls"
       }
     }
   ]

@@ -11,15 +11,15 @@ mod utils;
 fn main() -> anyhow::Result<()> {
     eprintln!("server: star-ls, v0.1.0");
 
-    panic!("lmao");
-
     // Create the transport over stdio.
     let (connection, io_threads) = Connection::stdio();
 
     // Initialize the connection with server capabilities. For now, this consists
     // only of `TextDocumentSyncKind.Full`.
     let server_capabilities = serde_json::to_value(&ServerCapabilities {
-        text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
+        text_document_sync: Some(TextDocumentSyncCapability::Kind(
+            TextDocumentSyncKind::INCREMENTAL,
+        )),
         ..Default::default()
     })?;
     let initialize_params = serde_json::from_value(connection.initialize(server_capabilities)?)?;

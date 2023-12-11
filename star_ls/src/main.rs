@@ -1,7 +1,12 @@
 use lsp_server::Connection;
 use lsp_types::{ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind};
 
+mod convert;
+mod document;
 mod event_loop;
+mod handlers;
+mod server;
+mod utils;
 
 fn main() -> anyhow::Result<()> {
     eprintln!("server: star-ls, v0.1.0");

@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension (Debug Build)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/editors/code"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/editors/code/dist/**/*.js"
+      ],
+      "preLaunchTask": "${defaultBuildTask}",
+      "env": {
+        "__STAR_LS_SERVER_DEBUG": "${workspaceFolder}/target/debug/star_ls"
+      }
+    }
+  ]
+}

@@ -6,12 +6,10 @@ import { Executable, LanguageClient, LanguageClientOptions, ServerOptions } from
  * of the editor.
  */
 export class Context {
-  // readonly extensionContext: vscode.ExtensionContext;
-
   /**
    * The active client connection to the language server.
    */
-  private _client: LanguageClient;
+  private _client!: LanguageClient;
 
   constructor(readonly extensionContext: vscode.ExtensionContext) { }
 
@@ -38,7 +36,7 @@ export class Context {
     const executable: Executable = { command: serverPath };
     const serverOptions: ServerOptions = { debug: executable, run: executable };
     const clientOptions: LanguageClientOptions = {
-      documentSelector: [{ scheme: 'file', language: 'eta' }],
+      documentSelector: [{ scheme: 'file', language: 'starlark' }],
     };
 
     return this._client = new LanguageClient(

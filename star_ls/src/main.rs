@@ -11,6 +11,8 @@ mod utils;
 fn main() -> anyhow::Result<()> {
     eprintln!("server: star-ls, v0.1.0");
 
+    panic!("lmao");
+
     // Create the transport over stdio.
     let (connection, io_threads) = Connection::stdio();
 

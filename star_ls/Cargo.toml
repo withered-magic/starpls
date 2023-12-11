@@ -1,5 +1,5 @@
 [package]
-name = "star_ls"
+name = "star-ls"
 version = "0.1.0"
 edition = "2021"
 

@@ -2,9 +2,12 @@
   "name": "star-ls",
   "version": "0.1.0",
   "description": "An LSP implementation for Starlark",
-  "main": "./out/main",
+  "publisher": "withered-magic",
+  "main": "./dist/main",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "bazelisk run //editors/code",
+    "test": "bazelisk test //editors/code/...",
+    "watch": "ibazel run //editors/code"
   },
   "keywords": [],
   "author": "",
@@ -36,14 +39,16 @@
     ]
   },
   "devDependencies": {
+    "@bazel/bazelisk": "^1.19.0",
     "@types/node": "^20.10.4",
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "^1.75.0",
     "@typescript-eslint/eslint-plugin": "^6.13.2",
     "@typescript-eslint/parser": "^6.13.2",
     "eslint": "^8.55.0",
-    "typescript": "^5.3.3"
+    "typescript": "5.3.3"
   },
   "dependencies": {
-    "vscode-languageclient": "^9.0.1"
+    "@bazel/ibazel": "^0.24.0",
+    "vscode-languageclient": "^8.1.0"
   }
 }

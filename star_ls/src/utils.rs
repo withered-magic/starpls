@@ -26,14 +26,14 @@ pub(crate) fn text_range(
 }
 
 pub(crate) enum Edit {
-    Incremental(InputEdit),
+    Incremental(Vec<InputEdit>),
     Full,
 }
 
 pub(crate) fn apply_document_content_changes(
     mut current_document_contents: String,
     content_changes: Vec<lsp_types::TextDocumentContentChangeEvent>,
-) -> (String, Vec<Edit>) {
+) -> (String, Vec<InputEdit>) {
     let mut line_index = LineIndex::new(&current_document_contents);
     let mut edits = vec![];
 
@@ -50,7 +50,7 @@ pub(crate) fn apply_document_content_changes(
                         line_index.line_col(new_end_byte.try_into().expect("invalid end byte"));
 
                     // Construct an `InputEdit` for the purpose of updating our tree-sitter parse tree.
-                    edits.push(Edit::Incremental(InputEdit {
+                    edits.push(InputEdit {
                         start_byte: range.start,
                         old_end_byte: range.end,
                         new_end_byte,
@@ -66,13 +66,14 @@ pub(crate) fn apply_document_content_changes(
                             new_end_position.line as usize,
                             new_end_position.col as usize,
                         ),
-                    }));
+                    });
                 }
             }
             None => {
-                current_document_contents = change.text;
-                line_index = LineIndex::new(&current_document_contents);
-                edits.push(Edit::Full);
+                continue;
+                // current_document_contents = change.text;
+                // line_index = LineIndex::new(&current_document_contents);
+                // edits.push(Edit::Full);
             }
         }
     }

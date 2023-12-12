@@ -1,4 +1,8 @@
-use crate::{convert, server::Server, utils};
+use crate::{
+    convert,
+    server::Server,
+    utils::{apply_document_content_changes, Edit},
+};
 
 pub(crate) fn did_open_text_document(
     server: &mut Server,
@@ -34,8 +38,10 @@ pub(crate) fn did_change_text_document(
             .contents(file_id)
             .expect("lookup contents of non-existent file");
         let (contents, edits) =
-            utils::apply_document_content_changes(contents, params.content_changes);
-        server.document_manager.modify(path, contents, None, edits);
+            apply_document_content_changes(contents.to_string(), params.content_changes);
+        server
+            .document_manager
+            .modify(path, contents, None, Edit::Incremental(edits));
     };
 
     Ok(())

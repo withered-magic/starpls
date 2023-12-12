@@ -41,7 +41,7 @@ impl Document {
 pub(crate) struct DocumentManager {
     documents: HashMap<u32, Document>,
     has_closed_or_opened_documents: bool,
-    changed_documents: Vec<(u32, Vec<Edit>)>,
+    changed_documents: Vec<(u32, Edit)>,
     path_interner: PathInterner,
 }
 
@@ -53,7 +53,7 @@ impl DocumentManager {
         let file_id = self.path_interner.intern_path(path);
         self.documents
             .insert(file_id, Document::new(contents, Some(version)));
-        self.changed_documents.push((file_id, vec![Edit::Full]));
+        self.changed_documents.push((file_id, Edit::Full));
     }
 
     pub(crate) fn close(&mut self, path: &PathBuf) {
@@ -70,7 +70,7 @@ impl DocumentManager {
         path: PathBuf,
         contents: String,
         version: Option<i32>,
-        edits: Vec<Edit>,
+        edits: Edit,
     ) {
         let file_id = self.path_interner.intern_path(path);
         if let Some(document) = self.documents.get_mut(&file_id) {
@@ -80,18 +80,18 @@ impl DocumentManager {
         };
     }
 
-    pub(crate) fn take_changes(&mut self) -> (bool, Vec<(u32, Vec<Edit>)>) {
+    pub(crate) fn take_changes(&mut self) -> (bool, Vec<(u32, Edit)>) {
         let changed_documents = mem::take(&mut self.changed_documents);
         let has_opened_or_closed_documents = self.has_closed_or_opened_documents;
         self.has_closed_or_opened_documents = false;
         (has_opened_or_closed_documents, changed_documents)
     }
 
-    pub(crate) fn contents(&mut self, file_id: u32) -> Option<String> {
-        self.get(file_id).map(|document| document.contents.clone())
+    pub(crate) fn contents(&self, file_id: u32) -> Option<&str> {
+        self.get(file_id).map(|document| document.contents.as_str())
     }
 
-    pub(crate) fn get(&mut self, file_id: u32) -> Option<&Document> {
+    pub(crate) fn get(&self, file_id: u32) -> Option<&Document> {
         self.documents.get(&file_id)
     }
 

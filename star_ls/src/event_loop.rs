@@ -74,6 +74,9 @@ impl Server {
             }
             _ => (),
         };
+
+        self.process_changes();
+
         Ok(())
     }
 

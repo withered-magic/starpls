@@ -1,5 +1,5 @@
 [package]
-name = "star_ls_syntax"
+name = "starpls_syntax"
 version = "0.1.0"
 edition = "2021"
 

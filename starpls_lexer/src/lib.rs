@@ -200,10 +200,20 @@ pub enum TokenKind {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LiteralKind {
-    Int,
-    Float,
+    Int { base: Base, empty_int: bool },
+    Float { empty_exponent: bool },
     Str { terminated: bool },
     ByteStr { terminated: bool },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Base {
+    /// Literal starts with "0o".
+    Octal = 8,
+    /// Literal doesn't contain a prefix.
+    Decimal = 10,
+    /// Literal starts with "0x".
+    Hexadecimal = 16,
 }
 
 pub fn tokenize(input: &str) -> impl Iterator<Item = Token> + '_ {
@@ -227,11 +237,38 @@ impl Cursor<'_> {
     pub fn advance_token(&mut self) -> Token {
         let first_char = match self.bump() {
             Some(c) => c,
-            None => return Token::new(TokenKind::Eof, 0),
+            None => return Token::new(Eof, 0),
         };
         let token_kind = match first_char {
             'a'..='z' | 'A'..='Z' | '_' => self.ident_or_keyword(),
+
+            // Numerical literal starting with a digit.
+            c @ '0'..='9' => {
+                let literal_kind = self.number(c);
+                TokenKind::Literal { kind: literal_kind }
+            }
+
+            // Float literals can start with a dot.
+            '.' => {
+                if self.eat_decimal_digits() {
+                    let mut empty_exponent = false;
+                    if matches!(self.first(), 'e' | 'E') {
+                        self.bump();
+                        empty_exponent = !self.eat_exponent();
+                    }
+                    TokenKind::Literal {
+                        kind: Float { empty_exponent },
+                    }
+                } else {
+                    Dot
+                }
+            }
+
+            _ => Unknown,
         };
+        let res = Token::new(token_kind, self.pos_within_token());
+        self.reset_pos_within_token();
+        res
     }
 
     fn ident_or_keyword(&mut self) -> TokenKind {
@@ -274,7 +311,105 @@ impl Cursor<'_> {
         }
     }
 
-    fn int_or_float(&mut self) -> TokenKind {
-        // self.eat_while(|c| matches!())
+    fn number(&mut self, first_digit: char) -> LiteralKind {
+        let mut base = Base::Decimal;
+        if first_digit == '0' {
+            // Attempt to parse encoding base.
+            match self.first() {
+                'o' => {
+                    base = Base::Octal;
+                    self.bump();
+                    Int {
+                        base,
+                        empty_int: !self.eat_octal_digits(),
+                    }
+                }
+                'x' => {
+                    base = Base::Hexadecimal;
+                    self.bump();
+                    Int {
+                        base,
+                        empty_int: !self.eat_hexadecimal_digits(),
+                    }
+                }
+                _ => Int {
+                    base,
+                    empty_int: false,
+                },
+            }
+        } else {
+            self.eat_decimal_digits();
+            match self.first() {
+                '.' => {
+                    let mut empty_exponent = false;
+                    self.bump();
+                    self.eat_decimal_digits();
+                    if matches!(self.first(), 'e' | 'E') {
+                        self.bump();
+                        empty_exponent = !self.eat_exponent();
+                    }
+                    Float { empty_exponent }
+                }
+                'e' | 'E' => {
+                    self.bump();
+                    Float {
+                        empty_exponent: !self.eat_exponent(),
+                    }
+                }
+                _ => Int {
+                    base,
+                    empty_int: false,
+                },
+            }
+        }
+    }
+
+    fn eat_octal_digits(&mut self) -> bool {
+        let mut has_digits = false;
+        loop {
+            match self.first() {
+                '0'..='7' => {
+                    has_digits = true;
+                    self.bump();
+                }
+                _ => break,
+            }
+        }
+        has_digits
+    }
+
+    fn eat_decimal_digits(&mut self) -> bool {
+        let mut has_digits = false;
+        loop {
+            match self.first() {
+                '0'..='9' => {
+                    has_digits = true;
+                    self.bump();
+                }
+                _ => break,
+            }
+        }
+        has_digits
+    }
+
+    fn eat_hexadecimal_digits(&mut self) -> bool {
+        let mut has_digits = false;
+        loop {
+            match self.first() {
+                '0'..='9' | 'a'..='f' | 'A'..='F' => {
+                    has_digits = true;
+                    self.bump();
+                }
+                _ => break,
+            }
+        }
+        has_digits
+    }
+
+    fn eat_exponent(&mut self) -> bool {
+        if matches!(self.first(), '+' | '-') {
+            self.bump();
+        }
+        self.eat_decimal_digits()
     }
 }

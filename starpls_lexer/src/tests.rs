@@ -272,3 +272,30 @@ fn test_punctuation() {
         "#]],
     );
 }
+
+#[test]
+fn test_strings() {
+    check_lexing(
+        r#"
+x = 'a\nb'
+x = "a\nb"
+x = 'a\\\nb'
+x = "a\\\nb"
+x = '\''
+x = "\""
+x = '''\''''
+x = """\""""
+x = ''''a'b'c'''
+x = """"a"b"c"""
+x = '''a\nb'''
+x = """a\nb"""
+x = '''a\rb'''
+x = """a\rb"""
+x = '''a\r\nb'''
+x = """a\r\nb"""
+x = '''a\n\rb'''
+x = """a\n\rb"""
+"#,
+        expect![],
+    );
+}

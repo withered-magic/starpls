@@ -166,8 +166,10 @@ pub enum TokenKind {
     Le,
     /// "=="
     EqEq,
+    /// "!"
+    Bang,
     /// "!="
-    Ne,
+    BangEq,
     /// "+="
     PlusEq,
     /// "-="
@@ -201,10 +203,18 @@ pub enum TokenKind {
 // Enum representing the literal types supported by the lexer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LiteralKind {
+    /// Decimal, hexadecimal, and octal integers, e.g. `0`, `123`, `0x7f`, `0o755`.
     Int { base: Base, empty_int: bool },
+    /// Floating-point numbers with optional exponents, e.g. `0.0`, `1.1e-10`.
     Float { empty_exponent: bool },
+    /// Strings delimited with either single or double quotes, e.g. `"hello"`, `'hello'`.
     Str { terminated: bool },
+    /// Raw strings, e.g. `r'hello'`, `r"hello"`.
+    RawStr { terminated: bool },
+    /// Byte strings delimited with either single or double quotes, e.g. `b"hello"`, `b'hello'`.
     ByteStr { terminated: bool },
+    /// Raw byte strings, e.g. `rb'hello'`, `rb"hello"`.
+    RawByteStr { terminated: bool },
 }
 
 /// The base of an integer literal, as specified by its prefix.
@@ -237,11 +247,112 @@ pub fn is_whitespace(c: char) -> bool {
 
 impl Cursor<'_> {
     pub fn advance_token(&mut self) -> Token {
+        macro_rules! augmented_assign {
+            ($assign_tok:ident, $op_tok:ident) => {
+                if self.first() == '=' {
+                    self.bump();
+                    $assign_tok
+                } else {
+                    $op_tok
+                }
+            };
+        }
+
         let first_char = match self.bump() {
             Some(c) => c,
             None => return Token::new(Eof, 0),
         };
         let token_kind = match first_char {
+            // One-character tokens.
+            ',' => Comma,
+            ';' => Semi,
+            ':' => Colon,
+            '(' => OpenParen,
+            ')' => CloseParen,
+            '[' => OpenBrack,
+            ']' => CloseBrack,
+            '{' => OpenBrace,
+            '}' => CloseBrace,
+            '~' => Tilde,
+
+            // One-character operators and their corresponding augmented assignments.
+            '+' => augmented_assign!(PlusEq, Plus),
+            '-' => augmented_assign!(MinusEq, Minus),
+            '%' => augmented_assign!(ModEq, Mod),
+            '&' => augmented_assign!(AmpersandEq, Ampersand),
+            '|' => augmented_assign!(BarEq, Bar),
+            '^' => augmented_assign!(CaretEq, Caret),
+
+            '=' => augmented_assign!(EqEq, Eq),
+            '!' => augmented_assign!(BangEq, Bang),
+
+            // Less-than or less-than-equal comparison operators, or left-shift and its augmented assignment.
+            '<' => match (self.first(), self.second()) {
+                ('<', '=') => {
+                    self.bump();
+                    self.bump();
+                    LtLtEq
+                }
+                ('<', _) => {
+                    self.bump();
+                    LtLt
+                }
+                ('=', _) => {
+                    self.bump();
+                    Le
+                }
+                _ => Lt,
+            },
+
+            // Greater-than or greater-than-equal comparison operators, or right-shift and its augmented assignment.
+            '>' => match (self.first(), self.second()) {
+                ('>', '=') => {
+                    self.bump();
+                    self.bump();
+                    GtGtEq
+                }
+                ('>', _) => {
+                    self.bump();
+                    GtGt
+                }
+                ('=', _) => {
+                    self.bump();
+                    Ge
+                }
+                _ => Gt,
+            },
+
+            // Normal and floored division, plus their augmented assignments.
+            '/' => match (self.first(), self.second()) {
+                ('=', _) => {
+                    self.bump();
+                    SlashEq
+                }
+                ('/', '=') => {
+                    self.bump();
+                    self.bump();
+                    SlashSlashEq
+                }
+                ('/', _) => {
+                    self.bump();
+                    SlashSlash
+                }
+                _ => Slash,
+            },
+
+            // Multiplication and its augmented assignment, or the "keywords arguments" operator.
+            '*' => match self.first() {
+                '=' => {
+                    self.bump();
+                    StarEq
+                }
+                '*' => {
+                    self.bump();
+                    StarStar
+                }
+                _ => Star,
+            },
+
             'a'..='z' | 'A'..='Z' | '_' => self.ident_or_keyword(),
 
             // Numerical literal starting with a digit.
@@ -416,5 +527,9 @@ impl Cursor<'_> {
             self.bump();
         }
         self.eat_decimal_digits()
+    }
+
+    fn string(&mut self, closing_quote: char) {
+        loop {}
     }
 }

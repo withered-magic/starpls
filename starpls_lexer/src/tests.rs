@@ -182,3 +182,93 @@ fn test_octal_numbers() {
         "#]],
     );
 }
+
+#[test]
+fn test_punctuation() {
+    check_lexing(
+        r#"+ - * / // % ** ~ & | ^ << >> . , = ; : ( ) [ ] { } < > >= <= == != += -= *= /= //= %= &= |= ^= <<= >>="#,
+        expect![[r#"
+            Token { kind: Plus, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Minus, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Star, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Slash, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: SlashSlash, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Mod, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: StarStar, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Tilde, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ampersand, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Bar, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Caret, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: LtLt, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: GtGt, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Dot, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Comma, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Semi, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Colon, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: OpenParen, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: CloseParen, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: OpenBrack, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: CloseBrack, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: OpenBrace, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: CloseBrace, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Lt, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Gt, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ge, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Le, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: EqEq, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: BangEq, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: PlusEq, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: MinusEq, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: StarEq, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: SlashEq, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: SlashSlashEq, len: 3 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: ModEq, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: AmpersandEq, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: BarEq, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: CaretEq, len: 2 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: LtLtEq, len: 3 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: GtGtEq, len: 3 }
+        "#]],
+    );
+}

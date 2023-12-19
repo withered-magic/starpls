@@ -198,6 +198,7 @@ pub enum TokenKind {
     Eof,
 }
 
+// Enum representing the literal types supported by the lexer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LiteralKind {
     Int { base: Base, empty_int: bool },
@@ -206,6 +207,7 @@ pub enum LiteralKind {
     ByteStr { terminated: bool },
 }
 
+/// The base of an integer literal, as specified by its prefix.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Base {
     /// Literal starts with "0o".
@@ -316,51 +318,54 @@ impl Cursor<'_> {
         if first_digit == '0' {
             // Attempt to parse encoding base.
             match self.first() {
-                'o' => {
+                'o' | 'O' => {
                     base = Base::Octal;
                     self.bump();
-                    Int {
+                    return Int {
                         base,
                         empty_int: !self.eat_octal_digits(),
-                    }
+                    };
                 }
-                'x' => {
+                'x' | 'X' => {
                     base = Base::Hexadecimal;
                     self.bump();
-                    Int {
+                    return Int {
                         base,
                         empty_int: !self.eat_hexadecimal_digits(),
+                    };
+                }
+                // TODO(withered-magic): Decimal int literals don't allow leading zeros.
+                '0'..='9' | '.' | 'e' | 'E' => {}
+                _ => {
+                    return Int {
+                        base,
+                        empty_int: false,
                     }
                 }
-                _ => Int {
-                    base,
-                    empty_int: false,
-                },
             }
-        } else {
-            self.eat_decimal_digits();
-            match self.first() {
-                '.' => {
-                    let mut empty_exponent = false;
+        }
+        self.eat_decimal_digits();
+        match self.first() {
+            '.' => {
+                let mut empty_exponent = false;
+                self.bump();
+                self.eat_decimal_digits();
+                if matches!(self.first(), 'e' | 'E') {
                     self.bump();
-                    self.eat_decimal_digits();
-                    if matches!(self.first(), 'e' | 'E') {
-                        self.bump();
-                        empty_exponent = !self.eat_exponent();
-                    }
-                    Float { empty_exponent }
+                    empty_exponent = !self.eat_exponent();
                 }
-                'e' | 'E' => {
-                    self.bump();
-                    Float {
-                        empty_exponent: !self.eat_exponent(),
-                    }
-                }
-                _ => Int {
-                    base,
-                    empty_int: false,
-                },
+                Float { empty_exponent }
             }
+            'e' | 'E' => {
+                self.bump();
+                Float {
+                    empty_exponent: !self.eat_exponent(),
+                }
+            }
+            _ => Int {
+                base,
+                empty_int: false,
+            },
         }
     }
 

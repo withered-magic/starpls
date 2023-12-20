@@ -1,14 +1,15 @@
+use crate::{
+    cursor::{Cursor, CursorState},
+    LiteralKind::*,
+    TokenKind::*,
+};
+
 mod cursor;
+
 pub mod unescape;
 
 #[cfg(test)]
 mod tests;
-
-pub use crate::cursor::Cursor;
-use crate::cursor::CursorState;
-
-use self::LiteralKind::*;
-use self::TokenKind::*;
 
 /// Parsed token.
 #[derive(Debug)]

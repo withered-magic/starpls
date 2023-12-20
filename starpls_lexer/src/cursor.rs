@@ -14,10 +14,10 @@ pub(crate) enum CursorState {
 
 pub struct Cursor<'a> {
     pub(crate) state: CursorState,
+    pub(crate) indents: Vec<u32>,
     chars: Chars<'a>,
     len_remaining: usize,
     input: &'a str,
-    pub(crate) indents: Vec<u32>,
     closers: Vec<char>,
 }
 

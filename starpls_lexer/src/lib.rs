@@ -289,31 +289,25 @@ impl Cursor<'_> {
                         true
                     });
 
-                    // If we are at a newline or EOF, don't consider indentation levels at all.
-                    if self.first() == '\n' || self.is_eof() {
+                    let last_indent = self.indents.last().cloned().unwrap_or(0);
+
+                    // If we are at an equal indentation level, or are currently at a newline or EOF, we can just
+                    // emit the whitespace that we consumed.
+                    if indent == last_indent || self.first() == '\n' || self.is_eof() {
                         self.state = CursorState::AfterLeadingSpaces;
                         let pos_within_token = self.reset_pos_within_token();
                         if pos_within_token == 0 {
                             continue;
                         }
-                        return Token {
-                            kind: Whitespace,
-                            len: pos_within_token,
-                        };
-                    }
-
-                    let last_indent = self.indents.last().cloned().unwrap_or(0);
-
-                    // If we are at a greater indentation level, push it on the stack and return an INDENT token.
-                    if indent > last_indent {
+                        return Token::new(Whitespace, pos_within_token);
+                    } else if indent > last_indent {
+                        // If we are at a greater indentation level, push it on the stack and return an INDENT token.
                         self.indents.push(indent);
                         self.state = CursorState::AfterLeadingSpaces;
-                        return Token {
-                            kind: Indent,
-                            len: self.reset_pos_within_token(),
-                        };
-                    } else if indent < last_indent {
-                        // Pop indentation levels off the stack until the top level is less than or equal to the current indentation level.
+                        return Token::new(Indent, self.reset_pos_within_token());
+                    } else {
+                        // If we are at a lower indentation level, pop levels off the stack until the top
+                        // level is less than or equal to the current indentation level.
                         let mut num_remaining = 0;
                         loop {
                             self.indents.pop();
@@ -327,28 +321,20 @@ impl Cursor<'_> {
                                 break;
                             }
                         }
-                    } else {
-                        // An equal indentation level means we continue lexing the current line.
-                        self.state = CursorState::AfterLeadingSpaces;
-                        break;
                     }
                 }
                 CursorState::Dedenting {
                     ref mut num_remaining,
                     consistent,
                 } => {
-                    if *num_remaining == 1 {
+                    let token = if *num_remaining == 1 {
                         self.state = CursorState::AfterLeadingSpaces;
-                        return Token {
-                            kind: Dedent { consistent },
-                            len: self.reset_pos_within_token(),
-                        };
-                    }
-                    *num_remaining -= 1;
-                    return Token {
-                        kind: Dedent { consistent: true },
-                        len: 0,
+                        Token::new(Dedent { consistent }, self.reset_pos_within_token())
+                    } else {
+                        *num_remaining -= 1;
+                        Token::new(Dedent { consistent: true }, 0)
                     };
+                    return token;
                 }
                 CursorState::AfterLeadingSpaces => break,
             }
@@ -356,8 +342,17 @@ impl Cursor<'_> {
 
         let first_char = match self.bump() {
             Some(c) => c,
-            None => return Token::new(Eof, 0),
+            None => {
+                let token = if self.indents.is_empty() {
+                    Token::new(Eof, 0)
+                } else {
+                    self.indents.pop();
+                    Token::new(Dedent { consistent: true }, 0)
+                };
+                return token;
+            }
         };
+
         let token_kind = match first_char {
             // Skip emitting newlines if we currently have an opened parenthesis, bracket, or brace.
             c if is_whitespace(c) => {
@@ -365,14 +360,13 @@ impl Cursor<'_> {
                     self.eat_while(is_whitespace);
                     Whitespace
                 } else if c == '\n' {
+                    self.state = CursorState::BeforeLeadingSpaces;
                     Newline
                 } else {
                     self.eat_while(is_non_newline_whitespace);
                     Whitespace
                 }
             }
-
-            '\n' => Newline,
 
             // One-character tokens.
             ',' => Comma,

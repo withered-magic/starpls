@@ -8,15 +8,198 @@ fn check_lexing(input: &str, expect: Expect) {
     expect.assert_eq(&actual);
 }
 
-// #[test]
-// fn smoke_test() {
-//     check_lexing(
-//         r#"
+#[test]
+fn smoke_test() {
+    check_lexing(
+        r#"
+def _hello_world_impl(ctx):
+    out = ctx.actions.declare_file(ctx.label.name + ".cc")
+    ctx.actions.expand_template(
+        output = out,
+        template = ctx.file.template,
+        substitutions = {"{NAME}": ctx.attr.username},
+    )
+    return [DefaultInfo(files = depset([out]))]
 
-//     "#,
-//         expect![],
-//     );
-// }
+hello_world = rule(
+    implementation = _hello_world_impl,
+    attrs = {
+        "username": attr.string(default = "unknown person"),
+        "template": attr.label(
+            allow_single_file = [".cc.tpl"],
+            mandatory = True,
+        ),
+    },
+)
+    "#,
+        expect![[r#"
+            Token { kind: Newline, len: 1 }
+            Token { kind: Def, len: 3 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Ident, len: 17 }
+            Token { kind: OpenParen, len: 1 }
+            Token { kind: Ident, len: 3 }
+            Token { kind: CloseParen, len: 1 }
+            Token { kind: Colon, len: 1 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Indent, len: 4 }
+            Token { kind: Ident, len: 3 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Ident, len: 3 }
+            Token { kind: Dot, len: 1 }
+            Token { kind: Ident, len: 7 }
+            Token { kind: Dot, len: 1 }
+            Token { kind: Ident, len: 12 }
+            Token { kind: OpenParen, len: 1 }
+            Token { kind: Ident, len: 3 }
+            Token { kind: Dot, len: 1 }
+            Token { kind: Ident, len: 5 }
+            Token { kind: Dot, len: 1 }
+            Token { kind: Ident, len: 4 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Plus, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 5 }
+            Token { kind: CloseParen, len: 1 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Whitespace, len: 4 }
+            Token { kind: Ident, len: 3 }
+            Token { kind: Dot, len: 1 }
+            Token { kind: Ident, len: 7 }
+            Token { kind: Dot, len: 1 }
+            Token { kind: Ident, len: 15 }
+            Token { kind: OpenParen, len: 1 }
+            Token { kind: Whitespace, len: 9 }
+            Token { kind: Ident, len: 6 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Ident, len: 3 }
+            Token { kind: Comma, len: 1 }
+            Token { kind: Whitespace, len: 9 }
+            Token { kind: Ident, len: 8 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Ident, len: 3 }
+            Token { kind: Dot, len: 1 }
+            Token { kind: Ident, len: 4 }
+            Token { kind: Dot, len: 1 }
+            Token { kind: Ident, len: 8 }
+            Token { kind: Comma, len: 1 }
+            Token { kind: Whitespace, len: 9 }
+            Token { kind: Ident, len: 13 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: OpenBrace, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 8 }
+            Token { kind: Colon, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Ident, len: 3 }
+            Token { kind: Dot, len: 1 }
+            Token { kind: Ident, len: 4 }
+            Token { kind: Dot, len: 1 }
+            Token { kind: Ident, len: 8 }
+            Token { kind: CloseBrace, len: 1 }
+            Token { kind: Comma, len: 1 }
+            Token { kind: Whitespace, len: 5 }
+            Token { kind: CloseParen, len: 1 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Whitespace, len: 4 }
+            Token { kind: Return, len: 6 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: OpenBrack, len: 1 }
+            Token { kind: Ident, len: 11 }
+            Token { kind: OpenParen, len: 1 }
+            Token { kind: Ident, len: 5 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Ident, len: 6 }
+            Token { kind: OpenParen, len: 1 }
+            Token { kind: OpenBrack, len: 1 }
+            Token { kind: Ident, len: 3 }
+            Token { kind: CloseBrack, len: 1 }
+            Token { kind: CloseParen, len: 1 }
+            Token { kind: CloseParen, len: 1 }
+            Token { kind: CloseBrack, len: 1 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Dedent { consistent: true }, len: 0 }
+            Token { kind: Ident, len: 11 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Ident, len: 4 }
+            Token { kind: OpenParen, len: 1 }
+            Token { kind: Whitespace, len: 5 }
+            Token { kind: Ident, len: 14 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Ident, len: 17 }
+            Token { kind: Comma, len: 1 }
+            Token { kind: Whitespace, len: 5 }
+            Token { kind: Ident, len: 5 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: OpenBrace, len: 1 }
+            Token { kind: Whitespace, len: 9 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
+            Token { kind: Colon, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Ident, len: 4 }
+            Token { kind: Dot, len: 1 }
+            Token { kind: Ident, len: 6 }
+            Token { kind: OpenParen, len: 1 }
+            Token { kind: Ident, len: 7 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 16 }
+            Token { kind: CloseParen, len: 1 }
+            Token { kind: Comma, len: 1 }
+            Token { kind: Whitespace, len: 9 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
+            Token { kind: Colon, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Ident, len: 4 }
+            Token { kind: Dot, len: 1 }
+            Token { kind: Ident, len: 5 }
+            Token { kind: OpenParen, len: 1 }
+            Token { kind: Whitespace, len: 13 }
+            Token { kind: Ident, len: 17 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: OpenBrack, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 9 }
+            Token { kind: CloseBrack, len: 1 }
+            Token { kind: Comma, len: 1 }
+            Token { kind: Whitespace, len: 13 }
+            Token { kind: Ident, len: 9 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Ident, len: 4 }
+            Token { kind: Comma, len: 1 }
+            Token { kind: Whitespace, len: 9 }
+            Token { kind: CloseParen, len: 1 }
+            Token { kind: Comma, len: 1 }
+            Token { kind: Whitespace, len: 5 }
+            Token { kind: CloseBrace, len: 1 }
+            Token { kind: Comma, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: CloseParen, len: 1 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Whitespace, len: 4 }
+        "#]],
+    );
+}
 
 #[test]
 fn test_decimal_numbers() {
@@ -549,6 +732,31 @@ x = (1,]
             Token { kind: CloseParen, len: 1 }
             Token { kind: Newline, len: 1 }
             Token { kind: Whitespace, len: 4 }
+        "#]],
+    );
+}
+
+#[test]
+fn test_indentation() {
+    check_lexing(
+        r#"
+def f():
+    pass
+    "#,
+        expect![[r#"
+            Token { kind: Newline, len: 1 }
+            Token { kind: Def, len: 3 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: OpenParen, len: 1 }
+            Token { kind: CloseParen, len: 1 }
+            Token { kind: Colon, len: 1 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Indent, len: 4 }
+            Token { kind: Pass, len: 4 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Whitespace, len: 4 }
+            Token { kind: Dedent { consistent: true }, len: 0 }
         "#]],
     );
 }

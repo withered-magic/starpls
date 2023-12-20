@@ -354,34 +354,56 @@ impl Cursor<'_> {
             },
 
             // Raw string literal, raw byte string literal, or identifier.
-            'r' => todo!(),
-
-            // Byte string literal, raw byte string literal, or identifier.
-            'b' => todo!(),
-
-            // Double-quoted or triple-quoted string literal.
-            '"' => {
-                let terminated = if self.first() == '"' && self.second() == '"' {
+            'r' => {
+                let is_raw_byte_string = if self.first() == 'b' {
                     self.bump();
-                    self.bump();
-                    self.string('"', true)
+                    true
                 } else {
-                    self.string('"', false)
+                    false
                 };
-                Literal {
-                    kind: Str { terminated },
+                match self.first() {
+                    closing_quote @ ('"' | '\'') => {
+                        self.bump();
+                        let terminated = self.string(closing_quote);
+                        Literal {
+                            kind: if is_raw_byte_string {
+                                RawByteStr { terminated }
+                            } else {
+                                RawStr { terminated }
+                            },
+                        }
+                    }
+                    _ => self.ident_or_keyword(),
                 }
             }
 
-            // Single-quoted or triple-quoted string literal.
-            '\'' => {
-                let terminated = if self.first() == '\'' && self.second() == '\'' {
+            // Byte string literal, raw byte string literal, or identifier.
+            'b' => {
+                let is_raw_byte_string = if self.first() == 'r' {
                     self.bump();
-                    self.bump();
-                    self.string('\'', true)
+                    true
                 } else {
-                    self.string('\'', false)
+                    false
                 };
+                match self.first() {
+                    closing_quote @ ('"' | '\'') => {
+                        self.bump();
+                        let terminated = self.string(closing_quote);
+                        Literal {
+                            kind: if is_raw_byte_string {
+                                RawByteStr { terminated }
+                            } else {
+                                RawStr { terminated }
+                            },
+                        }
+                    }
+                    _ => self.ident_or_keyword(),
+                }
+            }
+
+            // Single-, double-, or triple-quoted string literal.
+            closing_quote @ ('"' | '\'') => {
+                let terminated = self.string(closing_quote);
                 Literal {
                     kind: Str { terminated },
                 }
@@ -563,7 +585,15 @@ impl Cursor<'_> {
         self.eat_decimal_digits()
     }
 
-    fn string(&mut self, closing_quote: char, triple_quoted: bool) -> bool {
+    fn string(&mut self, closing_quote: char) -> bool {
+        let triple_quoted = if self.first() == closing_quote && self.second() == closing_quote {
+            self.bump();
+            self.bump();
+            true
+        } else {
+            false
+        };
+
         let mut closing_streak = 0;
         while let Some(c) = self.bump() {
             match c {
@@ -582,7 +612,7 @@ impl Cursor<'_> {
                 }
             }
         }
-        // End of file reached.
+        // End-of-file was reached.
         false
     }
 }

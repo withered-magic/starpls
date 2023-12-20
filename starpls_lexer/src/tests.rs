@@ -279,12 +279,18 @@ fn test_strings() {
         r#"
 x = 'a\nb'
 x = "a\nb"
+x = r'a\nb'
+x = r"a\nb"
 x = 'a\\\nb'
 x = "a\\\nb"
 x = '\''
 x = "\""
+x = r'\''
+x = r"\""
 x = '''\''''
 x = """\""""
+x = r'''\''''
+x = r"""\""""
 x = ''''a'b'c'''
 x = """"a"b"c"""
 x = '''a\nb'''
@@ -295,7 +301,195 @@ x = '''a\r\nb'''
 x = """a\r\nb"""
 x = '''a\n\rb'''
 x = """a\n\rb"""
+x = r'a\\\nb'
+x = r"a\\\nb"
+x = r'a\\\rb'
+x = r"a\\\rb"
+x = r'a\\\r\nb'
+x = r"a\\\r\nb"
 "#,
-        expect![],
+        expect![[r#"
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 6 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 6 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 7 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 7 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 8 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 8 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 4 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 4 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 5 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 5 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 8 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 8 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 11 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Unknown, len: 1 }
+            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 11 }
+            Token { kind: Unknown, len: 1 }
+        "#]],
     );
 }

@@ -43,50 +43,47 @@ fn test_decimal_numbers() {
 12345678901234567890
     "#,
         expect![[r#"
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 4 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 3 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Dot, len: 1 }
             Token { kind: Ident, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 4 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 5 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 5 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 3 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 4 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 4 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 3 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 6 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 51 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 20 }
-            Token { kind: Unknown, len: 1 }
-            Token { kind: Unknown, len: 1 }
-            Token { kind: Unknown, len: 1 }
-            Token { kind: Unknown, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Whitespace, len: 4 }
         "#]],
     );
 }
@@ -105,33 +102,30 @@ fn test_hexadecimal_numbers() {
 0x12345678deadbeef12345678
     "#,
         expect![[r#"
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Hexadecimal, empty_int: false } }, len: 3 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Hexadecimal, empty_int: false } }, len: 4 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Hexadecimal, empty_int: true } }, len: 2 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Hexadecimal, empty_int: false } }, len: 3 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Hexadecimal, empty_int: true } }, len: 2 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Hexadecimal, empty_int: false } }, len: 3 }
             Token { kind: Dot, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Hexadecimal, empty_int: false } }, len: 3 }
             Token { kind: Dot, len: 1 }
             Token { kind: Ident, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Hexadecimal, empty_int: false } }, len: 26 }
-            Token { kind: Unknown, len: 1 }
-            Token { kind: Unknown, len: 1 }
-            Token { kind: Unknown, len: 1 }
-            Token { kind: Unknown, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Whitespace, len: 4 }
         "#]],
     );
 }
@@ -152,33 +146,33 @@ fn test_octal_numbers() {
 012934
 "#,
         expect![[r#"
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Octal, empty_int: false } }, len: 5 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Octal, empty_int: false } }, len: 4 }
             Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 3 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Octal, empty_int: false } }, len: 4 }
             Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 3 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Octal, empty_int: false } }, len: 4 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 5 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Octal, empty_int: false } }, len: 4 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 5 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Octal, empty_int: false } }, len: 5 }
             Token { kind: Dot, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Octal, empty_int: false } }, len: 5 }
             Token { kind: Literal { kind: Float { empty_exponent: false } }, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 4 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 6 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 6 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
         "#]],
     );
 }
@@ -189,85 +183,85 @@ fn test_punctuation() {
         r#"+ - * / // % ** ~ & | ^ << >> . , = ; : ( ) [ ] { } < > >= <= == != += -= *= /= //= %= &= |= ^= <<= >>="#,
         expect![[r#"
             Token { kind: Plus, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Minus, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Star, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Slash, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: SlashSlash, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Mod, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: StarStar, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Tilde, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Ampersand, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Bar, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Caret, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: LtLt, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: GtGt, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Dot, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Comma, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Semi, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Colon, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: OpenParen, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: CloseParen, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: OpenBrack, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: CloseBrack, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: OpenBrace, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: CloseBrace, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Lt, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Gt, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Ge, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Le, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: EqEq, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: BangEq, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: PlusEq, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: MinusEq, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: StarEq, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: SlashEq, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: SlashSlashEq, len: 3 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: ModEq, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: AmpersandEq, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: BarEq, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: CaretEq, len: 2 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: LtLtEq, len: 3 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: GtGtEq, len: 3 }
         "#]],
     );
@@ -309,187 +303,252 @@ x = r'a\\\r\nb'
 x = r"a\\\r\nb"
 "#,
         expect![[r#"
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 6 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 6 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: RawStr { terminated: true } }, len: 7 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: RawStr { terminated: true } }, len: 7 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 8 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 8 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 4 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 4 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: RawStr { terminated: true } }, len: 5 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: RawStr { terminated: true } }, len: 5 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 8 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 8 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: RawStr { terminated: true } }, len: 11 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: RawStr { terminated: true } }, len: 11 }
-            Token { kind: Unknown, len: 1 }
+            Token { kind: Newline, len: 1 }
+        "#]],
+    );
+}
+
+#[test]
+fn test_implicit_line_joining() {
+    check_lexing(
+        r#"
+x = (1,
+     2)
+x = [1,
+     2]
+x = {1,
+     2}
+x = (1,]
+     2)
+    "#,
+        expect![[r#"
+            Token { kind: Newline, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: OpenParen, len: 1 }
+            Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+            Token { kind: Comma, len: 1 }
+            Token { kind: Whitespace, len: 6 }
+            Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+            Token { kind: CloseParen, len: 1 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: OpenBrack, len: 1 }
+            Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+            Token { kind: Comma, len: 1 }
+            Token { kind: Whitespace, len: 6 }
+            Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+            Token { kind: CloseBrack, len: 1 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: OpenBrace, len: 1 }
+            Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+            Token { kind: Comma, len: 1 }
+            Token { kind: Whitespace, len: 6 }
+            Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+            Token { kind: CloseBrace, len: 1 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: OpenParen, len: 1 }
+            Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+            Token { kind: Comma, len: 1 }
+            Token { kind: CloseBrack, len: 1 }
+            Token { kind: Whitespace, len: 6 }
+            Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+            Token { kind: CloseParen, len: 1 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Whitespace, len: 4 }
         "#]],
     );
 }

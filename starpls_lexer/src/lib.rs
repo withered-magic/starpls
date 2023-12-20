@@ -5,10 +5,10 @@ pub mod unescape;
 mod tests;
 
 pub use crate::cursor::Cursor;
+use crate::cursor::CursorState;
 
 use self::LiteralKind::*;
 use self::TokenKind::*;
-use crate::cursor::EOF_CHAR;
 
 /// Parsed token.
 #[derive(Debug)]
@@ -28,8 +28,17 @@ pub enum TokenKind {
     /// A comment.
     Comment,
 
-    /// A sequence of whitespace characters.
+    /// A newline character.
+    Newline,
+
+    /// A sequence of non-newline whitespace characters.
     Whitespace,
+
+    /// An increase in the indentation level.
+    Indent,
+
+    /// A decrease in the indentation level.
+    Dedent { consistent: bool },
 
     /// An identifier.
     Ident,
@@ -241,8 +250,11 @@ pub fn tokenize(input: &str) -> impl Iterator<Item = Token> + '_ {
 }
 
 pub fn is_whitespace(c: char) -> bool {
-    // matches!()
-    true
+    matches!(c, ' ' | '\t' | '\r' | '\n')
+}
+
+pub fn is_non_newline_whitespace(c: char) -> bool {
+    matches!(c, ' ' | '\t')
 }
 
 impl Cursor<'_> {
@@ -258,21 +270,138 @@ impl Cursor<'_> {
             };
         }
 
+        // Check if we're at the beginning of the line or in the middle of emitting DEDENT tokens.
+        loop {
+            match self.state {
+                CursorState::BeforeLeadingSpaces => {
+                    // Consume tabs and spaces to determine the indentation level. We consider tabs equivalent to four spaces.
+                    let mut indent = 0;
+                    self.eat_while(|c| {
+                        match c {
+                            ' ' => {
+                                indent += 1;
+                            }
+                            '\t' => {
+                                indent += 4;
+                            }
+                            _ => return false,
+                        }
+                        true
+                    });
+
+                    // If we are at a newline or EOF, don't consider indentation levels at all.
+                    if self.first() == '\n' || self.is_eof() {
+                        self.state = CursorState::AfterLeadingSpaces;
+                        let pos_within_token = self.reset_pos_within_token();
+                        if pos_within_token == 0 {
+                            continue;
+                        }
+                        return Token {
+                            kind: Whitespace,
+                            len: pos_within_token,
+                        };
+                    }
+
+                    let last_indent = self.indents.last().cloned().unwrap_or(0);
+
+                    // If we are at a greater indentation level, push it on the stack and return an INDENT token.
+                    if indent > last_indent {
+                        self.indents.push(indent);
+                        self.state = CursorState::AfterLeadingSpaces;
+                        return Token {
+                            kind: Indent,
+                            len: self.reset_pos_within_token(),
+                        };
+                    } else if indent < last_indent {
+                        // Pop indentation levels off the stack until the top level is less than or equal to the current indentation level.
+                        let mut num_remaining = 0;
+                        loop {
+                            self.indents.pop();
+                            num_remaining += 1;
+                            let last_indent = self.indents.last().cloned().unwrap_or(0);
+                            if last_indent <= indent {
+                                self.state = CursorState::Dedenting {
+                                    num_remaining,
+                                    consistent: last_indent == indent,
+                                };
+                                break;
+                            }
+                        }
+                    } else {
+                        // An equal indentation level means we continue lexing the current line.
+                        self.state = CursorState::AfterLeadingSpaces;
+                        break;
+                    }
+                }
+                CursorState::Dedenting {
+                    ref mut num_remaining,
+                    consistent,
+                } => {
+                    if *num_remaining == 1 {
+                        self.state = CursorState::AfterLeadingSpaces;
+                        return Token {
+                            kind: Dedent { consistent },
+                            len: self.reset_pos_within_token(),
+                        };
+                    }
+                    *num_remaining -= 1;
+                    return Token {
+                        kind: Dedent { consistent: true },
+                        len: 0,
+                    };
+                }
+                CursorState::AfterLeadingSpaces => break,
+            }
+        }
+
         let first_char = match self.bump() {
             Some(c) => c,
             None => return Token::new(Eof, 0),
         };
         let token_kind = match first_char {
+            // Skip emitting newlines if we currently have an opened parenthesis, bracket, or brace.
+            c if is_whitespace(c) => {
+                if self.has_open_block() {
+                    self.eat_while(is_whitespace);
+                    Whitespace
+                } else if c == '\n' {
+                    Newline
+                } else {
+                    self.eat_while(is_non_newline_whitespace);
+                    Whitespace
+                }
+            }
+
+            '\n' => Newline,
+
             // One-character tokens.
             ',' => Comma,
             ';' => Semi,
             ':' => Colon,
-            '(' => OpenParen,
-            ')' => CloseParen,
-            '[' => OpenBrack,
-            ']' => CloseBrack,
-            '{' => OpenBrace,
-            '}' => CloseBrace,
+            '(' => {
+                self.open_block(')');
+                OpenParen
+            }
+            ')' => {
+                self.close_block(')');
+                CloseParen
+            }
+            '[' => {
+                self.open_block(']');
+                OpenBrack
+            }
+            ']' => {
+                self.close_block(']');
+                CloseBrack
+            }
+            '{' => {
+                self.open_block('}');
+                OpenBrace
+            }
+            '}' => {
+                self.close_block('}');
+                CloseBrace
+            }
             '~' => Tilde,
 
             // One-character operators and their corresponding augmented assignments.
@@ -435,9 +564,8 @@ impl Cursor<'_> {
 
             _ => Unknown,
         };
-        let res = Token::new(token_kind, self.pos_within_token());
-        self.reset_pos_within_token();
-        res
+
+        Token::new(token_kind, self.reset_pos_within_token())
     }
 
     fn ident_or_keyword(&mut self) -> TokenKind {

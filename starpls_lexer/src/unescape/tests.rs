@@ -43,6 +43,15 @@ fn test_unescape_byte_string() {
         "#]],
     );
     check(
+        r#"\x41\u0400\u4e16\U0001F63F"#,
+        expect![[r#"
+        0..4 "A"
+        4..10 "Ѐ"
+        10..16 "世"
+        16..26 "😿"
+    "#]],
+    );
+    check(
         r#"\377\378\x80\xff\xff"#,
         expect![[r#"
         0..4 [ff]

@@ -151,7 +151,7 @@ fn scan_byte_string_escape<F>(
             'x' => scan_byte_string_hexadecimal_escape(chars),
 
             // unicode escapes start with either `u` or `U`
-            'u' => {
+            'u' | 'U' => {
                 let res = scan_unicode_escape(chars);
                 let end = input_len - chars.as_str().len();
                 match res {
@@ -271,19 +271,15 @@ fn scan_unicode_escape(chars: &mut Chars<'_>) -> Result<char, EscapeError> {
                 let digit = c.to_digit(16).expect("invalid hexadecimal digit");
                 value = value * 16 + digit;
                 num_digits += 1;
-                if num_digits == 4 || num_digits == 8 {
-                    break char::from_u32(value).ok_or_else(|| {
-                        if value > 0x10FFFF {
-                            EscapeError::OutOfRangeUnicodeEscape
-                        } else {
-                            EscapeError::LoneSurrogateUnicodeEscape
-                        }
-                    });
+                if num_digits == 8 {
+                    break;
                 }
             }
             _ => {
-                break Err(if num_digits == 0 {
+                return Err(if num_digits == 0 {
                     EscapeError::EmptyUnicodeEscape
+                } else if num_digits == 4 {
+                    break;
                 } else if num_digits < 4 {
                     EscapeError::TooShort16BitUnicodeEscape
                 } else if num_digits < 8 {
@@ -294,4 +290,12 @@ fn scan_unicode_escape(chars: &mut Chars<'_>) -> Result<char, EscapeError> {
             }
         }
     }
+
+    char::from_u32(value).ok_or_else(|| {
+        if value > 0x10FFFF {
+            EscapeError::OutOfRangeUnicodeEscape
+        } else {
+            EscapeError::LoneSurrogateUnicodeEscape
+        }
+    })
 }

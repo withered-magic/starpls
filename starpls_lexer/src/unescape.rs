@@ -1,5 +1,4 @@
-use std::ops::Range;
-use std::str::Chars;
+use std::{ops::Range, str::Chars};
 
 #[cfg(test)]
 mod tests;
@@ -32,6 +31,10 @@ pub enum EscapeError {
     TooShort32BitUnicodeEscape,
     /// Greater than 8 characters in Unicode escape sequence, e.g. `\u0000010FFFF`.
     TooLong32BitUnicodeEscape,
+    /// Invalid in-bound unicode character code, e.g. '\u{DFFF}'.
+    LoneSurrogateUnicodeEscape,
+    /// Out of bounds unicode character code, e.g. '\u{FFFFFF}'.
+    OutOfRangeUnicodeEscape,
 }
 
 /// Represents the type of string or bytes literal being unescaped. This is needed because strings and bytes literals,
@@ -109,7 +112,8 @@ fn scan_string_escape(chars: &mut Chars<'_>) -> Result<Option<char>, EscapeError
         // hexadecimal escapes start with `x`
         'x' => scan_string_hexadecimal_escape(chars)?, // hexadecimal escapes start with `x`
 
-        // 'u' | 'U' => scan_unicode_escape(chars)?, // unicode escapes start with either `u` or `U`
+        'u' | 'U' => scan_unicode_escape(chars)?, // unicode escapes start with either `u` or `U`
+
         _ => return Err(EscapeError::InvalidEscape),
     };
     Ok(Some(c))
@@ -146,7 +150,22 @@ fn scan_byte_string_escape<F>(
             // hexadecimal escapes start with `x`
             'x' => scan_byte_string_hexadecimal_escape(chars),
 
-            _ => Err(EscapeError::LoneSlash),
+            // unicode escapes start with either `u` or `U`
+            'u' => {
+                let res = scan_unicode_escape(chars);
+                let end = input_len - chars.as_str().len();
+                match res {
+                    Ok(c) => {
+                        let mut b = [0; 4];
+                        callback(start..end, Ok(c.encode_utf8(&mut b).as_bytes()));
+                    }
+                    Err(err) => callback(start..end, Err(err)),
+                }
+                return;
+            }
+
+            // any other escape sequence is invalid
+            _ => Err(EscapeError::InvalidEscape),
         },
         None => Err(EscapeError::LoneSlash),
     };
@@ -239,6 +258,40 @@ fn scan_hexadecimal_escape(chars: &mut Chars<'_>) -> Result<u32, EscapeError> {
     }
 }
 
-// fn scan_unicode_escape(chars: &mut Chars<'_>, mode: Mode) -> Result<char, EscapeError> {
-//     todo!()
-// }
+fn scan_unicode_escape(chars: &mut Chars<'_>) -> Result<char, EscapeError> {
+    let mut num_digits = 0;
+    let mut value = 0;
+
+    // Parse either 4 or 8 hexadecimal digits.
+    loop {
+        match chars.clone().next() {
+            Some(c @ ('0'..='9' | 'a'..='f' | 'A'..='F')) => {
+                chars.next();
+
+                let digit = c.to_digit(16).expect("invalid hexadecimal digit");
+                value = value * 16 + digit;
+                num_digits += 1;
+                if num_digits == 4 || num_digits == 8 {
+                    break char::from_u32(value).ok_or_else(|| {
+                        if value > 0x10FFFF {
+                            EscapeError::OutOfRangeUnicodeEscape
+                        } else {
+                            EscapeError::LoneSurrogateUnicodeEscape
+                        }
+                    });
+                }
+            }
+            _ => {
+                break Err(if num_digits == 0 {
+                    EscapeError::EmptyUnicodeEscape
+                } else if num_digits < 4 {
+                    EscapeError::TooShort16BitUnicodeEscape
+                } else if num_digits < 8 {
+                    EscapeError::TooShort32BitUnicodeEscape
+                } else {
+                    EscapeError::TooLong32BitUnicodeEscape
+                })
+            }
+        }
+    }
+}

@@ -34,7 +34,17 @@ pub enum EscapeError {
     TooLong32BitUnicodeEscape,
 }
 
-pub fn unescape_string<F>(input: &str, callback: &mut F)
+/// Represents the type of string or bytes literal being unescaped. This is needed because strings and bytes literals,
+/// as well as their raw counterparts, support different types of escapes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Mode {
+    Str,
+    RawStr,
+    ByteStr,
+    RawByteStr,
+}
+
+pub fn unescape_string<F>(input: &str, raw: bool, callback: &mut F)
 where
     F: FnMut(Range<usize>, Result<char, EscapeError>),
 {
@@ -44,7 +54,7 @@ where
     while let Some(c) = chars.next() {
         let start = input.len() - chars.as_str().len() - c.len_utf8();
         let res = match c {
-            '\\' => match scan_escape(&mut chars) {
+            '\\' => match scan_string_escape(&mut chars) {
                 Ok(Some(c)) => Ok(c),
                 Ok(None) => continue,
                 Err(err) => Err(err),
@@ -56,7 +66,7 @@ where
     }
 }
 
-fn scan_escape(chars: &mut Chars<'_>) -> Result<Option<char>, EscapeError> {
+fn scan_string_escape(chars: &mut Chars<'_>) -> Result<Option<char>, EscapeError> {
     let c = match chars.next().ok_or(EscapeError::LoneSlash)? {
         // Traditional escape sequences.
         // Taken from https://github.com/bazelbuild/starlark/blob/master/spec.md#string-escapes.
@@ -71,26 +81,99 @@ fn scan_escape(chars: &mut Chars<'_>) -> Result<Option<char>, EscapeError> {
         '\\' => '\\',            // literal backslash
         '\n' => return Ok(None), // escaped newlines are ignored
 
-        '0'..='7' => scan_octal_escape(chars)?,
+        // octal escapes immediately begin with digits
+        c @ '0'..='7' => {
+            scan_string_octal_escape(chars, c.to_digit(8).expect("invalid octal digit"))?
+        }
 
-        'x' => scan_hexadecimal_escape(chars)?,
+        // hexadecimal escapes start with `x`
+        'x' => scan_string_hexadecimal_escape(chars)?, // hexadecimal escapes start with `x`
 
-        'u' | _ => return Err(EscapeError::InvalidEscape),
+        // 'u' | 'U' => scan_unicode_escape(chars)?, // unicode escapes start with either `u` or `U`
+        _ => return Err(EscapeError::InvalidEscape),
     };
     Ok(Some(c))
 }
 
-// pub fn unescape_literal<F>(input: &str, mode: Mode, callback: &mut F)
-// where
-//     F: FnMut(Range<usize>, Result<char, EscapeError>),
-// {
+fn scan_string_octal_escape(
+    chars: &mut Chars<'_>,
+    initial_value: u32,
+) -> Result<char, EscapeError> {
+    let value = scan_octal_escape(chars, initial_value);
+    if value > 127 {
+        Err(EscapeError::InvalidOctalEscape)
+    } else {
+        Ok(char::from_u32(value).expect("invalid char value"))
+    }
+}
 
-// }
+fn scan_byte_string_octal_escape(
+    chars: &mut Chars<'_>,
+    initial_value: u32,
+) -> Result<u8, EscapeError> {
+    let value = scan_octal_escape(chars, initial_value);
+    if value > 255 {
+        Err(EscapeError::InvalidOctalEscape)
+    } else {
+        Ok(u8::try_from(value).expect("value does not fit in u8"))
+    }
+}
 
-// #[derive(Debug, PartialEq, Eq)]
-// pub enum Mode {
-//     Str,
-//     ByteStr,
-//     RawStr,
-//     RawByteStr,
-// }
+/// Processes an octal escape, which consists of up to 3 octal digits.
+fn scan_octal_escape(chars: &mut Chars<'_>, mut initial_value: u32) -> u32 {
+    // Process up to 2 more octal digits.
+    for _ in 0..2 {
+        match chars.next() {
+            Some(c @ '0'..='7') => {
+                let digit = c.to_digit(8).expect("invalid octal digit");
+                initial_value = initial_value * 8 + digit;
+            }
+            _ => break,
+        }
+    }
+    initial_value
+}
+
+fn scan_string_hexadecimal_escape(chars: &mut Chars<'_>) -> Result<char, EscapeError> {
+    let value = scan_hexadecimal_escape(chars)?;
+    if value > 127 {
+        Err(EscapeError::InvalidHexadecimalEscape)
+    } else {
+        // Safety: `value` is guaranteed to be valid ASCII.
+        unsafe { Ok(char::from_u32_unchecked(value)) }
+    }
+}
+
+fn scan_byte_string_hexadecimal_escape(chars: &mut Chars<'_>) -> Result<u8, EscapeError> {
+    let value = scan_hexadecimal_escape(chars)?;
+    if value > 255 {
+        Err(EscapeError::InvalidHexadecimalEscape)
+    } else {
+        Ok(u8::try_from(value).expect("value does not fit in u8"))
+    }
+}
+
+fn scan_hexadecimal_escape(chars: &mut Chars<'_>) -> Result<u32, EscapeError> {
+    // Process up to 6 hexadecimal digits.
+    let mut num_digits = 0;
+    let mut value = 0;
+
+    while let Some(c @ ('0'..='9' | 'a'..='f' | 'A'..='F')) = chars.next() {
+        let digit = c.to_digit(16).expect("invalid hexadecimal digit");
+        num_digits += 1;
+        value = value * 16 + digit;
+        if num_digits > 6 {
+            break;
+        }
+    }
+
+    if num_digits == 0 {
+        Err(EscapeError::EmptyHexadecimalEscape)
+    } else {
+        Ok(value)
+    }
+}
+
+fn scan_unicode_escape(chars: &mut Chars<'_>, mode: Mode) -> Result<char, EscapeError> {
+    todo!()
+}

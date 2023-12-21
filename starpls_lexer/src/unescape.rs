@@ -44,7 +44,7 @@ pub enum Mode {
     RawByteStr,
 }
 
-pub fn unescape_string<F>(input: &str, raw: bool, callback: &mut F)
+pub fn unescape_string<F>(input: &str, callback: &mut F)
 where
     F: FnMut(Range<usize>, Result<char, EscapeError>),
 {
@@ -63,6 +63,26 @@ where
         };
         let end = input.len() - chars.as_str().len();
         callback(start..end, res);
+    }
+}
+
+pub fn unescape_byte_string<F>(input: &str, callback: &mut F)
+where
+    F: FnMut(Range<usize>, Result<&[u8], EscapeError>),
+{
+    let mut chars = input.chars();
+
+    // Iterate over the input character by character, processing escape sequences as we see them.
+    while let Some(c) = chars.next() {
+        let start = input.len() - chars.as_str().len() - c.len_utf8();
+        match c {
+            '\\' => scan_byte_string_escape(&mut chars, start, input.len(), callback),
+            _ => {
+                let end = input.len() - chars.as_str().len();
+                let mut b = [0; 4];
+                callback(start..end, Ok(c.encode_utf8(&mut b).as_bytes()));
+            }
+        }
     }
 }
 
@@ -95,6 +115,49 @@ fn scan_string_escape(chars: &mut Chars<'_>) -> Result<Option<char>, EscapeError
     Ok(Some(c))
 }
 
+// TODO(withered-magic): This is super clunky (lots of repetition) and should be rewritten eventually.
+fn scan_byte_string_escape<F>(
+    chars: &mut Chars<'_>,
+    start: usize,
+    input_len: usize,
+    callback: &mut F,
+) where
+    F: FnMut(Range<usize>, Result<&[u8], EscapeError>),
+{
+    let res = match chars.next() {
+        Some(c) => match c {
+            'a' => Ok(b'\x07'), // alert or bell
+            'b' => Ok(b'\x08'), // backspace
+            'f' => Ok(b'\x0C'), // form feed
+            'n' => Ok(b'\x0A'), // line feed
+            'r' => Ok(b'\x0D'), // carriage return
+            't' => Ok(b'\x09'), // horizontal tab
+            'v' => Ok(b'\x0B'), // vertical tab
+
+            '\\' => Ok(b'\\'), // literal backslash
+            '\n' => return,
+
+            // octal escapes begin immediately with digits
+            c @ '0'..='7' => {
+                let initial_value = c.to_digit(8).expect("invalid octal digit");
+                scan_byte_string_octal_escape(chars, initial_value)
+            }
+
+            // hexadecimal escapes start with `x`
+            'x' => scan_byte_string_hexadecimal_escape(chars),
+
+            _ => Err(EscapeError::LoneSlash),
+        },
+        None => Err(EscapeError::LoneSlash),
+    };
+
+    let end = input_len - chars.as_str().len();
+    match res {
+        Ok(b) => callback(start..end, Ok(&[b])),
+        Err(err) => callback(start..end, Err(err)),
+    }
+}
+
 fn scan_string_octal_escape(
     chars: &mut Chars<'_>,
     initial_value: u32,
@@ -123,8 +186,9 @@ fn scan_byte_string_octal_escape(
 fn scan_octal_escape(chars: &mut Chars<'_>, mut initial_value: u32) -> u32 {
     // Process up to 2 more octal digits.
     for _ in 0..2 {
-        match chars.next() {
+        match chars.clone().next() {
             Some(c @ '0'..='7') => {
+                chars.next();
                 let digit = c.to_digit(8).expect("invalid octal digit");
                 initial_value = initial_value * 8 + digit;
             }
@@ -158,7 +222,8 @@ fn scan_hexadecimal_escape(chars: &mut Chars<'_>) -> Result<u32, EscapeError> {
     let mut num_digits = 0;
     let mut value = 0;
 
-    while let Some(c @ ('0'..='9' | 'a'..='f' | 'A'..='F')) = chars.next() {
+    while let Some(c @ ('0'..='9' | 'a'..='f' | 'A'..='F')) = chars.clone().next() {
+        chars.next();
         let digit = c.to_digit(16).expect("invalid hexadecimal digit");
         num_digits += 1;
         value = value * 16 + digit;
@@ -174,6 +239,6 @@ fn scan_hexadecimal_escape(chars: &mut Chars<'_>) -> Result<u32, EscapeError> {
     }
 }
 
-fn scan_unicode_escape(chars: &mut Chars<'_>, mode: Mode) -> Result<char, EscapeError> {
-    todo!()
-}
+// fn scan_unicode_escape(chars: &mut Chars<'_>, mode: Mode) -> Result<char, EscapeError> {
+//     todo!()
+// }

@@ -13,7 +13,7 @@ fn smoke_test() {
     check_lexing(
         r#"
 def _hello_world_impl(ctx):
-    out = ctx.actions.declare_file(ctx.label.name + ".cc")
+    out = ctx.actions.declare_file(ctx.label.name + ".cc") # test comment
     ctx.actions.expand_template(
         output = out,
         template = ctx.file.template,
@@ -63,6 +63,8 @@ hello_world = rule(
             Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true } }, len: 5 }
             Token { kind: CloseParen, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Comment, len: 14 }
             Token { kind: Newline, len: 1 }
             Token { kind: Whitespace, len: 4 }
             Token { kind: Ident, len: 3 }

@@ -369,6 +369,12 @@ impl Cursor<'_> {
                 }
             }
 
+            // Comments start with a `#` and continue until a newline character.
+            '#' => {
+                self.eat_while(|c| c != '\n');
+                Comment
+            }
+
             // One-character tokens.
             ',' => Comma,
             ';' => Semi,

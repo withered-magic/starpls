@@ -7,6 +7,7 @@ use crate::{
 
 pub use crate::{step::Step, syntax_kind::SyntaxKind};
 
+mod grammar;
 mod marker;
 mod step;
 mod syntax_kind;

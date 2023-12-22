@@ -60,6 +60,8 @@ pub enum TokenKind {
     Elif,
     /// "else"
     Else,
+    /// "False"
+    False,
     /// "for"
     For,
     /// "if"
@@ -70,6 +72,8 @@ pub enum TokenKind {
     Lambda,
     /// "load"
     Load,
+    /// "None"
+    NoneKw,
     /// "not"
     Not,
     /// "or"
@@ -78,6 +82,8 @@ pub enum TokenKind {
     Pass,
     /// "return"
     Return,
+    /// "True"
+    True,
 
     // Reserved tokens:
     /// "as"
@@ -605,15 +611,18 @@ impl Cursor<'_> {
             "def" => Def,
             "elif" => Elif,
             "else" => Else,
+            "False" => False,
             "for" => For,
             "if" => If,
             "in" => In,
             "lambda" => Lambda,
             "load" => Load,
+            "None" => NoneKw,
             "not" => Not,
             "or" => Or,
             "pass" => Pass,
             "return" => Return,
+            "True" => True,
             "as" => As,
             "assert" => Assert,
             "async" => Async,

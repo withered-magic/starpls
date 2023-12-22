@@ -17,6 +17,9 @@ pub enum SyntaxKind {
     FLOAT,
     STRING,
     BYTES,
+    TRUE,
+    FALSE,
+    NONE,
     AND,
     BREAK,
     CONTINUE,
@@ -138,6 +141,18 @@ pub enum SyntaxKind {
 #[macro_export]
 macro_rules! T {
     [ident] => { $ crate :: SyntaxKind :: IDENT };
+    ['('] => { $ crate :: SyntaxKind :: OPEN_PAREN };
+    [')'] => { $ crate :: SyntaxKind :: CLOSE_PAREN };
+    ['['] => { $ crate :: SyntaxKind :: OPEN_BRACK };
+    [']'] => { $ crate :: SyntaxKind :: CLOSE_BRACK };
+    ['{'] => { $ crate :: SyntaxKind :: OPEN_BRACE };
+    ['}'] => { $ crate :: SyntaxKind :: CLOSE_BRACE };
+    [if] => { $ crate :: SyntaxKind :: IF };
+    [+] => { $ crate :: SyntaxKind :: PLUS };
+    [-] => { $ crate :: SyntaxKind :: MINUS };
+    [~] => { $ crate :: SyntaxKind :: TILDE };
+    [not] => { $ crate :: SyntaxKind :: NOT };
+    [lambda] => { $ crate :: SyntaxKind :: LAMBDA };
 }
 
 impl SyntaxKind {
@@ -169,15 +184,18 @@ impl From<starpls_lexer::TokenKind> for SyntaxKind {
             starpls_lexer::TokenKind::Def => DEF,
             starpls_lexer::TokenKind::Elif => ELIF,
             starpls_lexer::TokenKind::Else => ELSE,
+            starpls_lexer::TokenKind::False => FALSE,
             starpls_lexer::TokenKind::For => FOR,
             starpls_lexer::TokenKind::If => IF,
             starpls_lexer::TokenKind::In => IN,
             starpls_lexer::TokenKind::Lambda => LAMBDA,
             starpls_lexer::TokenKind::Load => LOAD,
+            starpls_lexer::TokenKind::NoneKw => NONE,
             starpls_lexer::TokenKind::Not => NOT,
             starpls_lexer::TokenKind::Or => OR,
             starpls_lexer::TokenKind::Pass => PASS,
             starpls_lexer::TokenKind::Return => RETURN,
+            starpls_lexer::TokenKind::True => TRUE,
             starpls_lexer::TokenKind::As => AS,
             starpls_lexer::TokenKind::Assert => ASSERT,
             starpls_lexer::TokenKind::Async => ASYNC,

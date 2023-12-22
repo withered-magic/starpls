@@ -115,6 +115,7 @@ pub enum SyntaxKind {
     DEF_STMT,
     IF_STMT,
     FOR_STMT,
+    SIMPLE_STMT,
     RETURN_STMT,
     BREAK_STMT,
     CONTINUE_STMT,
@@ -153,6 +154,15 @@ macro_rules! T {
     [~] => { $ crate :: SyntaxKind :: TILDE };
     [not] => { $ crate :: SyntaxKind :: NOT };
     [lambda] => { $ crate :: SyntaxKind :: LAMBDA };
+    [return] => { $ crate :: SyntaxKind :: RETURN };
+    [break] => { $ crate :: SyntaxKind :: BREAK };
+    [continue] => { $ crate :: SyntaxKind :: CONTINUE };
+    [pass] => { $ crate :: SyntaxKind :: PASS };
+    [load] => { $ crate :: SyntaxKind :: LOAD };
+    [def] => { $ crate :: SyntaxKind :: DEF };
+    [for] => { $ crate :: SyntaxKind :: FOR };
+    ['\n'] => { $ crate :: SyntaxKind :: NEWLINE };
+    [;] => { $ crate :: SyntaxKind :: SEMI };
 }
 
 impl SyntaxKind {

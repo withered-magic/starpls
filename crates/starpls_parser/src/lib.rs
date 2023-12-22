@@ -12,6 +12,18 @@ mod step;
 mod syntax_kind;
 mod text;
 
+#[cfg(test)]
+mod tests;
+
+/// Parses a Starlark module from the given sequence of tokens. This function operates on a sequence of
+/// non-trivia tokens; use the `.to_input()` method on an instance of `StrWithTokens` to obtain an `Input`
+/// to pass to this function.
+pub fn parse(input: &Input) -> Output {
+    let mut p = Parser::new(input);
+    grammar::module(&mut p);
+    step::postprocess_step_events(p.events)
+}
+
 /// The input to the parser, consisting of a list of tokens.
 pub struct Input {
     tokens: Vec<SyntaxKind>,

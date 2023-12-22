@@ -218,13 +218,25 @@ pub enum LiteralKind {
     /// Floating-point numbers with optional exponents, e.g. `0.0`, `1.1e-10`.
     Float { empty_exponent: bool },
     /// Strings delimited with either single or double quotes, e.g. `"hello"`, `'hello'`.
-    Str { terminated: bool },
+    Str {
+        terminated: bool,
+        triple_quoted: bool,
+    },
     /// Raw strings, e.g. `r'hello'`, `r"hello"`.
-    RawStr { terminated: bool },
+    RawStr {
+        terminated: bool,
+        triple_quoted: bool,
+    },
     /// Byte strings delimited with either single or double quotes, e.g. `b"hello"`, `b'hello'`.
-    ByteStr { terminated: bool },
+    ByteStr {
+        terminated: bool,
+        triple_quoted: bool,
+    },
     /// Raw byte strings, e.g. `rb'hello'`, `rb"hello"`.
-    RawByteStr { terminated: bool },
+    RawByteStr {
+        terminated: bool,
+        triple_quoted: bool,
+    },
 }
 
 /// The base of an integer literal, as specified by its prefix.
@@ -494,12 +506,18 @@ impl Cursor<'_> {
                 match self.first() {
                     closing_quote @ ('"' | '\'') => {
                         self.bump();
-                        let terminated = self.string(closing_quote);
+                        let (terminated, triple_quoted) = self.string(closing_quote);
                         Literal {
                             kind: if is_raw_byte_string {
-                                RawByteStr { terminated }
+                                RawByteStr {
+                                    terminated,
+                                    triple_quoted,
+                                }
                             } else {
-                                RawStr { terminated }
+                                RawStr {
+                                    terminated,
+                                    triple_quoted,
+                                }
                             },
                         }
                     }
@@ -518,12 +536,18 @@ impl Cursor<'_> {
                 match self.first() {
                     closing_quote @ ('"' | '\'') => {
                         self.bump();
-                        let terminated = self.string(closing_quote);
+                        let (terminated, triple_quoted) = self.string(closing_quote);
                         Literal {
                             kind: if is_raw_byte_string {
-                                RawByteStr { terminated }
+                                RawByteStr {
+                                    terminated,
+                                    triple_quoted,
+                                }
                             } else {
-                                RawStr { terminated }
+                                RawStr {
+                                    terminated,
+                                    triple_quoted,
+                                }
                             },
                         }
                     }
@@ -533,9 +557,12 @@ impl Cursor<'_> {
 
             // Single-, double-, or triple-quoted string literal.
             closing_quote @ ('"' | '\'') => {
-                let terminated = self.string(closing_quote);
+                let (terminated, triple_quoted) = self.string(closing_quote);
                 Literal {
-                    kind: Str { terminated },
+                    kind: Str {
+                        terminated,
+                        triple_quoted,
+                    },
                 }
             }
 
@@ -714,7 +741,7 @@ impl Cursor<'_> {
         self.eat_decimal_digits()
     }
 
-    fn string(&mut self, closing_quote: char) -> bool {
+    fn string(&mut self, closing_quote: char) -> (bool, bool) {
         let triple_quoted = if self.first() == closing_quote && self.second() == closing_quote {
             self.bump();
             self.bump();
@@ -729,7 +756,7 @@ impl Cursor<'_> {
                 c if c == closing_quote => {
                     closing_streak += 1;
                     if !triple_quoted || closing_streak == 3 {
-                        return true;
+                        return (true, triple_quoted);
                     }
                 }
                 '\\' if self.first() == '\\' || self.first() == closing_quote => {
@@ -742,6 +769,6 @@ impl Cursor<'_> {
             }
         }
         // End-of-file was reached.
-        false
+        (false, triple_quoted)
     }
 }

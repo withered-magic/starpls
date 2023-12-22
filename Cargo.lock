@@ -475,6 +475,7 @@ version = "0.1.0"
 dependencies = [
  "drop_bomb",
  "expect-test",
+ "starpls_lexer",
 ]
 
 [[package]]

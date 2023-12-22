@@ -37,17 +37,7 @@ pub enum EscapeError {
     OutOfRangeUnicodeEscape,
 }
 
-/// Represents the type of string or bytes literal being unescaped. This is needed because strings and bytes literals,
-/// as well as their raw counterparts, support different types of escapes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Mode {
-    Str,
-    RawStr,
-    ByteStr,
-    RawByteStr,
-}
-
-pub fn unescape_string<F>(input: &str, callback: &mut F)
+pub fn unescape_string<F>(input: &str, raw: bool, triple_quoted: bool, callback: &mut F)
 where
     F: FnMut(Range<usize>, Result<char, EscapeError>),
 {

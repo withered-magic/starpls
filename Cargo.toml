@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
-    "starpls",
-    "starpls_lexer",
-    "starpls_parser",
-    "starpls_syntax",
+    "crates/starpls",
+    "crates/starpls_lexer",
+    "crates/starpls_parser",
+    "crates/starpls_syntax",
     "xtask",
 ]

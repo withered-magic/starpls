@@ -1,6 +1,6 @@
 use starpls_syntax::{parse_module, Module, Parse};
 
-pub use crate::diagnostics::{Diagnostic, Diagnostics, FileRange};
+pub use crate::diagnostics::{Diagnostic, Diagnostics, FileRange, Severity};
 
 mod diagnostics;
 mod util;
@@ -28,7 +28,7 @@ pub struct File {
 
 #[salsa::tracked]
 pub struct ParseResult {
-    inner: Parse<Module>,
+    pub inner: Parse<Module>,
 }
 
 #[salsa::tracked]
@@ -42,6 +42,7 @@ pub fn parse(db: &dyn Db, file: File) -> ParseResult {
                     file_id: file.id(db),
                     range: err.range,
                 },
+                severity: Severity::Error,
             },
         )
     });

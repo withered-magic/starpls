@@ -1,7 +1,8 @@
 use crate::Database;
-use starpls_common::{Db as _, FileId};
+use starpls_common::{parse, Db as _, FileId};
 
 pub(crate) fn view_syntax_tree(db: &Database, file_id: FileId) -> Option<String> {
-    let _file = db.get_file(file_id)?;
-    Some("syntax tree".to_string())
+    let file = db.get_file(file_id)?;
+    let parse = parse(db, file);
+    Some(format!("{:?}", parse.inner(db).syntax()))
 }

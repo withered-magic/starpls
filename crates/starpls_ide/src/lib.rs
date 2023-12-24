@@ -1,7 +1,9 @@
 use dashmap::{mapref::entry::Entry, DashMap};
-use starpls_common::{Diagnostic, Diagnostics, File, FileId};
+use salsa::ParallelDatabase;
+use starpls_common::{Db, Diagnostic, File, FileId};
 use std::sync::Arc;
 
+mod diagnostics;
 mod view_syntax_tree;
 
 pub type Cancellable<T> = Result<T, salsa::Cancelled>;
@@ -59,7 +61,17 @@ pub struct Analysis {
 }
 
 impl Analysis {
-    pub fn apply_change(&mut self, change: Change) {}
+    pub fn apply_change(&mut self, change: Change) {
+        for (path, contents) in change.changed_files {
+            self.db.set_file_contents(path, contents);
+        }
+    }
+
+    pub fn snapshot(&self) -> AnalysisSnapshot {
+        AnalysisSnapshot {
+            db: self.db.snapshot(),
+        }
+    }
 }
 
 pub struct AnalysisSnapshot {
@@ -68,7 +80,7 @@ pub struct AnalysisSnapshot {
 
 impl AnalysisSnapshot {
     pub fn diagnostics(&self, file_id: FileId) -> Cancellable<Vec<Diagnostic>> {
-        self.query(|_db| Vec::new())
+        self.query(|db| diagnostics::diagnostics(db, file_id))
     }
 
     pub fn view_syntax_tree(&self, file_id: FileId) -> Cancellable<Option<String>> {

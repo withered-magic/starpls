@@ -115,6 +115,10 @@ impl<'a> StrWithTokens<'a> {
     pub fn len(&self) -> usize {
         self.token_kinds.len()
     }
+
+    pub fn lexer_errors(&self) -> impl Iterator<Item = &LexerError> {
+        self.lexer_errors.iter()
+    }
 }
 
 fn collect_token_lexer_errors(

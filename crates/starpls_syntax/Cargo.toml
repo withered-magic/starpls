@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 starpls_parser = { path = "../starpls_parser" }
-rowan = "0.15.15"
+rowan = "0.15.11"
 
 [build-dependencies]
 cc = "*"

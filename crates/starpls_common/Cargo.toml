@@ -1,0 +1,10 @@
+[package]
+name = "starpls_common"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+salsa = { git = "https://github.com/salsa-rs/salsa", package = "salsa-2022", rev = "f1d318a2795e87081e316a5f31ef02f0cd6a1c83" }
+starpls_syntax = { path = "../starpls_syntax" }

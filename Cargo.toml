@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
     "crates/starpls",
+    "crates/starpls_common",
+    "crates/starpls_ide",
     "crates/starpls_lexer",
     "crates/starpls_parser",
     "crates/starpls_syntax",

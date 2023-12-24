@@ -1,6 +1,12 @@
 use starpls_parser::SyntaxKind;
 
-pub use rowan::TextRange;
+pub use {
+    crate::{
+        ast::Module,
+        parser::{parse_module, Parse, SyntaxError},
+    },
+    rowan::TextRange,
+};
 
 mod ast;
 mod parser;

@@ -4,7 +4,11 @@ use crate::{
 };
 use marker::Marker;
 
-pub use crate::{step::Step, syntax_kind::SyntaxKind};
+pub use crate::{
+    step::Step,
+    syntax_kind::SyntaxKind,
+    text::{StrStep, StrWithTokens},
+};
 
 mod grammar;
 mod marker;

@@ -20,3 +20,4 @@ serde_json = "1.0.108"
 starpls_common = { path = "../starpls_common" }
 starpls_syntax = { path = "../starpls_syntax" }
 starpls_ide = { path = "../starpls_ide" }
+parking_lot = "0.12.1"

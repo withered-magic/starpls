@@ -14,7 +14,7 @@ impl DiagnosticsManager {
             .entry(file_id)
             .and_modify(|current_diagnostics| {
                 if current_diagnostics.len() != diagnostics.len()
-                    && current_diagnostics.iter().zip(diagnostics.iter()).any(
+                    || current_diagnostics.iter().zip(diagnostics.iter()).any(
                         |(current_diagnostic, diagnostic)| {
                             !is_diagnostic_equal(current_diagnostic, diagnostic)
                         },

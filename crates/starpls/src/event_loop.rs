@@ -1,7 +1,8 @@
 use crate::{
     convert,
     document::DocumentSource,
-    handlers::notifications,
+    extensions,
+    handlers::{notifications, requests},
     server::{Server, ServerSnapshot},
 };
 use crossbeam_channel::select;
@@ -18,19 +19,6 @@ macro_rules! match_notification {
         _ => $catch_all:expr $(,)?
     }) => {{
         $( if let Some($it) = cast_notification::<$path>(&$node) { $res } else )*
-        { $catch_all }
-    }};
-}
-
-#[macro_export]
-macro_rules! match_request {
-    (match $node:ident { $($tt:tt)* }) => { $crate::match_request!(match ($node) { $($tt)* }) };
-
-    (match ($node:expr) {
-        $( if $path:path as $it:pat => $res:expr, )*
-        _ => $catch_all:expr $(,)?
-    }) => {{
-        $( if let Some($it) = cast_request::<$path>(&$node) { $res } else )*
         { $catch_all }
     }};
 }
@@ -96,10 +84,9 @@ impl Server {
         let changed_file_ids = self.diagnostics_manager.take_changes();
 
         for file_id in changed_file_ids {
-            eprintln!("send diagnostics {:?}", file_id);
+            let document_manager = self.document_manager.read();
             // Only send diagnostics for currently open editors.
-            let version = match self
-                .document_manager
+            let version = match document_manager
                 .get(file_id)
                 .map(|document| document.source)
             {
@@ -111,8 +98,10 @@ impl Server {
                 .get_diagnostics(file_id)
                 .cloned()
                 .collect::<Vec<_>>();
-            let path = self.document_manager.lookup_by_file_id(file_id);
+            let path = document_manager.lookup_by_file_id(file_id);
             let uri = lsp_types::Url::from_file_path(path).unwrap();
+
+            drop(document_manager);
 
             self.send_notification::<lsp_types::notification::PublishDiagnostics>(
                 lsp_types::PublishDiagnosticsParams {
@@ -129,12 +118,12 @@ impl Server {
     fn update_diagnostics(&mut self) {
         let file_ids = self
             .document_manager
+            .read()
             .iter()
             .map(|(path, _)| path.clone())
             .collect::<Vec<_>>();
         let snapshot = self.snapshot();
         self.task_pool_handle.spawn(move || {
-            eprintln!("update diagnostics");
             let mut res = Vec::new();
 
             // Query the database for diagnostics for each file and convert them to an LSP-compatible format.
@@ -156,20 +145,20 @@ impl Server {
     }
 
     fn handle_request(&mut self, req: lsp_server::Request) {
-        let _snapshot = self.snapshot();
-        self.task_pool_handle.spawn(move || {
-            let id = req.id.clone();
-            let _res: anyhow::Result<()> = match_request! {
-                match req {
-                    _ => Ok(())
-                }
-            };
-            Task::ResponseReady(lsp_server::Response::new_err(
-                id,
-                lsp_server::ErrorCode::InternalError as i32,
-                "unimplemented".to_string(),
-            ))
-        });
+        if let Some(params) = cast_request::<extensions::ViewSyntaxTree>(&req) {
+            let snapshot = self.snapshot();
+            self.task_pool_handle.spawn(move || {
+                let id = req.id.clone();
+                Task::ResponseReady(match requests::view_syntax_tree(&snapshot, params) {
+                    Ok(value) => lsp_server::Response::new_ok(id, value),
+                    Err(err) => lsp_server::Response::new_err(
+                        id,
+                        lsp_server::ErrorCode::RequestFailed as i32,
+                        err.to_string(),
+                    ),
+                })
+            });
+        }
     }
 
     fn handle_notification(&mut self, not: lsp_server::Notification) -> anyhow::Result<()> {
@@ -184,7 +173,6 @@ impl Server {
     }
 
     fn handle_task(&mut self, task: Task) {
-        eprintln!("handle task");
         match task {
             Task::DiagnosticsReady(diagnostics) => {
                 for (file_id, diagnostics) in diagnostics {

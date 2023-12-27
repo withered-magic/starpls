@@ -5,19 +5,22 @@ use crate::{
     task_pool::{TaskPool, TaskPoolHandle},
 };
 use lsp_server::{Connection, ReqQueue};
+use parking_lot::RwLock;
 use starpls_ide::{Analysis, AnalysisSnapshot, Change};
+use std::sync::Arc;
 
 pub(crate) struct Server {
     pub(crate) connection: Connection,
     pub(crate) req_queue: ReqQueue<(), ()>,
     pub(crate) task_pool_handle: TaskPoolHandle<Task>,
-    pub(crate) document_manager: DocumentManager,
+    pub(crate) document_manager: Arc<RwLock<DocumentManager>>,
     pub(crate) diagnostics_manager: DiagnosticsManager,
     pub(crate) analysis: Analysis,
 }
 
 pub(crate) struct ServerSnapshot {
     pub(crate) analysis_snapshot: AnalysisSnapshot,
+    pub(crate) document_manager: Arc<RwLock<DocumentManager>>,
 }
 
 impl Server {
@@ -40,21 +43,21 @@ impl Server {
     pub(crate) fn snapshot(&self) -> ServerSnapshot {
         ServerSnapshot {
             analysis_snapshot: self.analysis.snapshot(),
+            document_manager: Arc::clone(&self.document_manager),
         }
     }
 
     pub(crate) fn process_changes(&mut self) -> bool {
         let mut change = Change::default();
-        let (has_opened_or_closed_documents, changed_file_ids) =
-            self.document_manager.take_changes();
+        let mut document_manager = self.document_manager.write();
+        let (has_opened_or_closed_documents, changed_file_ids) = document_manager.take_changes();
 
         if changed_file_ids.is_empty() {
             return has_opened_or_closed_documents;
         }
 
         for file_id in changed_file_ids {
-            let contents = self
-                .document_manager
+            let contents = document_manager
                 .contents(file_id)
                 .map(|contents| contents.to_string())
                 .unwrap_or_else(|| String::new());

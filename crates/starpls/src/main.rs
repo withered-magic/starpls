@@ -5,6 +5,7 @@ mod convert;
 mod diagnostics;
 mod document;
 mod event_loop;
+mod extensions;
 mod handlers;
 mod server;
 mod task_pool;

@@ -3,8 +3,9 @@ use starpls_parser::SyntaxKind;
 pub use {
     crate::{
         ast::Module,
-        parser::{parse_module, Parse, SyntaxError},
+        parser::{line_index, parse_module, Parse, SyntaxError},
     },
+    line_index::LineIndex,
     rowan::TextRange,
 };
 

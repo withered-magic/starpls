@@ -1,4 +1,4 @@
-use starpls_syntax::{parse_module, Module, Parse};
+use starpls_syntax::{line_index as syntax_line_index, parse_module, LineIndex, Module, Parse};
 
 pub use crate::diagnostics::{Diagnostic, Diagnostics, FileRange, Severity};
 
@@ -6,7 +6,14 @@ mod diagnostics;
 mod util;
 
 #[salsa::jar(db = Db)]
-pub struct Jar(Diagnostics, File, ParseResult, parse);
+pub struct Jar(
+    Diagnostics,
+    File,
+    LineIndexResult,
+    ParseResult,
+    parse,
+    line_index,
+);
 
 /// A Key corresponding to an interned file path. Use these instead of `Path`s to refer to files.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -48,4 +55,15 @@ pub fn parse(db: &dyn Db, file: File) -> ParseResult {
     });
 
     ParseResult::new(db, parse)
+}
+
+#[salsa::tracked]
+pub struct LineIndexResult {
+    pub inner: LineIndex,
+}
+
+#[salsa::tracked]
+pub fn line_index(db: &dyn Db, file: File) -> LineIndexResult {
+    let line_index = syntax_line_index(&file.contents(db));
+    LineIndexResult::new(db, line_index)
 }

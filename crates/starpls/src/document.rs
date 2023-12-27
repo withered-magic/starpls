@@ -1,12 +1,7 @@
-use crate::utils::Edit;
-use rustc_hash::FxHashMap;
-use std::{
-    cell::{Cell, RefCell},
-    collections::HashMap,
-    mem,
-    path::PathBuf,
-    rc::Rc,
-};
+use indexmap::IndexSet;
+use rustc_hash::FxHasher;
+use starpls_common::FileId;
+use std::{collections::HashMap, hash::BuildHasherDefault, mem, path::PathBuf};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum DocumentSource {
@@ -39,9 +34,9 @@ impl Document {
 /// A collection of documents.
 #[derive(Default)]
 pub(crate) struct DocumentManager {
-    documents: HashMap<u32, Document>,
+    documents: HashMap<FileId, Document>,
     has_closed_or_opened_documents: bool,
-    changed_documents: Vec<(u32, Edit)>,
+    changed_file_ids: Vec<FileId>,
     path_interner: PathInterner,
 }
 
@@ -53,7 +48,7 @@ impl DocumentManager {
         let file_id = self.path_interner.intern_path(path);
         self.documents
             .insert(file_id, Document::new(contents, Some(version)));
-        self.changed_documents.push((file_id, Edit::Full));
+        self.changed_file_ids.push(file_id);
     }
 
     pub(crate) fn close(&mut self, path: &PathBuf) {
@@ -65,77 +60,63 @@ impl DocumentManager {
         };
     }
 
-    pub(crate) fn modify(
-        &mut self,
-        path: PathBuf,
-        contents: String,
-        version: Option<i32>,
-        edits: Edit,
-    ) {
+    pub(crate) fn modify(&mut self, path: PathBuf, contents: String, version: Option<i32>) {
         let file_id = self.path_interner.intern_path(path);
         if let Some(document) = self.documents.get_mut(&file_id) {
             document.contents = contents;
             document.source = version.into();
-            self.changed_documents.push((file_id, edits));
+            self.changed_file_ids.push(file_id);
         };
     }
 
-    pub(crate) fn take_changes(&mut self) -> (bool, Vec<(u32, Edit)>) {
-        let changed_documents = mem::take(&mut self.changed_documents);
+    pub(crate) fn take_changes(&mut self) -> (bool, Vec<FileId>) {
+        let changed_documents = mem::take(&mut self.changed_file_ids);
         let has_opened_or_closed_documents = self.has_closed_or_opened_documents;
         self.has_closed_or_opened_documents = false;
         (has_opened_or_closed_documents, changed_documents)
     }
 
-    pub(crate) fn contents(&self, file_id: u32) -> Option<&str> {
+    pub(crate) fn contents(&self, file_id: FileId) -> Option<&str> {
         self.get(file_id).map(|document| document.contents.as_str())
     }
 
-    pub(crate) fn get(&self, file_id: u32) -> Option<&Document> {
+    pub(crate) fn get(&self, file_id: FileId) -> Option<&Document> {
         self.documents.get(&file_id)
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (&u32, &Document)> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (&FileId, &Document)> {
         self.documents.iter()
     }
 
-    pub(crate) fn lookup_path(&self, file_id: u32) -> Option<Rc<PathBuf>> {
-        self.path_interner.lookup_path(file_id)
+    pub(crate) fn lookup_by_file_id(&self, file_id: FileId) -> &PathBuf {
+        self.path_interner.lookup_by_file_id(file_id)
     }
 
-    pub(crate) fn lookup_file_id(&self, path: &PathBuf) -> Option<u32> {
-        self.path_interner.lookup_file_id(path)
+    pub(crate) fn lookup_by_path_buf(&self, path: &PathBuf) -> Option<FileId> {
+        self.path_interner.lookup_by_path_buf(path)
     }
 }
 
 #[derive(Default)]
 pub struct PathInterner {
-    seq: Cell<u32>,
-    key_map: RefCell<FxHashMap<PathBuf, u32>>,
-    value_map: RefCell<FxHashMap<u32, Rc<PathBuf>>>,
+    map: IndexSet<PathBuf, BuildHasherDefault<FxHasher>>,
 }
 
 impl PathInterner {
-    pub(crate) fn intern_path(&self, path: PathBuf) -> u32 {
-        let mut key_map = self.key_map.borrow_mut();
-
-        // If this path has already been intered, return the corresponding file ID.
-        if let Some(file_id) = key_map.get(&path) {
-            return *file_id;
-        }
-
-        // Otherwise, intern the path and return the newly allocated identifier.
-        let file_id = self.seq.replace(self.seq.get() + 1);
-        key_map.insert(path.clone(), file_id);
-        self.value_map.borrow_mut().insert(file_id, Rc::new(path));
-        file_id
+    pub(crate) fn intern_path(&mut self, path: PathBuf) -> FileId {
+        let index = self.map.insert_full(path).0;
+        FileId(index as u32)
     }
 
-    pub(crate) fn lookup_path(&self, file_id: u32) -> Option<Rc<PathBuf>> {
-        self.value_map.borrow().get(&file_id).cloned()
+    pub(crate) fn lookup_by_path_buf(&self, path: &PathBuf) -> Option<FileId> {
+        self.map
+            .get_index_of(path)
+            .map(|index| FileId(index as u32))
     }
 
-    pub(crate) fn lookup_file_id(&self, path: &PathBuf) -> Option<u32> {
-        self.key_map.borrow().get(path).copied()
+    pub(crate) fn lookup_by_file_id(&self, file_id: FileId) -> &PathBuf {
+        self.map
+            .get_index(file_id.0 as usize)
+            .expect("unknown file_id")
     }
 }

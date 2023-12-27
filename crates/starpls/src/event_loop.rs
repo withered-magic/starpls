@@ -75,9 +75,36 @@ impl Server {
             _ => (),
         };
 
-        self.process_changes();
+        // Update our diagnostics if a triggering event (e.g. document open/close/change) occured.
+        // This is done asynchronously, so any new diagnostics resulting from this won't be seen until the next turn
+        // of the event loop.
+        if self.process_changes() {
+            self.update_diagnostics();
+        }
 
         Ok(())
+    }
+
+    fn register_and_handle_request(&mut self, req: lsp_server::Request) {
+        self.req_queue.incoming.register(req.id.clone(), ());
+        self.handle_request(req);
+    }
+
+    fn handle_request(&mut self, req: lsp_server::Request) {
+        let _snapshot = self.snapshot();
+        self.task_pool_handle.spawn(move || {
+            let id = req.id.clone();
+            let _res: anyhow::Result<()> = match_request! {
+                match req {
+                    _ => Ok(())
+                }
+            };
+            Task::ResponseReady(lsp_server::Response::new_err(
+                id,
+                lsp_server::ErrorCode::InternalError as i32,
+                "unimplemented".to_string(),
+            ))
+        });
     }
 
     fn handle_notification(&mut self, not: lsp_server::Notification) -> anyhow::Result<()> {

@@ -2,10 +2,12 @@ use lsp_server::Connection;
 use lsp_types::{ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind};
 
 mod convert;
+mod diagnostics;
 mod document;
 mod event_loop;
 mod handlers;
 mod server;
+mod task_pool;
 mod utils;
 
 fn main() -> anyhow::Result<()> {

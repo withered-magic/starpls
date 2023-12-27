@@ -1,8 +1,7 @@
-use std::marker::PhantomData;
-
-use crate::{ast::AstNode, Module, StarlarkLanguage, SyntaxNode};
+use crate::{ast::AstNode, LineIndex, Module, StarlarkLanguage, SyntaxNode};
 use rowan::{GreenNode, GreenNodeBuilder, Language, TextRange, TextSize};
 use starpls_parser::{parse, StrStep, StrWithTokens, SyntaxKind};
+use std::marker::PhantomData;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyntaxError {
@@ -80,4 +79,8 @@ pub fn parse_module(input: &str, errors_sink: &mut dyn FnMut(SyntaxError)) -> Pa
         green: green_node,
         _ty: PhantomData,
     }
+}
+
+pub fn line_index(input: &str) -> LineIndex {
+    LineIndex::new(input)
 }

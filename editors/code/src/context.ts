@@ -40,7 +40,7 @@ export class Context {
     };
 
     return this._client = new LanguageClient(
-      'star-ls',
+      'starpls',
       'Starlark Language Server',
       serverOptions,
       clientOptions,
@@ -48,9 +48,9 @@ export class Context {
   }
 
   private async ensureServerInstalled(): Promise<string> {
-    const serverPath = process.env.__STAR_LS_SERVER_DEBUG;
+    const serverPath = process.env.__STARPLS_SERVER_DEBUG;
     if (!serverPath) {
-      throw new Error('failed to find server executable: __STAR_LS_SERVER_DEBUG is not set');
+      throw new Error('failed to find server executable: __STARPLS_SERVER_DEBUG is not set');
     }
     console.log('context: using server executable at %s', serverPath);
     return serverPath;

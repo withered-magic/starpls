@@ -69,6 +69,7 @@ impl Server {
     fn next_event(&self) -> Option<Event> {
         let event = select! {
             recv(self.connection.receiver) -> req => req.ok().map(Event::Message),
+            recv(self.task_pool_handle.receiver) -> task => Some(Event::Task(task.unwrap())),
         };
         event
     }
@@ -95,6 +96,7 @@ impl Server {
         let changed_file_ids = self.diagnostics_manager.take_changes();
 
         for file_id in changed_file_ids {
+            eprintln!("send diagnostics {:?}", file_id);
             // Only send diagnostics for currently open editors.
             let version = match self
                 .document_manager
@@ -132,6 +134,7 @@ impl Server {
             .collect::<Vec<_>>();
         let snapshot = self.snapshot();
         self.task_pool_handle.spawn(move || {
+            eprintln!("update diagnostics");
             let mut res = Vec::new();
 
             // Query the database for diagnostics for each file and convert them to an LSP-compatible format.
@@ -181,6 +184,7 @@ impl Server {
     }
 
     fn handle_task(&mut self, task: Task) {
+        eprintln!("handle task");
         match task {
             Task::DiagnosticsReady(diagnostics) => {
                 for (file_id, diagnostics) in diagnostics {

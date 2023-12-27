@@ -41,6 +41,15 @@ impl<'a> StrWithTokens<'a> {
             str_with_tokens.token_start.push(current_start);
 
             // Collect any potential errors from the lexer.
+            collect_token_lexer_errors(
+                input,
+                &mut str_with_tokens.lexer_errors,
+                current_start as usize,
+                (current_start + len) as usize,
+                kind,
+            );
+
+            current_start += len;
         }
 
         // Push an extra entry to the `token_start` array to allow easily getting the length of the final token.

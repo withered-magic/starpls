@@ -33,17 +33,23 @@ pub(crate) fn statement(p: &mut Parser) {
 /// Parses a function definition.
 ///
 /// Grammar: `DefStmt = 'def' identifier '(' [Parameters [',']] ')' ':' Suite .`
-pub(crate) fn def_stmt(p: &mut Parser) {}
+pub(crate) fn def_stmt(p: &mut Parser) {
+    p.bump(T![def]);
+}
 
 /// Parses an `if` statement.
 ///
 /// Gramar: `IfStmt = 'if' Test ':' Suite {'elif' Test ':' Suite} ['else' ':' Suite] .`
-pub(crate) fn if_stmt(p: &mut Parser) {}
+pub(crate) fn if_stmt(p: &mut Parser) {
+    p.bump(T![if]);
+}
 
 /// Parses a `for` statement.
 ///
 /// Grammar: `ForStmt = 'for' LoopVariables 'in' Expression ':' Suite .`
-pub(crate) fn for_stmt(p: &mut Parser) {}
+pub(crate) fn for_stmt(p: &mut Parser) {
+    p.bump(T![for]);
+}
 
 /// Parses a semicolon-delimited list of small statements.
 ///

@@ -41,6 +41,7 @@ pub struct ParseResult {
 #[salsa::tracked]
 pub fn parse(db: &dyn Db, file: File) -> ParseResult {
     let parse = parse_module(&file.contents(db), &mut |err| {
+        eprintln!("push error");
         Diagnostics::push(
             db,
             Diagnostic {

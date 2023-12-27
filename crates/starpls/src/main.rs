@@ -11,7 +11,7 @@ mod task_pool;
 mod utils;
 
 fn main() -> anyhow::Result<()> {
-    eprintln!("server: star-ls, v0.1.0");
+    eprintln!("server: starpls, v0.1.0");
 
     // Create the transport over stdio.
     let (connection, io_threads) = Connection::stdio();

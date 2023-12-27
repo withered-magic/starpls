@@ -75,10 +75,7 @@ pub fn parse_module(input: &str, errors_sink: &mut dyn FnMut(SyntaxError)) -> Pa
         StarlarkLanguage::kind_to_raw(SyntaxKind::MODULE)
     );
 
-    Parse {
-        green: green_node,
-        _ty: PhantomData,
-    }
+    Parse::new(green_node)
 }
 
 pub fn line_index(input: &str) -> LineIndex {

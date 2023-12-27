@@ -6,7 +6,8 @@ pub(crate) fn diagnostics(db: &Database, file_id: FileId) -> Vec<Diagnostic> {
         Some(file) => file,
         None => return Vec::new(),
     };
-    let res = parse(db, file);
+
+    let _res = parse(db, file);
 
     // Limit the amount of syntax errors we send, as this many syntax errors probably means something
     // is really wrong with the file being analyzed.

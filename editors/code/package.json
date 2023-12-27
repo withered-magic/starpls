@@ -1,5 +1,5 @@
 {
-  "name": "star-ls",
+  "name": "starpls",
   "version": "0.1.0",
   "description": "An LSP implementation for Starlark",
   "publisher": "withered-magic",

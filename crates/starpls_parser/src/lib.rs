@@ -97,6 +97,7 @@ impl<'a> Parser<'a> {
             self.push_event(StepEvent::Token {
                 kind: self.input.tokens[self.pos],
             });
+            self.pos += 1;
         }
     }
 

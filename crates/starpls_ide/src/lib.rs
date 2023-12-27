@@ -1,10 +1,11 @@
+use crate::handlers::*;
 use dashmap::{mapref::entry::Entry, DashMap};
 use salsa::ParallelDatabase;
 use starpls_common::{Db, Diagnostic, File, FileId};
+use starpls_syntax::LineIndex;
 use std::sync::Arc;
 
-mod diagnostics;
-mod view_syntax_tree;
+mod handlers;
 
 pub type Cancellable<T> = Result<T, salsa::Cancelled>;
 
@@ -81,6 +82,10 @@ pub struct AnalysisSnapshot {
 impl AnalysisSnapshot {
     pub fn diagnostics(&self, file_id: FileId) -> Cancellable<Vec<Diagnostic>> {
         self.query(|db| diagnostics::diagnostics(db, file_id))
+    }
+
+    pub fn line_index(&self, file_id: FileId) -> Cancellable<Option<LineIndex>> {
+        self.query(|db| line_index::line_index(db, file_id))
     }
 
     pub fn view_syntax_tree(&self, file_id: FileId) -> Cancellable<Option<String>> {

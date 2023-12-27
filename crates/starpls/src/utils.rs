@@ -36,12 +36,7 @@ pub(crate) fn apply_document_content_changes(
         };
         if let Ok(range) = text_range(&line_index, pos_range) {
             current_document_contents.replace_range(range.clone(), &change.text);
-
-            // Update the line index so we can calculate the new end position.
             line_index = LineIndex::new(&current_document_contents);
-            let new_end_byte = range.start + change.text.len();
-            let new_end_position =
-                line_index.line_col(new_end_byte.try_into().expect("invalid end byte"));
         }
     }
 

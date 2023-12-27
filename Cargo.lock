@@ -647,6 +647,7 @@ dependencies = [
  "dashmap",
  "salsa-2022",
  "starpls_common",
+ "starpls_syntax",
 ]
 
 [[package]]

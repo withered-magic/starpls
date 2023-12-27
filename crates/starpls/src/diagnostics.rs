@@ -26,6 +26,17 @@ impl DiagnosticsManager {
             .or_insert(diagnostics);
         self.files_with_changed_diagnostics.push(file_id);
     }
+
+    pub(crate) fn take_changes(&mut self) -> Vec<FileId> {
+        mem::take(&mut self.files_with_changed_diagnostics)
+    }
+
+    pub(crate) fn get_diagnostics(
+        &self,
+        file_id: FileId,
+    ) -> impl Iterator<Item = &lsp_types::Diagnostic> {
+        self.diagnostics.get(&file_id).into_iter().flatten()
+    }
 }
 
 fn is_diagnostic_equal(left: &Diagnostic, right: &Diagnostic) -> bool {

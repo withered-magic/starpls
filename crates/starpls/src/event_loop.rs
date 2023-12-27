@@ -1,7 +1,13 @@
-use crate::{handlers::notifications, server::Server};
+use crate::{
+    convert,
+    document::DocumentSource,
+    handlers::notifications,
+    server::{Server, ServerSnapshot},
+};
 use crossbeam_channel::select;
 use lsp_server::Connection;
 use lsp_types::InitializeParams;
+use starpls_common::FileId;
 
 #[macro_export]
 macro_rules! match_notification {
@@ -32,7 +38,7 @@ macro_rules! match_request {
 #[derive(Debug)]
 pub(crate) enum Task {
     /// A new set of diagnostics has been processed and is ready for forwarding.
-    DiagnosticsReady(Vec<(u32, Vec<lsp_types::Diagnostic>)>),
+    DiagnosticsReady(Vec<(FileId, Vec<lsp_types::Diagnostic>)>),
     /// A request has been evaluated and its response is ready.
     ResponseReady(lsp_server::Response),
 }
@@ -69,9 +75,13 @@ impl Server {
 
     fn handle_event(&mut self, event: Event) -> anyhow::Result<()> {
         match event {
+            Event::Message(lsp_server::Message::Request(req)) => {
+                self.register_and_handle_request(req);
+            }
             Event::Message(lsp_server::Message::Notification(not)) => {
                 self.handle_notification(not)?;
             }
+            Event::Task(task) => self.handle_task(task),
             _ => (),
         };
 
@@ -82,7 +92,59 @@ impl Server {
             self.update_diagnostics();
         }
 
+        let changed_file_ids = self.diagnostics_manager.take_changes();
+
+        for file_id in changed_file_ids {
+            // Only send diagnostics for currently open editors.
+            let version = match self
+                .document_manager
+                .get(file_id)
+                .map(|document| document.source)
+            {
+                Some(DocumentSource::Editor(version)) => version,
+                _ => continue,
+            };
+            let diagnostics = self
+                .diagnostics_manager
+                .get_diagnostics(file_id)
+                .cloned()
+                .collect::<Vec<_>>();
+            let path = self.document_manager.lookup_by_file_id(file_id);
+            let uri = lsp_types::Url::from_file_path(path).unwrap();
+
+            self.send_notification::<lsp_types::notification::PublishDiagnostics>(
+                lsp_types::PublishDiagnosticsParams {
+                    uri,
+                    diagnostics,
+                    version: Some(version),
+                },
+            );
+        }
+
         Ok(())
+    }
+
+    fn update_diagnostics(&mut self) {
+        let file_ids = self
+            .document_manager
+            .iter()
+            .map(|(path, _)| path.clone())
+            .collect::<Vec<_>>();
+        let snapshot = self.snapshot();
+        self.task_pool_handle.spawn(move || {
+            let mut res = Vec::new();
+
+            // Query the database for diagnostics for each file and convert them to an LSP-compatible format.
+            for file_id in file_ids {
+                let diagnostics = match collect_diagnostics(&snapshot, file_id) {
+                    Some(diagnositcs) => diagnositcs,
+                    None => continue,
+                };
+                res.push((file_id, diagnostics));
+            }
+
+            Task::DiagnosticsReady(res)
+        });
     }
 
     fn register_and_handle_request(&mut self, req: lsp_server::Request) {
@@ -117,6 +179,40 @@ impl Server {
             }
         }
     }
+
+    fn handle_task(&mut self, task: Task) {
+        match task {
+            Task::DiagnosticsReady(diagnostics) => {
+                for (file_id, diagnostics) in diagnostics {
+                    self.diagnostics_manager
+                        .set_diagnostics(file_id, diagnostics);
+                }
+            }
+            Task::ResponseReady(resp) => {
+                self.respond(resp);
+            }
+        }
+    }
+
+    fn respond(&mut self, resp: lsp_server::Response) {
+        if self.req_queue.incoming.complete(resp.id.clone()).is_some() {
+            self.connection.sender.send(resp.into()).unwrap();
+        }
+    }
+}
+
+fn cast_request<R>(req: &lsp_server::Request) -> Option<R::Params>
+where
+    R: lsp_types::request::Request,
+    R::Params: serde::de::DeserializeOwned,
+{
+    if req.method == R::METHOD {
+        // Unwrapping here is fine, since if we see invalid JSON, we can't really recover parsing afterwards.
+        let params = serde_json::from_value(req.params.clone()).expect("invalid JSON");
+        Some(params)
+    } else {
+        None
+    }
 }
 
 fn cast_notification<R>(not: &lsp_server::Notification) -> Option<R::Params>
@@ -130,4 +226,22 @@ where
     } else {
         None
     }
+}
+
+fn collect_diagnostics(
+    snapshot: &ServerSnapshot,
+    file_id: FileId,
+) -> Option<Vec<lsp_types::Diagnostic>> {
+    let line_index = snapshot.analysis_snapshot.line_index(file_id).ok()??;
+
+    // Get the diagnostics for the current path. If the operation was cancelled, simply continue to the next file.
+    let diagnostics = snapshot.analysis_snapshot.diagnostics(file_id).ok()?;
+
+    // Convert the diagnostics. This includes translating text offsets into `(line, column)` format.
+    Some(
+        diagnostics
+            .into_iter()
+            .map(|diagnostic| convert::lsp_diagnostic_from_native(diagnostic, &line_index))
+            .collect::<Vec<_>>(),
+    )
 }

@@ -64,7 +64,7 @@ pub(super) fn postprocess_step_events(mut events: Vec<StepEvent>) -> Output {
             StepEvent::Finish => steps.push(Step::Finish),
             StepEvent::Token { kind } => steps.push(Step::Token { kind }),
             StepEvent::Error { message } => steps.push(Step::Error { message }),
-            StepEvent::Tombstone => todo!(),
+            StepEvent::Tombstone => (),
         }
     }
 

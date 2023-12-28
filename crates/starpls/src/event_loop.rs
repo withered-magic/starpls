@@ -145,7 +145,6 @@ impl Server {
     }
 
     fn handle_request(&mut self, req: lsp_server::Request) {
-        eprintln!("got request");
         if let Some(params) = cast_request::<extensions::ShowSyntaxTree>(&req) {
             let snapshot = self.snapshot();
             self.task_pool_handle.spawn(move || {
@@ -189,7 +188,6 @@ impl Server {
 
     fn respond(&mut self, resp: lsp_server::Response) {
         if self.req_queue.incoming.complete(resp.id.clone()).is_some() {
-            eprintln!("send response");
             self.connection.sender.send(resp.into()).unwrap();
         }
     }

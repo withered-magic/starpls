@@ -97,6 +97,7 @@ pub enum SyntaxKind {
     GT_GT_EQ,
 
     // Expressions.
+    IDENT_EXPR,
     LITERAL_EXPR,
     IF_EXPR,
     UNARY_EXPR,
@@ -163,6 +164,27 @@ macro_rules! T {
     [for] => { $ crate :: SyntaxKind :: FOR };
     ['\n'] => { $ crate :: SyntaxKind :: NEWLINE };
     [;] => { $ crate :: SyntaxKind :: SEMI };
+    [or] => { $ crate :: SyntaxKind :: OR };
+    [and] => { $ crate :: SyntaxKind :: AND };
+    [==] => { $ crate :: SyntaxKind :: EQ_EQ };
+    [!=] => { $ crate :: SyntaxKind :: BANG_EQ };
+    [<] => { $ crate :: SyntaxKind :: LT };
+    [>] => { $ crate :: SyntaxKind :: GT };
+    [<=] => { $ crate :: SyntaxKind :: LE };
+    [>=] => { $ crate :: SyntaxKind :: GE };
+    [in] => { $ crate :: SyntaxKind :: IN };
+    [|] => { $ crate :: SyntaxKind :: BAR };
+    [^] => { $ crate :: SyntaxKind :: CARET };
+    [&] => { $ crate :: SyntaxKind :: AMPERSAND };
+    [<<] => { $ crate :: SyntaxKind :: LT_LT };
+    [>>] => { $ crate :: SyntaxKind :: GT_GT };
+    [*] => { $ crate :: SyntaxKind :: STAR };
+    [/] => { $ crate :: SyntaxKind :: SLASH };
+    ["//"] => { $ crate :: SyntaxKind :: SLASH_SLASH };
+    [%] => { $ crate :: SyntaxKind :: MOD };
+    [True] => { $ crate :: SyntaxKind :: TRUE };
+    [False] => { $ crate :: SyntaxKind :: FALSE };
+    [None] => { $ crate :: SyntaxKind :: NONE };
 }
 
 impl SyntaxKind {

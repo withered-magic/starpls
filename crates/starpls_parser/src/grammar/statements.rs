@@ -1,5 +1,4 @@
-use super::*;
-use crate::syntax_kind::SyntaxKindSet;
+use crate::{grammar::*, syntax_kind::SyntaxKindSet};
 
 pub(crate) const SMALL_STMT_START: SyntaxKindSet = EXPR_START.union(SyntaxKindSet::new(&[
     T![return],
@@ -114,5 +113,5 @@ pub(crate) fn pass_stmt(p: &mut Parser) {
 }
 
 pub(crate) fn assign_or_expr_stmt(p: &mut Parser) {
-    p.error_recover("Expected expression", STMT_RECOVERY);
+    or_expr(p);
 }

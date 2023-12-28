@@ -88,8 +88,8 @@ impl AnalysisSnapshot {
         self.query(|db| line_index::line_index(db, file_id))
     }
 
-    pub fn view_syntax_tree(&self, file_id: FileId) -> Cancellable<Option<String>> {
-        self.query(|db| view_syntax_tree::view_syntax_tree(db, file_id))
+    pub fn show_syntax_tree(&self, file_id: FileId) -> Cancellable<Option<String>> {
+        self.query(|db| show_syntax_tree::show_syntax_tree(db, file_id))
     }
 
     /// Helper method to handle Salsa cancellations.

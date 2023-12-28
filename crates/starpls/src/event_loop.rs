@@ -145,11 +145,12 @@ impl Server {
     }
 
     fn handle_request(&mut self, req: lsp_server::Request) {
-        if let Some(params) = cast_request::<extensions::ViewSyntaxTree>(&req) {
+        eprintln!("got request");
+        if let Some(params) = cast_request::<extensions::ShowSyntaxTree>(&req) {
             let snapshot = self.snapshot();
             self.task_pool_handle.spawn(move || {
                 let id = req.id.clone();
-                Task::ResponseReady(match requests::view_syntax_tree(&snapshot, params) {
+                Task::ResponseReady(match requests::show_syntax_tree(&snapshot, params) {
                     Ok(value) => lsp_server::Response::new_ok(id, value),
                     Err(err) => lsp_server::Response::new_err(
                         id,
@@ -188,6 +189,7 @@ impl Server {
 
     fn respond(&mut self, resp: lsp_server::Response) {
         if self.req_queue.incoming.complete(resp.id.clone()).is_some() {
+            eprintln!("send response");
             self.connection.sender.send(resp.into()).unwrap();
         }
     }

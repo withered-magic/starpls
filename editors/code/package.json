@@ -16,6 +16,18 @@
     "vscode": "^1.75.0"
   },
   "contributes": {
+    "commands": [
+      {
+        "command": "starpls.showSyntaxTree",
+        "title": "Show Syntax Tree",
+        "category": "starpls"
+      },
+      {
+        "command": "starpls.showVersion",
+        "title": "Show Language Server Version",
+        "category": "starpls"
+      }
+    ],
     "grammars": [
       {
         "language": "starlark",

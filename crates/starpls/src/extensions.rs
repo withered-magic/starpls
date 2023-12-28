@@ -3,15 +3,15 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct ViewSyntaxTreeParams {
+pub struct ShowSyntaxTreeParams {
     pub text_document: TextDocumentIdentifier,
 }
 
 #[derive(Debug)]
-pub enum ViewSyntaxTree {}
+pub enum ShowSyntaxTree {}
 
-impl Request for ViewSyntaxTree {
-    type Params = ViewSyntaxTreeParams;
+impl Request for ShowSyntaxTree {
+    type Params = ShowSyntaxTreeParams;
     type Result = String;
-    const METHOD: &'static str = "starpls/viewSyntaxTree";
+    const METHOD: &'static str = "starpls/showSyntaxTree";
 }

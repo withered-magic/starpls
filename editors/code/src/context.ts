@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import { Executable, LanguageClient, LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
+import { CommandFactory } from './commands';
+import { StarlarkTextEditor, isStarlarkTextEditor } from './util';
 
 /**
  * The `Context` class wraps a `vscode.ExtensionContext and keeps track of the current state
@@ -11,17 +13,32 @@ export class Context {
    */
   private _client!: LanguageClient;
 
-  constructor(readonly extensionContext: vscode.ExtensionContext) { }
+  private _disposables: vscode.Disposable[];
+
+  constructor(readonly extensionContext: vscode.ExtensionContext, private commandFactories: Record<string, CommandFactory>) {
+    this._disposables = [];
+  }
 
   get client(): LanguageClient {
     return this._client;
   }
 
+  get disposables(): vscode.Disposable[] {
+    return this._disposables;
+  }
+
+  /**
+   * Initializes the context and establishes 
+   */
   async start() {
     // Establish connection to the language server.
     console.log('context: connecting to the language server');
     const client = await this.getOrCreateClient();
     await client.start();
+
+    // Register commands with the VSCode API.
+    console.log('context: registering commands');
+    this.registerCommands();
   }
 
   private async getOrCreateClient(): Promise<LanguageClient> {
@@ -54,5 +71,22 @@ export class Context {
     }
     console.log('context: using server executable at %s', serverPath);
     return serverPath;
+  }
+
+  private registerCommands() {
+    // Dispose of any currently active commands.
+    this.disposables.forEach((disposable) => disposable.dispose());
+    this._disposables = [];
+   
+    // Register the commands.
+    for (const [name, factory] of Object.entries(this.commandFactories)) {
+      const disposable = vscode.commands.registerCommand(name, factory(this));
+      this.disposables.push(disposable);
+    }
+  }
+
+  get activeStarlarkTextEditor(): StarlarkTextEditor | undefined {
+    const activeTextEditor = vscode.window.activeTextEditor;
+    return activeTextEditor && isStarlarkTextEditor(activeTextEditor) ? activeTextEditor : undefined;
   }
 }

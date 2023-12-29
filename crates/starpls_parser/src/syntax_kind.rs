@@ -111,6 +111,7 @@ pub enum SyntaxKind {
     PAREN_EXPR,
     DOT_EXPR,
     CALL_EXPR,
+    INDEX_EXPR,
     SLICE_EXPR,
 
     // Statements.

@@ -137,6 +137,7 @@ pub(crate) fn primary_expr(p: &mut Parser) -> Option<CompletedMarker> {
         let next = match p.current() {
             T!['('] => call_expr,
             T![.] => dot_expr,
+            T!['['] => slice_or_index_expr,
             _ => return Some(m),
         };
         let pred = m.precede(p);
@@ -164,6 +165,33 @@ fn dot_expr(p: &mut Parser, m: Marker) -> CompletedMarker {
         p.error_recover_until("Expected member name", STMT_RECOVERY);
     }
     m.complete(p, DOT_EXPR)
+}
+
+fn slice_or_index_expr(p: &mut Parser, m: Marker) -> CompletedMarker {
+    let mut kind = INDEX_EXPR;
+    p.bump(T!['[']);
+    if p.eat(T![']']) {
+        p.error("Slice expression cannot be empty");
+        return m.complete(p, kind);
+    }
+    if p.at_kinds(EXPR_START) {
+        tuple_or_paren_expr(p, false);
+    }
+    if p.eat(T![:]) {
+        kind = SLICE_EXPR;
+        if p.at_kinds(EXPR_START) {
+            test(p);
+        }
+        if p.eat(T![:]) {
+            if p.at_kinds(EXPR_START) {
+                test(p);
+            }
+        }
+    }
+    if !p.eat(T![']']) {
+        p.error_recover_until("\"[\" was not closed", STMT_RECOVERY);
+    }
+    m.complete(p, kind)
 }
 
 /// Grammar: `Operand = identifier | int | float | string | bytes | ListExpr | ListComp | DictExpr | DictComp | '(' [Expression [',']] ')' .`

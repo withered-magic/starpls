@@ -124,7 +124,6 @@ pub enum SyntaxKind {
     CONTINUE_STMT,
     PASS_STMT,
     ASSIGN_STMT,
-    EXPR_STMT,
     LOAD_STMT,
 
     ARGUMENTS,

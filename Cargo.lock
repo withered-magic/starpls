@@ -642,6 +642,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "starpls_hir"
+version = "0.1.0"
+dependencies = [
+ "salsa-2022",
+]
+
+[[package]]
 name = "starpls_ide"
 version = "0.1.0"
 dependencies = [

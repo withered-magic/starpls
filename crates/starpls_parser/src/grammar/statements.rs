@@ -234,7 +234,38 @@ pub(crate) fn pass_stmt(p: &mut Parser) {
 }
 
 pub(crate) fn assign_or_expr_stmt(p: &mut Parser) {
-    test(p);
+    let m = p.start();
+    tuple_or_paren_expr(p, false);
+
+    if !matches!(
+        p.current(),
+        T![=]
+            | T![+=]
+            | T![-=]
+            | T![*=]
+            | T![/=]
+            | T!["//="]
+            | T![%=]
+            | T![&=]
+            | T![|=]
+            | T![^=]
+            | T![<<=]
+            | T![>>=]
+    ) {
+        m.abandon(p);
+        return;
+    }
+
+    p.bump_any();
+
+    if !p.at_kinds(EXPR_START) {
+        p.error_recover_until("Expected expression", STMT_RECOVERY);
+        m.complete(p, ASSIGN_STMT);
+        return;
+    }
+
+    tuple_or_paren_expr(p, false);
+    m.complete(p, ASSIGN_STMT);
 }
 
 fn suite(p: &mut Parser) {

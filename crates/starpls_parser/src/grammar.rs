@@ -1,5 +1,5 @@
 use crate::{
-    grammar::{arguments::*, expressions::*, statements::*},
+    grammar::{arguments::*, expressions::*, parameters::*, statements::*},
     Parser,
     SyntaxKind::*,
     T,
@@ -7,6 +7,7 @@ use crate::{
 
 mod arguments;
 mod expressions;
+mod parameters;
 mod statements;
 
 pub(crate) fn module(p: &mut Parser) {

@@ -195,6 +195,17 @@ macro_rules! T {
     [.] => { $ crate :: SyntaxKind :: DOT };
     [,] => { $ crate :: SyntaxKind :: COMMA };
     [=] => { $ crate :: SyntaxKind :: EQ };
+    [+=] => { $ crate :: SyntaxKind :: PLUS_EQ };
+    [-=] => { $ crate :: SyntaxKind :: MINUS_EQ };
+    [*=] => { $ crate :: SyntaxKind :: STAR_EQ };
+    [/=] => { $ crate :: SyntaxKind :: SLASH_EQ };
+    ["//="] => { $ crate :: SyntaxKind :: SLASH_SLASH_EQ };
+    [%=] => { $ crate :: SyntaxKind :: MOD_EQ };
+    [&=] => { $ crate :: SyntaxKind :: AMPERSAND_EQ };
+    [|=] => { $ crate :: SyntaxKind :: BAR_EQ };
+    [^=] => { $ crate :: SyntaxKind :: CARET_EQ };
+    [<<=] => { $ crate :: SyntaxKind :: LT_LT_EQ };
+    [>>=] => { $ crate :: SyntaxKind :: GT_GT_EQ };
     [:] => { $ crate :: SyntaxKind :: COLON };
 }
 

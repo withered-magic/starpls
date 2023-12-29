@@ -169,13 +169,20 @@ pub(crate) fn tuple_or_paren_expr(p: &mut Parser, is_enclosed_in_parens: bool) -
 
     if is_enclosed_in_parens {
         p.bump(T!['(']);
+        if p.eat(T![')']) {
+            return m.complete(p, TUPLE_EXPR);
+        }
+    } else {
+        assert!(p.at_kinds(EXPR_START));
     }
 
-    if p.eat(T![')']) {
-        return m.complete(p, TUPLE_EXPR);
+    let completed_marker = test(p);
+    if !is_enclosed_in_parens && !p.at(T![,]) {
+        m.abandon(p);
+        return completed_marker.expect(
+            "first expression in tuple_or_paren_expr must parse if not enclosed in parens",
+        );
     }
-
-    test(p);
 
     let mut num_parsed = 1;
     let mut has_trailing_comma = false;

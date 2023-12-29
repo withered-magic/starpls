@@ -21,6 +21,7 @@ pub(crate) fn statement(p: &mut Parser) {
         T![def] => def_stmt(p),
         T![if] => if_stmt(p, T![if]),
         T![for] => for_stmt(p),
+        T![load] => load_stmt(p),
         kind if SMALL_STMT_START.contains(kind) => simple_stmt(p),
 
         // Blank lines are valid.
@@ -239,6 +240,50 @@ pub(crate) fn pass_stmt(p: &mut Parser) {
     let m = p.start();
     p.bump(T![pass]);
     m.complete(p, PASS_STMT);
+}
+
+/// Grammar: `LoadStmt = 'load' '(' string {',' [identifier '='] string} [','] ')' .`
+pub(crate) fn load_stmt(p: &mut Parser) {
+    let m = p.start();
+    p.bump(T![load]);
+    if !p.eat(T!['(']) {
+        p.error_recover_until("Expected \"(\"", STMT_RECOVERY);
+        m.complete(p, LOAD_STMT);
+        return;
+    }
+    if !p.eat(STRING) {
+        p.error_recover_until("Expected module name", STMT_RECOVERY);
+        m.complete(p, LOAD_STMT);
+        return;
+    }
+    while p.at(T![,]) && matches!(p.nth(1), T![ident] | STRING) {
+        p.bump(T![,]);
+        match p.current() {
+            T![ident] => {
+                let m = p.start();
+                p.bump(T![ident]);
+                if !p.eat(T![=]) {
+                    p.error("Expected \"=\"");
+                } else if !p.eat(STRING) {
+                    p.error("Expected item name");
+                }
+                m.complete(p, ALIASED_LOAD_ITEM);
+            }
+            STRING => {
+                let m = p.start();
+                p.bump(STRING);
+                m.complete(p, DIRECT_LOAD_ITEM);
+            }
+            _ => unreachable!(),
+        }
+    }
+    p.eat(T![,]);
+    if !p.eat(T![')']) {
+        p.error_recover_until("\"(\" was not closed", STMT_RECOVERY);
+        m.complete(p, LOAD_STMT);
+        return;
+    }
+    m.complete(p, LOAD_STMT);
 }
 
 /// Grammar: `AssignStmt = Expression ('=' | '+=' | '-=' | '*=' | '/=' | '//=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>=') Expression .`

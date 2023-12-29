@@ -1,0 +1,4 @@
+MODULE
+  SIMPLE_STMT
+    CONTINUE_STMT
+      CONTINUE "continue"

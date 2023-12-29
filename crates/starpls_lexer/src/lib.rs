@@ -550,7 +550,7 @@ impl Cursor<'_> {
                                     triple_quoted,
                                 }
                             } else {
-                                RawStr {
+                                ByteStr {
                                     terminated,
                                     triple_quoted,
                                 }

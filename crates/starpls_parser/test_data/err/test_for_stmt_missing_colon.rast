@@ -1,0 +1,13 @@
+MODULE
+  IF_STMT
+    FOR "for"
+    WHITESPACE " "
+    LOOP_VARIABLES
+      IDENT_EXPR
+        IDENT "x"
+    WHITESPACE " "
+    IN "in"
+    WHITESPACE " "
+    IDENT_EXPR
+      IDENT "y"
+error 7: Expected ":"

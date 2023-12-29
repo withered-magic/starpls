@@ -1,0 +1,4 @@
+MODULE
+  SIMPLE_STMT
+    PASS_STMT
+      PASS "pass"

@@ -1,0 +1,43 @@
+MODULE
+  FOR_STMT
+    FOR "for"
+    WHITESPACE " "
+    LOOP_VARIABLES
+      IDENT_EXPR
+        IDENT "i"
+      COMMA ","
+      WHITESPACE " "
+      IDENT_EXPR
+        IDENT "value"
+    WHITESPACE " "
+    IN "in"
+    WHITESPACE " "
+    CALL_EXPR
+      IDENT_EXPR
+        IDENT "enumerate"
+      OPEN_PAREN "("
+      ARGUMENTS
+        SIMPLE_ARGUMENT
+          IDENT_EXPR
+            IDENT "values"
+      CLOSE_PAREN ")"
+    COLON ":"
+    SUITE
+      NEWLINE "\n"
+      INDENT "    "
+      SIMPLE_STMT
+        CALL_EXPR
+          IDENT_EXPR
+            IDENT "print"
+          OPEN_PAREN "("
+          ARGUMENTS
+            SIMPLE_ARGUMENT
+              IDENT_EXPR
+                IDENT "i"
+            COMMA ","
+            WHITESPACE " "
+            SIMPLE_ARGUMENT
+              IDENT_EXPR
+                IDENT "value"
+          CLOSE_PAREN ")"
+      DEDENT ""

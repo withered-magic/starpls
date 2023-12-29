@@ -1,0 +1,14 @@
+MODULE
+  FOR_STMT
+    FOR "for"
+    WHITESPACE " "
+    LOOP_VARIABLES
+      IDENT_EXPR
+        IDENT "x"
+    WHITESPACE " "
+    IN "in"
+    WHITESPACE " "
+    IDENT_EXPR
+      IDENT "y"
+    COLON ":"
+error 8: Expected statement suite

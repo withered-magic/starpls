@@ -64,6 +64,8 @@ impl Server {
             change.add_file(file_id, contents);
         }
 
+        drop(document_manager);
+
         // Apply the change to our analyzer. This will cancel any affected active Salsa operations.
         self.analysis.apply_change(change);
         true

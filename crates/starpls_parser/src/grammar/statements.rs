@@ -133,9 +133,14 @@ pub(crate) fn if_stmt(p: &mut Parser, if_or_elif: SyntaxKind) {
 ///
 /// Grammar: `ForStmt = 'for' LoopVariables 'in' Expression ':' Suite .`
 pub(crate) fn for_stmt(p: &mut Parser) {
+    // test test_for_stmt_full
+    // for i, value in enumerate(values):
+    //     print(i, value)
     let m = p.start();
     p.bump(T![for]);
 
+    // test_err test_for_stmt_missing_loop_variables
+    // for
     if !PRIMARY_EXPR_START.contains(p.current()) {
         p.error_recover_until("Expected loop variables", STMT_RECOVERY);
         m.complete(p, FOR_STMT);
@@ -144,12 +149,16 @@ pub(crate) fn for_stmt(p: &mut Parser) {
 
     loop_variables(p);
 
+    // test_err test_for_stmt_missing_in
+    // for x * y
     if !p.eat(T![in]) {
         p.error_recover_until("Expected \"in\"", STMT_RECOVERY);
         m.complete(p, FOR_STMT);
         return;
     }
 
+    // test_err test_for_stmt_missing_iterable
+    // for x in:
     if !p.at_kinds(EXPR_START) {
         p.error_recover_until("Expected expression", STMT_RECOVERY);
         m.complete(p, FOR_STMT);
@@ -158,12 +167,16 @@ pub(crate) fn for_stmt(p: &mut Parser) {
 
     tuple_or_paren_expr(p, false);
 
+    // test_err test_for_stmt_missing_colon
+    // for x in y
     if !p.eat(T![:]) {
         p.error_recover_until("Expected \":\"", STMT_RECOVERY);
         m.complete(p, IF_STMT);
         return;
     }
 
+    // test_err test_for_stmt_missing_suite
+    // for x in y:
     if p.at_kinds(SUITE_START) {
         suite(p);
     } else {
@@ -213,6 +226,9 @@ pub(crate) fn small_stmt(p: &mut Parser) {
 
 /// Grammar: `ReturnStmt = 'return' [Expression] .`
 pub(crate) fn return_stmt(p: &mut Parser) {
+    // test test_return_stmt
+    // return
+    // return 1 + 2
     let m = p.start();
     p.bump(T![return]);
     if p.at_kinds(EXPR_START) {
@@ -223,6 +239,8 @@ pub(crate) fn return_stmt(p: &mut Parser) {
 
 /// Grammar: `BreakStmt = 'break' .`
 pub(crate) fn break_stmt(p: &mut Parser) {
+    // test test_break_stmt
+    // break
     let m = p.start();
     p.bump(T![break]);
     m.complete(p, BREAK_STMT);
@@ -230,6 +248,8 @@ pub(crate) fn break_stmt(p: &mut Parser) {
 
 /// Grammar: `ContinueStmt = 'continue' .`
 pub(crate) fn continue_stmt(p: &mut Parser) {
+    // test test_continue_stmt
+    // continue
     let m = p.start();
     p.bump(T![continue]);
     m.complete(p, CONTINUE_STMT);
@@ -237,6 +257,8 @@ pub(crate) fn continue_stmt(p: &mut Parser) {
 
 /// Grammar: `PassStmt = 'pass' .`
 pub(crate) fn pass_stmt(p: &mut Parser) {
+    // test test_pass_stmt
+    // pass
     let m = p.start();
     p.bump(T![pass]);
     m.complete(p, PASS_STMT);
@@ -288,8 +310,7 @@ pub(crate) fn load_stmt(p: &mut Parser) {
 
 /// Grammar: `AssignStmt = Expression ('=' | '+=' | '-=' | '*=' | '/=' | '//=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>=') Expression .`
 pub(crate) fn assign_or_expr_stmt(p: &mut Parser) {
-    let m = p.start();
-    tuple_or_paren_expr(p, false);
+    let mut completed_marker = tuple_or_paren_expr(p, false);
 
     if !matches!(
         p.current(),
@@ -306,9 +327,10 @@ pub(crate) fn assign_or_expr_stmt(p: &mut Parser) {
             | T![<<=]
             | T![>>=]
     ) {
-        m.abandon(p);
         return;
     }
+
+    let m = completed_marker.precede(p);
 
     p.bump_any();
 
@@ -324,6 +346,11 @@ pub(crate) fn assign_or_expr_stmt(p: &mut Parser) {
 
 /// Grammar: `Suite = [newline indent {Statement} outdent] | SimpleStmt .`
 fn suite(p: &mut Parser) {
+    // test test_suite_full
+    // def f(x, y): print(x); print(y)
+    // def g(x, y):
+    //     print(x)
+    //     print(y)
     let m = p.start();
     match p.current() {
         T!['\n'] => {

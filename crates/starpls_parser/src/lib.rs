@@ -141,11 +141,13 @@ impl<'a> Parser<'a> {
         self.error(message);
 
         // Start a new ERROR node and consume tokens until we are at either a token specified in the recovery set, or EOF.
-        let m = self.start();
-        while !self.at(EOF) && !recover.contains(self.current()) {
-            self.bump_any();
+        if !self.at(EOF) && !recover.contains(self.current()) {
+            let m = self.start();
+            while !self.at(EOF) && !recover.contains(self.current()) {
+                self.bump_any();
+            }
+            m.complete(self, ERROR);
         }
-        m.complete(self, ERROR);
     }
 
     pub(crate) fn expect(&mut self, kind: SyntaxKind) -> bool {

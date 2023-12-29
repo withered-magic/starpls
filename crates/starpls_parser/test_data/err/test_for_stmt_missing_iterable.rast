@@ -1,0 +1,12 @@
+MODULE
+  FOR_STMT
+    FOR "for"
+    WHITESPACE " "
+    LOOP_VARIABLES
+      IDENT_EXPR
+        IDENT "x"
+    WHITESPACE " "
+    IN "in"
+    ERROR
+      COLON ":"
+error 5: Expected expression

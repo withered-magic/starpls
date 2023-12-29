@@ -1,0 +1,13 @@
+MODULE
+  FOR_STMT
+    FOR "for"
+    WHITESPACE " "
+    LOOP_VARIABLES
+      IDENT_EXPR
+        IDENT "x"
+    WHITESPACE " "
+    ERROR
+      STAR "*"
+      WHITESPACE " "
+      IDENT "y"
+error 3: Expected "in"

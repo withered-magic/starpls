@@ -1,0 +1,79 @@
+MODULE
+  DEF_STMT
+    DEF "def"
+    WHITESPACE " "
+    IDENT "f"
+    OPEN_PAREN "("
+    PARAMETERS
+      SIMPLE_PARAMETER
+        IDENT "x"
+      COMMA ","
+      WHITESPACE " "
+      SIMPLE_PARAMETER
+        IDENT "y"
+    CLOSE_PAREN ")"
+    COLON ":"
+    WHITESPACE " "
+    SUITE
+      SIMPLE_STMT
+        CALL_EXPR
+          IDENT_EXPR
+            IDENT "print"
+          OPEN_PAREN "("
+          ARGUMENTS
+            SIMPLE_ARGUMENT
+              IDENT_EXPR
+                IDENT "x"
+          CLOSE_PAREN ")"
+        SEMI ";"
+        WHITESPACE " "
+        CALL_EXPR
+          IDENT_EXPR
+            IDENT "print"
+          OPEN_PAREN "("
+          ARGUMENTS
+            SIMPLE_ARGUMENT
+              IDENT_EXPR
+                IDENT "y"
+          CLOSE_PAREN ")"
+        NEWLINE "\n"
+  DEF_STMT
+    DEF "def"
+    WHITESPACE " "
+    IDENT "g"
+    OPEN_PAREN "("
+    PARAMETERS
+      SIMPLE_PARAMETER
+        IDENT "x"
+      COMMA ","
+      WHITESPACE " "
+      SIMPLE_PARAMETER
+        IDENT "y"
+    CLOSE_PAREN ")"
+    COLON ":"
+    SUITE
+      NEWLINE "\n"
+      INDENT "    "
+      SIMPLE_STMT
+        CALL_EXPR
+          IDENT_EXPR
+            IDENT "print"
+          OPEN_PAREN "("
+          ARGUMENTS
+            SIMPLE_ARGUMENT
+              IDENT_EXPR
+                IDENT "x"
+          CLOSE_PAREN ")"
+        NEWLINE "\n"
+      WHITESPACE "    "
+      SIMPLE_STMT
+        CALL_EXPR
+          IDENT_EXPR
+            IDENT "print"
+          OPEN_PAREN "("
+          ARGUMENTS
+            SIMPLE_ARGUMENT
+              IDENT_EXPR
+                IDENT "y"
+          CLOSE_PAREN ")"
+      DEDENT ""

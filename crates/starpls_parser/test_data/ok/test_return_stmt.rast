@@ -1,0 +1,17 @@
+MODULE
+  SIMPLE_STMT
+    RETURN_STMT
+      RETURN "return"
+    NEWLINE "\n"
+  SIMPLE_STMT
+    RETURN_STMT
+      RETURN "return"
+      WHITESPACE " "
+      BINARY_EXPR
+        LITERAL_EXPR
+          INT "1"
+        WHITESPACE " "
+        PLUS "+"
+        WHITESPACE " "
+        LITERAL_EXPR
+          INT "2"

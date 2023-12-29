@@ -1,0 +1,37 @@
+MODULE
+  SIMPLE_STMT
+    ASSIGN_STMT
+      IDENT_EXPR
+        IDENT "x"
+      WHITESPACE " "
+      EQ "="
+      WHITESPACE " "
+      LITERAL_EXPR
+        INT "1"
+    NEWLINE "\n"
+  ERROR
+    INDENT "    "
+    IDENT "y"
+    WHITESPACE " "
+    EQ "="
+    WHITESPACE " "
+    INT "2"
+    NEWLINE "\n"
+    WHITESPACE "    "
+    IDENT "z"
+    WHITESPACE " "
+    EQ "="
+    WHITESPACE " "
+    INT "3"
+    NEWLINE "\n"
+    DEDENT ""
+  SIMPLE_STMT
+    ASSIGN_STMT
+      IDENT_EXPR
+        IDENT "a"
+      WHITESPACE " "
+      EQ "="
+      WHITESPACE " "
+      LITERAL_EXPR
+        INT "4"
+error 6: Unexpected indentation

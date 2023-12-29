@@ -1,0 +1,30 @@
+MODULE
+  SIMPLE_STMT
+    CALL_EXPR
+      IDENT_EXPR
+        IDENT "f"
+      OPEN_PAREN "("
+      ARGUMENTS
+        SIMPLE_ARGUMENT
+          IDENT_EXPR
+            IDENT "x"
+        COMMA ","
+        WHITESPACE " "
+        UNPACKED_LIST_ARGUMENT
+          STAR "*"
+          IDENT_EXPR
+            IDENT "args"
+        COMMA ","
+        WHITESPACE " "
+        KEYWORD_ARGUMENT
+          IDENT "y"
+          EQ "="
+          LITERAL_EXPR
+            INT "1"
+        COMMA ","
+        WHITESPACE " "
+        UNPACKED_DICT_ARGUMENT
+          STAR_STAR "**"
+          IDENT_EXPR
+            IDENT "kwargs"
+      CLOSE_PAREN ")"

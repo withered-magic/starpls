@@ -1,0 +1,4 @@
+MODULE
+  FOR_STMT
+    FOR "for"
+error 1: Expected loop variables

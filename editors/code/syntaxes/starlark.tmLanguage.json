@@ -176,7 +176,7 @@
               },
               {
                   "name": "invalid.illegal.keyword.starlark",
-                  "match": "\\b(?<!\\.)(as|assert|class|del|except|finally|from|global|import|is|lambda|nonlocal|raise|try|while|with|yield)\\b"
+                  "match": "\\b(?<!\\.)(as|assert|class|del|except|finally|from|global|import|is|nonlocal|raise|try|while|with|yield)\\b"
               }
           ]
       },

@@ -29,7 +29,7 @@ pub(crate) const EXPR_START: SyntaxKindSet = PRIMARY_EXPR_START.union(SyntaxKind
     T![~],
     T![not],
     // TODO(withered-magic): lambda expression
-    // T![lambda],
+    T![lambda],
 ]));
 
 pub(crate) fn binary_expr(
@@ -157,11 +157,27 @@ fn operand_expr(p: &mut Parser) -> Option<CompletedMarker> {
             m.complete(p, IDENT_EXPR)
         }
         T!['('] => tuple_or_paren_expr(p, true),
+        T![lambda] => lambda_expr(p),
         _ => {
             p.error_recover_until("Expected expression", STMT_RECOVERY);
             return None;
         }
     })
+}
+
+/// Grammar: `LambdaExpr = 'lambda' [Parameters] ':' Test .`
+fn lambda_expr(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    p.bump(T![lambda]);
+    if p.at_kinds(PARAMETER_START) {
+        parameters(p);
+    }
+    if !p.eat(T![:]) {
+        p.error_recover_until("Expected \":\"", STMT_RECOVERY);
+        return m.complete(p, LAMBDA_EXPR);
+    }
+    test(p);
+    m.complete(p, LAMBDA_EXPR)
 }
 
 pub(crate) fn tuple_or_paren_expr(p: &mut Parser, is_enclosed_in_parens: bool) -> CompletedMarker {

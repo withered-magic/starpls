@@ -19,6 +19,7 @@ fn check(input: &str, expected: ExpectFile) {
     str_with_tokens.build_with_trivia(output, &mut |step| match step {
         StrStep::Start { kind } => {
             writeln!(buf, "{indent}{kind:?}").unwrap();
+            indent.push_str("  ");
         }
         StrStep::Finish => {
             indent.pop();

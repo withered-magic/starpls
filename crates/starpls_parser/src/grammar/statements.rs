@@ -359,6 +359,11 @@ pub(crate) fn loop_variables(p: &mut Parser) {
 }
 
 fn error_block(p: &mut Parser) {
+    // test_err test_error_block
+    // x = 1
+    //     y = 2
+    //     z = 3
+    // a = 4
     let m = p.start();
     let mut level = 1;
     p.error("Unexpected indentation");

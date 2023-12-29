@@ -113,7 +113,7 @@ fn add_tests_from_comment_blocks(
 pub(crate) fn run(filters: &[String]) -> anyhow::Result<()> {
     let update_patterns: HashSet<String> = filters.iter().cloned().collect::<HashSet<_>>();
     let mut tests: HashMap<String, Test> = HashMap::new();
-    let source_dir = project_root().join("crates/starpls_parser/src");
+    let source_dir = project_root().join("crates/starpls_parser/src/grammar");
 
     // Collect tests from all `*.rs` files in the `src` directory.
     for entry in fs::read_dir(&source_dir)? {
@@ -147,7 +147,7 @@ pub(crate) fn run(filters: &[String]) -> anyhow::Result<()> {
             TestKind::Ok => ok_dir,
             TestKind::Err => err_dir,
         };
-        let path = dir.join(format!("{}.eta", test.name));
+        let path = dir.join(format!("{}.star", test.name));
         fs::write(path, &test.text)?;
     }
 

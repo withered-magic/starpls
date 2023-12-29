@@ -15,6 +15,8 @@ pub(crate) fn arguments(p: &mut Parser) {
 }
 
 pub(crate) fn argument(p: &mut Parser) {
+    // test test_arguments_all
+    // f(x, *args, y=1, **kwargs)
     let m = p.start();
     match p.current() {
         T![*] => {

@@ -54,7 +54,9 @@ pub fn parse_module(input: &str, errors_sink: &mut dyn FnMut(SyntaxError)) -> Pa
         StrStep::Start { kind } => {
             builder.start_node(StarlarkLanguage::kind_to_raw(kind));
         }
-        StrStep::Finish => builder.finish_node(),
+        StrStep::Finish => {
+            builder.finish_node();
+        }
         StrStep::Token { kind, text } => {
             builder.token(StarlarkLanguage::kind_to_raw(kind), text);
         }

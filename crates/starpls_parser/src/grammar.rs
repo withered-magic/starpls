@@ -1,7 +1,11 @@
-use crate::{Parser, SyntaxKind::*, SyntaxKindSet, T};
-use expressions::*;
-use statements::*;
+use crate::{
+    grammar::{arguments::*, expressions::*, statements::*},
+    Parser,
+    SyntaxKind::*,
+    T,
+};
 
+mod arguments;
 mod expressions;
 mod statements;
 

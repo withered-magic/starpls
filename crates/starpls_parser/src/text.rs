@@ -229,7 +229,10 @@ struct Builder<'a, 'b> {
 impl Builder<'_, '_> {
     fn start(&mut self, kind: SyntaxKind) {
         match mem::replace(&mut self.state, BuilderState::Normal) {
-            BuilderState::Init => (self.sink)(StrStep::Start { kind }),
+            BuilderState::Init => {
+                (self.sink)(StrStep::Start { kind });
+                return;
+            }
             BuilderState::Normal => (),
             BuilderState::PendingFinish => (self.sink)(StrStep::Finish),
         }

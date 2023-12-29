@@ -125,9 +125,11 @@ pub enum SyntaxKind {
     EXPR_STMT,
     LOAD_STMT,
 
-    SIMPLE_ARG,        // x, kwarg=x
-    UNPACKED_LIST_ARG, // *x
-    UNPACKED_DICT_ARG, // **x
+    ARGUMENTS,
+    SIMPLE_ARGUMENT,        // f(x)
+    KEYWORD_ARGUMENT,       // f(kwarg=x)
+    UNPACKED_LIST_ARGUMENT, // f(*x)
+    UNPACKED_DICT_ARGUMENT, // f(**x)
 
     SIMPLE_PARAM,      // x, x="default"
     ARGS_LIST_PARAM,   // *args
@@ -179,12 +181,17 @@ macro_rules! T {
     [<<] => { $ crate :: SyntaxKind :: LT_LT };
     [>>] => { $ crate :: SyntaxKind :: GT_GT };
     [*] => { $ crate :: SyntaxKind :: STAR };
+    [**] => { $ crate :: SyntaxKind :: STAR_STAR };
     [/] => { $ crate :: SyntaxKind :: SLASH };
     ["//"] => { $ crate :: SyntaxKind :: SLASH_SLASH };
     [%] => { $ crate :: SyntaxKind :: MOD };
     [True] => { $ crate :: SyntaxKind :: TRUE };
     [False] => { $ crate :: SyntaxKind :: FALSE };
     [None] => { $ crate :: SyntaxKind :: NONE };
+    [.] => { $ crate :: SyntaxKind :: DOT };
+    [,] => { $ crate :: SyntaxKind :: COMMA };
+    [=] => { $ crate :: SyntaxKind :: EQ };
+    [:] => { $ crate :: SyntaxKind :: COLON };
 }
 
 impl SyntaxKind {

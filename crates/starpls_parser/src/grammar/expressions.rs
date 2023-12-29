@@ -1,4 +1,8 @@
-use crate::{grammar::*, marker::CompletedMarker, Parser, SyntaxKind, SyntaxKindSet, T};
+use crate::{
+    grammar::*,
+    marker::{CompletedMarker, Marker},
+    Parser, SyntaxKind, SyntaxKindSet, T,
+};
 
 /// Set of all tokens that can start a primary expression.
 pub(crate) const PRIMARY_EXPR_START: SyntaxKindSet = SyntaxKindSet::new(&[
@@ -98,7 +102,45 @@ fn unary_expr(p: &mut Parser) -> Option<CompletedMarker> {
     primary_expr(p)
 }
 
+/// Parses a function call, subscript expression, or member access.
 fn primary_expr(p: &mut Parser) -> Option<CompletedMarker> {
+    let mut m = match operand_expr(p) {
+        Some(m) => m,
+        None => return None,
+    };
+
+    loop {
+        let next = match p.current() {
+            T!['('] => call_expr,
+            T![.] => dot_expr,
+            _ => return Some(m),
+        };
+        let pred = m.precede(p);
+        m = next(p, pred)
+    }
+}
+
+fn call_expr(p: &mut Parser, m: Marker) -> CompletedMarker {
+    p.bump(T!['(']);
+    if ARGUMENT_START.contains(p.current()) {
+        arguments(p);
+    }
+    // If we aren't at the closing paren, recover to the next newline.
+    if !p.eat(T![')']) {
+        p.error_recover_until("\"(\" was not closed", STMT_RECOVERY);
+    }
+    m.complete(p, CALL_EXPR)
+}
+
+fn dot_expr(p: &mut Parser, m: Marker) -> CompletedMarker {
+    p.bump(T![.]);
+    if !p.eat(T![ident]) {
+        p.error_recover_until("Expected member name", STMT_RECOVERY);
+    }
+    m.complete(p, DOT_EXPR)
+}
+
+fn operand_expr(p: &mut Parser) -> Option<CompletedMarker> {
     Some(match p.current() {
         INT | FLOAT | STRING | BYTES | T![True] | T![False] | T![None] => {
             let m = p.start();
@@ -111,7 +153,7 @@ fn primary_expr(p: &mut Parser) -> Option<CompletedMarker> {
             m.complete(p, IDENT_EXPR)
         }
         _ => {
-            p.error_recover("Expected expression", STMT_RECOVERY);
+            p.error_recover_until("Expected expression", STMT_RECOVERY);
             return None;
         }
     })

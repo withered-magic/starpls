@@ -25,7 +25,7 @@ pub(crate) fn statement(p: &mut Parser) {
         T!['\n'] => p.bump_any(),
 
         // Recover to the next newline, leaving it to be processed by the next call to `statement()`.
-        _ => p.error_recover("Expected statement", STMT_RECOVERY),
+        _ => p.error_recover_until("Expected statement", STMT_RECOVERY),
     }
 }
 
@@ -33,7 +33,40 @@ pub(crate) fn statement(p: &mut Parser) {
 ///
 /// Grammar: `DefStmt = 'def' identifier '(' [Parameters [',']] ')' ':' Suite .`
 pub(crate) fn def_stmt(p: &mut Parser) {
+    let m = p.start();
     p.bump(T![def]);
+
+    // Parse the function name.
+    if !p.eat(T![ident]) {
+        p.error_recover_until("Expected function name", STMT_RECOVERY);
+        m.complete(p, DEF_STMT);
+        return;
+    }
+
+    // Parse the parameter list. If we don't see an opening '(' but are at a ':', we can emit
+    // an error for the missing parameter list and recover.
+    if p.eat(T!['(']) {
+        if !p.eat(T![')']) {
+            p.error_recover_until("\"(\" was not closed", STMT_RECOVERY);
+            m.complete(p, DEF_STMT);
+            return;
+        }
+    } else {
+        if p.current() != T![:] {
+            p.error_recover_until("Expected parameter list", STMT_RECOVERY);
+            m.complete(p, DEF_STMT);
+            return;
+        }
+        p.error("Expected parameter list")
+    }
+
+    if !p.eat(T![:]) {
+        p.error_recover_until("Expected \":\"", STMT_RECOVERY);
+        m.complete(p, DEF_STMT);
+        return;
+    }
+
+    m.complete(p, DEF_STMT);
 }
 
 /// Parses an `if` statement.

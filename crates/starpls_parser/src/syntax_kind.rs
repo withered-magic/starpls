@@ -140,8 +140,9 @@ pub enum SyntaxKind {
 
     SUITE,
     LOOP_VARIABLES,
-    COMP_FOR,
-    COMP_IF,
+    COMP_CLAUSE_FOR,
+    COMP_CLAUSE_IF,
+    DICT_ENTRY,
 
     MODULE,
 }

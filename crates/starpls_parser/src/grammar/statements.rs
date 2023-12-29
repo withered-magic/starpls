@@ -210,6 +210,7 @@ pub(crate) fn small_stmt(p: &mut Parser) {
     }
 }
 
+/// Grammar: `ReturnStmt = 'return' [Expression] .`
 pub(crate) fn return_stmt(p: &mut Parser) {
     let m = p.start();
     p.bump(T![return]);
@@ -219,24 +220,28 @@ pub(crate) fn return_stmt(p: &mut Parser) {
     m.complete(p, RETURN_STMT);
 }
 
+/// Grammar: `BreakStmt = 'break' .`
 pub(crate) fn break_stmt(p: &mut Parser) {
     let m = p.start();
     p.bump(T![break]);
     m.complete(p, BREAK_STMT);
 }
 
+/// Grammar: `ContinueStmt = 'continue' .`
 pub(crate) fn continue_stmt(p: &mut Parser) {
     let m = p.start();
     p.bump(T![continue]);
     m.complete(p, CONTINUE_STMT);
 }
 
+/// Grammar: `PassStmt = 'pass' .`
 pub(crate) fn pass_stmt(p: &mut Parser) {
     let m = p.start();
     p.bump(T![pass]);
     m.complete(p, PASS_STMT);
 }
 
+/// Grammar: `AssignStmt = Expression ('=' | '+=' | '-=' | '*=' | '/=' | '//=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>=') Expression .`
 pub(crate) fn assign_or_expr_stmt(p: &mut Parser) {
     let m = p.start();
     tuple_or_paren_expr(p, false);
@@ -272,6 +277,7 @@ pub(crate) fn assign_or_expr_stmt(p: &mut Parser) {
     m.complete(p, ASSIGN_STMT);
 }
 
+/// Grammar: `Suite = [newline indent {Statement} outdent] | SimpleStmt .`
 fn suite(p: &mut Parser) {
     let m = p.start();
     match p.current() {
@@ -296,7 +302,8 @@ fn suite(p: &mut Parser) {
     m.complete(p, SUITE);
 }
 
-fn loop_variables(p: &mut Parser) {
+/// Grammar: `LoopVariables = PrimaryExpr {',' PrimaryExpr} .`
+pub(crate) fn loop_variables(p: &mut Parser) {
     let m = p.start();
     primary_expr(p);
     while p.at(T![,]) && PRIMARY_EXPR_START.contains(p.nth(1)) {

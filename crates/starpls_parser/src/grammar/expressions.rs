@@ -14,9 +14,9 @@ pub(crate) const PRIMARY_EXPR_START: SyntaxKindSet = SyntaxKindSet::new(&[
     // tuples
     T!['('],
     // TODO(withered-magic): lists and list comprehensions
-    // T!['['],
+    T!['['],
     // TODO(withered-magic): dicts and dict comprehensions
-    // T!['{'],
+    T!['{'],
 ]);
 
 /// Set of all possible tokens that can start an expression.
@@ -32,6 +32,7 @@ pub(crate) const EXPR_START: SyntaxKindSet = PRIMARY_EXPR_START.union(SyntaxKind
     T![lambda],
 ]));
 
+/// Grammar: `BinaryExpr = Test {Binop Test} .`
 pub(crate) fn binary_expr(
     p: &mut Parser,
     tokens: &[SyntaxKind],
@@ -52,6 +53,7 @@ pub(crate) fn binary_expr(
     Some(m)
 }
 
+/// Grammar: `Test = IfExpr | PrimaryExpr | UnaryExpr | BinaryExpr | LambdaExpr .`
 pub(crate) fn test(p: &mut Parser) -> Option<CompletedMarker> {
     or_expr(p)
 }
@@ -96,6 +98,7 @@ fn factor_expr(p: &mut Parser) -> Option<CompletedMarker> {
     binary_expr(p, &[T![*], T![/], T!["//"], T![%]], unary_expr)
 }
 
+/// Grammar: `UnaryExpr = '+' Test | '-' Test | '~' Test | 'not' Test .`
 fn unary_expr(p: &mut Parser) -> Option<CompletedMarker> {
     if [T![+], T![-], T![~], T![not]].contains(&p.current()) {
         let m = p.start();
@@ -124,6 +127,7 @@ pub(crate) fn primary_expr(p: &mut Parser) -> Option<CompletedMarker> {
     }
 }
 
+/// Grammar: `CallSuffix  = '(' [Arguments [',']] ')' .`
 fn call_expr(p: &mut Parser, m: Marker) -> CompletedMarker {
     p.bump(T!['(']);
     if ARGUMENT_START.contains(p.current()) {
@@ -136,6 +140,7 @@ fn call_expr(p: &mut Parser, m: Marker) -> CompletedMarker {
     m.complete(p, CALL_EXPR)
 }
 
+/// Grammar: `DotSuffix = '.' identifier .`
 fn dot_expr(p: &mut Parser, m: Marker) -> CompletedMarker {
     p.bump(T![.]);
     if !p.eat(T![ident]) {
@@ -144,6 +149,7 @@ fn dot_expr(p: &mut Parser, m: Marker) -> CompletedMarker {
     m.complete(p, DOT_EXPR)
 }
 
+/// Grammar: `Operand = identifier | int | float | string | bytes | ListExpr | ListComp | DictExpr | DictComp | '(' [Expression [',']] ')' .`
 fn operand_expr(p: &mut Parser) -> Option<CompletedMarker> {
     Some(match p.current() {
         INT | FLOAT | STRING | BYTES | T![True] | T![False] | T![None] => {
@@ -157,6 +163,8 @@ fn operand_expr(p: &mut Parser) -> Option<CompletedMarker> {
             m.complete(p, IDENT_EXPR)
         }
         T!['('] => tuple_or_paren_expr(p, true),
+        T!['['] => list_expr_or_comp(p),
+        T!['{'] => dict_expr_or_comp(p),
         T![lambda] => lambda_expr(p),
         _ => {
             p.error_recover_until("Expected expression", STMT_RECOVERY);
@@ -180,6 +188,7 @@ fn lambda_expr(p: &mut Parser) -> CompletedMarker {
     m.complete(p, LAMBDA_EXPR)
 }
 
+/// Grammar: `Expression = Test {',' Test} .`
 pub(crate) fn tuple_or_paren_expr(p: &mut Parser, is_enclosed_in_parens: bool) -> CompletedMarker {
     let m = p.start();
 
@@ -225,4 +234,127 @@ pub(crate) fn tuple_or_paren_expr(p: &mut Parser, is_enclosed_in_parens: bool) -
     };
 
     m.complete(p, kind)
+}
+
+/// Grammar: `ListExpr = '[' [Expression [',']] ']' . ListComp = '[' Test {CompClause} ']'.`
+fn list_expr_or_comp(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    let mut kind = LIST_EXPR;
+    p.bump(T!['[']);
+    if p.eat(T![']']) {
+        return m.complete(p, kind);
+    }
+    test(p);
+    match p.current() {
+        // CompClause = 'for' LoopVariables 'in' Test | 'if' Test .
+        T![for] | T![if] => {
+            kind = LIST_COMP;
+            loop {
+                match p.current() {
+                    T![for] => {
+                        let m = p.start();
+                        p.bump(T![for]);
+                        if !PRIMARY_EXPR_START.contains(p.current()) {
+                            p.error_recover_until("Expected loop variables", STMT_RECOVERY);
+                            m.complete(p, COMP_CLAUSE_FOR);
+                            break;
+                        }
+                        loop_variables(p);
+                        if !p.eat(T![in]) {
+                            p.error_recover("Expected \"in\"", STMT_RECOVERY);
+                            m.complete(p, COMP_CLAUSE_FOR);
+                            break;
+                        }
+                        test(p);
+                        m.complete(p, COMP_CLAUSE_FOR);
+                    }
+                    T![if] => {
+                        let m = p.start();
+                        p.bump(T![if]);
+                        test(p);
+                        m.complete(p, COMP_CLAUSE_IF);
+                    }
+                    _ => break,
+                }
+            }
+        }
+        _ => {
+            while p.at(T![,]) && EXPR_START.contains(p.nth(1)) {
+                p.bump(T![,]);
+                test(p);
+            }
+            p.eat(T![,]);
+        }
+    }
+    if !p.eat(T![']']) {
+        p.error_recover_until("\"[\" was not closed", STMT_RECOVERY);
+    }
+    m.complete(p, kind)
+}
+
+/// Grammar: `DictExpr = '{' [Entries [',']] '}' . DictComp = '{' Entry {CompClause} '}' .`
+fn dict_expr_or_comp(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    let mut kind = DICT_EXPR;
+    p.bump(T!['{']);
+    if p.eat(T!['}']) {
+        return m.complete(p, kind);
+    }
+    entry(p);
+    match p.current() {
+        // CompClause = 'for' LoopVariables 'in' Test | 'if' Test .
+        T![for] | T![if] => {
+            kind = LIST_COMP;
+            loop {
+                match p.current() {
+                    T![for] => {
+                        let m = p.start();
+                        p.bump(T![for]);
+                        if !PRIMARY_EXPR_START.contains(p.current()) {
+                            p.error_recover_until("Expected loop variables", STMT_RECOVERY);
+                            m.complete(p, COMP_CLAUSE_FOR);
+                            break;
+                        }
+                        loop_variables(p);
+                        if !p.eat(T![in]) {
+                            p.error_recover("Expected \"in\"", STMT_RECOVERY);
+                            m.complete(p, COMP_CLAUSE_FOR);
+                            break;
+                        }
+                        test(p);
+                        m.complete(p, COMP_CLAUSE_FOR);
+                    }
+                    T![if] => {
+                        let m = p.start();
+                        p.bump(T![if]);
+                        test(p);
+                        m.complete(p, COMP_CLAUSE_IF);
+                    }
+                    _ => break,
+                }
+            }
+        }
+        _ => {
+            while p.at(T![,]) && EXPR_START.contains(p.nth(1)) {
+                p.bump(T![,]);
+                entry(p);
+            }
+            p.eat(T![,]);
+        }
+    }
+    if !p.eat(T!['}']) {
+        p.error_recover_until("\"{\" was not closed", STMT_RECOVERY);
+    }
+    m.complete(p, kind)
+}
+
+fn entry(p: &mut Parser) {
+    let m = p.start();
+    test(p);
+    if !p.eat(T![:]) {
+        p.error_recover("Expected \":\"", STMT_RECOVERY);
+    } else {
+        test(p);
+    }
+    m.complete(p, DICT_ENTRY);
 }

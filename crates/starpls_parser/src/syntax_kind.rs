@@ -132,9 +132,11 @@ pub enum SyntaxKind {
     UNPACKED_LIST_ARGUMENT, // f(*x)
     UNPACKED_DICT_ARGUMENT, // f(**x)
 
-    SIMPLE_PARAM,      // x, x="default"
-    ARGS_LIST_PARAM,   // *args
-    KWARGS_LIST_PARAM, // **kwargs
+    PARAMETERS,
+    SIMPLE_PARAMETER,         // def f(x, y="default")
+    ANON_ARGS_LIST_PARAMETER, // def f(*)
+    ARGS_LIST_PARAMETER,      // def f(*args)
+    KWARGS_LIST_PARAMETER,    // def f(**kwargs)
 
     SUITE,
     LOOP_VARIABLES,

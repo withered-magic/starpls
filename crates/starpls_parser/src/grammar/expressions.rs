@@ -13,22 +13,22 @@ pub(crate) const PRIMARY_EXPR_START: SyntaxKindSet = SyntaxKindSet::new(&[
     T![ident],
     // tuples
     T!['('],
-    // lists and list comprehensions
+    // TODO(withered-magic): lists and list comprehensions
     // T!['['],
-    // dicts and dict comprehensions
+    // TODO(withered-magic): dicts and dict comprehensions
     // T!['{'],
 ]);
 
 /// Set of all possible tokens that can start an expression.
 pub(crate) const EXPR_START: SyntaxKindSet = PRIMARY_EXPR_START.union(SyntaxKindSet::new(&[
-    // if expression, e.g. `x if cond else y`
+    // TODO(withered-magic): if expression, e.g. `x if cond else y`
     // T![if],
     // unary expressions
     T![+],
     T![-],
     T![~],
     T![not],
-    // lambda expression
+    // TODO(withered-magic): lambda expression
     // T![lambda],
 ]));
 

@@ -12,7 +12,7 @@ pub(crate) const PRIMARY_EXPR_START: SyntaxKindSet = SyntaxKindSet::new(&[
     BYTES,
     T![ident],
     // tuples
-    // T!['('],
+    T!['('],
     // lists and list comprehensions
     // T!['['],
     // dicts and dict comprehensions
@@ -52,7 +52,11 @@ pub(crate) fn binary_expr(
     Some(m)
 }
 
-pub(crate) fn or_expr(p: &mut Parser) -> Option<CompletedMarker> {
+pub(crate) fn test(p: &mut Parser) -> Option<CompletedMarker> {
+    or_expr(p)
+}
+
+fn or_expr(p: &mut Parser) -> Option<CompletedMarker> {
     binary_expr(p, &[T![or]], and_expr)
 }
 
@@ -103,7 +107,7 @@ fn unary_expr(p: &mut Parser) -> Option<CompletedMarker> {
 }
 
 /// Parses a function call, subscript expression, or member access.
-fn primary_expr(p: &mut Parser) -> Option<CompletedMarker> {
+pub(crate) fn primary_expr(p: &mut Parser) -> Option<CompletedMarker> {
     let mut m = match operand_expr(p) {
         Some(m) => m,
         None => return None,
@@ -152,9 +156,50 @@ fn operand_expr(p: &mut Parser) -> Option<CompletedMarker> {
             p.bump(T![ident]);
             m.complete(p, IDENT_EXPR)
         }
+        T!['('] => tuple_or_paren_expr(p, true),
         _ => {
             p.error_recover_until("Expected expression", STMT_RECOVERY);
             return None;
         }
     })
+}
+
+pub(crate) fn tuple_or_paren_expr(p: &mut Parser, is_enclosed_in_parens: bool) -> CompletedMarker {
+    let m = p.start();
+
+    if is_enclosed_in_parens {
+        p.bump(T!['(']);
+    }
+
+    if p.eat(T![')']) {
+        return m.complete(p, TUPLE_EXPR);
+    }
+
+    test(p);
+
+    let mut num_parsed = 1;
+    let mut has_trailing_comma = false;
+
+    while p.at(T![,]) && EXPR_START.contains(p.nth(1)) {
+        p.bump(T![,]);
+        test(p);
+        num_parsed += 1;
+    }
+
+    if is_enclosed_in_parens {
+        has_trailing_comma = p.eat(T![,]);
+    }
+
+    if is_enclosed_in_parens && !p.eat(T![')']) {
+        p.error_recover_until("\"(\" was not closed", STMT_RECOVERY);
+        num_parsed += 1;
+    }
+
+    let kind = if num_parsed == 1 && !has_trailing_comma {
+        PAREN_EXPR
+    } else {
+        TUPLE_EXPR
+    };
+
+    m.complete(p, kind)
 }

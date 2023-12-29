@@ -19,22 +19,22 @@ pub(crate) fn argument(p: &mut Parser) {
     match p.current() {
         T![*] => {
             p.bump(T![*]);
-            or_expr(p);
+            test(p);
             m.complete(p, UNPACKED_LIST_ARGUMENT);
         }
         T![**] => {
             p.bump(T![**]);
-            or_expr(p);
+            test(p);
             m.complete(p, UNPACKED_DICT_ARGUMENT);
         }
         T![ident] if p.nth(1) == T![=] => {
             p.bump(T![ident]);
             p.bump(T![=]);
-            or_expr(p);
+            test(p);
             m.complete(p, KEYWORD_ARGUMENT);
         }
         _ => {
-            or_expr(p);
+            test(p);
             m.complete(p, SIMPLE_ARGUMENT);
         }
     }

@@ -1,4 +1,4 @@
-use crate::{grammar::*, syntax_kind::SyntaxKindSet};
+use crate::{grammar::*, syntax_kind::SyntaxKindSet, SyntaxKind};
 
 pub(crate) const SMALL_STMT_START: SyntaxKindSet = EXPR_START.union(SyntaxKindSet::new(&[
     T![return],
@@ -10,6 +10,8 @@ pub(crate) const SMALL_STMT_START: SyntaxKindSet = EXPR_START.union(SyntaxKindSe
 
 pub(crate) const STMT_RECOVERY: SyntaxKindSet = SyntaxKindSet::new(&[T!['\n']]);
 
+const SUITE_START: SyntaxKindSet = SMALL_STMT_START.union(SyntaxKindSet::new(&[T!['\n']]));
+
 /// Parses a statement or blank line.
 ///
 /// Grammar: `File = {Statement | newline} eof .
@@ -17,12 +19,15 @@ pub(crate) const STMT_RECOVERY: SyntaxKindSet = SyntaxKindSet::new(&[T!['\n']]);
 pub(crate) fn statement(p: &mut Parser) {
     match p.current() {
         T![def] => def_stmt(p),
-        T![if] => if_stmt(p),
+        T![if] => if_stmt(p, T![if]),
         T![for] => for_stmt(p),
         kind if SMALL_STMT_START.contains(kind) => simple_stmt(p),
 
         // Blank lines are valid.
         T!['\n'] => p.bump_any(),
+
+        // Handle unexpected indented blocks by wrapping them with an error node.
+        INDENT => error_block(p),
 
         // Recover to the next newline, leaving it to be processed by the next call to `statement()`.
         _ => p.error_recover_until("Expected statement", STMT_RECOVERY),
@@ -66,21 +71,101 @@ pub(crate) fn def_stmt(p: &mut Parser) {
         return;
     }
 
+    if p.at_kinds(SUITE_START) {
+        suite(p);
+    } else {
+        p.error_recover_until("Expected statement suite", STMT_RECOVERY);
+    }
+
     m.complete(p, DEF_STMT);
 }
 
 /// Parses an `if` statement.
 ///
 /// Gramar: `IfStmt = 'if' Test ':' Suite {'elif' Test ':' Suite} ['else' ':' Suite] .`
-pub(crate) fn if_stmt(p: &mut Parser) {
-    p.bump(T![if]);
+pub(crate) fn if_stmt(p: &mut Parser, if_or_elif: SyntaxKind) {
+    let m = p.start();
+    p.bump(if_or_elif);
+
+    if test(p).is_none() {
+        m.complete(p, IF_STMT);
+        return;
+    }
+
+    if !p.eat(T![:]) {
+        p.error_recover_until("Expected \":\"", STMT_RECOVERY);
+        m.complete(p, IF_STMT);
+        return;
+    }
+
+    if p.at_kinds(SUITE_START) {
+        suite(p);
+    } else {
+        p.error_recover_until("Expected statement suite", STMT_RECOVERY);
+    }
+
+    match p.current() {
+        T![elif] => if_stmt(p, T![elif]),
+        T![else] => {
+            p.bump(T![else]);
+            if p.eat(T![:]) {
+                if p.at_kinds(SUITE_START) {
+                    suite(p);
+                } else {
+                    p.error_recover_until("Expected statement suite", STMT_RECOVERY);
+                }
+            } else {
+                p.error_recover_until("Expected \":\"", STMT_RECOVERY);
+            }
+        }
+        _ => (),
+    }
+
+    m.complete(p, IF_STMT);
 }
 
 /// Parses a `for` statement.
 ///
 /// Grammar: `ForStmt = 'for' LoopVariables 'in' Expression ':' Suite .`
 pub(crate) fn for_stmt(p: &mut Parser) {
+    let m = p.start();
     p.bump(T![for]);
+
+    if !PRIMARY_EXPR_START.contains(p.current()) {
+        p.error_recover_until("Expected loop variables", STMT_RECOVERY);
+        m.complete(p, FOR_STMT);
+        return;
+    }
+
+    loop_variables(p);
+
+    if !p.eat(T![in]) {
+        p.error_recover_until("Expected \"in\"", STMT_RECOVERY);
+        m.complete(p, FOR_STMT);
+        return;
+    }
+
+    if !p.at_kinds(EXPR_START) {
+        p.error_recover_until("Expected expression", STMT_RECOVERY);
+        m.complete(p, FOR_STMT);
+        return;
+    }
+
+    tuple_or_paren_expr(p, false);
+
+    if !p.eat(T![:]) {
+        p.error_recover_until("Expected \":\"", STMT_RECOVERY);
+        m.complete(p, IF_STMT);
+        return;
+    }
+
+    if p.at_kinds(SUITE_START) {
+        suite(p);
+    } else {
+        p.error_recover_until("Expected statement suite", STMT_RECOVERY);
+    }
+
+    m.complete(p, FOR_STMT);
 }
 
 /// Parses a semicolon-delimited list of small statements.
@@ -98,7 +183,7 @@ pub(crate) fn simple_stmt(p: &mut Parser) {
 
     // Simple statements need to end with a newline. If we aren't at one, recover to it,
     // discarding all tokens in-between.
-    if !p.at(EOF) && !p.eat(T!['\n']) {
+    if !p.at(EOF) && !p.at(DEDENT) && !p.eat(T!['\n']) {
         p.error_recover("Expected newline", STMT_RECOVERY);
     }
 
@@ -124,6 +209,9 @@ pub(crate) fn small_stmt(p: &mut Parser) {
 pub(crate) fn return_stmt(p: &mut Parser) {
     let m = p.start();
     p.bump(T![return]);
+    if p.at_kinds(EXPR_START) {
+        tuple_or_paren_expr(p, false);
+    }
     m.complete(p, RETURN_STMT);
 }
 
@@ -146,5 +234,63 @@ pub(crate) fn pass_stmt(p: &mut Parser) {
 }
 
 pub(crate) fn assign_or_expr_stmt(p: &mut Parser) {
-    or_expr(p);
+    test(p);
+}
+
+fn suite(p: &mut Parser) {
+    let m = p.start();
+    match p.current() {
+        T!['\n'] => {
+            p.bump(T!['\n']);
+            if p.eat(INDENT) {
+                while !p.at(EOF) && !p.at(DEDENT) {
+                    statement(p);
+                }
+                if !p.eat(DEDENT) {
+                    p.error("Expected dedentation");
+                }
+            } else {
+                p.error("Expected indentation");
+            }
+        }
+        _ if p.at_kinds(SMALL_STMT_START) => {
+            simple_stmt(p);
+        }
+        _ => unreachable!(),
+    }
+    m.complete(p, SUITE);
+}
+
+fn loop_variables(p: &mut Parser) {
+    let m = p.start();
+    primary_expr(p);
+    while p.at(T![,]) && PRIMARY_EXPR_START.contains(p.nth(1)) {
+        p.bump(T![,]);
+        primary_expr(p);
+    }
+    m.complete(p, LOOP_VARIABLES);
+}
+
+fn error_block(p: &mut Parser) {
+    let m = p.start();
+    let mut level = 1;
+    p.error("Unexpected indentation");
+    p.bump(INDENT);
+
+    while !p.at(EOF) {
+        let kind = p.current();
+        p.bump_any();
+        match kind {
+            INDENT => level += 1,
+            DEDENT => {
+                level -= 1;
+                if level == 0 {
+                    break;
+                }
+            }
+            _ => (),
+        }
+    }
+
+    m.complete(p, ERROR);
 }

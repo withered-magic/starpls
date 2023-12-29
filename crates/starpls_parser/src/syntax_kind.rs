@@ -108,6 +108,7 @@ pub enum SyntaxKind {
     DICT_EXPR,
     DICT_COMP,
     TUPLE_EXPR,
+    PAREN_EXPR,
     DOT_EXPR,
     CALL_EXPR,
     SLICE_EXPR,
@@ -136,6 +137,7 @@ pub enum SyntaxKind {
     KWARGS_LIST_PARAM, // **kwargs
 
     SUITE,
+    LOOP_VARIABLES,
     COMP_FOR,
     COMP_IF,
 
@@ -152,6 +154,8 @@ macro_rules! T {
     ['{'] => { $ crate :: SyntaxKind :: OPEN_BRACE };
     ['}'] => { $ crate :: SyntaxKind :: CLOSE_BRACE };
     [if] => { $ crate :: SyntaxKind :: IF };
+    [elif] => { $ crate :: SyntaxKind :: ELIF };
+    [else] => { $ crate :: SyntaxKind :: ELSE };
     [+] => { $ crate :: SyntaxKind :: PLUS };
     [-] => { $ crate :: SyntaxKind :: MINUS };
     [~] => { $ crate :: SyntaxKind :: TILDE };

@@ -13,22 +13,22 @@ pub(crate) const PRIMARY_EXPR_START: SyntaxKindSet = SyntaxKindSet::new(&[
     T![ident],
     // tuples
     T!['('],
-    // TODO(withered-magic): lists and list comprehensions
+    // lists and list comprehensions
     T!['['],
-    // TODO(withered-magic): dicts and dict comprehensions
+    // dicts and dict comprehensions
     T!['{'],
 ]);
 
 /// Set of all possible tokens that can start an expression.
 pub(crate) const EXPR_START: SyntaxKindSet = PRIMARY_EXPR_START.union(SyntaxKindSet::new(&[
-    // TODO(withered-magic): if expression, e.g. `x if cond else y`
-    // T![if],
+    // if expression, e.g. `x if cond else y`
+    T![if],
     // unary expressions
     T![+],
     T![-],
     T![~],
     T![not],
-    // TODO(withered-magic): lambda expression
+    // lambda expression
     T![lambda],
 ]));
 
@@ -55,7 +55,24 @@ pub(crate) fn binary_expr(
 
 /// Grammar: `Test = IfExpr | PrimaryExpr | UnaryExpr | BinaryExpr | LambdaExpr .`
 pub(crate) fn test(p: &mut Parser) -> Option<CompletedMarker> {
-    or_expr(p)
+    if_expr(p)
+}
+
+/// Grammar: `IfExpr = Test 'if' Test 'else' Test .`
+fn if_expr(p: &mut Parser) -> Option<CompletedMarker> {
+    let mut completed_marker = or_expr(p)?;
+    if !p.at(T![if]) {
+        return Some(completed_marker);
+    }
+    let m = completed_marker.precede(p);
+    p.bump(T![if]);
+    test(p);
+    if !p.eat(T![else]) {
+        p.error_recover("Expected \"else\"", STMT_RECOVERY);
+        return Some(m.complete(p, IF_EXPR));
+    }
+    test(p);
+    Some(m.complete(p, IF_EXPR))
 }
 
 fn or_expr(p: &mut Parser) -> Option<CompletedMarker> {

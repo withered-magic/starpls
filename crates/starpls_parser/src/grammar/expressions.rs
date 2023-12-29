@@ -68,7 +68,7 @@ fn if_expr(p: &mut Parser) -> Option<CompletedMarker> {
     p.bump(T![if]);
     test(p);
     if !p.eat(T![else]) {
-        p.error_recover("Expected \"else\"", STMT_RECOVERY);
+        p.error_recover_until("Expected \"else\"", STMT_RECOVERY);
         return Some(m.complete(p, IF_EXPR));
     }
     test(p);
@@ -306,7 +306,7 @@ fn list_expr_or_comp(p: &mut Parser) -> CompletedMarker {
                         }
                         loop_variables(p);
                         if !p.eat(T![in]) {
-                            p.error_recover("Expected \"in\"", STMT_RECOVERY);
+                            p.error_recover_until("Expected \"in\"", STMT_RECOVERY);
                             m.complete(p, COMP_CLAUSE_FOR);
                             break;
                         }
@@ -362,7 +362,7 @@ fn dict_expr_or_comp(p: &mut Parser) -> CompletedMarker {
                         }
                         loop_variables(p);
                         if !p.eat(T![in]) {
-                            p.error_recover("Expected \"in\"", STMT_RECOVERY);
+                            p.error_recover_until("Expected \"in\"", STMT_RECOVERY);
                             m.complete(p, COMP_CLAUSE_FOR);
                             break;
                         }
@@ -397,7 +397,7 @@ fn entry(p: &mut Parser) {
     let m = p.start();
     test(p);
     if !p.eat(T![:]) {
-        p.error_recover("Expected \":\"", STMT_RECOVERY);
+        p.error_recover_until("Expected \":\"", STMT_RECOVERY);
     } else {
         test(p);
     }

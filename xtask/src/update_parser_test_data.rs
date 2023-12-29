@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use std::{
     collections::{HashMap, HashSet},
-    mem,
+    fs, mem,
 };
 
 use crate::util::project_root;
@@ -111,9 +111,45 @@ fn add_tests_from_comment_blocks(
 }
 
 pub(crate) fn run(filters: &[String]) -> anyhow::Result<()> {
-    let update_patterns: HashSet<&str> = filters.iter().map(|s| s.as_str()).collect::<HashSet<_>>();
+    let update_patterns: HashSet<String> = filters.iter().cloned().collect::<HashSet<_>>();
     let mut tests: HashMap<String, Test> = HashMap::new();
-    let source_idr = project_root().join("starpls_parser/src");
+    let source_dir = project_root().join("crates/starpls_parser/src");
+
+    // Collect tests from all `*.rs` files in the `src` directory.
+    for entry in fs::read_dir(&source_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        // Skip non-`*.rs` files.
+        if path.extension().unwrap_or_default() != "rs" || !entry.file_type()?.is_file() {
+            continue;
+        }
+
+        // Extract tests from the source file's comment blocks.
+        let input = fs::read_to_string(&path)?;
+        let blocks = extract_comment_blocks(&input);
+        add_tests_from_comment_blocks(&mut tests, &blocks)?;
+    }
+
+    // Create the `test_data/ok` and `test_data/err` directories.
+    let test_data_dir = project_root().join("crates/starpls_parser/test_data");
+    let ok_dir = &test_data_dir.join("ok");
+    let err_dir = &test_data_dir.join("err");
+    fs::create_dir_all(ok_dir)?;
+    fs::create_dir_all(err_dir)?;
+
+    // Write tests to their corresponding files.
+    for test in tests
+        .values()
+        .filter(|&test| update_patterns.is_empty() || update_patterns.contains(&test.name))
+    {
+        let dir = match test.kind {
+            TestKind::Ok => ok_dir,
+            TestKind::Err => err_dir,
+        };
+        let path = dir.join(format!("{}.eta", test.name));
+        fs::write(path, &test.text)?;
+    }
 
     Ok(())
 }

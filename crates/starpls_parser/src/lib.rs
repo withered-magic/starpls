@@ -134,21 +134,6 @@ impl<'a> Parser<'a> {
         m.complete(self, ERROR);
     }
 
-    pub(crate) fn error_recover<T>(&mut self, message: T, recover: SyntaxKindSet)
-    where
-        T: Into<String>,
-    {
-        self.error(message);
-
-        // If we aren't at any of the tokens specified in the recovery set, then
-        // create a new ERROR node to hold the next token.
-        if !recover.contains(self.current()) {
-            let m = self.start();
-            self.bump_any();
-            m.complete(self, ERROR);
-        }
-    }
-
     pub(crate) fn error_recover_until<T>(&mut self, message: T, recover: SyntaxKindSet)
     where
         T: Into<String>,

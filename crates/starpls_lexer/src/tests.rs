@@ -61,7 +61,7 @@ hello_world = rule(
             Token { kind: Whitespace, len: 1 }
             Token { kind: Plus, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 5 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: false } }, len: 5 }
             Token { kind: CloseParen, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Comment, len: 14 }
@@ -97,7 +97,7 @@ hello_world = rule(
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: OpenBrace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 8 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: false } }, len: 8 }
             Token { kind: Colon, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Ident, len: 3 }
@@ -151,7 +151,7 @@ hello_world = rule(
             Token { kind: Whitespace, len: 1 }
             Token { kind: OpenBrace, len: 1 }
             Token { kind: Whitespace, len: 9 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: false } }, len: 10 }
             Token { kind: Colon, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Ident, len: 4 }
@@ -162,11 +162,11 @@ hello_world = rule(
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 16 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: false } }, len: 16 }
             Token { kind: CloseParen, len: 1 }
             Token { kind: Comma, len: 1 }
             Token { kind: Whitespace, len: 9 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: false } }, len: 10 }
             Token { kind: Colon, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Ident, len: 4 }
@@ -179,7 +179,7 @@ hello_world = rule(
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: OpenBrack, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 9 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: false } }, len: 9 }
             Token { kind: CloseBrack, len: 1 }
             Token { kind: Comma, len: 1 }
             Token { kind: Whitespace, len: 13 }
@@ -187,7 +187,7 @@ hello_world = rule(
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Ident, len: 4 }
+            Token { kind: True, len: 4 }
             Token { kind: Comma, len: 1 }
             Token { kind: Whitespace, len: 9 }
             Token { kind: CloseParen, len: 1 }
@@ -493,181 +493,181 @@ x = r"a\\\r\nb"
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 6 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: false } }, len: 6 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 6 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: false } }, len: 6 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 7 }
+            Token { kind: Literal { kind: RawStr { terminated: true, triple_quoted: false } }, len: 7 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 7 }
+            Token { kind: Literal { kind: RawStr { terminated: true, triple_quoted: false } }, len: 7 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 8 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: false } }, len: 8 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 8 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: false } }, len: 8 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 4 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: false } }, len: 4 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 4 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: false } }, len: 4 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 5 }
+            Token { kind: Literal { kind: RawStr { terminated: true, triple_quoted: false } }, len: 5 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 5 }
+            Token { kind: Literal { kind: RawStr { terminated: true, triple_quoted: false } }, len: 5 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 8 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: true } }, len: 8 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 8 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: true } }, len: 8 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
+            Token { kind: Literal { kind: RawStr { terminated: true, triple_quoted: true } }, len: 9 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
+            Token { kind: Literal { kind: RawStr { terminated: true, triple_quoted: true } }, len: 9 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: true } }, len: 12 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: true } }, len: 12 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: true } }, len: 10 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: true } }, len: 10 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: true } }, len: 10 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 10 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: true } }, len: 10 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: true } }, len: 12 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: true } }, len: 12 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: true } }, len: 12 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: Str { terminated: true } }, len: 12 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: true } }, len: 12 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
+            Token { kind: Literal { kind: RawStr { terminated: true, triple_quoted: false } }, len: 9 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
+            Token { kind: Literal { kind: RawStr { terminated: true, triple_quoted: false } }, len: 9 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
+            Token { kind: Literal { kind: RawStr { terminated: true, triple_quoted: false } }, len: 9 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 9 }
+            Token { kind: Literal { kind: RawStr { terminated: true, triple_quoted: false } }, len: 9 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 11 }
+            Token { kind: Literal { kind: RawStr { terminated: true, triple_quoted: false } }, len: 11 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Literal { kind: RawStr { terminated: true } }, len: 11 }
+            Token { kind: Literal { kind: RawStr { terminated: true, triple_quoted: false } }, len: 11 }
             Token { kind: Newline, len: 1 }
         "#]],
     );

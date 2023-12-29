@@ -189,7 +189,7 @@ pub(crate) fn simple_stmt(p: &mut Parser) {
     // Simple statements need to end with a newline. If we aren't at one, recover to it,
     // discarding all tokens in-between.
     if !p.at(EOF) && !p.at(DEDENT) && !p.eat(T!['\n']) {
-        p.error_recover("Expected newline", STMT_RECOVERY);
+        p.error_recover_until("Expected newline", STMT_RECOVERY);
     }
 
     m.complete(p, SIMPLE_STMT);

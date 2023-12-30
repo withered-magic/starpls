@@ -3,7 +3,7 @@ MODULE
     FOR "for"
     WHITESPACE " "
     LOOP_VARIABLES
-      IDENT_EXPR
+      NAME
         IDENT "x"
     WHITESPACE " "
     IN "in"

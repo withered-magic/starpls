@@ -3,12 +3,12 @@ MODULE
     FOR "for"
     WHITESPACE " "
     LOOP_VARIABLES
-      IDENT_EXPR
+      NAME
         IDENT "x"
     WHITESPACE " "
     IN "in"
     WHITESPACE " "
-    IDENT_EXPR
+    NAME
       IDENT "y"
     COLON ":"
 error 8: Expected statement suite

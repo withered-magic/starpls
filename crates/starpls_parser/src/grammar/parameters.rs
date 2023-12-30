@@ -20,22 +20,18 @@ pub(crate) fn parameter(p: &mut Parser) {
     match p.current() {
         T![*] => {
             p.bump(T![*]);
-            let kind = if p.eat(T![ident]) {
-                ANON_ARGS_LIST_PARAMETER
-            } else {
-                ARGS_LIST_PARAMETER
-            };
-            m.complete(p, kind);
+            name(p);
+            m.complete(p, ARGS_LIST_PARAMETER);
         }
         T![**] => {
             p.bump(T![**]);
-            if !p.eat(T![ident]) {
+            if name(p).is_none() {
                 p.error("Expected identifier")
             }
             m.complete(p, KWARGS_LIST_PARAMETER);
         }
         T![ident] => {
-            p.bump(T![ident]);
+            assert!(name(p).is_some());
             if p.eat(T![=]) {
                 if p.at_kinds(EXPR_START) {
                     test(p);

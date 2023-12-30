@@ -97,7 +97,7 @@ pub enum SyntaxKind {
     GT_GT_EQ,
 
     // Expressions.
-    IDENT_EXPR,
+    NAME,
     LITERAL_EXPR,
     IF_EXPR,
     UNARY_EXPR,
@@ -132,10 +132,9 @@ pub enum SyntaxKind {
     UNPACKED_DICT_ARGUMENT, // f(**x)
 
     PARAMETERS,
-    SIMPLE_PARAMETER,         // def f(x, y="default")
-    ANON_ARGS_LIST_PARAMETER, // def f(*)
-    ARGS_LIST_PARAMETER,      // def f(*args)
-    KWARGS_LIST_PARAMETER,    // def f(**kwargs)
+    SIMPLE_PARAMETER,      // def f(x, y="default")
+    ARGS_LIST_PARAMETER,   // def f(*, *args)
+    KWARGS_LIST_PARAMETER, // def f(**kwargs)
 
     SUITE,
     LOOP_VARIABLES,

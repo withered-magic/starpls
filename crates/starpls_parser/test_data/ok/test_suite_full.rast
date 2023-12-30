@@ -6,33 +6,35 @@ MODULE
     OPEN_PAREN "("
     PARAMETERS
       SIMPLE_PARAMETER
-        IDENT "x"
+        NAME
+          IDENT "x"
       COMMA ","
       WHITESPACE " "
       SIMPLE_PARAMETER
-        IDENT "y"
+        NAME
+          IDENT "y"
     CLOSE_PAREN ")"
     COLON ":"
     WHITESPACE " "
     SUITE
       CALL_EXPR
-        IDENT_EXPR
+        NAME
           IDENT "print"
         OPEN_PAREN "("
         ARGUMENTS
           SIMPLE_ARGUMENT
-            IDENT_EXPR
+            NAME
               IDENT "x"
         CLOSE_PAREN ")"
       SEMI ";"
       WHITESPACE " "
       CALL_EXPR
-        IDENT_EXPR
+        NAME
           IDENT "print"
         OPEN_PAREN "("
         ARGUMENTS
           SIMPLE_ARGUMENT
-            IDENT_EXPR
+            NAME
               IDENT "y"
         CLOSE_PAREN ")"
       NEWLINE "\n"
@@ -43,34 +45,36 @@ MODULE
     OPEN_PAREN "("
     PARAMETERS
       SIMPLE_PARAMETER
-        IDENT "x"
+        NAME
+          IDENT "x"
       COMMA ","
       WHITESPACE " "
       SIMPLE_PARAMETER
-        IDENT "y"
+        NAME
+          IDENT "y"
     CLOSE_PAREN ")"
     COLON ":"
     SUITE
       NEWLINE "\n"
       INDENT "    "
       CALL_EXPR
-        IDENT_EXPR
+        NAME
           IDENT "print"
         OPEN_PAREN "("
         ARGUMENTS
           SIMPLE_ARGUMENT
-            IDENT_EXPR
+            NAME
               IDENT "x"
         CLOSE_PAREN ")"
       NEWLINE "\n"
       WHITESPACE "    "
       CALL_EXPR
-        IDENT_EXPR
+        NAME
           IDENT "print"
         OPEN_PAREN "("
         ARGUMENTS
           SIMPLE_ARGUMENT
-            IDENT_EXPR
+            NAME
               IDENT "y"
         CLOSE_PAREN ")"
       DEDENT ""

@@ -159,7 +159,7 @@ fn call_expr(p: &mut Parser, m: Marker) -> CompletedMarker {
 /// Grammar: `DotSuffix = '.' identifier .`
 fn dot_expr(p: &mut Parser, m: Marker) -> CompletedMarker {
     p.bump(T![.]);
-    if !p.eat(T![ident]) {
+    if name(p).is_none() {
         p.error_recover_until("Expected member name", STMT_RECOVERY);
     }
     m.complete(p, DOT_EXPR)
@@ -200,11 +200,10 @@ fn operand_expr(p: &mut Parser) -> Option<CompletedMarker> {
             p.bump_any();
             m.complete(p, LITERAL_EXPR)
         }
-        T![ident] => {
-            let m = p.start();
-            p.bump(T![ident]);
-            m.complete(p, IDENT_EXPR)
-        }
+        T![ident] => match name(p) {
+            Some(m) => m,
+            None => panic!("failed to parse name"),
+        },
         T!['('] => tuple_or_paren_expr(p, true),
         T!['['] => list_expr_or_comp(p),
         T!['{'] => dict_expr_or_comp(p),
@@ -400,4 +399,13 @@ fn entry(p: &mut Parser) {
         test(p);
     }
     m.complete(p, DICT_ENTRY);
+}
+
+pub(crate) fn name(p: &mut Parser) -> Option<CompletedMarker> {
+    if p.at(T![ident]) {
+        let m = p.start();
+        p.eat(T![ident]);
+        return Some(m.complete(p, NAME));
+    }
+    None
 }

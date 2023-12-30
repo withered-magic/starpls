@@ -1,17 +1,17 @@
 MODULE
   CALL_EXPR
-    IDENT_EXPR
+    NAME
       IDENT "f"
     OPEN_PAREN "("
     ARGUMENTS
       SIMPLE_ARGUMENT
-        IDENT_EXPR
+        NAME
           IDENT "x"
       COMMA ","
       WHITESPACE " "
       UNPACKED_LIST_ARGUMENT
         STAR "*"
-        IDENT_EXPR
+        NAME
           IDENT "args"
       COMMA ","
       WHITESPACE " "
@@ -24,6 +24,6 @@ MODULE
       WHITESPACE " "
       UNPACKED_DICT_ARGUMENT
         STAR_STAR "**"
-        IDENT_EXPR
+        NAME
           IDENT "kwargs"
     CLOSE_PAREN ")"

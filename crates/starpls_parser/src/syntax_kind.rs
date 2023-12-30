@@ -118,7 +118,6 @@ pub enum SyntaxKind {
     DEF_STMT,
     IF_STMT,
     FOR_STMT,
-    SIMPLE_STMT,
     RETURN_STMT,
     BREAK_STMT,
     CONTINUE_STMT,

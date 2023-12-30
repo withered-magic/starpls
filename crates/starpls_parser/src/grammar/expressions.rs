@@ -21,8 +21,6 @@ pub(crate) const PRIMARY_EXPR_START: SyntaxKindSet = SyntaxKindSet::new(&[
 
 /// Set of all possible tokens that can start an expression.
 pub(crate) const EXPR_START: SyntaxKindSet = PRIMARY_EXPR_START.union(SyntaxKindSet::new(&[
-    // if expression, e.g. `x if cond else y`
-    T![if],
     // unary expressions
     T![+],
     T![-],

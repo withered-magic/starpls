@@ -135,7 +135,13 @@ pub enum Statement {
     Def(DefStmt),
     If(IfStmt),
     For(ForStmt),
-    Simple(SimpleStmt),
+    Return(ReturnStmt),
+    Break(BreakStmt),
+    Continue(ContinueStmt),
+    Pass(PassStmt),
+    Assign(AssignStmt),
+    Load(LoadStmt),
+    Expr(Expression),
 }
 
 impl AstNode for Statement {
@@ -143,7 +149,18 @@ impl AstNode for Statement {
     where
         Self: Sized,
     {
-        matches!(kind, DEF_STMT | IF_STMT | FOR_STMT | SIMPLE_STMT)
+        matches!(
+            kind,
+            DEF_STMT
+                | IF_STMT
+                | FOR_STMT
+                | RETURN_STMT
+                | BREAK_STMT
+                | CONTINUE_STMT
+                | PASS_STMT
+                | ASSIGN_STMT
+                | LOAD_STMT
+        ) || Expression::can_cast(kind)
     }
 
     fn cast(syntax: SyntaxNode) -> Option<Self>
@@ -154,7 +171,6 @@ impl AstNode for Statement {
             DEF_STMT => Self::Def(DefStmt { syntax }),
             IF_STMT => Self::If(IfStmt { syntax }),
             FOR_STMT => Self::For(ForStmt { syntax }),
-            SIMPLE_STMT => Self::Simple(SimpleStmt { syntax }),
             _ => return None,
         })
     }
@@ -164,63 +180,54 @@ impl AstNode for Statement {
             Statement::Def(DefStmt { syntax }) => syntax,
             Statement::If(IfStmt { syntax }) => syntax,
             Statement::For(ForStmt { syntax }) => syntax,
-            Statement::Simple(SimpleStmt { syntax }) => syntax,
         }
     }
 }
 
-/// A small statement.
-pub enum SmallStmt {
-    Return(ReturnStmt),
-    Break(BreakStmt),
-    Continue(ContinueStmt),
-    Pass(PassStmt),
-    Assign(AssignStmt),
-    Load(LoadStmt),
-    Expr(Expression),
-}
+// /// A small statement.
+// pub enum SmallStmt {}
 
-impl AstNode for SmallStmt {
-    fn can_cast(kind: SyntaxKind) -> bool
-    where
-        Self: Sized,
-    {
-        matches!(
-            kind,
-            RETURN_STMT | BREAK_STMT | CONTINUE_STMT | PASS_STMT | ASSIGN_STMT | LOAD_STMT
-        ) || Expression::can_cast(kind)
-    }
+// impl AstNode for SmallStmt {
+//     fn can_cast(kind: SyntaxKind) -> bool
+//     where
+//         Self: Sized,
+//     {
+//         matches!(
+//             kind,
+//             RETURN_STMT | BREAK_STMT | CONTINUE_STMT | PASS_STMT | ASSIGN_STMT | LOAD_STMT
+//         ) || Expression::can_cast(kind)
+//     }
 
-    fn cast(syntax: SyntaxNode) -> Option<Self>
-    where
-        Self: Sized,
-    {
-        Some(match syntax.kind() {
-            RETURN_STMT => Self::Return(ReturnStmt { syntax }),
-            BREAK_STMT => Self::Break(BreakStmt { syntax }),
-            CONTINUE_STMT => Self::Continue(ContinueStmt { syntax }),
-            PASS_STMT => Self::Pass(PassStmt { syntax }),
-            ASSIGN_STMT => Self::Assign(AssignStmt { syntax }),
-            LOAD_STMT => Self::Load(LoadStmt { syntax }),
-            kind if Expression::can_cast(kind) => {
-                Self::Expr(Expression::cast(syntax).expect("failed to cast as Expression"))
-            }
-            _ => return None,
-        })
-    }
+//     fn cast(syntax: SyntaxNode) -> Option<Self>
+//     where
+//         Self: Sized,
+//     {
+//         Some(match syntax.kind() {
+//             RETURN_STMT => Self::Return(ReturnStmt { syntax }),
+//             BREAK_STMT => Self::Break(BreakStmt { syntax }),
+//             CONTINUE_STMT => Self::Continue(ContinueStmt { syntax }),
+//             PASS_STMT => Self::Pass(PassStmt { syntax }),
+//             ASSIGN_STMT => Self::Assign(AssignStmt { syntax }),
+//             LOAD_STMT => Self::Load(LoadStmt { syntax }),
+//             kind if Expression::can_cast(kind) => {
+//                 Self::Expr(Expression::cast(syntax).expect("failed to cast as Expression"))
+//             }
+//             _ => return None,
+//         })
+//     }
 
-    fn syntax(&self) -> &SyntaxNode {
-        match self {
-            SmallStmt::Return(ReturnStmt { syntax }) => syntax,
-            SmallStmt::Break(BreakStmt { syntax }) => syntax,
-            SmallStmt::Continue(ContinueStmt { syntax }) => syntax,
-            SmallStmt::Pass(PassStmt { syntax }) => syntax,
-            SmallStmt::Assign(AssignStmt { syntax }) => syntax,
-            SmallStmt::Load(LoadStmt { syntax }) => syntax,
-            SmallStmt::Expr(expr) => expr.syntax(),
-        }
-    }
-}
+//     fn syntax(&self) -> &SyntaxNode {
+//         match self {
+//             SmallStmt::Return(ReturnStmt { syntax }) => syntax,
+//             SmallStmt::Break(BreakStmt { syntax }) => syntax,
+//             SmallStmt::Continue(ContinueStmt { syntax }) => syntax,
+//             SmallStmt::Pass(PassStmt { syntax }) => syntax,
+//             SmallStmt::Assign(AssignStmt { syntax }) => syntax,
+//             SmallStmt::Load(LoadStmt { syntax }) => syntax,
+//             SmallStmt::Expr(expr) => expr.syntax(),
+//         }
+//     }
+// }
 
 ast_node! {
     /// A function definition.
@@ -250,12 +257,6 @@ ast_node! {
     child for_suite -> Suite;
     child iterable -> Expression;
     child targets -> LoopVariables;
-}
-
-ast_node! {
-    /// A list of one or more small statements, delimited with semicolons.
-    SimpleStmt => SIMPLE_STMT
-    children small_stmts -> SmallStmt;
 }
 
 ast_node! {
@@ -468,7 +469,7 @@ ast_node! {
 
 ast_node! {
     CallExpr => CALL_EXPR
-    child lhs -> Expression;
+    child callee -> Expression;
     children arguments -> Arguments;
 }
 
@@ -478,7 +479,7 @@ ast_node! {
 }
 
 impl IndexExpr {
-    pub fn index_expr(&self) -> Option<Expression> {
+    pub fn index(&self) -> Option<Expression> {
         children(self.syntax()).nth(1)
     }
 }

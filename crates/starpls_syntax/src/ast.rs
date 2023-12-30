@@ -171,63 +171,34 @@ impl AstNode for Statement {
             DEF_STMT => Self::Def(DefStmt { syntax }),
             IF_STMT => Self::If(IfStmt { syntax }),
             FOR_STMT => Self::For(ForStmt { syntax }),
+            RETURN_STMT => Self::Return(ReturnStmt { syntax }),
+            BREAK_STMT => Self::Break(BreakStmt { syntax }),
+            CONTINUE_STMT => Self::Continue(ContinueStmt { syntax }),
+            PASS_STMT => Self::Pass(PassStmt { syntax }),
+            ASSIGN_STMT => Self::Assign(AssignStmt { syntax }),
+            LOAD_STMT => Self::Load(LoadStmt { syntax }),
+            kind if Expression::can_cast(kind) => {
+                Self::Expr(Expression::cast(syntax).expect("failed to cast as Expression"))
+            }
             _ => return None,
         })
     }
 
     fn syntax(&self) -> &SyntaxNode {
         match self {
-            Statement::Def(DefStmt { syntax }) => syntax,
-            Statement::If(IfStmt { syntax }) => syntax,
-            Statement::For(ForStmt { syntax }) => syntax,
+            Self::Def(DefStmt { syntax }) => syntax,
+            Self::If(IfStmt { syntax }) => syntax,
+            Self::For(ForStmt { syntax }) => syntax,
+            Self::Return(ReturnStmt { syntax }) => syntax,
+            Self::Break(BreakStmt { syntax }) => syntax,
+            Self::Continue(ContinueStmt { syntax }) => syntax,
+            Self::Pass(PassStmt { syntax }) => syntax,
+            Self::Assign(AssignStmt { syntax }) => syntax,
+            Self::Load(LoadStmt { syntax }) => syntax,
+            Self::Expr(expr) => expr.syntax(),
         }
     }
 }
-
-// /// A small statement.
-// pub enum SmallStmt {}
-
-// impl AstNode for SmallStmt {
-//     fn can_cast(kind: SyntaxKind) -> bool
-//     where
-//         Self: Sized,
-//     {
-//         matches!(
-//             kind,
-//             RETURN_STMT | BREAK_STMT | CONTINUE_STMT | PASS_STMT | ASSIGN_STMT | LOAD_STMT
-//         ) || Expression::can_cast(kind)
-//     }
-
-//     fn cast(syntax: SyntaxNode) -> Option<Self>
-//     where
-//         Self: Sized,
-//     {
-//         Some(match syntax.kind() {
-//             RETURN_STMT => Self::Return(ReturnStmt { syntax }),
-//             BREAK_STMT => Self::Break(BreakStmt { syntax }),
-//             CONTINUE_STMT => Self::Continue(ContinueStmt { syntax }),
-//             PASS_STMT => Self::Pass(PassStmt { syntax }),
-//             ASSIGN_STMT => Self::Assign(AssignStmt { syntax }),
-//             LOAD_STMT => Self::Load(LoadStmt { syntax }),
-//             kind if Expression::can_cast(kind) => {
-//                 Self::Expr(Expression::cast(syntax).expect("failed to cast as Expression"))
-//             }
-//             _ => return None,
-//         })
-//     }
-
-//     fn syntax(&self) -> &SyntaxNode {
-//         match self {
-//             SmallStmt::Return(ReturnStmt { syntax }) => syntax,
-//             SmallStmt::Break(BreakStmt { syntax }) => syntax,
-//             SmallStmt::Continue(ContinueStmt { syntax }) => syntax,
-//             SmallStmt::Pass(PassStmt { syntax }) => syntax,
-//             SmallStmt::Assign(AssignStmt { syntax }) => syntax,
-//             SmallStmt::Load(LoadStmt { syntax }) => syntax,
-//             SmallStmt::Expr(expr) => expr.syntax(),
-//         }
-//     }
-// }
 
 ast_node! {
     /// A function definition.

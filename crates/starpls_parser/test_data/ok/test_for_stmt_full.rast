@@ -25,19 +25,18 @@ MODULE
     SUITE
       NEWLINE "\n"
       INDENT "    "
-      SIMPLE_STMT
-        CALL_EXPR
-          IDENT_EXPR
-            IDENT "print"
-          OPEN_PAREN "("
-          ARGUMENTS
-            SIMPLE_ARGUMENT
-              IDENT_EXPR
-                IDENT "i"
-            COMMA ","
-            WHITESPACE " "
-            SIMPLE_ARGUMENT
-              IDENT_EXPR
-                IDENT "value"
-          CLOSE_PAREN ")"
+      CALL_EXPR
+        IDENT_EXPR
+          IDENT "print"
+        OPEN_PAREN "("
+        ARGUMENTS
+          SIMPLE_ARGUMENT
+            IDENT_EXPR
+              IDENT "i"
+          COMMA ","
+          WHITESPACE " "
+          SIMPLE_ARGUMENT
+            IDENT_EXPR
+              IDENT "value"
+        CLOSE_PAREN ")"
       DEDENT ""

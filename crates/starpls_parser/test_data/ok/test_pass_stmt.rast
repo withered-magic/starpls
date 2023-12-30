@@ -1,4 +1,3 @@
 MODULE
-  SIMPLE_STMT
-    PASS_STMT
-      PASS "pass"
+  PASS_STMT
+    PASS "pass"

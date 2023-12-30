@@ -1,4 +1,3 @@
 MODULE
-  SIMPLE_STMT
-    BREAK_STMT
-      BREAK "break"
+  BREAK_STMT
+    BREAK "break"

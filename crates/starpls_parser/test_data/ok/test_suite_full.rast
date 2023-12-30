@@ -15,28 +15,27 @@ MODULE
     COLON ":"
     WHITESPACE " "
     SUITE
-      SIMPLE_STMT
-        CALL_EXPR
-          IDENT_EXPR
-            IDENT "print"
-          OPEN_PAREN "("
-          ARGUMENTS
-            SIMPLE_ARGUMENT
-              IDENT_EXPR
-                IDENT "x"
-          CLOSE_PAREN ")"
-        SEMI ";"
-        WHITESPACE " "
-        CALL_EXPR
-          IDENT_EXPR
-            IDENT "print"
-          OPEN_PAREN "("
-          ARGUMENTS
-            SIMPLE_ARGUMENT
-              IDENT_EXPR
-                IDENT "y"
-          CLOSE_PAREN ")"
-        NEWLINE "\n"
+      CALL_EXPR
+        IDENT_EXPR
+          IDENT "print"
+        OPEN_PAREN "("
+        ARGUMENTS
+          SIMPLE_ARGUMENT
+            IDENT_EXPR
+              IDENT "x"
+        CLOSE_PAREN ")"
+      SEMI ";"
+      WHITESPACE " "
+      CALL_EXPR
+        IDENT_EXPR
+          IDENT "print"
+        OPEN_PAREN "("
+        ARGUMENTS
+          SIMPLE_ARGUMENT
+            IDENT_EXPR
+              IDENT "y"
+        CLOSE_PAREN ")"
+      NEWLINE "\n"
   DEF_STMT
     DEF "def"
     WHITESPACE " "
@@ -54,26 +53,24 @@ MODULE
     SUITE
       NEWLINE "\n"
       INDENT "    "
-      SIMPLE_STMT
-        CALL_EXPR
-          IDENT_EXPR
-            IDENT "print"
-          OPEN_PAREN "("
-          ARGUMENTS
-            SIMPLE_ARGUMENT
-              IDENT_EXPR
-                IDENT "x"
-          CLOSE_PAREN ")"
-        NEWLINE "\n"
+      CALL_EXPR
+        IDENT_EXPR
+          IDENT "print"
+        OPEN_PAREN "("
+        ARGUMENTS
+          SIMPLE_ARGUMENT
+            IDENT_EXPR
+              IDENT "x"
+        CLOSE_PAREN ")"
+      NEWLINE "\n"
       WHITESPACE "    "
-      SIMPLE_STMT
-        CALL_EXPR
-          IDENT_EXPR
-            IDENT "print"
-          OPEN_PAREN "("
-          ARGUMENTS
-            SIMPLE_ARGUMENT
-              IDENT_EXPR
-                IDENT "y"
-          CLOSE_PAREN ")"
+      CALL_EXPR
+        IDENT_EXPR
+          IDENT "print"
+        OPEN_PAREN "("
+        ARGUMENTS
+          SIMPLE_ARGUMENT
+            IDENT_EXPR
+              IDENT "y"
+        CLOSE_PAREN ")"
       DEDENT ""

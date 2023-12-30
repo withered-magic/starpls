@@ -190,7 +190,6 @@ pub(crate) fn for_stmt(p: &mut Parser) {
 ///
 /// Grammar: `SimpleStmt = SmallStmt {';' SmallStmt} [';'] '\n' .`
 pub(crate) fn simple_stmt(p: &mut Parser) {
-    // let m = p.start();
     small_stmt(p);
     while p.at(T![;]) && SMALL_STMT_START.contains(p.nth(1)) {
         p.bump(T![;]);
@@ -204,8 +203,6 @@ pub(crate) fn simple_stmt(p: &mut Parser) {
     if !p.at(EOF) && !p.at(DEDENT) && !p.eat(T!['\n']) {
         p.error_recover_until("Expected newline", STMT_RECOVERY);
     }
-
-    // m.complete(p, SIMPLE_STMT);
 }
 
 /// Parses a small statement.

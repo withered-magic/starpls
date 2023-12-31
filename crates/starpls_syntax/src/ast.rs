@@ -222,7 +222,7 @@ ast_node! {
     IfStmt => IF_STMT
     child test -> Expression;
     child if_suite -> Suite;
-    child elif_stmt -> IfStmt;
+    child elif_stmt -> Statement;
 }
 
 impl IfStmt {

@@ -1,8 +1,15 @@
 use crate::Db;
 use id_arena::{Arena, Id};
 use smol_str::SmolStr;
+use starpls_syntax::ast::{self, AstPtr};
 
 mod lower;
+
+pub type ExpressionId = Id<Expression>;
+pub type ExpressionPtr = AstPtr<Expression>;
+
+pub type StatementId = Id<Statement>;
+pub type StatementPtr = AstPtr<Statement>;
 
 // #[salsa::tracked]
 // pub struct Module {
@@ -18,34 +25,41 @@ pub struct Module {
 }
 
 impl Module {
-    fn new() {}
+    fn new(db: &dyn Db, syntax: ast::Module) -> Self {
+        lower::lower(db, syntax)
+    }
 }
-
-pub type ExpressionId = Id<Expression>;
-// pub type ExpressionPtr
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expression {
     Missing,
-    Name,
+    Name {
+        name: Name,
+    },
     Literal,
     If {
-        if_expr: ExpressionId,
+        if_expression: ExpressionId,
         test: ExpressionId,
-        else_expr: ExpressionId,
+        else_expression: ExpressionId,
     },
     Unary {
-        expr: ExpressionId,
+        expression: ExpressionId,
     },
     Binary {
         lhs: ExpressionId,
         rhs: ExpressionId,
     },
     Lambda {
+        parameters: Box<[Parameter]>,
         body: ExpressionId,
     },
-    List,
-    ListComp,
+    List {
+        elements: Box<[ExpressionId]>,
+    },
+    ListComp {
+        expression: ExpressionId,
+        comp_clauses: Box<[CompClause]>,
+    },
     Dict,
     DictComp,
     Tuple,
@@ -61,8 +75,6 @@ pub enum Expression {
     },
     Slice,
 }
-
-pub type StatementId = Id<Statement>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Statement {
@@ -126,6 +138,17 @@ pub enum Parameter {
 pub enum LoadItem {
     Direct { name: Box<str> },
     Aliased { alias: Name, name: Box<str> },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CompClause {
+    For {
+        iterable: ExpressionId,
+        targets: Box<[ExpressionId]>,
+    },
+    If {
+        test: ExpressionId,
+    },
 }
 
 #[salsa::interned]

@@ -8,3 +8,5 @@ edition = "2021"
 [dependencies]
 id-arena = "2.2.1"
 salsa = { git = "https://github.com/salsa-rs/salsa", package = "salsa-2022", rev = "f1d318a2795e87081e316a5f31ef02f0cd6a1c83" }
+smol_str = "0.2.0"
+starpls_syntax = { path = "../starpls_syntax" }

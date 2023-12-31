@@ -1,22 +1,39 @@
+use crate::Db;
 use id_arena::{Arena, Id};
+use smol_str::SmolStr;
+
+mod lower;
+
+// #[salsa::tracked]
+// pub struct Module {
+//     #[return_ref]
+//     expressions: Arena<Expression>,
+//     #[return_ref]
+//     statements: Arena<Statement>,
+// }
 
 pub struct Module {
-    exprs: Arena<Expression>,
-    stmts: Arena<Statement>,
+    expressions: Arena<Expression>,
+    statements: Arena<Statement>,
+}
+
+impl Module {
+    fn new() {}
 }
 
 pub type ExpressionId = Id<Expression>;
+// pub type ExpressionPtr
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expression {
     Missing,
-    Ident {
+    Name,
+    Literal,
+    If {
         if_expr: ExpressionId,
         test: ExpressionId,
         else_expr: ExpressionId,
     },
-    Literal,
-    If,
     Unary {
         expr: ExpressionId,
     },
@@ -36,6 +53,7 @@ pub enum Expression {
     Dot,
     Call {
         callee: ExpressionId,
+        arguments: Box<[Argument]>,
     },
     Index {
         lhs: ExpressionId,
@@ -46,27 +64,81 @@ pub enum Expression {
 
 pub type StatementId = Id<Statement>;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Statement {
-    Def,
-    If,
-    For,
-    Return,
+    Def {
+        name: Name,
+        parameters: Box<[Parameter]>,
+        statements: Box<[StatementId]>,
+    },
+    If {
+        test: ExpressionId,
+        if_statements: Box<[StatementId]>,
+        elif_statement: Option<StatementId>,
+        else_statements: Box<[StatementId]>,
+    },
+    For {
+        iterable: ExpressionId,
+        targets: Box<[ExpressionId]>,
+        statements: Box<[StatementId]>,
+    },
+    Return {
+        expr: Option<ExpressionId>,
+    },
     Break,
     Continue,
     Pass,
-    Assign,
-    Load,
-    Expr,
+    Assign {
+        lhs: ExpressionId,
+        rhs: ExpressionId,
+    },
+    Load {
+        items: LoadItem,
+    },
+    Expr {
+        expr: ExpressionId,
+    },
 }
 
-pub type ArgumentId = Id<Argument>;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Argument {
+    Simple { expr: ExpressionId },
+    Keyword { name: Name, expr: ExpressionId },
+    UnpackedList { expr: ExpressionId },
+    UnpackedDict { expr: ExpressionId },
+}
 
-pub enum Argument {}
-
-pub type ParameterId = Id<Parameter>;
-
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Parameter {
-    Simple { default: ExpressionId },
-    ArgsList { name},
-    KwargsList { expr: ExpressionId },
+    Simple {
+        name: Name,
+        default: Option<ExpressionId>,
+    },
+    ArgsList {
+        name: Name,
+    },
+    KwargsList {
+        name: Name,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LoadItem {
+    Direct { name: Box<str> },
+    Aliased { alias: Name, name: Box<str> },
+}
+
+#[salsa::interned]
+pub struct Name {
+    inner: SmolStr,
+}
+
+impl Name {
+    fn from_str(db: &dyn Db, name: &str) -> Self {
+        Self::new(db, SmolStr::new(name))
+    }
+
+    fn missing(db: &dyn Db) -> Self {
+        Name::new(db, SmolStr::new_inline("[missing name]"))
+    }
 }

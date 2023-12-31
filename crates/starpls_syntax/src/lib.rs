@@ -9,7 +9,7 @@ pub use {
     rowan::TextRange,
 };
 
-mod ast;
+pub mod ast;
 mod parser;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

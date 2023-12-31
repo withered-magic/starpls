@@ -1,8 +1,16 @@
 use crate::{
+    StarlarkLanguage,
     SyntaxKind::{self, *},
     SyntaxNode, SyntaxNodeChildren, SyntaxToken,
 };
 use std::marker::PhantomData;
+
+pub type SyntaxNodePtr = rowan::ast::SyntaxNodePtr<StarlarkLanguage>;
+
+pub struct AstPtr<N: AstNode> {
+    inner: SyntaxNodePtr,
+    phantom: PhantomData<fn() -> N>,
+}
 
 /// A trait that allows converting between untyped `SyntaxNode`s and typed AST nodes.
 pub trait AstNode {
@@ -128,6 +136,7 @@ fn token(parent: &SyntaxNode, kind: SyntaxKind) -> Option<SyntaxToken> {
 ast_node! {
     /// A Starlark module. This is typically the root of the AST.
     Module => MODULE
+    children statements -> Statement;
 }
 
 /// A statement.
@@ -205,7 +214,7 @@ ast_node! {
     DefStmt => DEF_STMT
     child parameters -> Parameters;
     child suite -> Suite;
-    child_token name -> IDENT;
+    child name -> Name;
 }
 
 ast_node! {
@@ -225,7 +234,7 @@ impl IfStmt {
 ast_node! {
     /// A `for` statement.
     ForStmt => FOR_STMT
-    child for_suite -> Suite;
+    child suite -> Suite;
     child iterable -> Expression;
     child targets -> LoopVariables;
 }
@@ -264,7 +273,7 @@ ast_node! {
 }
 
 pub enum Expression {
-    Ident(IdentExpr),
+    Name(Name),
     Literal(LiteralExpr),
     If(IfExpr),
     Unary(UnaryExpr),
@@ -289,8 +298,7 @@ impl AstNode for Expression {
     {
         matches!(
             kind,
-            IDENT_EXPR
-                | LITERAL_EXPR
+            NAME | LITERAL_EXPR
                 | IF_EXPR
                 | UNARY_EXPR
                 | BINARY_EXPR
@@ -313,7 +321,7 @@ impl AstNode for Expression {
         Self: Sized,
     {
         Some(match syntax.kind() {
-            IDENT_EXPR => Self::Ident(IdentExpr { syntax }),
+            NAME => Self::Name(Name { syntax }),
             LITERAL_EXPR => Self::Literal(LiteralExpr { syntax }),
             IF_EXPR => Self::If(IfExpr { syntax }),
             UNARY_EXPR => Self::Unary(UnaryExpr { syntax }),
@@ -335,7 +343,7 @@ impl AstNode for Expression {
 
     fn syntax(&self) -> &SyntaxNode {
         match self {
-            Expression::Ident(IdentExpr { syntax }) => syntax,
+            Expression::Name(Name { syntax }) => syntax,
             Expression::Literal(LiteralExpr { syntax }) => syntax,
             Expression::If(IfExpr { syntax }) => syntax,
             Expression::Unary(UnaryExpr { syntax }) => syntax,
@@ -356,7 +364,7 @@ impl AstNode for Expression {
 }
 
 ast_node! {
-    IdentExpr => IDENT_EXPR
+    Name => NAME
     child_token name -> IDENT;
 }
 
@@ -435,7 +443,7 @@ ast_node! {
 
 ast_node! {
     DotExpr => DOT_EXPR
-    child_token field -> IDENT;
+    child field -> Name;
 }
 
 ast_node! {
@@ -529,7 +537,7 @@ ast_node! {
 ast_node! {
     KeywordArgument => KEYWORD_ARGUMENT
     child expr -> Expression;
-    child_token name -> IDENT;
+    child name -> Name;
 }
 
 ast_node! {
@@ -544,7 +552,6 @@ ast_node! {
 
 pub enum Parameter {
     Simple(SimpleParameter),
-    AnonArgsList(AnonArgsListParameter),
     ArgsList(ArgsListParameter),
     KwargsList(KwargsListParameter),
 }
@@ -556,10 +563,7 @@ impl AstNode for Parameter {
     {
         matches!(
             kind,
-            SIMPLE_PARAMETER
-                | ANON_ARGS_LIST_PARAMETER
-                | ARGS_LIST_PARAMETER
-                | KWARGS_LIST_PARAMETER
+            SIMPLE_PARAMETER | ARGS_LIST_PARAMETER | KWARGS_LIST_PARAMETER
         )
     }
 
@@ -569,7 +573,6 @@ impl AstNode for Parameter {
     {
         Some(match syntax.kind() {
             SIMPLE_PARAMETER => Self::Simple(SimpleParameter { syntax }),
-            ANON_ARGS_LIST_PARAMETER => Self::AnonArgsList(AnonArgsListParameter { syntax }),
             ARGS_LIST_PARAMETER => Self::ArgsList(ArgsListParameter { syntax }),
             KWARGS_LIST_PARAMETER => Self::KwargsList(KwargsListParameter { syntax }),
             _ => return None,
@@ -579,7 +582,6 @@ impl AstNode for Parameter {
     fn syntax(&self) -> &SyntaxNode {
         match self {
             Self::Simple(SimpleParameter { syntax }) => syntax,
-            Self::AnonArgsList(AnonArgsListParameter { syntax }) => syntax,
             Self::ArgsList(ArgsListParameter { syntax }) => syntax,
             Self::KwargsList(KwargsListParameter { syntax }) => syntax,
         }
@@ -594,21 +596,17 @@ ast_node! {
 ast_node! {
     SimpleParameter => SIMPLE_PARAMETER
     child default -> Expression;
-    child_token name -> IDENT;
-}
-
-ast_node! {
-    AnonArgsListParameter => ANON_ARGS_LIST_PARAMETER
+    child name -> Name;
 }
 
 ast_node! {
     ArgsListParameter => ARGS_LIST_PARAMETER
-    child_token name -> IDENT;
+    child name -> Name;
 }
 
 ast_node! {
     KwargsListParameter => KWARGS_LIST_PARAMETER
-    child_token name -> IDENT;
+    child name -> Name;
 }
 
 ast_node! {
@@ -702,6 +700,6 @@ ast_node! {
 
 ast_node! {
     AliasedLoadItem => ALIASED_LOAD_ITEM
-    child_token alias -> IDENT;
+    child alias -> Name;
     child_token name -> STRING;
 }

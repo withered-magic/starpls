@@ -1,4 +1,19 @@
-use crate::{convert::path_buf_from_url, extensions::ShowSyntaxTreeParams, server::ServerSnapshot};
+use crate::{
+    convert::path_buf_from_url,
+    extensions::{ShowHirParams, ShowSyntaxTreeParams},
+    server::ServerSnapshot,
+};
+
+pub(crate) fn show_hir(snapshot: &ServerSnapshot, params: ShowHirParams) -> anyhow::Result<String> {
+    let document_manager = snapshot.document_manager.read();
+    let path = path_buf_from_url(&params.text_document.uri)?;
+    let file_id = match document_manager.lookup_by_path_buf(&path) {
+        Some(file_id) => file_id,
+        None => return Ok("".to_string()),
+    };
+    let rendered_hir = snapshot.analysis_snapshot.show_hir(file_id)?;
+    Ok(rendered_hir.unwrap_or_else(|| "".to_string()))
+}
 
 pub(crate) fn show_syntax_tree(
     snapshot: &ServerSnapshot,

@@ -443,13 +443,14 @@ ast_node! {
 
 ast_node! {
     DotExpr => DOT_EXPR
+    child expr -> Expression;
     child field -> Name;
 }
 
 ast_node! {
     CallExpr => CALL_EXPR
     child callee -> Expression;
-    children arguments -> Arguments;
+    child arguments -> Arguments;
 }
 
 ast_node! {
@@ -678,18 +679,25 @@ impl AstNode for LoadItem {
     where
         Self: Sized,
     {
-        todo!()
+        matches!(kind, DIRECT_LOAD_ITEM | ALIASED_LOAD_ITEM)
     }
 
     fn cast(syntax: SyntaxNode) -> Option<Self>
     where
         Self: Sized,
     {
-        todo!()
+        Some(match syntax.kind() {
+            DIRECT_LOAD_ITEM => LoadItem::Direct(DirectLoadItem { syntax }),
+            ALIASED_LOAD_ITEM => LoadItem::Aliased(AliasedLoadItem { syntax }),
+            _ => return None,
+        })
     }
 
     fn syntax(&self) -> &SyntaxNode {
-        todo!()
+        match self {
+            LoadItem::Direct(DirectLoadItem { syntax }) => syntax,
+            LoadItem::Aliased(AliasedLoadItem { syntax }) => syntax,
+        }
     }
 }
 

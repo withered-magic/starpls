@@ -145,11 +145,25 @@ impl Server {
     }
 
     fn handle_request(&mut self, req: lsp_server::Request) {
+        // TODO: Refactor this into a `RequestDispatcher`.
         if let Some(params) = cast_request::<extensions::ShowSyntaxTree>(&req) {
             let snapshot = self.snapshot();
             self.task_pool_handle.spawn(move || {
                 let id = req.id.clone();
                 Task::ResponseReady(match requests::show_syntax_tree(&snapshot, params) {
+                    Ok(value) => lsp_server::Response::new_ok(id, value),
+                    Err(err) => lsp_server::Response::new_err(
+                        id,
+                        lsp_server::ErrorCode::RequestFailed as i32,
+                        err.to_string(),
+                    ),
+                })
+            });
+        } else if let Some(params) = cast_request::<extensions::ShowHir>(&req) {
+            let snapshot = self.snapshot();
+            self.task_pool_handle.spawn(move || {
+                let id = req.id.clone();
+                Task::ResponseReady(match requests::show_hir(&snapshot, params) {
                     Ok(value) => lsp_server::Response::new_ok(id, value),
                     Err(err) => lsp_server::Response::new_err(
                         id,

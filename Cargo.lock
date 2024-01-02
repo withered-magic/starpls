@@ -663,6 +663,7 @@ dependencies = [
  "id-arena",
  "salsa-2022",
  "smol_str",
+ "starpls_common",
  "starpls_syntax",
 ]
 
@@ -673,6 +674,7 @@ dependencies = [
  "dashmap",
  "salsa-2022",
  "starpls_common",
+ "starpls_hir",
  "starpls_syntax",
 ]
 

@@ -10,7 +10,7 @@ mod handlers;
 pub type Cancellable<T> = Result<T, salsa::Cancelled>;
 
 #[derive(Default)]
-#[salsa::db(starpls_common::Jar)]
+#[salsa::db(starpls_common::Jar, starpls_hir::Jar)]
 pub(crate) struct Database {
     storage: salsa::Storage<Self>,
     files: Arc<DashMap<FileId, File>>,
@@ -86,6 +86,10 @@ impl AnalysisSnapshot {
 
     pub fn line_index(&self, file_id: FileId) -> Cancellable<Option<LineIndex>> {
         self.query(|db| line_index::line_index(db, file_id))
+    }
+
+    pub fn show_hir(&self, file_id: FileId) -> Cancellable<Option<String>> {
+        self.query(|db| show_hir::show_hir(db, file_id))
     }
 
     pub fn show_syntax_tree(&self, file_id: FileId) -> Cancellable<Option<String>> {

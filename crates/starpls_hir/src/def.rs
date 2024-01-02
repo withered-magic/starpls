@@ -3,7 +3,7 @@ use id_arena::{Arena, Id};
 use smol_str::SmolStr;
 use starpls_syntax::ast::{self, AstPtr};
 
-mod lower;
+pub mod lower;
 
 pub type ExpressionId = Id<Expression>;
 pub type ExpressionPtr = AstPtr<Expression>;
@@ -11,22 +11,15 @@ pub type ExpressionPtr = AstPtr<Expression>;
 pub type StatementId = Id<Statement>;
 pub type StatementPtr = AstPtr<Statement>;
 
-// #[salsa::tracked]
-// pub struct Module {
-//     #[return_ref]
-//     expressions: Arena<Expression>,
-//     #[return_ref]
-//     statements: Arena<Statement>,
-// }
-
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Module {
     expressions: Arena<Expression>,
     statements: Arena<Statement>,
 }
 
 impl Module {
-    fn new(db: &dyn Db, syntax: ast::Module) -> Self {
-        lower::lower(db, syntax)
+    pub(crate) fn new(db: &dyn Db, syntax: ast::Module) -> Self {
+        lower::lower_module(db, syntax)
     }
 }
 
@@ -60,11 +53,23 @@ pub enum Expression {
         expression: ExpressionId,
         comp_clauses: Box<[CompClause]>,
     },
-    Dict,
-    DictComp,
-    Tuple,
-    Paren,
-    Dot,
+    Dict {
+        entries: Box<[DictEntry]>,
+    },
+    DictComp {
+        entry: DictEntry,
+        comp_clauses: Box<[CompClause]>,
+    },
+    Tuple {
+        expressions: Box<[ExpressionId]>,
+    },
+    Paren {
+        expression: ExpressionId,
+    },
+    Dot {
+        expression: ExpressionId,
+        field: Name,
+    },
     Call {
         callee: ExpressionId,
         arguments: Box<[Argument]>,
@@ -73,7 +78,11 @@ pub enum Expression {
         lhs: ExpressionId,
         index: ExpressionId,
     },
-    Slice,
+    Slice {
+        start: Option<ExpressionId>,
+        end: Option<ExpressionId>,
+        step: Option<ExpressionId>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -105,7 +114,7 @@ pub enum Statement {
         rhs: ExpressionId,
     },
     Load {
-        items: LoadItem,
+        items: Box<[LoadItem]>,
     },
     Expr {
         expr: ExpressionId,
@@ -149,6 +158,12 @@ pub enum CompClause {
     If {
         test: ExpressionId,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DictEntry {
+    key: ExpressionId,
+    value: ExpressionId,
 }
 
 #[salsa::interned]

@@ -13,6 +13,54 @@ function showVersion() {
   };
 }
 
+function showHir(ctx: Context) {
+  const hirScheme = 'starpls-hir';
+  const hirUri = vscode.Uri.parse(`${hirScheme}://hir/hir`);
+
+  const hirProvider = new class implements vscode.TextDocumentContentProvider {
+    private readonly emitter = new vscode.EventEmitter<vscode.Uri>();
+    onDidChange = this.emitter.event;
+
+    constructor() {
+      vscode.window.onDidChangeActiveTextEditor((textEditor) => this.onDidChangeActiveTextEditor(textEditor), this, ctx.disposables);
+      vscode.workspace.onDidChangeTextDocument((textDocumentChangeEvent) => this.onDidChangeTextDocument(textDocumentChangeEvent), this, ctx.disposables);
+    }
+
+    provideTextDocumentContent(_uri: vscode.Uri, _token: vscode.CancellationToken): vscode.ProviderResult<string> {
+      if (!ctx.activeStarlarkTextEditor) {
+        return;
+      }
+      return ctx.client.sendRequest('starpls/showHir', {
+        textDocument: {
+          uri: ctx.activeStarlarkTextEditor.document.uri.toString(),
+        },
+      });
+    }
+
+    onDidChangeActiveTextEditor(textEditor: vscode.TextEditor | undefined) {
+      if (textEditor && isStarlarkTextEditor(textEditor)) {
+        this.emitter.fire(hirUri);
+      }
+    }
+
+    onDidChangeTextDocument(textDocumentChangeEvent: vscode.TextDocumentChangeEvent) {
+      if (isStarlarkDocument(textDocumentChangeEvent.document)) {
+        setTimeout(() => this.emitter.fire(hirUri), 10);
+      }
+    }
+  };
+
+  ctx.disposables.push(vscode.workspace.registerTextDocumentContentProvider(hirScheme, hirProvider));
+
+  return async () => {
+    const document = await vscode.workspace.openTextDocument(hirUri);
+    await vscode.window.showTextDocument(document, {
+      preserveFocus: true,
+      viewColumn: vscode.ViewColumn.Two,
+    });
+  };
+}
+
 function showSyntaxTree(ctx: Context) {
   // Define and register a content provider for the syntax tree viewer.
   const syntaxTreeScheme = 'starpls-syntax-tree';
@@ -67,6 +115,7 @@ function showSyntaxTree(ctx: Context) {
 
 export default function createCommandFactories(): Record<string, CommandFactory> {
   return {
+    'starpls.showHir': showHir,
     'starpls.showSyntaxTree': showSyntaxTree,
     'starpls.showVersion': showVersion,
   };

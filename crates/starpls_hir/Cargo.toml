@@ -11,3 +11,4 @@ salsa = { git = "https://github.com/salsa-rs/salsa", package = "salsa-2022", rev
 smol_str = "0.2.0"
 starpls_syntax = { path = "../starpls_syntax" }
 starpls_common = { path = "../starpls_common" }
+rustc-hash = "1.1.0"

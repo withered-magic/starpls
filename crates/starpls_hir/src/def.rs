@@ -13,8 +13,9 @@ pub type StatementPtr = AstPtr<Statement>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Module {
-    expressions: Arena<Expression>,
-    statements: Arena<Statement>,
+    pub(crate) expressions: Arena<Expression>,
+    pub(crate) statements: Arena<Statement>,
+    pub(crate) top_level: Box<[StatementId]>,
 }
 
 impl Module {
@@ -51,7 +52,7 @@ pub enum Expression {
         body: ExpressionId,
     },
     List {
-        elements: Box<[ExpressionId]>,
+        expressions: Box<[ExpressionId]>,
     },
     ListComp {
         expression: ExpressionId,

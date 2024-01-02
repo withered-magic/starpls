@@ -661,6 +661,7 @@ name = "starpls_hir"
 version = "0.1.0"
 dependencies = [
  "id-arena",
+ "rustc-hash",
  "salsa-2022",
  "smol_str",
  "starpls_common",

@@ -13,6 +13,7 @@ pub(super) fn lower_module(db: &dyn Db, syntax: ast::Module) -> Module {
         module: Module {
             expressions: Default::default(),
             statements: Default::default(),
+            top_level: Default::default(),
         },
     }
     .lower(syntax)
@@ -24,10 +25,12 @@ struct LoweringContext<'a> {
 }
 
 impl<'a> LoweringContext<'a> {
-    pub(crate) fn lower(mut self, syntax: ast::Module) -> Module {
+    fn lower(mut self, syntax: ast::Module) -> Module {
+        let mut top_level = Vec::new();
         for statement in syntax.statements() {
-            self.lower_statement(statement);
+            top_level.push(self.lower_statement(statement));
         }
+        self.module.top_level = top_level.into_boxed_slice();
         self.module
     }
 
@@ -144,12 +147,12 @@ impl<'a> LoweringContext<'a> {
                 Expression::Lambda { parameters, body }
             }
             ast::Expression::List(expr) => {
-                let elements = expr
+                let expressions = expr
                     .elements()
                     .map(|element| self.lower_expression(element))
                     .collect::<Vec<_>>()
                     .into_boxed_slice();
-                Expression::List { elements }
+                Expression::List { expressions }
             }
             ast::Expression::ListComp(expr) => {
                 let expression = self.lower_expression_opt(expr.expr());

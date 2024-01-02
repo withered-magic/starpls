@@ -31,7 +31,7 @@ pub fn lower(db: &dyn Db, parse: ParseResult) -> LowerResult {
 
 #[salsa::tracked]
 pub fn bind(db: &dyn Db, lower: LowerResult) -> BindResult {
-    let info = ty::bind_module(lower.module(db));
+    let info = ty::bind_module(db, lower.module(db));
     BindResult::new(db, info)
 }
 

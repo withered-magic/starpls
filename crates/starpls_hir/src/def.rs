@@ -182,17 +182,27 @@ pub enum Literal {
     None,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Declaration {
+    Function { id: StatementId },
+    Variable { id: ExpressionId },
+}
+
 #[salsa::interned]
 pub struct Name {
     inner: SmolStr,
 }
 
 impl Name {
-    fn from_str(db: &dyn Db, name: &str) -> Self {
+    pub(crate) fn from_str(db: &dyn Db, name: &str) -> Self {
         Self::new(db, SmolStr::new(name))
     }
 
-    fn missing(db: &dyn Db) -> Self {
+    pub(crate) fn missing(db: &dyn Db) -> Self {
         Name::new(db, SmolStr::new_inline("[missing name]"))
+    }
+
+    pub(crate) fn is_missing(&self, db: &dyn Db) -> bool {
+        self.inner(db).eq("[missing name]")
     }
 }

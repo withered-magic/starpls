@@ -1,14 +1,18 @@
-use crate::def::{Expression, ExpressionId, Module, Name, Statement, StatementId};
+use crate::{
+    def::{Declaration, Expression, ExpressionId, Module, Name, Statement, StatementId},
+    Db,
+};
 use rustc_hash::FxHashMap;
 use std::collections::hash_map::Entry;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ModuleInfo {
-    declarations: FxHashMap<Name, Vec<ExpressionId>>,
+    declarations: FxHashMap<Name, Vec<Declaration>>,
 }
 
-pub(crate) fn bind_module(module: Module) -> ModuleInfo {
+pub(crate) fn bind_module(db: &dyn Db, module: Module) -> ModuleInfo {
     BindingContext {
+        db,
         module: &module,
         declarations: Default::default(),
     }
@@ -16,8 +20,9 @@ pub(crate) fn bind_module(module: Module) -> ModuleInfo {
 }
 
 struct BindingContext<'a> {
+    db: &'a dyn Db,
     module: &'a Module,
-    declarations: FxHashMap<Name, Vec<ExpressionId>>,
+    declarations: FxHashMap<Name, Vec<Declaration>>,
 }
 
 impl<'a> BindingContext<'a> {
@@ -38,7 +43,14 @@ impl<'a> BindingContext<'a> {
 
     fn bind_statement(&mut self, statement_id: StatementId) {
         match &self.module.statements[statement_id] {
-            Statement::Def { statements, .. } => self.bind_statements(statements),
+            Statement::Def {
+                name, statements, ..
+            } => {
+                if !name.is_missing(self.db) {
+                    self.add_declaration(*name, Declaration::Function { id: statement_id });
+                    self.bind_statements(statements);
+                }
+            }
             Statement::If {
                 if_statements,
                 elif_statement,
@@ -52,27 +64,33 @@ impl<'a> BindingContext<'a> {
                 self.bind_statements(else_statements);
             }
             Statement::For { statements, .. } => self.bind_statements(statements),
-            Statement::Assign { lhs, rhs, op } => self.collect_declarations_from_assignment(*lhs),
+            Statement::Assign { lhs, .. } => self.collect_declarations_from_assignment(*lhs),
             _ => {}
         }
     }
 
     fn collect_declarations_from_assignment(&mut self, expression: ExpressionId) {
         match &self.module.expressions[expression] {
-            Expression::Name { name } => match self.declarations.entry(*name) {
-                Entry::Occupied(mut entry) => {
-                    entry.get_mut().push(expression);
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(vec![expression]);
-                }
-            },
+            Expression::Name { name } => {
+                self.add_declaration(*name, Declaration::Variable { id: expression });
+            }
             Expression::Tuple { expressions } | Expression::List { expressions } => {
                 for expression in expressions.iter().cloned() {
                     self.collect_declarations_from_assignment(expression);
                 }
             }
             _ => (),
+        }
+    }
+
+    fn add_declaration(&mut self, name: Name, declaration: Declaration) {
+        match self.declarations.entry(name) {
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().push(declaration);
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(vec![declaration]);
+            }
         }
     }
 }

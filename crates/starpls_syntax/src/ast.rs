@@ -541,16 +541,52 @@ impl IndexExpr {
 
 ast_node! {
     SliceExpr => SLICE_EXPR
-    child start -> Expression;
+    child expr -> Expression;
 }
 
 impl SliceExpr {
+    pub fn start(&self) -> Option<Expression> {
+        // Take all expressions until the first ":", which should just consist of "expr" (at index 0)
+        // and "start" (at index 1).
+        self.syntax()
+            .children_with_tokens()
+            .take_while(|node_or_token| {
+                node_or_token.as_token().map(|token| token.kind()) != Some(T![:])
+            })
+            .filter_map(|node_or_token| node_or_token.into_node())
+            .filter_map(Expression::cast)
+            .nth(1)
+    }
+
     pub fn end(&self) -> Option<Expression> {
-        children(self.syntax()).nth(1)
+        // Skip all children until the first colon, consume the colon, then take all children until the second colon.
+        self.syntax()
+            .children_with_tokens()
+            .skip_while(|node_or_token| {
+                node_or_token.as_token().map(|token| token.kind()) != Some(T![:])
+            })
+            .skip(1)
+            .take_while(|node_or_token| {
+                node_or_token.as_token().map(|token| token.kind()) != Some(T![:])
+            })
+            .filter_map(|node_or_token| node_or_token.into_node())
+            .find_map(Expression::cast)
     }
 
     pub fn step(&self) -> Option<Expression> {
-        children(self.syntax()).nth(2)
+        // Skip all children until the second colon.
+        self.syntax()
+            .children_with_tokens()
+            .skip_while(|node_or_token| {
+                node_or_token.as_token().map(|token| token.kind()) != Some(T![:])
+            })
+            .skip(1)
+            .skip_while(|node_or_token| {
+                node_or_token.as_token().map(|token| token.kind()) != Some(T![:])
+            })
+            .skip(1)
+            .filter_map(|node_or_token| node_or_token.into_node())
+            .find_map(Expression::cast)
     }
 }
 

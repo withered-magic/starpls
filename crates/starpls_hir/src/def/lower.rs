@@ -9,7 +9,7 @@ use starpls_syntax::ast::{self, LoopVariables};
 
 pub(super) fn lower_module(db: &dyn Db, syntax: ast::Module) -> Module {
     LoweringContext {
-        db: db,
+        db,
         module: Module {
             expressions: Default::default(),
             statements: Default::default(),

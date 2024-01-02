@@ -1,7 +1,7 @@
 use crate::{
     def::{
-        Argument, CompClause, DictEntry, Expression, ExpressionId, Module, Name, Parameter,
-        Statement, StatementId,
+        Argument, CompClause, DictEntry, Expression, ExpressionId, Literal, LoadItem, Module, Name,
+        Parameter, Statement, StatementId,
     },
     Db,
 };
@@ -80,9 +80,10 @@ impl<'a> LoweringContext<'a> {
                 let op = stmt.assign_op_info().map(|info| info.1);
                 Statement::Assign { lhs, rhs, op }
             }
-            ast::Statement::Load(_) => Statement::Load {
-                items: Vec::new().into_boxed_slice(),
-            },
+            ast::Statement::Load(stmt) => {
+                let items = self.lower_load_items(stmt.items());
+                Statement::Load { items }
+            }
             ast::Statement::Expr(stmt) => {
                 let expr = self.lower_expression(stmt);
                 Statement::Expr { expr }
@@ -112,7 +113,10 @@ impl<'a> LoweringContext<'a> {
                 let name = self.lower_name_opt(Some(expr));
                 Expression::Name { name }
             }
-            ast::Expression::Literal(_) => Expression::Literal,
+            ast::Expression::Literal(expr) => {
+                let literal = expr.kind().into();
+                Expression::Literal { literal }
+            }
             ast::Expression::If(expr) => {
                 let if_expression = self.lower_expression_opt(expr.if_expr());
                 let test = self.lower_expression_opt(expr.test());
@@ -326,11 +330,44 @@ impl<'a> LoweringContext<'a> {
             .into_boxed_slice()
     }
 
+    fn lower_load_items(
+        &mut self,
+        load_items: impl Iterator<Item = ast::LoadItem>,
+    ) -> Box<[LoadItem]> {
+        load_items
+            .map(|load_item| match load_item {
+                ast::LoadItem::Direct(_item) => {
+                    let name = String::new().into_boxed_str();
+                    LoadItem::Direct { name }
+                }
+                ast::LoadItem::Aliased(item) => {
+                    let alias = self.lower_name_opt(item.alias());
+                    let name = String::new().into_boxed_str();
+                    LoadItem::Aliased { alias, name }
+                }
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice()
+    }
+
     fn alloc_statement(&mut self, statement: Statement) -> StatementId {
         self.module.statements.alloc(statement)
     }
 
     fn alloc_expression(&mut self, expression: Expression) -> ExpressionId {
         self.module.expressions.alloc(expression)
+    }
+}
+
+impl From<ast::LiteralKind> for Literal {
+    fn from(value: ast::LiteralKind) -> Self {
+        match value {
+            ast::LiteralKind::Int(_) => Literal::Int,
+            ast::LiteralKind::Float(_) => Literal::Float,
+            ast::LiteralKind::String(_) => Literal::String,
+            ast::LiteralKind::Bytes(_) => Literal::Bytes,
+            ast::LiteralKind::Bool(_) => Literal::Bool,
+            ast::LiteralKind::None => Literal::None,
+        }
     }
 }

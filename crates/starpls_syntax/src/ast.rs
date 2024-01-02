@@ -435,6 +435,28 @@ impl LiteralExpr {
             .and_then(|node_or_token| node_or_token.into_token())
             .unwrap()
     }
+
+    pub fn kind(&self) -> LiteralKind {
+        let token = self.token();
+        if let Some(lit) = Int::cast(token.clone()) {
+            return LiteralKind::Int(lit);
+        }
+        if let Some(lit) = Float::cast(token.clone()) {
+            return LiteralKind::Float(lit);
+        }
+        if let Some(lit) = String::cast(token.clone()) {
+            return LiteralKind::String(lit);
+        }
+        if let Some(lit) = Bytes::cast(token.clone()) {
+            return LiteralKind::Bytes(lit);
+        }
+        match token.kind() {
+            T![True] => LiteralKind::Bool(true),
+            T![False] => LiteralKind::Bool(false),
+            T![None] => LiteralKind::None,
+            _ => unreachable!(),
+        }
+    }
 }
 
 ast_node! {
@@ -944,6 +966,14 @@ pub enum UnaryArithOp {
 }
 
 ast_token! {
+    Int => INT
+}
+
+ast_token! {
+    Float => FLOAT
+}
+
+ast_token! {
     String => STRING
 }
 
@@ -953,8 +983,8 @@ ast_token! {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum LiteralKind {
-    // Int(Int),
-    // Float(Float),
+    Int(Int),
+    Float(Float),
     String(String),
     Bytes(Bytes),
     Bool(bool),

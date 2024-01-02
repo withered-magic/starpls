@@ -29,7 +29,9 @@ pub enum Expression {
     Name {
         name: Name,
     },
-    Literal,
+    Literal {
+        literal: Literal,
+    },
     If {
         if_expression: ExpressionId,
         test: ExpressionId,
@@ -167,6 +169,16 @@ pub enum CompClause {
 pub struct DictEntry {
     key: ExpressionId,
     value: ExpressionId,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Literal {
+    Int,
+    Float,
+    String,
+    Bytes,
+    Bool,
+    None,
 }
 
 #[salsa::interned]

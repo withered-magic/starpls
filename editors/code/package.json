@@ -18,6 +18,11 @@
   "contributes": {
     "commands": [
       {
+        "command": "starpls.showHir",
+        "title": "Show HIR",
+        "category": "starpls"
+      },
+      {
         "command": "starpls.showSyntaxTree",
         "title": "Show Syntax Tree",
         "category": "starpls"

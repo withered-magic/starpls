@@ -1,0 +1,6 @@
+MODULE
+  DOT_EXPR
+    NAME
+      IDENT "a"
+    DOT "."
+error 2: Expected member name

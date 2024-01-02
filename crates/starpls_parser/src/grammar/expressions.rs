@@ -158,8 +158,12 @@ fn call_expr(p: &mut Parser, m: Marker) -> CompletedMarker {
 
 /// Grammar: `DotSuffix = '.' identifier .`
 fn dot_expr(p: &mut Parser, m: Marker) -> CompletedMarker {
+    // test test_dot_expr_full
+    // a.b
     p.bump(T![.]);
-    if name(p).is_none() {
+    if field(p).is_none() {
+        // test_err test_dot_expr_missing_member
+        // a.
         p.error_recover_until("Expected member name", STMT_RECOVERY);
     }
     m.complete(p, DOT_EXPR)
@@ -406,6 +410,15 @@ pub(crate) fn name(p: &mut Parser) -> Option<CompletedMarker> {
         let m = p.start();
         p.eat(T![ident]);
         return Some(m.complete(p, NAME));
+    }
+    None
+}
+
+pub(crate) fn field(p: &mut Parser) -> Option<CompletedMarker> {
+    if p.at(T![ident]) {
+        let m = p.start();
+        p.eat(T![ident]);
+        return Some(m.complete(p, FIELD));
     }
     None
 }

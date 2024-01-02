@@ -1,0 +1,7 @@
+MODULE
+  DOT_EXPR
+    NAME
+      IDENT "a"
+    DOT "."
+    FIELD
+      IDENT "b"

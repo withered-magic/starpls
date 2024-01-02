@@ -424,6 +424,11 @@ ast_node! {
 }
 
 ast_node! {
+    Field => FIELD
+    child_token field -> IDENT;
+}
+
+ast_node! {
     LiteralExpr => LITERAL_EXPR
 }
 
@@ -582,7 +587,7 @@ ast_node! {
 ast_node! {
     DotExpr => DOT_EXPR
     child expr -> Expression;
-    child field -> Name;
+    child field -> Field;
 }
 
 ast_node! {

@@ -198,7 +198,7 @@ impl<'a> LoweringContext<'a> {
                 Expression::Paren { expression }
             }
             ast::Expression::Dot(expr) => {
-                let field = self.lower_name_opt(expr.field());
+                let field = self.lower_field_opt(expr.field());
                 let expression = self.lower_expression_opt(expr.expr());
                 Expression::Dot { expression, field }
             }
@@ -273,6 +273,17 @@ impl<'a> LoweringContext<'a> {
     fn lower_name_opt(&mut self, syntax: Option<ast::Name>) -> Name {
         syntax
             .and_then(|name| name.name())
+            .as_ref()
+            .map(|token| token.text())
+            .map_or_else(
+                || Name::missing(self.db),
+                |text| Name::from_str(self.db, text),
+            )
+    }
+
+    fn lower_field_opt(&mut self, syntax: Option<ast::Field>) -> Name {
+        syntax
+            .and_then(|field| field.field())
             .as_ref()
             .map(|token| token.text())
             .map_or_else(

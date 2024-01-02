@@ -77,7 +77,8 @@ impl<'a> LoweringContext<'a> {
             ast::Statement::Assign(stmt) => {
                 let lhs = self.lower_expression_opt(stmt.lhs());
                 let rhs = self.lower_expression_opt(stmt.rhs());
-                Statement::Assign { lhs, rhs }
+                let op = stmt.assign_op_info().map(|info| info.1);
+                Statement::Assign { lhs, rhs, op }
             }
             ast::Statement::Load(_) => Statement::Load {
                 items: Vec::new().into_boxed_slice(),
@@ -124,12 +125,14 @@ impl<'a> LoweringContext<'a> {
             }
             ast::Expression::Unary(expr) => {
                 let expression = self.lower_expression_opt(expr.expr());
-                Expression::Unary { expression }
+                let op = expr.unary_op_info().map(|info| info.1);
+                Expression::Unary { expression, op }
             }
             ast::Expression::Binary(expr) => {
                 let lhs = self.lower_expression_opt(expr.lhs());
                 let rhs = self.lower_expression_opt(expr.rhs());
-                Expression::Binary { lhs, rhs }
+                let op = expr.binary_op_info().map(|info| info.1);
+                Expression::Binary { lhs, rhs, op }
             }
             ast::Expression::Lambda(expr) => {
                 let parameters = self.lower_parameters_opt(expr.parameters());

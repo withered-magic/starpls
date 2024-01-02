@@ -1,7 +1,7 @@
 use crate::{
     StarlarkLanguage,
     SyntaxKind::{self, *},
-    SyntaxNode, SyntaxNodeChildren, SyntaxToken,
+    SyntaxNode, SyntaxNodeChildren, SyntaxToken, T,
 };
 use std::marker::PhantomData;
 
@@ -265,6 +265,30 @@ impl AssignStmt {
     pub fn rhs(&self) -> Option<Expression> {
         children(self.syntax()).nth(1)
     }
+
+    pub fn assign_op_info(&self) -> Option<(SyntaxToken, AssignOp)> {
+        self.syntax()
+            .children_with_tokens()
+            .filter_map(|node_or_token| node_or_token.into_token())
+            .find_map(|token| {
+                let op = match token.kind() {
+                    T![=] => AssignOp::Normal,
+                    T![+=] => AssignOp::Arith(ArithAssignOp::Add),
+                    T![-=] => AssignOp::Arith(ArithAssignOp::Sub),
+                    T![*=] => AssignOp::Arith(ArithAssignOp::Mul),
+                    T![/=] => AssignOp::Arith(ArithAssignOp::Div),
+                    T!["//="] => AssignOp::Arith(ArithAssignOp::Flr),
+                    T![%=] => AssignOp::Arith(ArithAssignOp::Mod),
+                    T![&=] => AssignOp::Bitwise(BitwiseAssignOp::And),
+                    T![|=] => AssignOp::Bitwise(BitwiseAssignOp::Or),
+                    T![>>=] => AssignOp::Bitwise(BitwiseAssignOp::Shl),
+                    T![<<=] => AssignOp::Bitwise(BitwiseAssignOp::Shr),
+                    T![^=] => AssignOp::Bitwise(BitwiseAssignOp::Xor),
+                    _ => return None,
+                };
+                Some((token, op))
+            })
+    }
 }
 
 ast_node! {
@@ -392,6 +416,24 @@ ast_node! {
     child expr -> Expression;
 }
 
+impl UnaryExpr {
+    pub fn unary_op_info(&self) -> Option<(SyntaxToken, UnaryOp)> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(|node_or_token| node_or_token.into_token())
+            .find_map(|token| {
+                let op = match token.kind() {
+                    T![+] => UnaryOp::Arith(UnaryArithOp::Add),
+                    T![-] => UnaryOp::Arith(UnaryArithOp::Sub),
+                    T![~] => UnaryOp::Inv,
+                    T![not] => UnaryOp::Not,
+                    _ => return None,
+                };
+                Some((token, op))
+            })
+    }
+}
+
 ast_node! {
     BinaryExpr => BINARY_EXPR
     child lhs -> Expression;
@@ -400,6 +442,39 @@ ast_node! {
 impl BinaryExpr {
     pub fn rhs(&self) -> Option<Expression> {
         children(self.syntax()).nth(1)
+    }
+
+    pub fn binary_op_info(&self) -> Option<(SyntaxToken, BinaryOp)> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(|node_or_token| node_or_token.into_token())
+            .find_map(|token| {
+                let op = match token.kind() {
+                    // TODO(withered-magic): Handle "not in".
+                    T![+] => BinaryOp::Arith(ArithOp::Add),
+                    T![-] => BinaryOp::Arith(ArithOp::Sub),
+                    T![*] => BinaryOp::Arith(ArithOp::Mul),
+                    T![/] => BinaryOp::Arith(ArithOp::Div),
+                    T!["//"] => BinaryOp::Arith(ArithOp::Flr),
+                    T![%] => BinaryOp::Arith(ArithOp::Mod),
+                    T![&] => BinaryOp::Bitwise(BitwiseOp::And),
+                    T![|] => BinaryOp::Bitwise(BitwiseOp::Or),
+                    T![^] => BinaryOp::Bitwise(BitwiseOp::Xor),
+                    T![<<] => BinaryOp::Bitwise(BitwiseOp::Shl),
+                    T![>>] => BinaryOp::Bitwise(BitwiseOp::Shr),
+                    T![==] => BinaryOp::Cmp(CmpOp::Eq),
+                    T![!=] => BinaryOp::Cmp(CmpOp::Ne),
+                    T![<] => BinaryOp::Cmp(CmpOp::Lt),
+                    T![>] => BinaryOp::Cmp(CmpOp::Gt),
+                    T![<=] => BinaryOp::Cmp(CmpOp::Le),
+                    T![>=] => BinaryOp::Cmp(CmpOp::Ge),
+                    T![and] => BinaryOp::Logic(LogicOp::And),
+                    T![or] => BinaryOp::Logic(LogicOp::Or),
+                    T![in] => BinaryOp::MemberOp(MemberOp::In),
+                    _ => return None,
+                };
+                Some((token, op))
+            })
     }
 }
 
@@ -710,4 +785,93 @@ ast_node! {
     AliasedLoadItem => ALIASED_LOAD_ITEM
     child alias -> Name;
     child_token name -> STRING;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BinaryOp {
+    Arith(ArithOp),
+    Bitwise(BitwiseOp),
+    Cmp(CmpOp),
+    Logic(LogicOp),
+    MemberOp(MemberOp),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ArithOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Flr,
+    Mod,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BitwiseOp {
+    And,
+    Or,
+    Xor,
+    Shl,
+    Shr,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CmpOp {
+    Eq,
+    Ne,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LogicOp {
+    And,
+    Or,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MemberOp {
+    In,
+    NotIn,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AssignOp {
+    Normal,
+    Arith(ArithAssignOp),
+    Bitwise(BitwiseAssignOp),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ArithAssignOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Flr,
+    Mod,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BitwiseAssignOp {
+    And,
+    Or,
+    Shl,
+    Shr,
+    Xor,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum UnaryOp {
+    Arith(UnaryArithOp),
+    Inv,
+    Not,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum UnaryArithOp {
+    Add,
+    Sub,
 }

@@ -1,7 +1,7 @@
 use crate::Db;
 use id_arena::{Arena, Id};
 use smol_str::SmolStr;
-use starpls_syntax::ast::{self, AstPtr};
+use starpls_syntax::ast::{self, AssignOp, AstPtr, BinaryOp, UnaryOp};
 
 pub mod lower;
 
@@ -36,11 +36,13 @@ pub enum Expression {
         else_expression: ExpressionId,
     },
     Unary {
+        op: Option<UnaryOp>,
         expression: ExpressionId,
     },
     Binary {
         lhs: ExpressionId,
         rhs: ExpressionId,
+        op: Option<BinaryOp>,
     },
     Lambda {
         parameters: Box<[Parameter]>,
@@ -112,6 +114,7 @@ pub enum Statement {
     Assign {
         lhs: ExpressionId,
         rhs: ExpressionId,
+        op: Option<AssignOp>,
     },
     Load {
         items: Box<[LoadItem]>,

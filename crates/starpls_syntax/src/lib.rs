@@ -1,4 +1,4 @@
-use starpls_parser::SyntaxKind;
+use starpls_parser::{SyntaxKind, T};
 
 pub use {
     crate::{

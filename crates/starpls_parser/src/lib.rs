@@ -122,22 +122,11 @@ impl<'a> Parser<'a> {
         });
     }
 
-    pub(crate) fn error_and_bump<T>(&mut self, message: T)
-    where
-        T: Into<String>,
-    {
-        self.error(message);
-
-        // Create a new ERROR node to hold the next token.
-        let m = self.start();
-        self.bump_any();
-        m.complete(self, ERROR);
-    }
-
-    pub(crate) fn error_recover_until<T>(&mut self, message: T, recover: SyntaxKindSet)
-    where
-        T: Into<String>,
-    {
+    pub(crate) fn error_recover_until(
+        &mut self,
+        message: impl Into<String>,
+        recover: SyntaxKindSet,
+    ) {
         self.error(message);
 
         // Start a new ERROR node and consume tokens until we are at either a token specified in the recovery set, or EOF.
@@ -148,14 +137,6 @@ impl<'a> Parser<'a> {
             }
             m.complete(self, ERROR);
         }
-    }
-
-    pub(crate) fn expect(&mut self, kind: SyntaxKind) -> bool {
-        if !self.eat(kind) {
-            self.error(format!("expected {kind:?}"));
-            return false;
-        }
-        true
     }
 
     pub(crate) fn at_kinds(&self, set: SyntaxKindSet) -> bool {

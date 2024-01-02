@@ -96,6 +96,37 @@ macro_rules! ast_node {
     };
 }
 
+/// A macro for defining AST tokens. The `AstToken` trait is automatically implemented.
+macro_rules! ast_token {
+    (
+        $(#[doc = $doc:expr])*$token:ident => $kind:ident
+    ) => {
+        $(#[doc = $doc])*
+        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        pub struct $token {
+            pub(crate) syntax: SyntaxToken,
+        }
+
+        impl AstToken for $token {
+            fn can_cast(kind: SyntaxKind) -> bool {
+                kind == $kind
+            }
+
+            fn cast(syntax: SyntaxToken) -> Option<Self> {
+                if Self::can_cast(syntax.kind()) {
+                    Some(Self { syntax })
+                } else {
+                    None
+                }
+            }
+
+            fn syntax(&self) -> &SyntaxToken {
+                &self.syntax
+            }
+        }
+    };
+}
+
 pub struct AstChildren<N> {
     inner: SyntaxNodeChildren,
     phantom: PhantomData<N>,
@@ -396,6 +427,16 @@ ast_node! {
     LiteralExpr => LITERAL_EXPR
 }
 
+impl LiteralExpr {
+    pub fn token(&self) -> SyntaxToken {
+        self.syntax
+            .children_with_tokens()
+            .find(|node_or_token| !node_or_token.kind().is_trivia_token())
+            .and_then(|node_or_token| node_or_token.into_token())
+            .unwrap()
+    }
+}
+
 ast_node! {
     IfExpr => IF_EXPR
     child if_expr -> Expression;
@@ -550,9 +591,7 @@ impl SliceExpr {
         // and "start" (at index 1).
         self.syntax()
             .children_with_tokens()
-            .take_while(|node_or_token| {
-                node_or_token.as_token().map(|token| token.kind()) != Some(T![:])
-            })
+            .take_while(|node_or_token| node_or_token.kind() != T![:])
             .filter_map(|node_or_token| node_or_token.into_node())
             .filter_map(Expression::cast)
             .nth(1)
@@ -562,13 +601,9 @@ impl SliceExpr {
         // Skip all children until the first colon, consume the colon, then take all children until the second colon.
         self.syntax()
             .children_with_tokens()
-            .skip_while(|node_or_token| {
-                node_or_token.as_token().map(|token| token.kind()) != Some(T![:])
-            })
+            .skip_while(|node_or_token| node_or_token.kind() != T![:])
             .skip(1)
-            .take_while(|node_or_token| {
-                node_or_token.as_token().map(|token| token.kind()) != Some(T![:])
-            })
+            .take_while(|node_or_token| node_or_token.kind() != T![:])
             .filter_map(|node_or_token| node_or_token.into_node())
             .find_map(Expression::cast)
     }
@@ -577,13 +612,9 @@ impl SliceExpr {
         // Skip all children until the second colon.
         self.syntax()
             .children_with_tokens()
-            .skip_while(|node_or_token| {
-                node_or_token.as_token().map(|token| token.kind()) != Some(T![:])
-            })
+            .skip_while(|node_or_token| node_or_token.kind() != T![:])
             .skip(1)
-            .skip_while(|node_or_token| {
-                node_or_token.as_token().map(|token| token.kind()) != Some(T![:])
-            })
+            .skip_while(|node_or_token| node_or_token.kind() != T![:])
             .skip(1)
             .filter_map(|node_or_token| node_or_token.into_node())
             .find_map(Expression::cast)
@@ -899,15 +930,33 @@ pub enum BitwiseAssignOp {
     Xor,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
     Arith(UnaryArithOp),
     Inv,
     Not,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum UnaryArithOp {
     Add,
     Sub,
+}
+
+ast_token! {
+    String => STRING
+}
+
+ast_token! {
+    Bytes => BYTES
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum LiteralKind {
+    // Int(Int),
+    // Float(Float),
+    String(String),
+    Bytes(Bytes),
+    Bool(bool),
+    None,
 }

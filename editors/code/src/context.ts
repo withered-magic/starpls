@@ -41,6 +41,11 @@ export class Context {
     this.registerCommands();
   }
 
+  async stop() {
+    this.disposables.forEach((disposable) => disposable.dispose());
+    return this._client.stop();
+  }
+
   private async getOrCreateClient(): Promise<LanguageClient> {
     if (this._client) {
       return this._client;

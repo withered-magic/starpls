@@ -4,6 +4,7 @@ use smol_str::SmolStr;
 use starpls_syntax::ast::{self, AssignOp, AstPtr, BinaryOp, UnaryOp};
 
 pub mod lower;
+pub mod scope;
 
 pub type ExpressionId = Id<Expression>;
 pub type ExpressionPtr = AstPtr<Expression>;

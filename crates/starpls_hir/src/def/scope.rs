@@ -1,12 +1,24 @@
 use crate::{
     def::{Declaration, Expression, ExpressionId, Parameter, Statement, StatementId},
-    Module, Name,
+    Db, LowerResult, Module, Name,
 };
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
 use std::collections::{hash_map::Entry, VecDeque};
+use std::sync::Arc;
 
 pub(crate) type ScopeId = Id<Scope>;
+
+#[salsa::tracked]
+pub(crate) struct ModuleScopes {
+    pub(crate) scopes: Arc<Scopes>,
+}
+
+#[salsa::tracked]
+pub(crate) fn module_scopes(db: &dyn Db, lower_res: LowerResult) -> ModuleScopes {
+    let scopes = Scopes::new_for_module(&lower_res.module(db));
+    ModuleScopes::new(db, Arc::new(scopes))
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Scope {
@@ -14,9 +26,10 @@ pub struct Scope {
     pub(crate) parent: Option<ScopeId>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Scopes {
-    scopes: Arena<Scope>,
-    scope_by_expression: FxHashMap<ExpressionId, ScopeId>,
+    pub(crate) scopes: Arena<Scope>,
+    pub(crate) scope_by_expression: FxHashMap<ExpressionId, ScopeId>,
 }
 
 struct DeferredScope {
@@ -98,11 +111,14 @@ impl Scopes {
             }
         }
     }
+
+    pub(crate) fn scope_chain(&self, scope: Option<ScopeId>) -> impl Iterator<Item = ScopeId> + '_ {
+        std::iter::successors(scope, |scope| self.scopes[*scope].parent)
+    }
 }
 
 fn compute_scopes_for_expression(
     scopes: &mut Scopes,
-    deferred_scopes: &mut VecDeque<DeferredScope>,
     expression: ExpressionId,
     module: &Module,
     current_scope: ScopeId,
@@ -110,14 +126,7 @@ fn compute_scopes_for_expression(
 ) {
     scopes.scope_by_expression.insert(expression, current_scope);
     let mut compute_and_assign = |expression| {
-        compute_scopes_for_expression(
-            scopes,
-            deferred_scopes,
-            expression,
-            module,
-            current_scope,
-            is_assign_target,
-        )
+        compute_scopes_for_expression(scopes, expression, module, current_scope, is_assign_target)
     };
 
     // TODO(withered-magic): Handle list and dict comprehensions, whose CompClauses create scopes.
@@ -136,15 +145,16 @@ fn compute_scopes_for_expression(
             expressions.iter().copied().for_each(compute_and_assign)
         }
         Expression::Paren { expression } => compute_and_assign(*expression),
+        Expression::DictComp {
+            entry,
+            comp_clauses,
+        } => {}
+        Expression::ListComp {
+            expression,
+            comp_clauses,
+        } => {}
         expression => expression.walk_child_expressions(|expression| {
-            compute_scopes_for_expression(
-                scopes,
-                deferred_scopes,
-                expression,
-                module,
-                current_scope,
-                false,
-            )
+            compute_scopes_for_expression(scopes, expression, module, current_scope, false)
         }),
     }
 }
@@ -192,7 +202,7 @@ fn compute_scopes_for_statement(
     statement: StatementId,
     module: &Module,
     current: &mut ScopeId,
-) -> Option<DeferredFunctionData> {
+) {
     match &module.statements[statement] {
         Statement::Def {
             name,
@@ -240,10 +250,18 @@ fn compute_scopes_for_statement(
             iterable,
             targets,
             statements,
-        } => {}
-        Statement::Assign { lhs, .. } => {}
+        } => {
+            compute_scopes_for_expression(scopes, *iterable, module, *current, false);
+            targets.iter().copied().for_each(|expression| {
+                compute_scopes_for_expression(scopes, expression, module, *current, false)
+            });
+            compute_scopes_for_statements(scopes, deferred_functions, statements, module, current);
+        }
+        Statement::Assign { lhs, .. } => {
+            *current = scopes.alloc_scope(module, *current);
+            compute_scopes_for_expression(scopes, *lhs, module, *current, true);
+        }
         Statement::Load { items } => {}
         _ => {}
     }
-    None
 }

@@ -19,7 +19,15 @@ pub struct BindResult {
 }
 
 #[salsa::jar(db = Db)]
-pub struct Jar(bind, lower, BindResult, LowerResult, Name);
+pub struct Jar(
+    bind,
+    lower,
+    BindResult,
+    LowerResult,
+    Name,
+    def::scope::ModuleScopes,
+    def::scope::module_scopes,
+);
 
 pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {}
 

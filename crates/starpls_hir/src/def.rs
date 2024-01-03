@@ -6,6 +6,7 @@ use smol_str::SmolStr;
 use starpls_syntax::ast::{self, AssignOp, AstPtr, BinaryOp, UnaryOp};
 
 pub mod lower;
+pub mod resolver;
 pub mod scope;
 
 pub struct IdRange<T> {

@@ -5,26 +5,8 @@ use crate::{
 };
 use std::marker::PhantomData;
 
+pub use rowan::ast::{AstNode, AstPtr};
 pub type SyntaxNodePtr = rowan::ast::SyntaxNodePtr<StarlarkLanguage>;
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct AstPtr<N: AstNode> {
-    inner: SyntaxNodePtr,
-    phantom: PhantomData<fn() -> N>,
-}
-
-/// A trait that allows converting between untyped `SyntaxNode`s and typed AST nodes.
-pub trait AstNode {
-    fn can_cast(kind: SyntaxKind) -> bool
-    where
-        Self: Sized;
-
-    fn cast(syntax: SyntaxNode) -> Option<Self>
-    where
-        Self: Sized;
-
-    fn syntax(&self) -> &SyntaxNode;
-}
 
 /// A trait that allows converting between untyped `SyntaxToken`s and typed AST tokens.
 pub trait AstToken {
@@ -58,6 +40,8 @@ macro_rules! ast_node {
         }
 
         impl AstNode for $node {
+            type Language = StarlarkLanguage;
+
             fn can_cast(kind: SyntaxKind) -> bool {
                 kind == $kind
             }
@@ -142,7 +126,7 @@ impl<N> AstChildren<N> {
     }
 }
 
-impl<N: AstNode> Iterator for AstChildren<N> {
+impl<N: AstNode<Language = StarlarkLanguage>> Iterator for AstChildren<N> {
     type Item = N;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -150,11 +134,13 @@ impl<N: AstNode> Iterator for AstChildren<N> {
     }
 }
 
-fn child<N: AstNode>(parent: &SyntaxNode) -> Option<N> {
+fn child<N: AstNode<Language = StarlarkLanguage>>(parent: &SyntaxNode) -> Option<N> {
     parent.children().find_map(N::cast)
 }
 
-fn children<N: AstNode>(parent: &SyntaxNode) -> impl Iterator<Item = N> {
+fn children<N: AstNode<Language = StarlarkLanguage>>(
+    parent: &SyntaxNode,
+) -> impl Iterator<Item = N> {
     parent.children().filter_map(N::cast)
 }
 
@@ -187,6 +173,8 @@ pub enum Statement {
 }
 
 impl AstNode for Statement {
+    type Language = StarlarkLanguage;
+
     fn can_cast(kind: SyntaxKind) -> bool
     where
         Self: Sized,
@@ -350,6 +338,8 @@ pub enum Expression {
 }
 
 impl AstNode for Expression {
+    type Language = StarlarkLanguage;
+
     fn can_cast(kind: SyntaxKind) -> bool
     where
         Self: Sized,
@@ -664,6 +654,8 @@ pub enum Argument {
 }
 
 impl AstNode for Argument {
+    type Language = StarlarkLanguage;
+
     fn can_cast(kind: SyntaxKind) -> bool
     where
         Self: Sized,
@@ -730,6 +722,8 @@ pub enum Parameter {
 }
 
 impl AstNode for Parameter {
+    type Language = StarlarkLanguage;
+
     fn can_cast(kind: SyntaxKind) -> bool
     where
         Self: Sized,
@@ -804,6 +798,8 @@ pub enum CompClause {
 }
 
 impl AstNode for CompClause {
+    type Language = StarlarkLanguage;
+
     fn can_cast(kind: SyntaxKind) -> bool
     where
         Self: Sized,
@@ -847,6 +843,8 @@ pub enum LoadItem {
 }
 
 impl AstNode for LoadItem {
+    type Language = StarlarkLanguage;
+
     fn can_cast(kind: SyntaxKind) -> bool
     where
         Self: Sized,

@@ -10,10 +10,6 @@ pub mod lower;
 pub mod resolver;
 pub mod scope;
 
-pub struct IdRange<T> {
-    phantom: PhantomData<T>,
-}
-
 pub type ExprId = Id<Expr>;
 pub type ExprPtr = AstPtr<ast::Expression>;
 
@@ -192,7 +188,7 @@ pub enum Stmt {
     For {
         iterable: ExprId,
         targets: Box<[ExprId]>,
-        statements: Box<[StmtId]>,
+        stmts: Box<[StmtId]>,
     },
     Return {
         expr: Option<ExprId>,

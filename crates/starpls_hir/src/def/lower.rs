@@ -1,11 +1,11 @@
 use crate::{
     def::{
-        Argument, CompClause, DictEntry, Expr, ExprId, Literal, LoadItem, Module, Name, Parameter,
-        Stmt, StmtId,
+        Argument, CompClause, DictEntry, Expr, ExprId, ExprPtr, Literal, LoadItem, Module, Name,
+        Parameter, Stmt, StmtId, StmtPtr,
     },
     Db,
 };
-use starpls_syntax::ast::{self, LoopVariables};
+use starpls_syntax::ast::{self, AstNode, AstPtr, LoopVariables};
 
 pub(super) fn lower_module(db: &dyn Db, syntax: ast::Module) -> Module {
     LoweringContext {
@@ -39,6 +39,7 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn lower_stmt(&mut self, stmt: ast::Statement) -> StmtId {
+        let ptr = AstPtr::new(&stmt);
         let statement = match stmt {
             ast::Statement::Def(syntax) => {
                 let name = self.lower_name_opt(syntax.name());
@@ -65,11 +66,11 @@ impl<'a> LoweringContext<'a> {
             ast::Statement::For(syntax) => {
                 let iterable = self.lower_expr_opt(syntax.iterable());
                 let targets = self.lower_loop_variables_opt(syntax.targets());
-                let statements = self.lower_suite_opt(syntax.suite());
+                let stmts = self.lower_suite_opt(syntax.suite());
                 Stmt::For {
                     iterable,
                     targets,
-                    statements,
+                    stmts,
                 }
             }
             ast::Statement::Return(syntax) => {
@@ -94,7 +95,7 @@ impl<'a> LoweringContext<'a> {
                 Stmt::Expr { expr }
             }
         };
-        self.alloc_stmt(statement)
+        self.alloc_stmt(statement, ptr)
     }
 
     fn lower_expr_opt(&mut self, syntax: Option<ast::Expression>) -> ExprId {
@@ -109,11 +110,12 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn lower_expr_missing(&mut self) -> ExprId {
-        self.alloc_expr(Expr::Missing)
+        self.module.exprs.alloc(Expr::Missing)
     }
 
-    fn lower_expr(&mut self, syntax: ast::Expression) -> ExprId {
-        let expr = match syntax {
+    fn lower_expr(&mut self, expr: ast::Expression) -> ExprId {
+        let ptr = AstPtr::new(&expr);
+        let expr = match expr {
             ast::Expression::Name(node) => {
                 let name = self.lower_name_opt(Some(node));
                 Expr::Name { name }
@@ -218,7 +220,7 @@ impl<'a> LoweringContext<'a> {
                 Expr::Slice { start, end, step }
             }
         };
-        self.alloc_expr(expr)
+        self.alloc_expr(expr, ptr)
     }
 
     fn lower_params_opt(&mut self, syntax: Option<ast::Parameters>) -> Box<[Parameter]> {
@@ -360,12 +362,18 @@ impl<'a> LoweringContext<'a> {
             .into_boxed_slice()
     }
 
-    fn alloc_stmt(&mut self, statement: Stmt) -> StmtId {
-        self.module.stmts.alloc(statement)
+    fn alloc_stmt(&mut self, stmt: Stmt, ptr: StmtPtr) -> StmtId {
+        let id = self.module.stmts.alloc(stmt);
+        self.module.stmt_map.insert(ptr.clone(), id);
+        self.module.stmt_map_back.insert(id, ptr);
+        id
     }
 
-    fn alloc_expr(&mut self, expression: Expr) -> ExprId {
-        self.module.exprs.alloc(expression)
+    fn alloc_expr(&mut self, expr: Expr, ptr: ExprPtr) -> ExprId {
+        let id = self.module.exprs.alloc(expr);
+        self.module.expr_map.insert(ptr.clone(), id);
+        self.module.expr_map_back.insert(id, ptr);
+        id
     }
 }
 

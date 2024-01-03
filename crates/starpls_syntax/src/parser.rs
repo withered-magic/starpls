@@ -1,5 +1,5 @@
-use crate::{ast::AstNode, LineIndex, Module, StarlarkLanguage, SyntaxNode};
-use rowan::{GreenNode, GreenNodeBuilder, Language, TextRange, TextSize};
+use crate::{LineIndex, Module, StarlarkLanguage, SyntaxNode};
+use rowan::{ast::AstNode, GreenNode, GreenNodeBuilder, Language, TextRange, TextSize};
 use starpls_parser::{parse, StrStep, StrWithTokens, SyntaxKind};
 use std::marker::PhantomData;
 
@@ -29,7 +29,7 @@ impl<T> Parse<T> {
     }
 }
 
-impl<T: AstNode> Parse<T> {
+impl<T: AstNode<Language = StarlarkLanguage>> Parse<T> {
     pub fn tree(&self) -> T {
         T::cast(self.syntax()).unwrap()
     }

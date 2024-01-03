@@ -211,13 +211,13 @@ fn compute_stmt_scopes(
         Stmt::For {
             iterable,
             targets,
-            statements,
+            stmts,
         } => {
             compute_expr_scopes(scopes, *iterable, module, *current, false);
             targets.iter().copied().for_each(|expression| {
                 compute_expr_scopes(scopes, expression, module, *current, false)
             });
-            compute_stmt_list_scopes(scopes, deferred_functions, statements, module, current);
+            compute_stmt_list_scopes(scopes, deferred_functions, stmts, module, current);
         }
         Stmt::Assign { lhs, .. } => {
             *current = scopes.alloc_scope(module, *current);

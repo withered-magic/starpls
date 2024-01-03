@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use crate::Db;
 use id_arena::{Arena, Id};
 use smol_str::SmolStr;
@@ -5,6 +7,10 @@ use starpls_syntax::ast::{self, AssignOp, AstPtr, BinaryOp, UnaryOp};
 
 pub mod lower;
 pub mod scope;
+
+pub struct IdRange<T> {
+    phantom: PhantomData<T>,
+}
 
 pub type ExpressionId = Id<Expression>;
 pub type ExpressionPtr = AstPtr<Expression>;
@@ -89,6 +95,81 @@ pub enum Expression {
         end: Option<ExpressionId>,
         step: Option<ExpressionId>,
     },
+}
+
+impl Expression {
+    pub(crate) fn walk_child_expressions(&self, mut f: impl FnMut(ExpressionId)) {
+        match self {
+            Expression::If {
+                if_expression,
+                test,
+                else_expression,
+            } => {
+                f(*if_expression);
+                f(*test);
+                f(*else_expression);
+            }
+            Expression::Unary { expression, .. } => f(*expression),
+            Expression::Binary { lhs, rhs, .. } => {
+                f(*lhs);
+                f(*rhs);
+            }
+            Expression::Lambda { body, .. } => f(*body),
+            Expression::List { expressions } => expressions.iter().copied().for_each(f),
+            Expression::ListComp {
+                expression,
+                comp_clauses,
+            } => {
+                self.walk_comp_clause_expressions(comp_clauses, &mut f);
+                f(*expression);
+            }
+
+            Expression::Dict { entries } => {
+                for entry in entries.iter() {
+                    f(entry.key);
+                    f(entry.value);
+                }
+            }
+            Expression::DictComp {
+                entry,
+                comp_clauses,
+            } => {
+                self.walk_comp_clause_expressions(comp_clauses, &mut f);
+                f(entry.key);
+                f(entry.value);
+            }
+            Expression::Tuple { expressions } => expressions.iter().copied().for_each(f),
+            Expression::Paren { expression } => f(*expression),
+            Expression::Dot { expression, .. } => f(*expression),
+            Expression::Call { callee, arguments } => f(*callee),
+            Expression::Index { lhs, index } => {
+                f(*lhs);
+                f(*index);
+            }
+            Expression::Slice { start, end, step } => {
+                start.map(&mut f);
+                end.map(&mut f);
+                step.map(&mut f);
+            }
+            _ => {}
+        }
+    }
+
+    fn walk_comp_clause_expressions(
+        &self,
+        comp_clauses: &Box<[CompClause]>,
+        mut f: impl FnMut(ExpressionId),
+    ) {
+        for comp_clause in comp_clauses.iter() {
+            match comp_clause {
+                CompClause::For { iterable, targets } => {
+                    f(*iterable);
+                    targets.iter().copied().for_each(&mut f);
+                }
+                CompClause::If { test } => f(*test),
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -185,8 +266,16 @@ pub enum Literal {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Declaration {
-    Function { id: StatementId },
-    Variable { id: ExpressionId },
+    Function {
+        id: StatementId,
+    },
+    Variable {
+        id: ExpressionId,
+    },
+    Parameter {
+        // id: ParameterId,
+    },
+    LoadItem {},
 }
 
 #[salsa::interned]

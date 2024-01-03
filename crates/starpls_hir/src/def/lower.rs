@@ -1,7 +1,7 @@
 use crate::{
     def::{
-        Argument, CompClause, DictEntry, Expression, ExpressionId, Literal, LoadItem, Module, Name,
-        Parameter, Statement, StatementId,
+        Argument, CompClause, DictEntry, Expr, ExprId, Literal, LoadItem, Module, Name, Parameter,
+        Stmt, StmtId,
     },
     Db,
 };
@@ -11,8 +11,12 @@ pub(super) fn lower_module(db: &dyn Db, syntax: ast::Module) -> Module {
     LoweringContext {
         db,
         module: Module {
-            expressions: Default::default(),
-            statements: Default::default(),
+            exprs: Default::default(),
+            expr_map: Default::default(),
+            expr_map_back: Default::default(),
+            stmts: Default::default(),
+            stmt_map: Default::default(),
+            stmt_map_back: Default::default(),
             top_level: Default::default(),
         },
     }
@@ -28,208 +32,203 @@ impl<'a> LoweringContext<'a> {
     fn lower(mut self, syntax: ast::Module) -> Module {
         let mut top_level = Vec::new();
         for statement in syntax.statements() {
-            top_level.push(self.lower_statement(statement));
+            top_level.push(self.lower_stmt(statement));
         }
         self.module.top_level = top_level.into_boxed_slice();
         self.module
     }
 
-    fn lower_statement(&mut self, statement: ast::Statement) -> StatementId {
-        let statement = match statement {
-            ast::Statement::Def(stmt) => {
-                let name = self.lower_name_opt(stmt.name());
-                let parameters = self.lower_parameters_opt(stmt.parameters());
-                let statements = self.lower_suite_opt(stmt.suite());
-                Statement::Def {
+    fn lower_stmt(&mut self, stmt: ast::Statement) -> StmtId {
+        let statement = match stmt {
+            ast::Statement::Def(syntax) => {
+                let name = self.lower_name_opt(syntax.name());
+                let params = self.lower_params_opt(syntax.parameters());
+                let stmts = self.lower_suite_opt(syntax.suite());
+                Stmt::Def {
                     name,
-                    parameters,
-                    statements,
+                    params,
+                    stmts,
                 }
             }
             ast::Statement::If(stmt) => {
-                let test = self.lower_expression_opt(stmt.test());
-                let if_statements = self.lower_suite_opt(stmt.if_suite());
-                let elif_statement = stmt
-                    .elif_stmt()
-                    .map(|elif_stmt| self.lower_statement(elif_stmt));
-                let else_statements = self.lower_suite_opt(stmt.else_suite());
-                Statement::If {
+                let test = self.lower_expr_opt(stmt.test());
+                let if_stmts = self.lower_suite_opt(stmt.if_suite());
+                let elif_stmt = stmt.elif_stmt().map(|elif_stmt| self.lower_stmt(elif_stmt));
+                let else_stmts = self.lower_suite_opt(stmt.else_suite());
+                Stmt::If {
                     test,
-                    if_statements,
-                    elif_statement,
-                    else_statements,
+                    if_stmts,
+                    elif_stmt,
+                    else_stmts,
                 }
             }
             ast::Statement::For(syntax) => {
-                let iterable = self.lower_expression_opt(syntax.iterable());
+                let iterable = self.lower_expr_opt(syntax.iterable());
                 let targets = self.lower_loop_variables_opt(syntax.targets());
                 let statements = self.lower_suite_opt(syntax.suite());
-                Statement::For {
+                Stmt::For {
                     iterable,
                     targets,
                     statements,
                 }
             }
             ast::Statement::Return(syntax) => {
-                let expr = self.lower_expression_maybe(syntax.expr());
-                Statement::Return { expr }
+                let expr = self.lower_expr_maybe(syntax.expr());
+                Stmt::Return { expr }
             }
-            ast::Statement::Break(_) => Statement::Break,
-            ast::Statement::Continue(_) => Statement::Continue,
-            ast::Statement::Pass(_) => Statement::Pass,
+            ast::Statement::Break(_) => Stmt::Break,
+            ast::Statement::Continue(_) => Stmt::Continue,
+            ast::Statement::Pass(_) => Stmt::Pass,
             ast::Statement::Assign(stmt) => {
-                let lhs = self.lower_expression_opt(stmt.lhs());
-                let rhs = self.lower_expression_opt(stmt.rhs());
+                let lhs = self.lower_expr_opt(stmt.lhs());
+                let rhs = self.lower_expr_opt(stmt.rhs());
                 let op = stmt.assign_op_info().map(|info| info.1);
-                Statement::Assign { lhs, rhs, op }
+                Stmt::Assign { lhs, rhs, op }
             }
             ast::Statement::Load(stmt) => {
                 let items = self.lower_load_items(stmt.items());
-                Statement::Load { items }
+                Stmt::Load { items }
             }
             ast::Statement::Expr(stmt) => {
-                let expr = self.lower_expression(stmt);
-                Statement::Expr { expr }
+                let expr = self.lower_expr(stmt);
+                Stmt::Expr { expr }
             }
         };
-        self.alloc_statement(statement)
+        self.alloc_stmt(statement)
     }
 
-    fn lower_expression_opt(&mut self, syntax: Option<ast::Expression>) -> ExpressionId {
+    fn lower_expr_opt(&mut self, syntax: Option<ast::Expression>) -> ExprId {
         match syntax {
-            Some(syntax) => self.lower_expression(syntax),
-            None => self.lower_expression_missing(),
+            Some(syntax) => self.lower_expr(syntax),
+            None => self.lower_expr_missing(),
         }
     }
 
-    fn lower_expression_maybe(&mut self, syntax: Option<ast::Expression>) -> Option<ExpressionId> {
-        syntax.map(|syntax| self.lower_expression(syntax))
+    fn lower_expr_maybe(&mut self, syntax: Option<ast::Expression>) -> Option<ExprId> {
+        syntax.map(|syntax| self.lower_expr(syntax))
     }
 
-    fn lower_expression_missing(&mut self) -> ExpressionId {
-        self.alloc_expression(Expression::Missing)
+    fn lower_expr_missing(&mut self) -> ExprId {
+        self.alloc_expr(Expr::Missing)
     }
 
-    fn lower_expression(&mut self, syntax: ast::Expression) -> ExpressionId {
-        let expression = match syntax {
-            ast::Expression::Name(expr) => {
-                let name = self.lower_name_opt(Some(expr));
-                Expression::Name { name }
+    fn lower_expr(&mut self, syntax: ast::Expression) -> ExprId {
+        let expr = match syntax {
+            ast::Expression::Name(node) => {
+                let name = self.lower_name_opt(Some(node));
+                Expr::Name { name }
             }
-            ast::Expression::Literal(expr) => {
-                let literal = expr.kind().into();
-                Expression::Literal { literal }
+            ast::Expression::Literal(node) => {
+                let literal = node.kind().into();
+                Expr::Literal { literal }
             }
-            ast::Expression::If(expr) => {
-                let if_expression = self.lower_expression_opt(expr.if_expr());
-                let test = self.lower_expression_opt(expr.test());
-                let else_expression = self.lower_expression_opt(expr.else_expr());
-                Expression::If {
-                    if_expression,
+            ast::Expression::If(node) => {
+                let if_expr = self.lower_expr_opt(node.if_expr());
+                let test = self.lower_expr_opt(node.test());
+                let else_expr = self.lower_expr_opt(node.else_expr());
+                Expr::If {
+                    if_expr,
                     test,
-                    else_expression,
+                    else_expr,
                 }
             }
-            ast::Expression::Unary(expr) => {
-                let expression = self.lower_expression_opt(expr.expr());
-                let op = expr.unary_op_info().map(|info| info.1);
-                Expression::Unary { expression, op }
+            ast::Expression::Unary(node) => {
+                let expr = self.lower_expr_opt(node.expr());
+                let op = node.unary_op_info().map(|info| info.1);
+                Expr::Unary { expr, op }
             }
-            ast::Expression::Binary(expr) => {
-                let lhs = self.lower_expression_opt(expr.lhs());
-                let rhs = self.lower_expression_opt(expr.rhs());
-                let op = expr.binary_op_info().map(|info| info.1);
-                Expression::Binary { lhs, rhs, op }
+            ast::Expression::Binary(node) => {
+                let lhs = self.lower_expr_opt(node.lhs());
+                let rhs = self.lower_expr_opt(node.rhs());
+                let op = node.binary_op_info().map(|info| info.1);
+                Expr::Binary { lhs, rhs, op }
             }
-            ast::Expression::Lambda(expr) => {
-                let parameters = self.lower_parameters_opt(expr.parameters());
-                let body = self.lower_expression_opt(expr.body());
-                Expression::Lambda { parameters, body }
+            ast::Expression::Lambda(node) => {
+                let params = self.lower_params_opt(node.parameters());
+                let body = self.lower_expr_opt(node.body());
+                Expr::Lambda { params, body }
             }
-            ast::Expression::List(expr) => {
-                let expressions = expr
+            ast::Expression::List(node) => {
+                let exprs = node
                     .elements()
-                    .map(|element| self.lower_expression(element))
+                    .map(|element| self.lower_expr(element))
                     .collect::<Vec<_>>()
                     .into_boxed_slice();
-                Expression::List { expressions }
+                Expr::List { exprs }
             }
-            ast::Expression::ListComp(expr) => {
-                let expression = self.lower_expression_opt(expr.expr());
-                let comp_clauses = self.lower_comp_clauses(expr.comp_clauses());
-                Expression::ListComp {
-                    expression,
-                    comp_clauses,
-                }
+            ast::Expression::ListComp(node) => {
+                let expr = self.lower_expr_opt(node.expr());
+                let comp_clauses = self.lower_comp_clauses(node.comp_clauses());
+                Expr::ListComp { expr, comp_clauses }
             }
-            ast::Expression::Dict(expr) => {
-                let entries = self.lower_entries(expr.entries());
-                Expression::Dict { entries }
+            ast::Expression::Dict(node) => {
+                let entries = self.lower_entries(node.entries());
+                Expr::Dict { entries }
             }
-            ast::Expression::DictComp(expr) => {
-                let entry = expr
+            ast::Expression::DictComp(node) => {
+                let entry = node
                     .entry()
                     .map(|entry| {
-                        let key = self.lower_expression_opt(entry.key());
-                        let value = self.lower_expression_opt(entry.value());
+                        let key = self.lower_expr_opt(entry.key());
+                        let value = self.lower_expr_opt(entry.value());
                         DictEntry { key, value }
                     })
                     .unwrap_or_else(|| {
-                        let key = self.lower_expression_missing();
-                        let value = self.lower_expression_missing();
+                        let key = self.lower_expr_missing();
+                        let value = self.lower_expr_missing();
                         DictEntry { key, value }
                     });
-                let comp_clauses = self.lower_comp_clauses(expr.comp_clauses());
-                Expression::DictComp {
+                let comp_clauses = self.lower_comp_clauses(node.comp_clauses());
+                Expr::DictComp {
                     entry,
                     comp_clauses,
                 }
             }
-            ast::Expression::Tuple(expr) => {
-                let expressions = expr
+            ast::Expression::Tuple(node) => {
+                let exprs = node
                     .elements()
-                    .map(|element| self.lower_expression(element))
+                    .map(|element| self.lower_expr(element))
                     .collect::<Vec<_>>()
                     .into_boxed_slice();
-                Expression::Tuple { expressions }
+                Expr::Tuple { exprs }
             }
-            ast::Expression::Paren(expr) => {
-                let expression = self.lower_expression_opt(expr.expr());
-                Expression::Paren { expression }
+            ast::Expression::Paren(node) => {
+                let expr = self.lower_expr_opt(node.expr());
+                Expr::Paren { expr }
             }
-            ast::Expression::Dot(expr) => {
-                let field = self.lower_field_opt(expr.field());
-                let expression = self.lower_expression_opt(expr.expr());
-                Expression::Dot { expression, field }
+            ast::Expression::Dot(node) => {
+                let field = self.lower_field_opt(node.field());
+                let expr = self.lower_expr_opt(node.expr());
+                Expr::Dot { expr, field }
             }
-            ast::Expression::Call(expr) => {
-                let callee = self.lower_expression_opt(expr.callee());
-                let arguments = self.lower_arguments_opt(expr.arguments());
-                Expression::Call { callee, arguments }
+            ast::Expression::Call(node) => {
+                let callee = self.lower_expr_opt(node.callee());
+                let arguments = self.lower_arguments_opt(node.arguments());
+                Expr::Call { callee, arguments }
             }
-            ast::Expression::Index(expr) => {
-                let lhs = self.lower_expression_opt(expr.lhs());
-                let index = self.lower_expression_opt(expr.index());
-                Expression::Index { lhs, index }
+            ast::Expression::Index(node) => {
+                let lhs = self.lower_expr_opt(node.lhs());
+                let index = self.lower_expr_opt(node.index());
+                Expr::Index { lhs, index }
             }
-            ast::Expression::Slice(expr) => {
-                let start = self.lower_expression_maybe(expr.start());
-                let end = self.lower_expression_maybe(expr.end());
-                let step = self.lower_expression_maybe(expr.step());
-                Expression::Slice { start, end, step }
+            ast::Expression::Slice(node) => {
+                let start = self.lower_expr_maybe(node.start());
+                let end = self.lower_expr_maybe(node.end());
+                let step = self.lower_expr_maybe(node.step());
+                Expr::Slice { start, end, step }
             }
         };
-        self.alloc_expression(expression)
+        self.alloc_expr(expr)
     }
 
-    fn lower_parameters_opt(&mut self, syntax: Option<ast::Parameters>) -> Box<[Parameter]> {
+    fn lower_params_opt(&mut self, syntax: Option<ast::Parameters>) -> Box<[Parameter]> {
         syntax
             .iter()
             .flat_map(|parameters| parameters.parameters())
             .map(|parameter| match parameter {
                 ast::Parameter::Simple(param) => {
                     let name = self.lower_name_opt(param.name());
-                    let default = self.lower_expression_maybe(param.default());
+                    let default = self.lower_expr_maybe(param.default());
                     Parameter::Simple { name, default }
                 }
                 ast::Parameter::ArgsList(param) => Parameter::ArgsList {
@@ -249,20 +248,20 @@ impl<'a> LoweringContext<'a> {
             .flat_map(|arguments| arguments.arguments())
             .map(|argument| match argument {
                 ast::Argument::Simple(arg) => {
-                    let expr = self.lower_expression_opt(arg.expr());
+                    let expr = self.lower_expr_opt(arg.expr());
                     Argument::Simple { expr }
                 }
                 ast::Argument::Keyword(arg) => {
                     let name = self.lower_name_opt(arg.name());
-                    let expr = self.lower_expression_opt(arg.expr());
+                    let expr = self.lower_expr_opt(arg.expr());
                     Argument::Keyword { name, expr }
                 }
                 ast::Argument::UnpackedList(arg) => {
-                    let expr = self.lower_expression_opt(arg.expr());
+                    let expr = self.lower_expr_opt(arg.expr());
                     Argument::UnpackedList { expr }
                 }
                 ast::Argument::UnpackedDict(arg) => {
-                    let expr = self.lower_expression_opt(arg.expr());
+                    let expr = self.lower_expr_opt(arg.expr());
                     Argument::UnpackedDict { expr }
                 }
             })
@@ -292,11 +291,11 @@ impl<'a> LoweringContext<'a> {
             )
     }
 
-    fn lower_suite_opt(&mut self, syntax: Option<ast::Suite>) -> Box<[StatementId]> {
+    fn lower_suite_opt(&mut self, syntax: Option<ast::Suite>) -> Box<[StmtId]> {
         syntax
             .iter()
             .flat_map(|suite| suite.statements())
-            .map(|statement| self.lower_statement(statement))
+            .map(|statement| self.lower_stmt(statement))
             .collect::<Vec<_>>()
             .into_boxed_slice()
     }
@@ -308,12 +307,12 @@ impl<'a> LoweringContext<'a> {
         comp_clauses
             .map(|comp_clause| match comp_clause {
                 ast::CompClause::For(comp_clause) => {
-                    let iterable = self.lower_expression_opt(comp_clause.iterable());
+                    let iterable = self.lower_expr_opt(comp_clause.iterable());
                     let targets = self.lower_loop_variables_opt(comp_clause.targets());
                     CompClause::For { iterable, targets }
                 }
                 ast::CompClause::If(comp_clause) => {
-                    let test = self.lower_expression_opt(comp_clause.test());
+                    let test = self.lower_expr_opt(comp_clause.test());
                     CompClause::If { test }
                 }
             })
@@ -321,14 +320,11 @@ impl<'a> LoweringContext<'a> {
             .into_boxed_slice()
     }
 
-    fn lower_loop_variables_opt(
-        &mut self,
-        loop_variables: Option<LoopVariables>,
-    ) -> Box<[ExpressionId]> {
+    fn lower_loop_variables_opt(&mut self, loop_variables: Option<LoopVariables>) -> Box<[ExprId]> {
         loop_variables
             .iter()
             .flat_map(|loop_variables| loop_variables.exprs())
-            .map(|expression| self.lower_expression(expression))
+            .map(|expression| self.lower_expr(expression))
             .collect::<Vec<_>>()
             .into_boxed_slice()
     }
@@ -336,8 +332,8 @@ impl<'a> LoweringContext<'a> {
     fn lower_entries(&mut self, entries: impl Iterator<Item = ast::DictEntry>) -> Box<[DictEntry]> {
         entries
             .map(|entry| {
-                let key = self.lower_expression_opt(entry.key());
-                let value = self.lower_expression_opt(entry.value());
+                let key = self.lower_expr_opt(entry.key());
+                let value = self.lower_expr_opt(entry.value());
                 DictEntry { key, value }
             })
             .collect::<Vec<_>>()
@@ -364,12 +360,12 @@ impl<'a> LoweringContext<'a> {
             .into_boxed_slice()
     }
 
-    fn alloc_statement(&mut self, statement: Statement) -> StatementId {
-        self.module.statements.alloc(statement)
+    fn alloc_stmt(&mut self, statement: Stmt) -> StmtId {
+        self.module.stmts.alloc(statement)
     }
 
-    fn alloc_expression(&mut self, expression: Expression) -> ExpressionId {
-        self.module.expressions.alloc(expression)
+    fn alloc_expr(&mut self, expression: Expr) -> ExprId {
+        self.module.exprs.alloc(expression)
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::{
     def::{
         scope::{module_scopes, Scope, ScopeId, Scopes},
-        Declaration, ExpressionId,
+        Declaration, ExprId,
     },
     Db, LowerResult, Name,
 };
@@ -32,11 +32,7 @@ impl Resolver {
             .map(|scope| &self.scopes.scopes[*scope])
     }
 
-    fn new_for_expression(
-        db: &dyn Db,
-        lower_result: LowerResult,
-        expression: ExpressionId,
-    ) -> Self {
+    fn new_for_expression(db: &dyn Db, lower_result: LowerResult, expression: ExprId) -> Self {
         let scopes = module_scopes(db, lower_result);
         let scopes = scopes.scopes(db);
         let scope = scopes.scope_by_expression.get(&expression).cloned();

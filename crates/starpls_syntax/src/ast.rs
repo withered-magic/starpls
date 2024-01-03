@@ -7,6 +7,7 @@ use std::marker::PhantomData;
 
 pub type SyntaxNodePtr = rowan::ast::SyntaxNodePtr<StarlarkLanguage>;
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct AstPtr<N: AstNode> {
     inner: SyntaxNodePtr,
     phantom: PhantomData<fn() -> N>,
@@ -171,6 +172,7 @@ ast_node! {
 }
 
 /// A statement.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Statement {
     Def(DefStmt),
     If(IfStmt),
@@ -327,6 +329,7 @@ ast_node! {
     children items -> LoadItem;
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Expression {
     Name(Name),
     Literal(LiteralExpr),

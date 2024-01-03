@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use crate::Db;
 use id_arena::{Arena, Id};
+use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 use starpls_syntax::ast::{self, AssignOp, AstPtr, BinaryOp, UnaryOp};
 
@@ -13,17 +14,23 @@ pub struct IdRange<T> {
     phantom: PhantomData<T>,
 }
 
-pub type ExpressionId = Id<Expression>;
-pub type ExpressionPtr = AstPtr<Expression>;
+pub type ExprId = Id<Expr>;
+pub type ExprPtr = AstPtr<ast::Expression>;
 
-pub type StatementId = Id<Statement>;
-pub type StatementPtr = AstPtr<Statement>;
+pub type StmtId = Id<Stmt>;
+pub type StmtPtr = AstPtr<ast::Statement>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Module {
-    pub(crate) expressions: Arena<Expression>,
-    pub(crate) statements: Arena<Statement>,
-    pub(crate) top_level: Box<[StatementId]>,
+    pub(crate) exprs: Arena<Expr>,
+    pub(crate) expr_map: FxHashMap<ExprPtr, ExprId>,
+    pub(crate) expr_map_back: FxHashMap<ExprId, ExprPtr>,
+
+    pub(crate) stmts: Arena<Stmt>,
+    pub(crate) stmt_map: FxHashMap<StmtPtr, StmtId>,
+    pub(crate) stmt_map_back: FxHashMap<StmtId, StmtPtr>,
+
+    pub(crate) top_level: Box<[StmtId]>,
 }
 
 impl Module {
@@ -33,7 +40,7 @@ impl Module {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Expression {
+pub enum Expr {
     Missing,
     Name {
         name: Name,
@@ -42,28 +49,28 @@ pub enum Expression {
         literal: Literal,
     },
     If {
-        if_expression: ExpressionId,
-        test: ExpressionId,
-        else_expression: ExpressionId,
+        if_expr: ExprId,
+        test: ExprId,
+        else_expr: ExprId,
     },
     Unary {
         op: Option<UnaryOp>,
-        expression: ExpressionId,
+        expr: ExprId,
     },
     Binary {
-        lhs: ExpressionId,
-        rhs: ExpressionId,
+        lhs: ExprId,
+        rhs: ExprId,
         op: Option<BinaryOp>,
     },
     Lambda {
-        parameters: Box<[Parameter]>,
-        body: ExpressionId,
+        params: Box<[Parameter]>,
+        body: ExprId,
     },
     List {
-        expressions: Box<[ExpressionId]>,
+        exprs: Box<[ExprId]>,
     },
     ListComp {
-        expression: ExpressionId,
+        expr: ExprId,
         comp_clauses: Box<[CompClause]>,
     },
     Dict {
@@ -74,64 +81,60 @@ pub enum Expression {
         comp_clauses: Box<[CompClause]>,
     },
     Tuple {
-        expressions: Box<[ExpressionId]>,
+        exprs: Box<[ExprId]>,
     },
     Paren {
-        expression: ExpressionId,
+        expr: ExprId,
     },
     Dot {
-        expression: ExpressionId,
+        expr: ExprId,
         field: Name,
     },
     Call {
-        callee: ExpressionId,
+        callee: ExprId,
         arguments: Box<[Argument]>,
     },
     Index {
-        lhs: ExpressionId,
-        index: ExpressionId,
+        lhs: ExprId,
+        index: ExprId,
     },
     Slice {
-        start: Option<ExpressionId>,
-        end: Option<ExpressionId>,
-        step: Option<ExpressionId>,
+        start: Option<ExprId>,
+        end: Option<ExprId>,
+        step: Option<ExprId>,
     },
 }
 
-impl Expression {
-    pub(crate) fn walk_child_expressions(&self, mut f: impl FnMut(ExpressionId)) {
+impl Expr {
+    pub(crate) fn walk_child_exprs(&self, mut f: impl FnMut(ExprId)) {
         match self {
-            Expression::If {
-                if_expression,
+            Expr::If {
+                if_expr,
                 test,
-                else_expression,
+                else_expr,
             } => {
-                f(*if_expression);
+                f(*if_expr);
                 f(*test);
-                f(*else_expression);
+                f(*else_expr);
             }
-            Expression::Unary { expression, .. } => f(*expression),
-            Expression::Binary { lhs, rhs, .. } => {
+            Expr::Unary { expr, .. } => f(*expr),
+            Expr::Binary { lhs, rhs, .. } => {
                 f(*lhs);
                 f(*rhs);
             }
-            Expression::Lambda { body, .. } => f(*body),
-            Expression::List { expressions } => expressions.iter().copied().for_each(f),
-            Expression::ListComp {
-                expression,
-                comp_clauses,
-            } => {
+            Expr::Lambda { body, .. } => f(*body),
+            Expr::List { exprs } => exprs.iter().copied().for_each(f),
+            Expr::ListComp { expr, comp_clauses } => {
                 self.walk_comp_clause_expressions(comp_clauses, &mut f);
-                f(*expression);
+                f(*expr);
             }
-
-            Expression::Dict { entries } => {
+            Expr::Dict { entries } => {
                 for entry in entries.iter() {
                     f(entry.key);
                     f(entry.value);
                 }
             }
-            Expression::DictComp {
+            Expr::DictComp {
                 entry,
                 comp_clauses,
             } => {
@@ -139,15 +142,15 @@ impl Expression {
                 f(entry.key);
                 f(entry.value);
             }
-            Expression::Tuple { expressions } => expressions.iter().copied().for_each(f),
-            Expression::Paren { expression } => f(*expression),
-            Expression::Dot { expression, .. } => f(*expression),
-            Expression::Call { callee, arguments } => f(*callee),
-            Expression::Index { lhs, index } => {
+            Expr::Tuple { exprs } => exprs.iter().copied().for_each(f),
+            Expr::Paren { expr } => f(*expr),
+            Expr::Dot { expr, .. } => f(*expr),
+            Expr::Call { callee, arguments } => f(*callee),
+            Expr::Index { lhs, index } => {
                 f(*lhs);
                 f(*index);
             }
-            Expression::Slice { start, end, step } => {
+            Expr::Slice { start, end, step } => {
                 start.map(&mut f);
                 end.map(&mut f);
                 step.map(&mut f);
@@ -159,7 +162,7 @@ impl Expression {
     fn walk_comp_clause_expressions(
         &self,
         comp_clauses: &Box<[CompClause]>,
-        mut f: impl FnMut(ExpressionId),
+        mut f: impl FnMut(ExprId),
     ) {
         for comp_clause in comp_clauses.iter() {
             match comp_clause {
@@ -174,62 +177,55 @@ impl Expression {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Statement {
+pub enum Stmt {
     Def {
         name: Name,
-        parameters: Box<[Parameter]>,
-        statements: Box<[StatementId]>,
+        params: Box<[Parameter]>,
+        stmts: Box<[StmtId]>,
     },
     If {
-        test: ExpressionId,
-        if_statements: Box<[StatementId]>,
-        elif_statement: Option<StatementId>,
-        else_statements: Box<[StatementId]>,
+        test: ExprId,
+        if_stmts: Box<[StmtId]>,
+        elif_stmt: Option<StmtId>,
+        else_stmts: Box<[StmtId]>,
     },
     For {
-        iterable: ExpressionId,
-        targets: Box<[ExpressionId]>,
-        statements: Box<[StatementId]>,
+        iterable: ExprId,
+        targets: Box<[ExprId]>,
+        statements: Box<[StmtId]>,
     },
     Return {
-        expr: Option<ExpressionId>,
+        expr: Option<ExprId>,
     },
     Break,
     Continue,
     Pass,
     Assign {
-        lhs: ExpressionId,
-        rhs: ExpressionId,
+        lhs: ExprId,
+        rhs: ExprId,
         op: Option<AssignOp>,
     },
     Load {
         items: Box<[LoadItem]>,
     },
     Expr {
-        expr: ExpressionId,
+        expr: ExprId,
     },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Argument {
-    Simple { expr: ExpressionId },
-    Keyword { name: Name, expr: ExpressionId },
-    UnpackedList { expr: ExpressionId },
-    UnpackedDict { expr: ExpressionId },
+    Simple { expr: ExprId },
+    Keyword { name: Name, expr: ExprId },
+    UnpackedList { expr: ExprId },
+    UnpackedDict { expr: ExprId },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Parameter {
-    Simple {
-        name: Name,
-        default: Option<ExpressionId>,
-    },
-    ArgsList {
-        name: Name,
-    },
-    KwargsList {
-        name: Name,
-    },
+    Simple { name: Name, default: Option<ExprId> },
+    ArgsList { name: Name },
+    KwargsList { name: Name },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -241,18 +237,18 @@ pub enum LoadItem {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CompClause {
     For {
-        iterable: ExpressionId,
-        targets: Box<[ExpressionId]>,
+        iterable: ExprId,
+        targets: Box<[ExprId]>,
     },
     If {
-        test: ExpressionId,
+        test: ExprId,
     },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DictEntry {
-    key: ExpressionId,
-    value: ExpressionId,
+    key: ExprId,
+    value: ExprId,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -268,10 +264,10 @@ pub enum Literal {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Declaration {
     Function {
-        id: StatementId,
+        id: StmtId,
     },
     Variable {
-        id: ExpressionId,
+        id: ExprId,
     },
     Parameter {
         // id: ParameterId,

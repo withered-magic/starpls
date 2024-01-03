@@ -1,5 +1,5 @@
 use crate::{
-    def::{Declaration, Expression, ExpressionId, Parameter, Statement, StatementId},
+    def::{Declaration, Expr, ExprId, Parameter, Stmt, StmtId},
     Db, LowerResult, Module, Name,
 };
 use id_arena::{Arena, Id};
@@ -29,17 +29,17 @@ pub struct Scope {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Scopes {
     pub(crate) scopes: Arena<Scope>,
-    pub(crate) scope_by_expression: FxHashMap<ExpressionId, ScopeId>,
+    pub(crate) scope_by_expression: FxHashMap<ExprId, ScopeId>,
 }
 
 struct DeferredScope {
     parent: ScopeId,
-    deferred_function: DeferredFunctionData,
+    data: DeferredFunctionData,
 }
 
 struct DeferredFunctionData {
-    parameters: Box<[Parameter]>,
-    statements: Box<[StatementId]>,
+    params: Box<[Parameter]>,
+    stmts: Box<[StmtId]>,
 }
 
 impl Scopes {
@@ -58,7 +58,7 @@ impl Scopes {
         let mut deferred_scopes = VecDeque::new();
 
         // Compute scopes by walking the module HIR, starting at the top-level statements.
-        compute_scopes_for_statements_with_deferred(
+        compute_stmt_list_scopes_deferred(
             &mut scopes,
             &mut deferred_scopes,
             &module.top_level,
@@ -67,13 +67,9 @@ impl Scopes {
         );
 
         // Compute deferred scopes. This mainly applies to function definitions.
-        while let Some(DeferredScope {
-            parent,
-            deferred_function,
-        }) = deferred_scopes.pop_front()
-        {
+        while let Some(DeferredScope { parent, data }) = deferred_scopes.pop_front() {
             let scope = scopes.alloc_scope(module, parent);
-            for parameter in deferred_function.parameters.into_iter() {
+            for parameter in data.params.into_iter() {
                 match parameter {
                     Parameter::Simple { name, .. }
                     | Parameter::ArgsList { name }
@@ -82,10 +78,10 @@ impl Scopes {
                     }
                 }
             }
-            compute_scopes_for_statements_with_deferred(
+            compute_stmt_list_scopes_deferred(
                 &mut scopes,
                 &mut deferred_scopes,
-                &deferred_function.statements,
+                &data.stmts,
                 module,
                 scope,
             );
@@ -117,151 +113,117 @@ impl Scopes {
     }
 }
 
-fn compute_scopes_for_expression(
+fn compute_expr_scopes(
     scopes: &mut Scopes,
-    expression: ExpressionId,
+    expr: ExprId,
     module: &Module,
-    current_scope: ScopeId,
+    current: ScopeId,
     is_assign_target: bool,
 ) {
-    scopes.scope_by_expression.insert(expression, current_scope);
-    let mut compute_and_assign = |expression| {
-        compute_scopes_for_expression(scopes, expression, module, current_scope, is_assign_target)
-    };
+    scopes.scope_by_expression.insert(expr, current);
+    let mut compute_and_assign =
+        |expression| compute_expr_scopes(scopes, expression, module, current, is_assign_target);
 
     // TODO(withered-magic): Handle list and dict comprehensions, whose CompClauses create scopes.
-    match &module.expressions[expression] {
-        Expression::Name { name } => {
+    match &module.exprs[expr] {
+        Expr::Name { name } => {
             if is_assign_target {
-                scopes.add_declaration(
-                    current_scope,
-                    *name,
-                    Declaration::Variable { id: expression },
-                );
+                scopes.add_declaration(current, *name, Declaration::Variable { id: expr });
             }
         }
-        Expression::Lambda { parameters, body } => {}
-        Expression::Tuple { expressions } => {
-            expressions.iter().copied().for_each(compute_and_assign)
-        }
-        Expression::Paren { expression } => compute_and_assign(*expression),
-        Expression::DictComp {
+        Expr::Lambda { params, body } => {}
+        Expr::Tuple { exprs } => exprs.iter().copied().for_each(compute_and_assign),
+        Expr::Paren { expr } => compute_and_assign(*expr),
+        Expr::DictComp {
             entry,
             comp_clauses,
         } => {}
-        Expression::ListComp {
-            expression,
-            comp_clauses,
-        } => {}
-        expression => expression.walk_child_expressions(|expression| {
-            compute_scopes_for_expression(scopes, expression, module, current_scope, false)
+        Expr::ListComp { expr, comp_clauses } => {}
+        expression => expression.walk_child_exprs(|expression| {
+            compute_expr_scopes(scopes, expression, module, current, false)
         }),
     }
 }
 
-fn compute_scopes_for_statements_with_deferred(
+fn compute_stmt_list_scopes_deferred(
     scopes: &mut Scopes,
     deferred_scopes: &mut VecDeque<DeferredScope>,
-    statements: &Box<[StatementId]>,
+    stmts: &Box<[StmtId]>,
     module: &Module,
     mut current: ScopeId,
 ) {
     let mut deferred_functions = VecDeque::new();
-    for statement in statements.iter().copied() {
-        compute_scopes_for_statement(
-            scopes,
-            &mut deferred_functions,
-            statement,
-            module,
-            &mut current,
-        );
+    for stmt in stmts.iter().copied() {
+        compute_stmt_scopes(scopes, &mut deferred_functions, stmt, module, &mut current);
     }
-    while let Some(deferred_function) = deferred_functions.pop_front() {
+    while let Some(data) = deferred_functions.pop_front() {
         deferred_scopes.push_back(DeferredScope {
             parent: current,
-            deferred_function,
+            data,
         });
     }
 }
 
-fn compute_scopes_for_statements(
+fn compute_stmt_list_scopes(
     scopes: &mut Scopes,
     deferred_functions: &mut VecDeque<DeferredFunctionData>,
-    statements: &Box<[StatementId]>,
+    stmts: &Box<[StmtId]>,
     module: &Module,
     current: &mut ScopeId,
 ) {
-    for statement in statements.iter().copied() {
-        compute_scopes_for_statement(scopes, deferred_functions, statement, module, current);
+    for stmt in stmts.iter().copied() {
+        compute_stmt_scopes(scopes, deferred_functions, stmt, module, current);
     }
 }
 
-fn compute_scopes_for_statement(
+fn compute_stmt_scopes(
     scopes: &mut Scopes,
     deferred_functions: &mut VecDeque<DeferredFunctionData>,
-    statement: StatementId,
+    statement: StmtId,
     module: &Module,
     current: &mut ScopeId,
 ) {
-    match &module.statements[statement] {
-        Statement::Def {
+    match &module.stmts[statement] {
+        Stmt::Def {
             name,
-            parameters,
-            statements,
+            params,
+            stmts,
         } => {
             scopes.add_declaration(*current, *name, Declaration::Function { id: statement });
             *current = scopes.alloc_scope(module, *current);
             deferred_functions.push_back(DeferredFunctionData {
-                parameters: parameters.clone(),
-                statements: statements.clone(),
+                params: params.clone(),
+                stmts: stmts.clone(),
             });
         }
-        Statement::If {
-            if_statements,
-            elif_statement,
-            else_statements,
+        Stmt::If {
+            if_stmts,
+            elif_stmt,
+            else_stmts,
             ..
         } => {
-            compute_scopes_for_statements(
-                scopes,
-                deferred_functions,
-                if_statements,
-                module,
-                current,
-            );
-            if let Some(statement) = elif_statement {
-                compute_scopes_for_statement(
-                    scopes,
-                    deferred_functions,
-                    *statement,
-                    module,
-                    current,
-                );
+            compute_stmt_list_scopes(scopes, deferred_functions, if_stmts, module, current);
+            if let Some(elif_stmt) = elif_stmt {
+                compute_stmt_scopes(scopes, deferred_functions, *elif_stmt, module, current);
             }
-            compute_scopes_for_statements(
-                scopes,
-                deferred_functions,
-                else_statements,
-                module,
-                current,
-            );
+            compute_stmt_list_scopes(scopes, deferred_functions, else_stmts, module, current);
         }
-        Statement::For {
+        Stmt::For {
             iterable,
             targets,
             statements,
         } => {
-            compute_scopes_for_expression(scopes, *iterable, module, *current, false);
+            compute_expr_scopes(scopes, *iterable, module, *current, false);
             targets.iter().copied().for_each(|expression| {
-                compute_scopes_for_expression(scopes, expression, module, *current, false)
+                compute_expr_scopes(scopes, expression, module, *current, false)
             });
-            compute_scopes_for_statements(scopes, deferred_functions, statements, module, current);
+            compute_stmt_list_scopes(scopes, deferred_functions, statements, module, current);
         }
-        Statement::Assign { lhs, .. } => {
+        Stmt::Assign { lhs, .. } => {
             *current = scopes.alloc_scope(module, *current);
-            compute_scopes_for_expression(scopes, *lhs, module, *current, true);
+            compute_expr_scopes(scopes, *lhs, module, *current, true);
         }
-        Statement::Load { items } => {}
+        Stmt::Load { items } => {}
         _ => {}
     }
 }

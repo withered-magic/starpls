@@ -6,7 +6,7 @@ pub use {
         parser::{line_index, parse_module, Parse, SyntaxError},
     },
     line_index::LineIndex,
-    rowan::TextRange,
+    rowan::{TextRange, TextSize},
 };
 
 pub mod ast;

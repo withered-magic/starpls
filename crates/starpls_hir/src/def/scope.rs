@@ -1,6 +1,6 @@
 use crate::{
-    def::{Declaration, Expr, ExprId, Parameter, Stmt, StmtId},
-    Db, LowerResult, Module, Name,
+    def::{CompClause, Declaration, Expr, ExprId, Parameter, Stmt, StmtId},
+    Db, Module, ModuleInfo, Name,
 };
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
@@ -15,8 +15,8 @@ pub(crate) struct ModuleScopes {
 }
 
 #[salsa::tracked]
-pub(crate) fn module_scopes(db: &dyn Db, lower_res: LowerResult) -> ModuleScopes {
-    let scopes = Scopes::new_for_module(&lower_res.module(db));
+pub(crate) fn module_scopes(db: &dyn Db, info: ModuleInfo) -> ModuleScopes {
+    let scopes = Scopes::new_for_module(&info.module(db));
     ModuleScopes::new(db, Arc::new(scopes))
 }
 
@@ -29,7 +29,7 @@ pub struct Scope {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Scopes {
     pub(crate) scopes: Arena<Scope>,
-    pub(crate) scope_by_expression: FxHashMap<ExprId, ScopeId>,
+    pub(crate) scope_by_expr: FxHashMap<ExprId, ScopeId>,
 }
 
 struct DeferredScope {
@@ -46,7 +46,7 @@ impl Scopes {
     fn new_for_module(module: &Module) -> Self {
         let mut scopes = Scopes {
             scopes: Default::default(),
-            scope_by_expression: Default::default(),
+            scope_by_expr: Default::default(),
         };
 
         // Allocate the root module scope.
@@ -69,8 +69,8 @@ impl Scopes {
         // Compute deferred scopes. This mainly applies to function definitions.
         while let Some(DeferredScope { parent, data }) = deferred_scopes.pop_front() {
             let scope = scopes.alloc_scope(module, parent);
-            for parameter in data.params.into_iter() {
-                match parameter {
+            for param in data.params.into_iter() {
+                match param {
                     Parameter::Simple { name, .. }
                     | Parameter::ArgsList { name }
                     | Parameter::KwargsList { name } => {
@@ -120,7 +120,7 @@ fn compute_expr_scopes(
     current: ScopeId,
     is_assign_target: bool,
 ) {
-    scopes.scope_by_expression.insert(expr, current);
+    scopes.scope_by_expr.insert(expr, current);
     let mut compute_and_assign =
         |expression| compute_expr_scopes(scopes, expression, module, current, is_assign_target);
 
@@ -131,7 +131,19 @@ fn compute_expr_scopes(
                 scopes.add_declaration(current, *name, Declaration::Variable { id: expr });
             }
         }
-        Expr::Lambda { params, body } => {}
+        Expr::Lambda { params, body } => {
+            let scope = scopes.alloc_scope(module, current);
+            for param in params.into_iter() {
+                match param {
+                    Parameter::Simple { name, .. }
+                    | Parameter::ArgsList { name }
+                    | Parameter::KwargsList { name } => {
+                        scopes.add_declaration(scope, *name, Declaration::Parameter {});
+                    }
+                }
+            }
+            compute_expr_scopes(scopes, *body, module, scope, false);
+        }
         Expr::Tuple { exprs } => exprs.iter().copied().for_each(compute_and_assign),
         Expr::Paren { expr } => compute_and_assign(*expr),
         Expr::DictComp {
@@ -215,7 +227,7 @@ fn compute_stmt_scopes(
         } => {
             compute_expr_scopes(scopes, *iterable, module, *current, false);
             targets.iter().copied().for_each(|expression| {
-                compute_expr_scopes(scopes, expression, module, *current, false)
+                compute_expr_scopes(scopes, expression, module, *current, true)
             });
             compute_stmt_list_scopes(scopes, deferred_functions, stmts, module, current);
         }
@@ -225,5 +237,23 @@ fn compute_stmt_scopes(
         }
         Stmt::Load { items } => {}
         _ => {}
+    }
+}
+
+fn compute_comp_clause_scopes(
+    scopes: &mut Scopes,
+    module: &Module,
+    comp_clauses: &Box<[CompClause]>,
+    current: &mut ScopeId,
+) {
+    for comp_clause in comp_clauses.into_iter() {
+        match comp_clause {
+            CompClause::For { iterable, targets } => {
+                targets.iter().copied().for_each(|expr| {
+                    compute_expr_scopes(scopes, expr, module, *current, false);
+                });
+            }
+            CompClause::If { test } => todo!(),
+        }
     }
 }

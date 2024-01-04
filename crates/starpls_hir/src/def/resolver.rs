@@ -3,7 +3,7 @@ use crate::{
         scope::{module_scopes, Scope, ScopeId, Scopes},
         Declaration, ExprId,
     },
-    Db, LowerResult, Name,
+    Db, ModuleInfo, Name,
 };
 use std::sync::Arc;
 
@@ -16,7 +16,7 @@ pub struct Resolver {
 }
 
 impl Resolver {
-    fn resolve_name(&self, name: Name) -> Option<Vec<Declaration>> {
+    pub fn resolve_name(&self, name: Name) -> Option<Vec<Declaration>> {
         for scope in self.scopes() {
             if let Some(declarations) = scope.declarations.get(&name) {
                 return Some(declarations.clone());
@@ -32,10 +32,10 @@ impl Resolver {
             .map(|scope| &self.scopes.scopes[*scope])
     }
 
-    fn new_for_expression(db: &dyn Db, lower_result: LowerResult, expression: ExprId) -> Self {
-        let scopes = module_scopes(db, lower_result);
+    pub fn new_for_expr(db: &dyn Db, info: ModuleInfo, expr: ExprId) -> Self {
+        let scopes = module_scopes(db, info);
         let scopes = scopes.scopes(db);
-        let scope = scopes.scope_by_expression.get(&expression).cloned();
+        let scope = scopes.scope_by_expr.get(&expr).cloned();
         let mut scope_chain = scopes.scope_chain(scope).collect::<Vec<_>>();
         scope_chain.reverse();
         Self {

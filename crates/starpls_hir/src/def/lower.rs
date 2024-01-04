@@ -1,23 +1,25 @@
 use crate::{
     def::{
-        Argument, CompClause, DictEntry, Expr, ExprId, ExprPtr, Literal, LoadItem, Module, Name,
-        Parameter, Stmt, StmtId, StmtPtr,
+        Argument, CompClause, DictEntry, Expr, ExprId, ExprPtr, Literal, LoadItem, Module,
+        ModuleSourceMap, Name, Parameter, Stmt, StmtId, StmtPtr,
     },
     Db,
 };
-use starpls_syntax::ast::{self, AstNode, AstPtr, LoopVariables};
+use starpls_syntax::ast::{self, AstPtr, LoopVariables};
 
-pub(super) fn lower_module(db: &dyn Db, syntax: ast::Module) -> Module {
+pub(super) fn lower_module(db: &dyn Db, syntax: ast::Module) -> (Module, ModuleSourceMap) {
     LoweringContext {
         db,
         module: Module {
             exprs: Default::default(),
+            stmts: Default::default(),
+            top_level: Default::default(),
+        },
+        source_map: ModuleSourceMap {
             expr_map: Default::default(),
             expr_map_back: Default::default(),
-            stmts: Default::default(),
             stmt_map: Default::default(),
             stmt_map_back: Default::default(),
-            top_level: Default::default(),
         },
     }
     .lower(syntax)
@@ -26,16 +28,17 @@ pub(super) fn lower_module(db: &dyn Db, syntax: ast::Module) -> Module {
 struct LoweringContext<'a> {
     db: &'a dyn Db,
     module: Module,
+    source_map: ModuleSourceMap,
 }
 
 impl<'a> LoweringContext<'a> {
-    fn lower(mut self, syntax: ast::Module) -> Module {
+    fn lower(mut self, syntax: ast::Module) -> (Module, ModuleSourceMap) {
         let mut top_level = Vec::new();
         for statement in syntax.statements() {
             top_level.push(self.lower_stmt(statement));
         }
         self.module.top_level = top_level.into_boxed_slice();
-        self.module
+        (self.module, self.source_map)
     }
 
     fn lower_stmt(&mut self, stmt: ast::Statement) -> StmtId {
@@ -205,8 +208,8 @@ impl<'a> LoweringContext<'a> {
             }
             ast::Expression::Call(node) => {
                 let callee = self.lower_expr_opt(node.callee());
-                let arguments = self.lower_arguments_opt(node.arguments());
-                Expr::Call { callee, arguments }
+                let args = self.lower_args_opt(node.arguments());
+                Expr::Call { callee, args }
             }
             ast::Expression::Index(node) => {
                 let lhs = self.lower_expr_opt(node.lhs());
@@ -244,7 +247,7 @@ impl<'a> LoweringContext<'a> {
             .into_boxed_slice()
     }
 
-    fn lower_arguments_opt(&mut self, syntax: Option<ast::Arguments>) -> Box<[Argument]> {
+    fn lower_args_opt(&mut self, syntax: Option<ast::Arguments>) -> Box<[Argument]> {
         syntax
             .iter()
             .flat_map(|arguments| arguments.arguments())
@@ -364,15 +367,15 @@ impl<'a> LoweringContext<'a> {
 
     fn alloc_stmt(&mut self, stmt: Stmt, ptr: StmtPtr) -> StmtId {
         let id = self.module.stmts.alloc(stmt);
-        self.module.stmt_map.insert(ptr.clone(), id);
-        self.module.stmt_map_back.insert(id, ptr);
+        self.source_map.stmt_map.insert(ptr.clone(), id);
+        self.source_map.stmt_map_back.insert(id, ptr);
         id
     }
 
     fn alloc_expr(&mut self, expr: Expr, ptr: ExprPtr) -> ExprId {
         let id = self.module.exprs.alloc(expr);
-        self.module.expr_map.insert(ptr.clone(), id);
-        self.module.expr_map_back.insert(id, ptr);
+        self.source_map.expr_map.insert(ptr.clone(), id);
+        self.source_map.expr_map_back.insert(id, ptr);
         id
     }
 }

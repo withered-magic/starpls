@@ -4,7 +4,7 @@ use crate::Db;
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
-use starpls_syntax::ast::{self, AssignOp, AstPtr, BinaryOp, UnaryOp};
+use starpls_syntax::ast::{self, AssignOp, AstNode, AstPtr, BinaryOp, UnaryOp};
 
 pub mod lower;
 pub mod resolver;
@@ -19,18 +19,23 @@ pub type StmtPtr = AstPtr<ast::Statement>;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Module {
     pub(crate) exprs: Arena<Expr>,
-    pub(crate) expr_map: FxHashMap<ExprPtr, ExprId>,
-    pub(crate) expr_map_back: FxHashMap<ExprId, ExprPtr>,
-
     pub(crate) stmts: Arena<Stmt>,
-    pub(crate) stmt_map: FxHashMap<StmtPtr, StmtId>,
-    pub(crate) stmt_map_back: FxHashMap<StmtId, StmtPtr>,
-
     pub(crate) top_level: Box<[StmtId]>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModuleSourceMap {
+    pub expr_map: FxHashMap<ExprPtr, ExprId>,
+    pub expr_map_back: FxHashMap<ExprId, ExprPtr>,
+    pub stmt_map: FxHashMap<StmtPtr, StmtId>,
+    pub stmt_map_back: FxHashMap<StmtId, StmtPtr>,
+}
+
 impl Module {
-    pub(crate) fn new(db: &dyn Db, syntax: ast::Module) -> Self {
+    pub(crate) fn new_with_source_map(
+        db: &dyn Db,
+        syntax: ast::Module,
+    ) -> (Module, ModuleSourceMap) {
         lower::lower_module(db, syntax)
     }
 }
@@ -88,7 +93,7 @@ pub enum Expr {
     },
     Call {
         callee: ExprId,
-        arguments: Box<[Argument]>,
+        args: Box<[Argument]>,
     },
     Index {
         lhs: ExprId,
@@ -141,7 +146,7 @@ impl Expr {
             Expr::Tuple { exprs } => exprs.iter().copied().for_each(f),
             Expr::Paren { expr } => f(*expr),
             Expr::Dot { expr, .. } => f(*expr),
-            Expr::Call { callee, arguments } => f(*callee),
+            Expr::Call { callee, .. } => f(*callee),
             Expr::Index { lhs, index } => {
                 f(*lhs);
                 f(*index);
@@ -287,5 +292,12 @@ impl Name {
 
     pub(crate) fn is_missing(&self, db: &dyn Db) -> bool {
         self.inner(db).eq("[missing name]")
+    }
+
+    pub fn from_ast_node(db: &dyn Db, name: ast::Name) -> Self {
+        Self::from_str(
+            db,
+            name.name().as_ref().map_or_else(|| "", |name| name.text()),
+        )
     }
 }

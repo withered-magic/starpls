@@ -1,7 +1,5 @@
-pub use crate::{
-    def::{Module, Name},
-    // ty::ModuleInfo,
-};
+pub use crate::def::{resolver::Resolver, Declaration, Module, Name};
+use def::ModuleSourceMap;
 use starpls_common::ParseResult;
 
 mod api;
@@ -9,8 +7,11 @@ mod def;
 mod ty;
 
 #[salsa::tracked]
-pub struct LowerResult {
+pub struct ModuleInfo {
+    #[return_ref]
     pub module: Module,
+    #[return_ref]
+    pub source_map: ModuleSourceMap,
 }
 
 // #[salsa::tracked]
@@ -21,7 +22,7 @@ pub struct LowerResult {
 #[salsa::jar(db = Db)]
 pub struct Jar(
     lower,
-    LowerResult,
+    ModuleInfo,
     Name,
     def::scope::ModuleScopes,
     def::scope::module_scopes,
@@ -30,15 +31,9 @@ pub struct Jar(
 pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {}
 
 #[salsa::tracked]
-pub fn lower(db: &dyn Db, parse: ParseResult) -> LowerResult {
-    let module = Module::new(db, parse.inner(db).tree());
-    LowerResult::new(db, module)
+pub fn lower(db: &dyn Db, parse: ParseResult) -> ModuleInfo {
+    let (module, source_map) = Module::new_with_source_map(db, parse.inner(db).tree());
+    ModuleInfo::new(db, module, source_map)
 }
-
-// #[salsa::tracked]
-// pub fn bind(db: &dyn Db, lower: LowerResult) -> BindResult {
-//     let info = ty::bind_module(db, lower.module(db));
-//     BindResult::new(db, info)
-// }
 
 impl<DB> Db for DB where DB: ?Sized + salsa::DbWithJar<Jar> + starpls_common::Db {}

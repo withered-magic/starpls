@@ -2,7 +2,7 @@ use crate::handlers::*;
 use dashmap::{mapref::entry::Entry, DashMap};
 use salsa::ParallelDatabase;
 use starpls_common::{Db, Diagnostic, File, FileId};
-use starpls_syntax::LineIndex;
+use starpls_syntax::{LineIndex, TextRange, TextSize};
 use std::sync::Arc;
 
 mod handlers;
@@ -84,6 +84,10 @@ impl AnalysisSnapshot {
         self.query(|db| diagnostics::diagnostics(db, file_id))
     }
 
+    pub fn goto_definition(&self, pos: FilePosition) -> Cancellable<Option<Vec<Location>>> {
+        self.query(|db| goto_definition::goto_definition(db, pos))
+    }
+
     pub fn line_index(&self, file_id: FileId) -> Cancellable<Option<LineIndex>> {
         self.query(|db| line_index::line_index(db, file_id))
     }
@@ -106,3 +110,15 @@ impl AnalysisSnapshot {
 }
 
 impl std::panic::RefUnwindSafe for AnalysisSnapshot {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Location {
+    file_id: FileId,
+    range: TextRange,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FilePosition {
+    file_id: FileId,
+    pos: TextSize,
+}

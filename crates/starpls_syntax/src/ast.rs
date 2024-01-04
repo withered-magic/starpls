@@ -715,6 +715,7 @@ ast_node! {
     child expr -> Expression;
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Parameter {
     Simple(SimpleParameter),
     ArgsList(ArgsListParameter),

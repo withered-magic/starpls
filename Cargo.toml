@@ -8,5 +8,6 @@ members = [
     "crates/starpls_lexer",
     "crates/starpls_parser",
     "crates/starpls_syntax",
+    "crates/starpls_test_util",
     "xtask",
 ]

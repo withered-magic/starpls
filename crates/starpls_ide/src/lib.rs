@@ -6,6 +6,7 @@ use starpls_syntax::{LineIndex, TextRange, TextSize};
 use std::sync::Arc;
 
 mod handlers;
+mod util;
 
 pub type Cancellable<T> = Result<T, salsa::Cancelled>;
 

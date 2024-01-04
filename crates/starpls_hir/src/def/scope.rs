@@ -1,5 +1,5 @@
 use crate::{
-    def::{CompClause, Declaration, Expr, ExprId, Parameter, Stmt, StmtId},
+    def::{CompClause, Declaration, Expr, ExprId, Param, ParamId, Stmt, StmtId},
     Db, Module, ModuleInfo, Name,
 };
 use id_arena::{Arena, Id};
@@ -26,10 +26,29 @@ pub struct Scope {
     pub(crate) parent: Option<ScopeId>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ScopeHirId {
+    Module,
+    Expr(ExprId),
+    Stmt(StmtId),
+}
+
+impl From<ExprId> for ScopeHirId {
+    fn from(value: ExprId) -> Self {
+        Self::Expr(value)
+    }
+}
+
+impl From<StmtId> for ScopeHirId {
+    fn from(value: StmtId) -> Self {
+        Self::Stmt(value)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Scopes {
     pub(crate) scopes: Arena<Scope>,
-    pub(crate) scope_by_expr: FxHashMap<ExprId, ScopeId>,
+    pub(crate) scopes_by_hir_id: FxHashMap<ScopeHirId, ScopeId>,
 }
 
 struct DeferredScope {
@@ -38,7 +57,7 @@ struct DeferredScope {
 }
 
 struct DeferredFunctionData {
-    params: Box<[Parameter]>,
+    params: Box<[ParamId]>,
     stmts: Box<[StmtId]>,
 }
 
@@ -46,7 +65,7 @@ impl Scopes {
     fn new_for_module(module: &Module) -> Self {
         let mut scopes = Scopes {
             scopes: Default::default(),
-            scope_by_expr: Default::default(),
+            scopes_by_hir_id: Default::default(),
         };
 
         // Allocate the root module scope.
@@ -54,6 +73,7 @@ impl Scopes {
             declarations: Default::default(),
             parent: None,
         });
+        scopes.scopes_by_hir_id.insert(ScopeHirId::Module, root);
 
         let mut deferred_scopes = VecDeque::new();
 
@@ -69,12 +89,12 @@ impl Scopes {
         // Compute deferred scopes. This mainly applies to function definitions.
         while let Some(DeferredScope { parent, data }) = deferred_scopes.pop_front() {
             let scope = scopes.alloc_scope(parent);
-            for param in data.params.into_iter() {
-                match param {
-                    Parameter::Simple { name, .. }
-                    | Parameter::ArgsList { name }
-                    | Parameter::KwargsList { name } => {
-                        scopes.add_declaration(scope, *name, Declaration::Parameter {});
+            for param in data.params.into_iter().copied() {
+                match &module.params[param] {
+                    Param::Simple { name, .. }
+                    | Param::ArgsList { name }
+                    | Param::KwargsList { name } => {
+                        scopes.add_decl(scope, *name, Declaration::Parameter { id: param });
                     }
                 }
             }
@@ -97,15 +117,19 @@ impl Scopes {
         })
     }
 
-    fn add_declaration(&mut self, scope: ScopeId, name: Name, declaration: Declaration) {
+    fn add_decl(&mut self, scope: ScopeId, name: Name, decl: Declaration) {
         match self.scopes[scope].declarations.entry(name) {
             Entry::Occupied(mut entry) => {
-                entry.get_mut().push(declaration);
+                entry.get_mut().push(decl);
             }
             Entry::Vacant(entry) => {
-                entry.insert(vec![declaration]);
+                entry.insert(vec![decl]);
             }
         }
+    }
+
+    pub fn scope_for_hir_id(&self, id: impl Into<ScopeHirId>) -> Option<ScopeId> {
+        self.scopes_by_hir_id.get(&id.into()).copied()
     }
 
     pub(crate) fn scope_chain(&self, scope: Option<ScopeId>) -> impl Iterator<Item = ScopeId> + '_ {
@@ -120,23 +144,23 @@ fn compute_expr_scopes(
     current: ScopeId,
     is_assign_target: bool,
 ) {
-    scopes.scope_by_expr.insert(expr, current);
+    scopes.scopes_by_hir_id.insert(expr.into(), current);
 
     // TODO(withered-magic): Handle list and dict comprehensions, whose CompClauses create scopes.
     match &module.exprs[expr] {
         Expr::Name { name } => {
             if is_assign_target {
-                scopes.add_declaration(current, *name, Declaration::Variable { id: expr });
+                scopes.add_decl(current, *name, Declaration::Variable { id: expr });
             }
         }
         Expr::Lambda { params, body } => {
             let scope = scopes.alloc_scope(current);
-            for param in params.into_iter() {
-                match param {
-                    Parameter::Simple { name, .. }
-                    | Parameter::ArgsList { name }
-                    | Parameter::KwargsList { name } => {
-                        scopes.add_declaration(scope, *name, Declaration::Parameter {});
+            for param in params.into_iter().copied() {
+                match &module.params[param] {
+                    Param::Simple { name, .. }
+                    | Param::ArgsList { name }
+                    | Param::KwargsList { name } => {
+                        scopes.add_decl(scope, *name, Declaration::Parameter { id: param });
                     }
                 }
             }
@@ -212,7 +236,7 @@ fn compute_stmt_scopes(
             params,
             stmts,
         } => {
-            scopes.add_declaration(*current, *name, Declaration::Function { id: statement });
+            scopes.add_decl(*current, *name, Declaration::Function { id: statement });
             *current = scopes.alloc_scope(*current);
             deferred_functions.push_back(DeferredFunctionData {
                 params: params.clone(),

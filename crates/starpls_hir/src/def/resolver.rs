@@ -5,6 +5,7 @@ use crate::{
     },
     Db, ModuleInfo, Name,
 };
+use starpls_syntax::TextSize;
 use std::sync::Arc;
 
 /// Resolves things like variables, function definition, etc. For now this is implemented as a simple list
@@ -35,12 +36,16 @@ impl Resolver {
     pub fn new_for_expr(db: &dyn Db, info: ModuleInfo, expr: ExprId) -> Self {
         let scopes = module_scopes(db, info);
         let scopes = scopes.scopes(db);
-        let scope = scopes.scope_by_expr.get(&expr).cloned();
+        let scope = scopes.scope_for_hir_id(expr);
         let mut scope_chain = scopes.scope_chain(scope).collect::<Vec<_>>();
         scope_chain.reverse();
         Self {
             scopes,
             scope_chain,
         }
+    }
+
+    pub fn new_for_offset(db: &dyn Db, info: ModuleInfo, offset: TextSize) -> Self {
+        todo!();
     }
 }

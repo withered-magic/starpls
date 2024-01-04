@@ -1,12 +1,11 @@
-use starpls_parser::{SyntaxKind, T};
-
 pub use {
     crate::{
         ast::Module,
         parser::{line_index, parse_module, Parse, SyntaxError},
     },
     line_index::LineIndex,
-    rowan::{TextRange, TextSize},
+    rowan::{TextRange, TextSize, TokenAtOffset},
+    starpls_parser::{SyntaxKind, T},
 };
 
 pub mod ast;

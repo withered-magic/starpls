@@ -13,10 +13,14 @@ pub type ExprPtr = AstPtr<ast::Expression>;
 pub type StmtId = Id<Stmt>;
 pub type StmtPtr = AstPtr<ast::Statement>;
 
+pub type ParamId = Id<Param>;
+pub type ParamPtr = AstPtr<ast::Parameter>;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Module {
     pub(crate) exprs: Arena<Expr>,
     pub(crate) stmts: Arena<Stmt>,
+    pub(crate) params: Arena<Param>,
     pub(crate) top_level: Box<[StmtId]>,
 }
 
@@ -26,6 +30,8 @@ pub struct ModuleSourceMap {
     pub expr_map_back: FxHashMap<ExprId, ExprPtr>,
     pub stmt_map: FxHashMap<StmtPtr, StmtId>,
     pub stmt_map_back: FxHashMap<StmtId, StmtPtr>,
+    pub param_map: FxHashMap<ParamPtr, ParamId>,
+    pub param_map_back: FxHashMap<ParamId, ParamPtr>,
 }
 
 impl Module {
@@ -61,7 +67,7 @@ pub enum Expr {
         op: Option<BinaryOp>,
     },
     Lambda {
-        params: Box<[Parameter]>,
+        params: Box<[ParamId]>,
         body: ExprId,
     },
     List {
@@ -188,7 +194,7 @@ impl Expr {
 pub enum Stmt {
     Def {
         name: Name,
-        params: Box<[Parameter]>,
+        params: Box<[ParamId]>,
         stmts: Box<[StmtId]>,
     },
     If {
@@ -230,7 +236,7 @@ pub enum Argument {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Parameter {
+pub enum Param {
     Simple { name: Name, default: Option<ExprId> },
     ArgsList { name: Name },
     KwargsList { name: Name },
@@ -271,15 +277,9 @@ pub enum Literal {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Declaration {
-    Function {
-        id: StmtId,
-    },
-    Variable {
-        id: ExprId,
-    },
-    Parameter {
-        // id: ParameterId,
-    },
+    Function { id: StmtId },
+    Variable { id: ExprId },
+    Parameter { id: ParamId },
     LoadItem {},
 }
 

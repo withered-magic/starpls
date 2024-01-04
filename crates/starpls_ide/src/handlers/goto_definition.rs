@@ -1,7 +1,10 @@
-use crate::{Database, FilePosition, Location};
+use crate::{util::pick_best_token, Database, FilePosition, Location};
 use starpls_common::{parse, Db};
 use starpls_hir::{lower, Declaration, Name, Resolver};
-use starpls_syntax::ast::{self, AstNode, AstPtr};
+use starpls_syntax::{
+    ast::{self, AstNode, AstPtr},
+    T,
+};
 
 pub(crate) fn goto_definition(
     db: &Database,
@@ -9,12 +12,16 @@ pub(crate) fn goto_definition(
 ) -> Option<Vec<Location>> {
     let file = db.get_file(file_id)?;
     let res = parse(db, file);
-    let parent = res
-        .inner(db)
-        .syntax()
-        .token_at_offset(pos)
-        .next()?
-        .parent()?;
+    let parent = pick_best_token(
+        res.inner(db).syntax().token_at_offset(pos),
+        |kind| match kind {
+            T![ident] => 2,
+            T!['('] | T![')'] | T!['['] | T![']'] | T!['{'] | T!['}'] => 0,
+            kind if kind.is_trivia_token() => 0,
+            _ => 1,
+        },
+    )?
+    .parent()?;
 
     // For now, we only handle identifiers.
     if let Some(name) = ast::Name::cast(parent) {
@@ -42,7 +49,13 @@ pub(crate) fn goto_definition(
                             range: ptr.syntax_node_ptr().text_range(),
                         })
                     }
-                    Declaration::Parameter {} => None,
+                    Declaration::Parameter { id } => {
+                        source_map.param_map_back.get(&id).map(|ptr| Location {
+                            file_id,
+                            range: ptr.syntax_node_ptr().text_range(),
+                        })
+                    }
+
                     Declaration::LoadItem {} => None,
                 })
                 .collect(),

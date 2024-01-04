@@ -1,7 +1,7 @@
 use crate::{
     def::{
         Argument, CompClause, DictEntry, Expr, ExprId, ExprPtr, Literal, LoadItem, Module,
-        ModuleSourceMap, Name, Parameter, Stmt, StmtId, StmtPtr,
+        ModuleSourceMap, Name, Param, ParamId, ParamPtr, Stmt, StmtId, StmtPtr,
     },
     Db,
 };
@@ -13,6 +13,7 @@ pub(super) fn lower_module(db: &dyn Db, syntax: ast::Module) -> (Module, ModuleS
         module: Module {
             exprs: Default::default(),
             stmts: Default::default(),
+            params: Default::default(),
             top_level: Default::default(),
         },
         source_map: ModuleSourceMap {
@@ -20,6 +21,8 @@ pub(super) fn lower_module(db: &dyn Db, syntax: ast::Module) -> (Module, ModuleS
             expr_map_back: Default::default(),
             stmt_map: Default::default(),
             stmt_map_back: Default::default(),
+            param_map: Default::default(),
+            param_map_back: Default::default(),
         },
     }
     .lower(syntax)
@@ -226,25 +229,26 @@ impl<'a> LoweringContext<'a> {
         self.alloc_expr(expr, ptr)
     }
 
-    fn lower_params_opt(&mut self, syntax: Option<ast::Parameters>) -> Box<[Parameter]> {
-        syntax
-            .iter()
-            .flat_map(|parameters| parameters.parameters())
-            .map(|parameter| match parameter {
+    fn lower_params_opt(&mut self, syntax: Option<ast::Parameters>) -> Box<[ParamId]> {
+        let mut params = Vec::new();
+        for param in syntax.iter().flat_map(|params| params.parameters()) {
+            let ptr = AstPtr::new(&param);
+            let param = match param {
                 ast::Parameter::Simple(param) => {
                     let name = self.lower_name_opt(param.name());
                     let default = self.lower_expr_maybe(param.default());
-                    Parameter::Simple { name, default }
+                    Param::Simple { name, default }
                 }
-                ast::Parameter::ArgsList(param) => Parameter::ArgsList {
+                ast::Parameter::ArgsList(param) => Param::ArgsList {
                     name: self.lower_name_opt(param.name()),
                 },
-                ast::Parameter::KwargsList(param) => Parameter::KwargsList {
+                ast::Parameter::KwargsList(param) => Param::KwargsList {
                     name: self.lower_name_opt(param.name()),
                 },
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice()
+            };
+            params.push(self.alloc_param(param, ptr));
+        }
+        params.into_boxed_slice()
     }
 
     fn lower_args_opt(&mut self, syntax: Option<ast::Arguments>) -> Box<[Argument]> {
@@ -376,6 +380,13 @@ impl<'a> LoweringContext<'a> {
         let id = self.module.exprs.alloc(expr);
         self.source_map.expr_map.insert(ptr.clone(), id);
         self.source_map.expr_map_back.insert(id, ptr);
+        id
+    }
+
+    fn alloc_param(&mut self, param: Param, ptr: ParamPtr) -> ParamId {
+        let id = self.module.params.alloc(param);
+        self.source_map.param_map.insert(ptr.clone(), id);
+        self.source_map.param_map_back.insert(id, ptr.clone());
         id
     }
 }

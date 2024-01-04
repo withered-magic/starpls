@@ -8,6 +8,7 @@ use crate::{
 use starpls_syntax::ast::{self, AstPtr, LoopVariables};
 
 pub(super) fn lower_module(db: &dyn Db, syntax: ast::Module) -> (Module, ModuleSourceMap) {
+    let root = AstPtr::new(&syntax);
     LoweringContext {
         db,
         module: Module {
@@ -17,6 +18,7 @@ pub(super) fn lower_module(db: &dyn Db, syntax: ast::Module) -> (Module, ModuleS
             top_level: Default::default(),
         },
         source_map: ModuleSourceMap {
+            root,
             expr_map: Default::default(),
             expr_map_back: Default::default(),
             stmt_map: Default::default(),

@@ -75,19 +75,13 @@ impl Scopes {
         });
         scopes.scopes_by_hir_id.insert(ScopeHirId::Module, root);
 
-        let mut deferred_scopes = VecDeque::new();
+        let mut defer = VecDeque::new();
 
         // Compute scopes by walking the module HIR, starting at the top-level statements.
-        compute_stmt_list_scopes_deferred(
-            &mut scopes,
-            &mut deferred_scopes,
-            &module.top_level,
-            module,
-            root,
-        );
+        compute_stmt_list_scopes_deferred(&mut scopes, &mut defer, &module.top_level, module, root);
 
         // Compute deferred scopes. This mainly applies to function definitions.
-        while let Some(DeferredScope { parent, data }) = deferred_scopes.pop_front() {
+        while let Some(DeferredScope { parent, data }) = defer.pop_front() {
             let scope = scopes.alloc_scope(parent);
             for param in data.params.into_iter().copied() {
                 match &module.params[param] {
@@ -98,13 +92,7 @@ impl Scopes {
                     }
                 }
             }
-            compute_stmt_list_scopes_deferred(
-                &mut scopes,
-                &mut deferred_scopes,
-                &data.stmts,
-                module,
-                scope,
-            );
+            compute_stmt_list_scopes_deferred(&mut scopes, &mut defer, &data.stmts, module, scope);
         }
 
         scopes
@@ -194,7 +182,7 @@ fn compute_expr_scopes(
 
 fn compute_stmt_list_scopes_deferred(
     scopes: &mut Scopes,
-    deferred_scopes: &mut VecDeque<DeferredScope>,
+    defer: &mut VecDeque<DeferredScope>,
     stmts: &Box<[StmtId]>,
     module: &Module,
     mut current: ScopeId,
@@ -204,7 +192,7 @@ fn compute_stmt_list_scopes_deferred(
         compute_stmt_scopes(scopes, &mut deferred_functions, stmt, module, &mut current);
     }
     while let Some(data) = deferred_functions.pop_front() {
-        deferred_scopes.push_back(DeferredScope {
+        defer.push_back(DeferredScope {
             parent: current,
             data,
         });

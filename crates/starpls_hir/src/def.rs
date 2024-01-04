@@ -7,6 +7,8 @@ pub mod lower;
 pub mod resolver;
 pub mod scope;
 
+pub type ModulePtr = AstPtr<ast::Module>;
+
 pub type ExprId = Id<Expr>;
 pub type ExprPtr = AstPtr<ast::Expression>;
 
@@ -26,6 +28,7 @@ pub struct Module {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ModuleSourceMap {
+    pub root: ModulePtr,
     pub expr_map: FxHashMap<ExprPtr, ExprId>,
     pub expr_map_back: FxHashMap<ExprId, ExprPtr>,
     pub stmt_map: FxHashMap<StmtPtr, StmtId>,

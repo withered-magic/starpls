@@ -35,22 +35,26 @@ pub(crate) fn goto_definition(
     snapshot: &ServerSnapshot,
     params: lsp_types::GotoDefinitionParams,
 ) -> anyhow::Result<lsp_types::GotoDefinitionResponse> {
+    let res = || Ok(Vec::<lsp_types::Location>::new().into());
     let path = path_buf_from_url(&params.text_document_position_params.text_document.uri)?;
+
     let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
         Some(file_id) => file_id,
-        None => return Ok(Vec::<lsp_types::Location>::new().into()),
+        None => return res(),
     };
+
     let pos = match convert::text_size_from_lsp_position(
         snapshot,
         file_id,
         params.text_document_position_params.position,
     )? {
         Some(pos) => pos,
-        None => return Ok(Vec::<lsp_types::Location>::new().into()),
+        None => return res(),
     };
+
     let line_index = match snapshot.analysis_snapshot.line_index(file_id)? {
         Some(line_index) => line_index,
-        None => return Ok(Vec::<lsp_types::Location>::new().into()),
+        None => return res(),
     };
 
     let to_lsp_location = |location: Location| -> Option<lsp_types::Location> {
@@ -75,4 +79,35 @@ pub(crate) fn goto_definition(
         .flat_map(to_lsp_location)
         .collect::<Vec<_>>()
         .into())
+}
+
+pub(crate) fn completion(
+    snapshot: &ServerSnapshot,
+    params: lsp_types::CompletionParams,
+) -> anyhow::Result<lsp_types::CompletionResponse> {
+    let res = || Ok(Vec::<lsp_types::CompletionItem>::new().into());
+    let path = path_buf_from_url(&params.text_document_position.text_document.uri)?;
+
+    let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
+        Some(file_id) => file_id,
+        None => return res(),
+    };
+
+    let pos = match convert::text_size_from_lsp_position(
+        snapshot,
+        file_id,
+        params.text_document_position.position,
+    )? {
+        Some(pos) => pos,
+        None => return res(),
+    };
+
+    let line_index = match snapshot.analysis_snapshot.line_index(file_id)? {
+        Some(line_index) => line_index,
+        None => return res(),
+    };
+
+    todo!()
+
+    // snapshot.analysis_snapshot
 }

@@ -1,6 +1,6 @@
 pub use crate::def::{resolver::Resolver, Declaration, Module, Name};
 use def::ModuleSourceMap;
-use starpls_common::ParseResult;
+use starpls_common::Parse;
 
 mod api;
 mod def;
@@ -31,8 +31,8 @@ pub struct Jar(
 pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {}
 
 #[salsa::tracked]
-pub fn lower(db: &dyn Db, parse: ParseResult) -> ModuleInfo {
-    let (module, source_map) = Module::new_with_source_map(db, parse.inner(db).tree());
+pub fn lower(db: &dyn Db, parse: Parse) -> ModuleInfo {
+    let (module, source_map) = Module::new_with_source_map(db, parse.tree(db));
     ModuleInfo::new(db, module, source_map)
 }
 

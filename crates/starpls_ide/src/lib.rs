@@ -1,10 +1,12 @@
 use crate::handlers::*;
+use completion::CompletionItem;
 use dashmap::{mapref::entry::Entry, DashMap};
 use salsa::ParallelDatabase;
 use starpls_common::{Db, Diagnostic, File, FileId};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use std::sync::Arc;
 
+mod completion;
 mod handlers;
 mod util;
 
@@ -81,6 +83,10 @@ pub struct AnalysisSnapshot {
 }
 
 impl AnalysisSnapshot {
+    pub fn completion(&self, pos: FilePosition) -> Cancellable<Option<Vec<CompletionItem>>> {
+        todo!()
+    }
+
     pub fn diagnostics(&self, file_id: FileId) -> Cancellable<Vec<Diagnostic>> {
         self.query(|db| diagnostics::diagnostics(db, file_id))
     }

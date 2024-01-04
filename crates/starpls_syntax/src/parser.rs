@@ -11,14 +11,14 @@ pub struct SyntaxError {
 
 /// The result of parsing a Starlark module and constructing a Rowan syntax tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Parse<T> {
+pub struct ParseTree<T> {
     green: GreenNode,
     _ty: PhantomData<fn() -> T>,
 }
 
-impl<T> Parse<T> {
+impl<T> ParseTree<T> {
     fn new(green: GreenNode) -> Self {
-        Parse {
+        ParseTree {
             green,
             _ty: PhantomData,
         }
@@ -29,13 +29,13 @@ impl<T> Parse<T> {
     }
 }
 
-impl<T: AstNode<Language = StarlarkLanguage>> Parse<T> {
+impl<T: AstNode<Language = StarlarkLanguage>> ParseTree<T> {
     pub fn tree(&self) -> T {
         T::cast(self.syntax()).unwrap()
     }
 }
 
-pub fn parse_module(input: &str, errors_sink: &mut dyn FnMut(SyntaxError)) -> Parse<Module> {
+pub fn parse_module(input: &str, errors_sink: &mut dyn FnMut(SyntaxError)) -> ParseTree<Module> {
     let str_with_tokens = StrWithTokens::new(input);
     let output = parse(&str_with_tokens.to_input());
     let mut builder = GreenNodeBuilder::new();
@@ -77,7 +77,7 @@ pub fn parse_module(input: &str, errors_sink: &mut dyn FnMut(SyntaxError)) -> Pa
         StarlarkLanguage::kind_to_raw(SyntaxKind::MODULE)
     );
 
-    Parse::new(green_node)
+    ParseTree::new(green_node)
 }
 
 pub fn line_index(input: &str) -> LineIndex {

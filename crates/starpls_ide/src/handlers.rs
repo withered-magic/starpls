@@ -1,3 +1,4 @@
+pub mod completion;
 pub mod diagnostics;
 pub mod goto_definition;
 pub mod line_index;

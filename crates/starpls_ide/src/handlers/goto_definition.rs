@@ -11,22 +11,19 @@ pub(crate) fn goto_definition(
     FilePosition { file_id, pos }: FilePosition,
 ) -> Option<Vec<Location>> {
     let file = db.get_file(file_id)?;
-    let res = parse(db, file);
-    let parent = pick_best_token(
-        res.inner(db).syntax().token_at_offset(pos),
-        |kind| match kind {
-            T![ident] => 2,
-            T!['('] | T![')'] | T!['['] | T![']'] | T!['{'] | T!['}'] => 0,
-            kind if kind.is_trivia_token() => 0,
-            _ => 1,
-        },
-    )?
+    let parse = parse(db, file);
+    let parent = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
+        T![ident] => 2,
+        T!['('] | T![')'] | T!['['] | T![']'] | T!['{'] | T!['}'] => 0,
+        kind if kind.is_trivia_token() => 0,
+        _ => 1,
+    })?
     .parent()?;
 
     // For now, we only handle identifiers.
     if let Some(name) = ast::Name::cast(parent) {
         let ptr = AstPtr::new(&ast::Expression::cast(name.syntax().clone())?);
-        let info = lower(db, res);
+        let info = lower(db, parse);
         let source_map = info.source_map(db);
         let expr = source_map.expr_map.get(&ptr).cloned()?;
         let name = Name::from_ast_node(db, name);

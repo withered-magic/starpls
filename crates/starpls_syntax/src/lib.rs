@@ -1,7 +1,7 @@
 pub use {
     crate::{
         ast::Module,
-        parser::{line_index, parse_module, Parse, SyntaxError},
+        parser::{line_index, parse_module, ParseTree, SyntaxError},
     },
     line_index::LineIndex,
     rowan::{TextRange, TextSize, TokenAtOffset},

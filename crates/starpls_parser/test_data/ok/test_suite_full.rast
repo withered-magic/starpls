@@ -2,7 +2,8 @@ MODULE
   DEF_STMT
     DEF "def"
     WHITESPACE " "
-    IDENT "f"
+    NAME
+      IDENT "f"
     OPEN_PAREN "("
     PARAMETERS
       SIMPLE_PARAMETER
@@ -41,7 +42,8 @@ MODULE
   DEF_STMT
     DEF "def"
     WHITESPACE " "
-    IDENT "g"
+    NAME
+      IDENT "g"
     OPEN_PAREN "("
     PARAMETERS
       SIMPLE_PARAMETER

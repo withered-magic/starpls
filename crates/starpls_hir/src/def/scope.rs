@@ -68,7 +68,7 @@ impl Scopes {
 
         // Compute deferred scopes. This mainly applies to function definitions.
         while let Some(DeferredScope { parent, data }) = deferred_scopes.pop_front() {
-            let scope = scopes.alloc_scope(module, parent);
+            let scope = scopes.alloc_scope(parent);
             for param in data.params.into_iter() {
                 match param {
                     Parameter::Simple { name, .. }
@@ -90,7 +90,7 @@ impl Scopes {
         scopes
     }
 
-    fn alloc_scope(&mut self, module: &Module, parent: ScopeId) -> ScopeId {
+    fn alloc_scope(&mut self, parent: ScopeId) -> ScopeId {
         self.scopes.alloc(Scope {
             declarations: Default::default(),
             parent: Some(parent),
@@ -121,8 +121,6 @@ fn compute_expr_scopes(
     is_assign_target: bool,
 ) {
     scopes.scope_by_expr.insert(expr, current);
-    let mut compute_and_assign =
-        |expr| compute_expr_scopes(scopes, expr, module, current, is_assign_target);
 
     // TODO(withered-magic): Handle list and dict comprehensions, whose CompClauses create scopes.
     match &module.exprs[expr] {
@@ -132,7 +130,7 @@ fn compute_expr_scopes(
             }
         }
         Expr::Lambda { params, body } => {
-            let scope = scopes.alloc_scope(module, current);
+            let scope = scopes.alloc_scope(current);
             for param in params.into_iter() {
                 match param {
                     Parameter::Simple { name, .. }
@@ -144,17 +142,28 @@ fn compute_expr_scopes(
             }
             compute_expr_scopes(scopes, *body, module, scope, false);
         }
-        Expr::Tuple { exprs } => exprs.iter().copied().for_each(compute_and_assign),
-        Expr::Paren { expr } => compute_and_assign(*expr),
+        Expr::Tuple { exprs } => exprs.iter().copied().for_each(|expr| {
+            compute_expr_scopes(scopes, expr, module, current, is_assign_target);
+        }),
+        Expr::Paren { expr } => {
+            compute_expr_scopes(scopes, *expr, module, current, is_assign_target)
+        }
         Expr::DictComp {
             entry,
             comp_clauses,
-        } => {}
-        Expr::ListComp { expr, comp_clauses } => {}
+        } => {
+            let mut comp = current;
+            compute_comp_clause_scopes(scopes, module, comp_clauses, &mut comp);
+            compute_expr_scopes(scopes, entry.key, module, comp, false);
+            compute_expr_scopes(scopes, entry.value, module, comp, false);
+        }
+        Expr::ListComp { expr, comp_clauses } => {
+            let mut comp = current;
+            compute_comp_clause_scopes(scopes, module, comp_clauses, &mut comp);
+            compute_expr_scopes(scopes, *expr, module, comp, false);
+        }
         expr => {
-            expr.walk_child_exprs(|expression| {
-                compute_expr_scopes(scopes, expression, module, current, false)
-            });
+            expr.walk_child_exprs(|expr| compute_expr_scopes(scopes, expr, module, current, false));
         }
     }
 }
@@ -204,7 +213,7 @@ fn compute_stmt_scopes(
             stmts,
         } => {
             scopes.add_declaration(*current, *name, Declaration::Function { id: statement });
-            *current = scopes.alloc_scope(module, *current);
+            *current = scopes.alloc_scope(*current);
             deferred_functions.push_back(DeferredFunctionData {
                 params: params.clone(),
                 stmts: stmts.clone(),
@@ -233,8 +242,9 @@ fn compute_stmt_scopes(
             });
             compute_stmt_list_scopes(scopes, deferred_functions, stmts, module, current);
         }
-        Stmt::Assign { lhs, .. } => {
-            *current = scopes.alloc_scope(module, *current);
+        Stmt::Assign { lhs, rhs, .. } => {
+            compute_expr_scopes(scopes, *rhs, module, *current, false);
+            *current = scopes.alloc_scope(*current);
             compute_expr_scopes(scopes, *lhs, module, *current, true);
         }
         Stmt::Load { items } => {}
@@ -257,11 +267,14 @@ fn compute_comp_clause_scopes(
     for comp_clause in comp_clauses.into_iter() {
         match comp_clause {
             CompClause::For { iterable, targets } => {
+                compute_expr_scopes(scopes, *iterable, module, *current, false);
                 targets.iter().copied().for_each(|expr| {
-                    compute_expr_scopes(scopes, expr, module, *current, false);
+                    compute_expr_scopes(scopes, expr, module, *current, true);
                 });
             }
-            CompClause::If { test } => todo!(),
+            CompClause::If { test } => {
+                compute_expr_scopes(scopes, *test, module, *current, false);
+            }
         }
     }
 }

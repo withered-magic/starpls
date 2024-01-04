@@ -43,7 +43,7 @@ pub(crate) fn def_stmt(p: &mut Parser) {
     p.bump(T![def]);
 
     // Parse the function name.
-    if !p.eat(T![ident]) {
+    if name(p).is_none() {
         p.error_recover_until("Expected function name", STMT_RECOVERY);
         m.complete(p, DEF_STMT);
         return;

@@ -85,7 +85,10 @@ impl AnalysisSnapshot {
     }
 
     pub fn goto_definition(&self, pos: FilePosition) -> Cancellable<Option<Vec<Location>>> {
-        self.query(|db| goto_definition::goto_definition(db, pos))
+        self.query(|db| {
+            let res = goto_definition::goto_definition(db, pos);
+            res
+        })
     }
 
     pub fn line_index(&self, file_id: FileId) -> Cancellable<Option<LineIndex>> {

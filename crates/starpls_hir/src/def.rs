@@ -1,10 +1,7 @@
-use std::marker::PhantomData;
-
 use crate::Db;
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
-use smol_str::SmolStr;
-use starpls_syntax::ast::{self, AssignOp, AstNode, AstPtr, BinaryOp, UnaryOp};
+use starpls_syntax::ast::{self, AssignOp, AstPtr, BinaryOp, UnaryOp};
 
 pub mod lower;
 pub mod resolver;
@@ -288,16 +285,17 @@ pub enum Declaration {
 
 #[salsa::interned]
 pub struct Name {
-    pub inner: SmolStr,
+    #[return_ref]
+    pub inner: String,
 }
 
 impl Name {
     pub(crate) fn from_str(db: &dyn Db, name: &str) -> Self {
-        Self::new(db, SmolStr::new(name))
+        Self::new(db, name.to_string())
     }
 
     pub(crate) fn missing(db: &dyn Db) -> Self {
-        Name::new(db, SmolStr::new_inline("[missing name]"))
+        Name::new(db, "[missing name]".to_string())
     }
 
     pub(crate) fn is_missing(&self, db: &dyn Db) -> bool {

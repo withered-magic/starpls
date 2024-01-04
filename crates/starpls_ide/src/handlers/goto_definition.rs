@@ -23,6 +23,7 @@ pub(crate) fn goto_definition(
         let source_map = info.source_map(db);
         let expr = source_map.expr_map.get(&ptr).cloned()?;
         let name = Name::from_ast_node(db, name);
+
         let resolver = Resolver::new_for_expr(db, info, expr);
         return Some(
             resolver

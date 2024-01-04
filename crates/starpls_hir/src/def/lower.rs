@@ -248,7 +248,7 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn lower_args_opt(&mut self, syntax: Option<ast::Arguments>) -> Box<[Argument]> {
-        syntax
+        let args = syntax
             .iter()
             .flat_map(|arguments| arguments.arguments())
             .map(|argument| match argument {
@@ -270,8 +270,8 @@ impl<'a> LoweringContext<'a> {
                     Argument::UnpackedDict { expr }
                 }
             })
-            .collect::<Vec<_>>()
-            .into_boxed_slice()
+            .collect::<Vec<_>>();
+        args.into_boxed_slice()
     }
 
     fn lower_name_opt(&mut self, syntax: Option<ast::Name>) -> Name {

@@ -122,7 +122,7 @@ fn compute_expr_scopes(
 ) {
     scopes.scope_by_expr.insert(expr, current);
     let mut compute_and_assign =
-        |expression| compute_expr_scopes(scopes, expression, module, current, is_assign_target);
+        |expr| compute_expr_scopes(scopes, expr, module, current, is_assign_target);
 
     // TODO(withered-magic): Handle list and dict comprehensions, whose CompClauses create scopes.
     match &module.exprs[expr] {
@@ -151,9 +151,11 @@ fn compute_expr_scopes(
             comp_clauses,
         } => {}
         Expr::ListComp { expr, comp_clauses } => {}
-        expression => expression.walk_child_exprs(|expression| {
-            compute_expr_scopes(scopes, expression, module, current, false)
-        }),
+        expr => {
+            expr.walk_child_exprs(|expression| {
+                compute_expr_scopes(scopes, expression, module, current, false)
+            });
+        }
     }
 }
 
@@ -236,6 +238,12 @@ fn compute_stmt_scopes(
             compute_expr_scopes(scopes, *lhs, module, *current, true);
         }
         Stmt::Load { items } => {}
+        Stmt::Return { expr } => {
+            if let Some(expr) = expr {
+                compute_expr_scopes(scopes, *expr, module, *current, false);
+            }
+        }
+        Stmt::Expr { expr } => compute_expr_scopes(scopes, *expr, module, *current, false),
         _ => {}
     }
 }

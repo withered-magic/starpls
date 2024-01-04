@@ -146,7 +146,17 @@ impl Expr {
             Expr::Tuple { exprs } => exprs.iter().copied().for_each(f),
             Expr::Paren { expr } => f(*expr),
             Expr::Dot { expr, .. } => f(*expr),
-            Expr::Call { callee, .. } => f(*callee),
+            Expr::Call { callee, args } => {
+                f(*callee);
+                for arg in args.iter() {
+                    match arg {
+                        Argument::Simple { expr }
+                        | Argument::Keyword { expr, .. }
+                        | Argument::UnpackedList { expr }
+                        | Argument::UnpackedDict { expr } => f(*expr),
+                    }
+                }
+            }
             Expr::Index { lhs, index } => {
                 f(*lhs);
                 f(*index);
@@ -278,7 +288,7 @@ pub enum Declaration {
 
 #[salsa::interned]
 pub struct Name {
-    inner: SmolStr,
+    pub inner: SmolStr,
 }
 
 impl Name {

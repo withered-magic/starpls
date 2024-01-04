@@ -1,5 +1,5 @@
 use crate::{Database, FilePosition, Location};
-use starpls_common::{parse, Db, FileId};
+use starpls_common::{parse, Db};
 use starpls_hir::{lower, Declaration, Name, Resolver};
 use starpls_syntax::ast::{self, AstNode, AstPtr};
 

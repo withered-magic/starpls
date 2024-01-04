@@ -1,8 +1,10 @@
 use anyhow::anyhow;
-use line_index::LineIndex;
-use starpls_common::{Diagnostic, Severity};
-use starpls_syntax::TextRange;
+use line_index::{LineCol, LineIndex};
+use starpls_common::{Diagnostic, FileId, Severity};
+use starpls_syntax::{TextRange, TextSize};
 use std::path::PathBuf;
+
+use crate::server::ServerSnapshot;
 
 pub(crate) fn path_buf_from_url(url: &lsp_types::Url) -> anyhow::Result<PathBuf> {
     url.to_file_path()
@@ -26,7 +28,10 @@ pub fn lsp_diagnostic_from_native(
     }
 }
 
-fn lsp_range_from_text_range(text_range: TextRange, line_index: &LineIndex) -> lsp_types::Range {
+pub(crate) fn lsp_range_from_text_range(
+    text_range: TextRange,
+    line_index: &LineIndex,
+) -> lsp_types::Range {
     let start = line_index.line_col(text_range.start());
     let end = line_index.line_col(text_range.end());
     lsp_types::Range {
@@ -39,6 +44,24 @@ fn lsp_range_from_text_range(text_range: TextRange, line_index: &LineIndex) -> l
             character: end.col,
         },
     }
+}
+
+fn line_col_from_lsp_position(pos: lsp_types::Position) -> LineCol {
+    LineCol {
+        line: pos.line,
+        col: pos.character,
+    }
+}
+
+pub(crate) fn text_size_from_lsp_position(
+    snapshot: &ServerSnapshot,
+    file_id: FileId,
+    pos: lsp_types::Position,
+) -> anyhow::Result<Option<TextSize>> {
+    Ok(snapshot
+        .analysis_snapshot
+        .line_index(file_id)?
+        .and_then(|line_index| line_index.offset(line_col_from_lsp_position(pos))))
 }
 
 fn lsp_severity_from_native(severity: Severity) -> lsp_types::DiagnosticSeverity {

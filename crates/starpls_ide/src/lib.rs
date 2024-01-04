@@ -113,12 +113,12 @@ impl std::panic::RefUnwindSafe for AnalysisSnapshot {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Location {
-    file_id: FileId,
-    range: TextRange,
+    pub file_id: FileId,
+    pub range: TextRange,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FilePosition {
-    file_id: FileId,
-    pos: TextSize,
+    pub file_id: FileId,
+    pub pos: TextSize,
 }

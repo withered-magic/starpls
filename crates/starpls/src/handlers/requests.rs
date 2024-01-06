@@ -102,12 +102,16 @@ pub(crate) fn completion(
         None => return res(),
     };
 
-    let line_index = match snapshot.analysis_snapshot.line_index(file_id)? {
-        Some(line_index) => line_index,
-        None => return res(),
-    };
-
-    todo!()
-
-    // snapshot.analysis_snapshot
+    Ok(snapshot
+        .analysis_snapshot
+        .completion(FilePosition { file_id, pos })?
+        .unwrap_or_else(|| Vec::new())
+        .into_iter()
+        .map(|item| lsp_types::CompletionItem {
+            label: item.label,
+            kind: Some(lsp_types::CompletionItemKind::VARIABLE),
+            ..Default::default()
+        })
+        .collect::<Vec<_>>()
+        .into())
 }

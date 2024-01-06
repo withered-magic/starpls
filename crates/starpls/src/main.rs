@@ -20,6 +20,7 @@ fn main() -> anyhow::Result<()> {
     // Initialize the connection with server capabilities. For now, this consists
     // only of `TextDocumentSyncKind.Full`.
     let server_capabilities = serde_json::to_value(&ServerCapabilities {
+        completion_provider: Some(Default::default()),
         definition_provider: Some(OneOf::Left(true)),
         text_document_sync: Some(TextDocumentSyncCapability::Kind(
             TextDocumentSyncKind::INCREMENTAL,

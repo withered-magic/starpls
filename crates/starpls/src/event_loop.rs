@@ -185,6 +185,19 @@ impl Server {
                     ),
                 })
             });
+        } else if let Some(params) = cast_request::<lsp_types::request::Completion>(&req) {
+            let snapshot = self.snapshot();
+            self.task_pool_handle.spawn(move || {
+                let id = req.id.clone();
+                Task::ResponseReady(match requests::completion(&snapshot, params) {
+                    Ok(value) => lsp_server::Response::new_ok(id, value),
+                    Err(err) => lsp_server::Response::new_err(
+                        id,
+                        lsp_server::ErrorCode::RequestFailed as i32,
+                        err.to_string(),
+                    ),
+                })
+            });
         }
     }
 

@@ -69,20 +69,28 @@ impl Scopes {
         };
 
         // Allocate the root module scope.
-        let root = scopes.scopes.alloc(Scope {
+        let mut root = scopes.scopes.alloc(Scope {
             declarations: Default::default(),
             parent: None,
         });
-        scopes.scopes_by_hir_id.insert(ScopeHirId::Module, root);
+        eprintln!("root before {:?}", root);
 
         let mut defer = VecDeque::new();
 
         // Compute scopes by walking the module HIR, starting at the top-level statements.
-        compute_stmt_list_scopes_deferred(&mut scopes, &mut defer, &module.top_level, module, root);
+        compute_stmt_list_scopes_deferred(
+            &mut scopes,
+            &mut defer,
+            &module.top_level,
+            module,
+            &mut root,
+        );
+        eprintln!("root after {:?}", root);
+        scopes.scopes_by_hir_id.insert(ScopeHirId::Module, root);
 
         // Compute deferred scopes. This mainly applies to function definitions.
         while let Some(DeferredScope { parent, data }) = defer.pop_front() {
-            let scope = scopes.alloc_scope(parent);
+            let mut scope = scopes.alloc_scope(parent);
             for param in data.params.into_iter().copied() {
                 match &module.params[param] {
                     Param::Simple { name, .. }
@@ -92,7 +100,13 @@ impl Scopes {
                     }
                 }
             }
-            compute_stmt_list_scopes_deferred(&mut scopes, &mut defer, &data.stmts, module, scope);
+            compute_stmt_list_scopes_deferred(
+                &mut scopes,
+                &mut defer,
+                &data.stmts,
+                module,
+                &mut scope,
+            );
         }
 
         scopes
@@ -132,12 +146,13 @@ fn compute_expr_scopes(
     current: ScopeId,
     is_assign_target: bool,
 ) {
-    scopes.scopes_by_hir_id.insert(expr.into(), current);
-
+    eprintln!("scope for {:?}", expr);
     // TODO(withered-magic): Handle list and dict comprehensions, whose CompClauses create scopes.
     match &module.exprs[expr] {
+        Expr::Missing => {}
         Expr::Name { name } => {
             if is_assign_target {
+                eprintln!("add to scope {:?}", current);
                 scopes.add_decl(current, *name, Declaration::Variable { id: expr });
             }
         }
@@ -153,12 +168,15 @@ fn compute_expr_scopes(
                 }
             }
             compute_expr_scopes(scopes, *body, module, scope, false);
+            scopes.scopes_by_hir_id.insert(expr.into(), current);
         }
         Expr::Tuple { exprs } => exprs.iter().copied().for_each(|expr| {
             compute_expr_scopes(scopes, expr, module, current, is_assign_target);
+            scopes.scopes_by_hir_id.insert(expr.into(), current);
         }),
-        Expr::Paren { expr } => {
-            compute_expr_scopes(scopes, *expr, module, current, is_assign_target)
+        Expr::Paren { expr: paren_expr } => {
+            compute_expr_scopes(scopes, *paren_expr, module, current, is_assign_target);
+            scopes.scopes_by_hir_id.insert(expr.into(), current);
         }
         Expr::DictComp {
             entry,
@@ -168,14 +186,22 @@ fn compute_expr_scopes(
             compute_comp_clause_scopes(scopes, module, comp_clauses, &mut comp);
             compute_expr_scopes(scopes, entry.key, module, comp, false);
             compute_expr_scopes(scopes, entry.value, module, comp, false);
+            scopes.scopes_by_hir_id.insert(expr.into(), current);
         }
-        Expr::ListComp { expr, comp_clauses } => {
+        Expr::ListComp {
+            expr: list_expr,
+            comp_clauses,
+        } => {
             let mut comp = current;
             compute_comp_clause_scopes(scopes, module, comp_clauses, &mut comp);
-            compute_expr_scopes(scopes, *expr, module, comp, false);
+            compute_expr_scopes(scopes, *list_expr, module, comp, false);
+            scopes.scopes_by_hir_id.insert(expr.into(), current);
         }
-        expr => {
-            expr.walk_child_exprs(|expr| compute_expr_scopes(scopes, expr, module, current, false));
+        hir_expr => {
+            hir_expr
+                .walk_child_exprs(|expr| compute_expr_scopes(scopes, expr, module, current, false));
+            scopes.scopes_by_hir_id.insert(expr.into(), current);
+            eprintln!("{:?}", hir_expr);
         }
     }
 }
@@ -185,15 +211,15 @@ fn compute_stmt_list_scopes_deferred(
     defer: &mut VecDeque<DeferredScope>,
     stmts: &Box<[StmtId]>,
     module: &Module,
-    mut current: ScopeId,
+    current: &mut ScopeId,
 ) {
     let mut deferred_functions = VecDeque::new();
     for stmt in stmts.iter().copied() {
-        compute_stmt_scopes(scopes, &mut deferred_functions, stmt, module, &mut current);
+        compute_stmt_scopes(scopes, &mut deferred_functions, stmt, module, current);
     }
     while let Some(data) = deferred_functions.pop_front() {
         defer.push_back(DeferredScope {
-            parent: current,
+            parent: *current,
             data,
         });
     }
@@ -255,6 +281,7 @@ fn compute_stmt_scopes(
             compute_stmt_list_scopes(scopes, deferred_functions, stmts, module, current);
         }
         Stmt::Assign { lhs, rhs, .. } => {
+            eprintln!("compute assign scopes");
             compute_expr_scopes(scopes, *rhs, module, *current, false);
             *current = scopes.alloc_scope(*current);
             compute_expr_scopes(scopes, *lhs, module, *current, true);

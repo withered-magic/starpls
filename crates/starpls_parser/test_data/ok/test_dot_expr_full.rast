@@ -3,5 +3,5 @@ MODULE
     NAME_REF
       IDENT "a"
     DOT "."
-    FIELD
+    NAME
       IDENT "b"

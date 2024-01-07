@@ -2,17 +2,17 @@ MODULE
   DEF_STMT
     DEF "def"
     WHITESPACE " "
-    NAME_REF
+    NAME
       IDENT "f"
     OPEN_PAREN "("
     PARAMETERS
       SIMPLE_PARAMETER
-        NAME_REF
+        NAME
           IDENT "x"
       COMMA ","
       WHITESPACE " "
       SIMPLE_PARAMETER
-        NAME_REF
+        NAME
           IDENT "y"
     CLOSE_PAREN ")"
     COLON ":"
@@ -42,17 +42,17 @@ MODULE
   DEF_STMT
     DEF "def"
     WHITESPACE " "
-    NAME_REF
+    NAME
       IDENT "g"
     OPEN_PAREN "("
     PARAMETERS
       SIMPLE_PARAMETER
-        NAME_REF
+        NAME
           IDENT "x"
       COMMA ","
       WHITESPACE " "
       SIMPLE_PARAMETER
-        NAME_REF
+        NAME
           IDENT "y"
     CLOSE_PAREN ")"
     COLON ":"

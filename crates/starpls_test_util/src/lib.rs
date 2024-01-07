@@ -1,14 +1,11 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+use starpls_syntax::TextSize;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub const CURSOR_MARKER: &str = "$0";
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+pub fn parse_fixture(fixture: &str) -> (String, TextSize) {
+    let offset = fixture.find(CURSOR_MARKER).unwrap();
+    let mut text = String::new();
+    text.push_str(&fixture[..offset]);
+    text.push_str(&fixture[offset + CURSOR_MARKER.len()..]);
+    (text, (offset as u32).into())
 }

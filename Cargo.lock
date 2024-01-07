@@ -651,11 +651,13 @@ dependencies = [
 name = "starpls_hir"
 version = "0.1.0"
 dependencies = [
+ "dashmap",
  "id-arena",
  "rustc-hash",
  "salsa-2022",
  "starpls_common",
  "starpls_syntax",
+ "starpls_test_util",
 ]
 
 [[package]]
@@ -698,6 +700,9 @@ dependencies = [
 [[package]]
 name = "starpls_test_util"
 version = "0.1.0"
+dependencies = [
+ "starpls_syntax",
+]
 
 [[package]]
 name = "strsim"

@@ -1,9 +1,11 @@
-pub use crate::def::{resolver::Resolver, Declaration, Module, Name};
-use def::ModuleSourceMap;
+use crate::def::ModuleSourceMap;
 use starpls_common::Parse;
+
+pub use crate::def::{resolver::Resolver, Declaration, Module, Name};
 
 mod api;
 mod def;
+mod test_database;
 mod ty;
 
 #[salsa::tracked]

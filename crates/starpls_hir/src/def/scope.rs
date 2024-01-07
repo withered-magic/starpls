@@ -235,7 +235,6 @@ fn compute_stmt_scopes(
             params,
             stmts,
         } => {
-            eprintln!("add def {:?} to scope {:?}", *name, *current);
             *current = scopes.alloc_scope(*current);
             scopes.add_decl(*current, *name, Declaration::Function { id: stmt });
             deferred_functions.push_back(DeferredFunctionData {
@@ -278,12 +277,10 @@ fn compute_stmt_scopes(
             }
         }
         Stmt::Expr { expr } => {
-            eprintln!("expr {:?}", &module.exprs[*expr]);
             compute_expr_scopes(scopes, *expr, module, *current, false);
         }
         _ => return,
     }
-    eprintln!("insert stmt scope {:?} {:?}", stmt, &module.stmts[stmt]);
     scopes.scopes_by_hir_id.insert(stmt.into(), *current);
 }
 

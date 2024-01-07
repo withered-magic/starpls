@@ -7,6 +7,9 @@ pub mod lower;
 pub mod resolver;
 pub mod scope;
 
+#[cfg(test)]
+mod tests;
+
 pub type ModulePtr = AstPtr<ast::Module>;
 
 pub type ExprId = Id<Expr>;

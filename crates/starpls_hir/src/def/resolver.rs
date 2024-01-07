@@ -122,14 +122,21 @@ fn find_nearest_predecessor(
                     .unwrap()
                     .syntax_node_ptr(),
             };
-            eprintln!("narrow {:?} {:?}", ptr.text_range(), *scope);
+            eprintln!("narrow {:?} {:?} {:?}", ptr.text_range(), *scope, hir);
             (ptr.text_range(), *scope)
         })
         .filter(|(range, _)| {
-            range.start() <= offset
-                && hir_range.contains_range(range.clone())
-                && hir_range != range.clone()
+            range.start() <= offset && hir_range.contains_range(*range) && hir_range != *range
         })
-        .max_by(|(lhs, _), (rhs, _)| lhs.start().cmp(&rhs.start()))
+        .max_by(|(lhs, _), (rhs, _)| {
+            eprintln!("cmp");
+            if lhs.contains_range(*rhs) {
+                std::cmp::Ordering::Greater
+            } else if lhs.contains_range(*lhs) {
+                std::cmp::Ordering::Less
+            } else {
+                lhs.start().cmp(&rhs.start())
+            }
+        })
         .map(|(_, scope)| scope)
 }

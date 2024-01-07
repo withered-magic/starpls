@@ -240,17 +240,17 @@ fn compute_stmt_list_scopes(
 fn compute_stmt_scopes(
     scopes: &mut Scopes,
     deferred_functions: &mut VecDeque<DeferredFunctionData>,
-    statement: StmtId,
+    stmt: StmtId,
     module: &Module,
     current: &mut ScopeId,
 ) {
-    match &module.stmts[statement] {
+    match &module.stmts[stmt] {
         Stmt::Def {
             name,
             params,
             stmts,
         } => {
-            scopes.add_decl(*current, *name, Declaration::Function { id: statement });
+            scopes.add_decl(*current, *name, Declaration::Function { id: stmt });
             *current = scopes.alloc_scope(*current);
             deferred_functions.push_back(DeferredFunctionData {
                 params: params.clone(),
@@ -293,8 +293,9 @@ fn compute_stmt_scopes(
             }
         }
         Stmt::Expr { expr } => compute_expr_scopes(scopes, *expr, module, *current, false),
-        _ => {}
+        _ => return,
     }
+    scopes.scopes_by_hir_id.insert(stmt.into(), *current);
 }
 
 fn compute_comp_clause_scopes(

@@ -6,7 +6,7 @@ use starpls_common::parse;
 use starpls_hir::{lower, Db, Declaration, Name, Resolver};
 use starpls_syntax::{
     ast::{self, AstNode},
-    parse_module, TextSize,
+    parse_module,
 };
 
 const COMPLETION_MARKER: &'static str = "__STARPLS_COMPLETION_MARKER";
@@ -26,11 +26,17 @@ pub enum CompletionMode {
 pub enum CompletionItemKind {
     Function,
     Variable,
+    Keyword,
 }
 
 enum CompletionAnalysis {
-    Name { names: HashMap<Name, Declaration> },
-    Field,
+    Name,
+    NameRef(NameRefContext),
+}
+
+struct NameRefContext {
+    names: HashMap<Name, Declaration>,
+    is_lone_expr: bool,
 }
 
 struct CompletionContext {
@@ -42,18 +48,48 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
     let mut items = Vec::new();
 
     match &ctx.analysis {
-        CompletionAnalysis::Name { names } => {
-            for name in names.keys() {
+        CompletionAnalysis::NameRef(NameRefContext {
+            names,
+            is_lone_expr,
+        }) => {
+            for (name, decl) in names {
                 items.push(CompletionItem {
                     label: name.inner(db).clone(),
-                    kind: CompletionItemKind::Variable,
+                    kind: match decl {
+                        Declaration::Function { .. } => CompletionItemKind::Function,
+                        Declaration::Variable { .. } | Declaration::Parameter { .. } => {
+                            CompletionItemKind::Variable
+                        }
+                        _ => CompletionItemKind::Variable,
+                    },
                     mode: None,
-                })
+                });
+            }
+            if *is_lone_expr {
+                add_keywords(&mut items);
             }
         }
         _ => (),
     }
     Some(items)
+}
+
+fn add_keywords(items: &mut Vec<CompletionItem>) {
+    let add_keyword = &mut |keyword: &'static str| {
+        items.push(CompletionItem {
+            label: keyword.to_string(),
+            kind: CompletionItemKind::Keyword,
+            mode: None,
+        })
+    };
+    add_keyword("def");
+    add_keyword("if");
+    add_keyword("for");
+    add_keyword("load");
+    add_keyword("return");
+    add_keyword("break");
+    add_keyword("continue");
+    add_keyword("pass");
 }
 
 impl CompletionContext {
@@ -75,15 +111,19 @@ impl CompletionContext {
             .right_biased()?
             .parent()?;
 
-        let analysis = if let Some(_name) = ast::Name::cast(parent.clone()) {
-            eprintln!("is name analysis");
+        let analysis = if let Some(_name_ref) = ast::NameRef::cast(parent.clone()) {
             let info = lower(db, parse);
             let resolver = Resolver::new_for_offset(db, info, pos);
-            CompletionAnalysis::Name {
+            let is_lone_expr = parent
+                .parent()
+                .map(|node| !ast::Expression::can_cast(node.kind()))
+                .unwrap_or(true);
+            CompletionAnalysis::NameRef(NameRefContext {
                 names: resolver.names(),
-            }
-        } else if let Some(_field) = ast::Field::cast(parent.clone()) {
-            CompletionAnalysis::Field
+                is_lone_expr,
+            })
+        } else if let Some(_name) = ast::Name::cast(parent.clone()) {
+            CompletionAnalysis::Name
         } else {
             return None;
         };

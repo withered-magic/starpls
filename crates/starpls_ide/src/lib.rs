@@ -6,7 +6,7 @@ use starpls_common::{Db, Diagnostic, File, FileId};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use std::sync::Arc;
 
-mod completions;
+pub mod completions;
 mod handlers;
 mod util;
 

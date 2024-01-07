@@ -1,5 +1,5 @@
 use anyhow::Ok;
-use starpls_ide::{FilePosition, Location};
+use starpls_ide::{completions::CompletionItemKind, FilePosition, Location};
 
 use crate::{
     convert::{self, path_buf_from_url},
@@ -109,7 +109,11 @@ pub(crate) fn completion(
         .into_iter()
         .map(|item| lsp_types::CompletionItem {
             label: item.label,
-            kind: Some(lsp_types::CompletionItemKind::VARIABLE),
+            kind: Some(match item.kind {
+                CompletionItemKind::Function => lsp_types::CompletionItemKind::FUNCTION,
+                CompletionItemKind::Variable => lsp_types::CompletionItemKind::VARIABLE,
+                CompletionItemKind::Keyword => lsp_types::CompletionItemKind::KEYWORD,
+            }),
             ..Default::default()
         })
         .collect::<Vec<_>>()

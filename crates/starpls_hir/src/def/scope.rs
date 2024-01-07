@@ -73,7 +73,6 @@ impl Scopes {
             declarations: Default::default(),
             parent: None,
         });
-        eprintln!("root before {:?}", root);
 
         let mut defer = VecDeque::new();
 
@@ -85,7 +84,6 @@ impl Scopes {
             module,
             &mut root,
         );
-        eprintln!("root after {:?}", root);
         scopes.scopes_by_hir_id.insert(ScopeHirId::Module, root);
 
         // Compute deferred scopes. This mainly applies to function definitions.
@@ -146,14 +144,15 @@ fn compute_expr_scopes(
     current: ScopeId,
     is_assign_target: bool,
 ) {
-    eprintln!("scope for {:?}", expr);
     // TODO(withered-magic): Handle list and dict comprehensions, whose CompClauses create scopes.
     match &module.exprs[expr] {
         Expr::Missing => {}
         Expr::Name { name } => {
             if is_assign_target {
-                eprintln!("add to scope {:?}", current);
                 scopes.add_decl(current, *name, Declaration::Variable { id: expr });
+            } else {
+                eprintln!("insert into scope by hir");
+                scopes.scopes_by_hir_id.insert(expr.into(), current);
             }
         }
         Expr::Lambda { params, body } => {
@@ -201,7 +200,6 @@ fn compute_expr_scopes(
             hir_expr
                 .walk_child_exprs(|expr| compute_expr_scopes(scopes, expr, module, current, false));
             scopes.scopes_by_hir_id.insert(expr.into(), current);
-            eprintln!("{:?}", hir_expr);
         }
     }
 }
@@ -281,7 +279,6 @@ fn compute_stmt_scopes(
             compute_stmt_list_scopes(scopes, deferred_functions, stmts, module, current);
         }
         Stmt::Assign { lhs, rhs, .. } => {
-            eprintln!("compute assign scopes");
             compute_expr_scopes(scopes, *rhs, module, *current, false);
             *current = scopes.alloc_scope(*current);
             compute_expr_scopes(scopes, *lhs, module, *current, true);

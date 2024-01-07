@@ -319,7 +319,7 @@ ast_node! {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Expression {
-    Name(Name),
+    Name(NameRef),
     Literal(LiteralExpr),
     If(IfExpr),
     Unary(UnaryExpr),
@@ -346,7 +346,8 @@ impl AstNode for Expression {
     {
         matches!(
             kind,
-            NAME | LITERAL_EXPR
+            NAME_REF
+                | LITERAL_EXPR
                 | IF_EXPR
                 | UNARY_EXPR
                 | BINARY_EXPR
@@ -369,7 +370,7 @@ impl AstNode for Expression {
         Self: Sized,
     {
         Some(match syntax.kind() {
-            NAME => Self::Name(Name { syntax }),
+            NAME_REF => Self::Name(NameRef { syntax }),
             LITERAL_EXPR => Self::Literal(LiteralExpr { syntax }),
             IF_EXPR => Self::If(IfExpr { syntax }),
             UNARY_EXPR => Self::Unary(UnaryExpr { syntax }),
@@ -391,7 +392,7 @@ impl AstNode for Expression {
 
     fn syntax(&self) -> &SyntaxNode {
         match self {
-            Expression::Name(Name { syntax }) => syntax,
+            Expression::Name(NameRef { syntax }) => syntax,
             Expression::Literal(LiteralExpr { syntax }) => syntax,
             Expression::If(IfExpr { syntax }) => syntax,
             Expression::Unary(UnaryExpr { syntax }) => syntax,
@@ -417,8 +418,8 @@ ast_node! {
 }
 
 ast_node! {
-    Field => FIELD
-    child_token field -> IDENT;
+    NameRef => NAME_REF
+    child_token name -> IDENT;
 }
 
 ast_node! {
@@ -580,7 +581,7 @@ ast_node! {
 ast_node! {
     DotExpr => DOT_EXPR
     child expr -> Expression;
-    child field -> Field;
+    child field -> Name;
 }
 
 ast_node! {

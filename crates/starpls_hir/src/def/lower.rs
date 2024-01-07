@@ -125,7 +125,7 @@ impl<'a> LoweringContext<'a> {
         let ptr = AstPtr::new(&expr);
         let expr = match expr {
             ast::Expression::Name(node) => {
-                let name = self.lower_name_opt(Some(node));
+                let name = self.lower_name_ref_opt(Some(node));
                 Expr::Name { name }
             }
             ast::Expression::Literal(node) => {
@@ -207,7 +207,7 @@ impl<'a> LoweringContext<'a> {
                 Expr::Paren { expr }
             }
             ast::Expression::Dot(node) => {
-                let field = self.lower_field_opt(node.field());
+                let field = self.lower_name_opt(node.field());
                 let expr = self.lower_expr_opt(node.expr());
                 Expr::Dot { expr, field }
             }
@@ -291,9 +291,9 @@ impl<'a> LoweringContext<'a> {
             )
     }
 
-    fn lower_field_opt(&mut self, syntax: Option<ast::Field>) -> Name {
+    fn lower_name_ref_opt(&mut self, syntax: Option<ast::NameRef>) -> Name {
         syntax
-            .and_then(|field| field.field())
+            .and_then(|name| name.name())
             .as_ref()
             .map(|token| token.text())
             .map_or_else(

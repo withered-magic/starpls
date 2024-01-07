@@ -21,12 +21,12 @@ pub(crate) fn goto_definition(
     .parent()?;
 
     // For now, we only handle identifiers.
-    if let Some(name) = ast::Name::cast(parent) {
-        let ptr = AstPtr::new(&ast::Expression::cast(name.syntax().clone())?);
+    if let Some(name_ref) = ast::NameRef::cast(parent) {
+        let ptr = AstPtr::new(&ast::Expression::cast(name_ref.syntax().clone())?);
         let info = lower(db, parse);
         let source_map = info.source_map(db);
         let expr = source_map.expr_map.get(&ptr).cloned()?;
-        let name = Name::from_ast_node(db, name);
+        let name = Name::from_ast_node(db, name_ref);
 
         let resolver = Resolver::new_for_expr(db, info, expr);
         return Some(
@@ -52,7 +52,6 @@ pub(crate) fn goto_definition(
                             range: ptr.syntax_node_ptr().text_range(),
                         })
                     }
-
                     Declaration::LoadItem {} => None,
                 })
                 .collect(),

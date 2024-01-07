@@ -1,6 +1,6 @@
 MODULE
   ASSIGN_STMT
-    NAME
+    NAME_REF
       IDENT "x"
     WHITESPACE " "
     EQ "="
@@ -25,7 +25,7 @@ MODULE
     NEWLINE "\n"
     DEDENT ""
   ASSIGN_STMT
-    NAME
+    NAME_REF
       IDENT "a"
     WHITESPACE " "
     EQ "="

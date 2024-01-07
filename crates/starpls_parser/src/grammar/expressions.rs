@@ -161,7 +161,7 @@ fn dot_expr(p: &mut Parser, m: Marker) -> CompletedMarker {
     // test test_dot_expr_full
     // a.b
     p.bump(T![.]);
-    if field(p).is_none() {
+    if name(p).is_none() {
         // test_err test_dot_expr_missing_member
         // a.
         p.error_recover_until("Expected member name", STMT_RECOVERY);
@@ -204,9 +204,9 @@ fn operand_expr(p: &mut Parser) -> Option<CompletedMarker> {
             p.bump_any();
             m.complete(p, LITERAL_EXPR)
         }
-        T![ident] => match name(p) {
+        T![ident] => match name_ref(p) {
             Some(m) => m,
-            None => panic!("failed to parse name"),
+            None => panic!("failed to parse name ref"),
         },
         T!['('] => tuple_or_paren_expr(p, true),
         T!['['] => list_expr_or_comp(p),
@@ -311,13 +311,13 @@ fn list_expr_or_comp(p: &mut Parser) -> CompletedMarker {
                             m.complete(p, COMP_CLAUSE_FOR);
                             break;
                         }
-                        test(p);
+                        or_expr(p);
                         m.complete(p, COMP_CLAUSE_FOR);
                     }
                     T![if] => {
                         let m = p.start();
                         p.bump(T![if]);
-                        test(p);
+                        or_expr(p);
                         m.complete(p, COMP_CLAUSE_IF);
                     }
                     _ => break,
@@ -405,20 +405,20 @@ fn entry(p: &mut Parser) {
     m.complete(p, DICT_ENTRY);
 }
 
+pub(crate) fn name_ref(p: &mut Parser) -> Option<CompletedMarker> {
+    if p.at(T![ident]) {
+        let m = p.start();
+        p.eat(T![ident]);
+        return Some(m.complete(p, NAME_REF));
+    }
+    None
+}
+
 pub(crate) fn name(p: &mut Parser) -> Option<CompletedMarker> {
     if p.at(T![ident]) {
         let m = p.start();
         p.eat(T![ident]);
         return Some(m.complete(p, NAME));
-    }
-    None
-}
-
-pub(crate) fn field(p: &mut Parser) -> Option<CompletedMarker> {
-    if p.at(T![ident]) {
-        let m = p.start();
-        p.eat(T![ident]);
-        return Some(m.complete(p, FIELD));
     }
     None
 }

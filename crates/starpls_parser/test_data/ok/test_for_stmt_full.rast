@@ -3,22 +3,22 @@ MODULE
     FOR "for"
     WHITESPACE " "
     LOOP_VARIABLES
-      NAME
+      NAME_REF
         IDENT "i"
       COMMA ","
       WHITESPACE " "
-      NAME
+      NAME_REF
         IDENT "value"
     WHITESPACE " "
     IN "in"
     WHITESPACE " "
     CALL_EXPR
-      NAME
+      NAME_REF
         IDENT "enumerate"
       OPEN_PAREN "("
       ARGUMENTS
         SIMPLE_ARGUMENT
-          NAME
+          NAME_REF
             IDENT "values"
       CLOSE_PAREN ")"
     COLON ":"
@@ -26,17 +26,17 @@ MODULE
       NEWLINE "\n"
       INDENT "    "
       CALL_EXPR
-        NAME
+        NAME_REF
           IDENT "print"
         OPEN_PAREN "("
         ARGUMENTS
           SIMPLE_ARGUMENT
-            NAME
+            NAME_REF
               IDENT "i"
           COMMA ","
           WHITESPACE " "
           SIMPLE_ARGUMENT
-            NAME
+            NAME_REF
               IDENT "value"
         CLOSE_PAREN ")"
       DEDENT ""

@@ -86,12 +86,10 @@ impl Resolver {
             .filter(|(range, _)| range.start() <= offset && offset <= range.end())
             .min_by_key(|(range, _)| range.len())
             .map(|(hir_range, scope)| {
-                eprintln!("scope after initial filter: {:?}", scope);
                 find_nearest_predecessor(&scopes, &source_map, hir_range, offset).unwrap_or(scope)
             });
         let mut scope_chain = scopes.scope_chain(scope).collect::<Vec<_>>();
         scope_chain.reverse();
-        eprintln!("scope chain: {:?}", scope_chain);
         Self {
             scopes,
             scope_chain,
@@ -122,14 +120,12 @@ fn find_nearest_predecessor(
                     .unwrap()
                     .syntax_node_ptr(),
             };
-            eprintln!("narrow {:?} {:?} {:?}", ptr.text_range(), *scope, hir);
             (ptr.text_range(), *scope)
         })
         .filter(|(range, _)| {
             range.start() <= offset && hir_range.contains_range(*range) && hir_range != *range
         })
         .max_by(|(lhs, _), (rhs, _)| {
-            eprintln!("cmp");
             if lhs.contains_range(*rhs) {
                 std::cmp::Ordering::Greater
             } else if lhs.contains_range(*lhs) {

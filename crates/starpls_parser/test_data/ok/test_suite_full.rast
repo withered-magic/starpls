@@ -2,57 +2,57 @@ MODULE
   DEF_STMT
     DEF "def"
     WHITESPACE " "
-    NAME
+    NAME_REF
       IDENT "f"
     OPEN_PAREN "("
     PARAMETERS
       SIMPLE_PARAMETER
-        NAME
+        NAME_REF
           IDENT "x"
       COMMA ","
       WHITESPACE " "
       SIMPLE_PARAMETER
-        NAME
+        NAME_REF
           IDENT "y"
     CLOSE_PAREN ")"
     COLON ":"
     WHITESPACE " "
     SUITE
       CALL_EXPR
-        NAME
+        NAME_REF
           IDENT "print"
         OPEN_PAREN "("
         ARGUMENTS
           SIMPLE_ARGUMENT
-            NAME
+            NAME_REF
               IDENT "x"
         CLOSE_PAREN ")"
       SEMI ";"
       WHITESPACE " "
       CALL_EXPR
-        NAME
+        NAME_REF
           IDENT "print"
         OPEN_PAREN "("
         ARGUMENTS
           SIMPLE_ARGUMENT
-            NAME
+            NAME_REF
               IDENT "y"
         CLOSE_PAREN ")"
       NEWLINE "\n"
   DEF_STMT
     DEF "def"
     WHITESPACE " "
-    NAME
+    NAME_REF
       IDENT "g"
     OPEN_PAREN "("
     PARAMETERS
       SIMPLE_PARAMETER
-        NAME
+        NAME_REF
           IDENT "x"
       COMMA ","
       WHITESPACE " "
       SIMPLE_PARAMETER
-        NAME
+        NAME_REF
           IDENT "y"
     CLOSE_PAREN ")"
     COLON ":"
@@ -60,23 +60,23 @@ MODULE
       NEWLINE "\n"
       INDENT "    "
       CALL_EXPR
-        NAME
+        NAME_REF
           IDENT "print"
         OPEN_PAREN "("
         ARGUMENTS
           SIMPLE_ARGUMENT
-            NAME
+            NAME_REF
               IDENT "x"
         CLOSE_PAREN ")"
       NEWLINE "\n"
       WHITESPACE "    "
       CALL_EXPR
-        NAME
+        NAME_REF
           IDENT "print"
         OPEN_PAREN "("
         ARGUMENTS
           SIMPLE_ARGUMENT
-            NAME
+            NAME_REF
               IDENT "y"
         CLOSE_PAREN ")"
       DEDENT ""

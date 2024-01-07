@@ -98,7 +98,7 @@ pub enum SyntaxKind {
 
     // Expressions.
     NAME,
-    FIELD,
+    NAME_REF,
     LITERAL_EXPR,
     IF_EXPR,
     UNARY_EXPR,

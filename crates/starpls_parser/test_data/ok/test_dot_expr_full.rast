@@ -1,6 +1,6 @@
 MODULE
   DOT_EXPR
-    NAME
+    NAME_REF
       IDENT "a"
     DOT "."
     FIELD

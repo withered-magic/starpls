@@ -305,7 +305,7 @@ impl Name {
         self.inner(db).eq("[missing name]")
     }
 
-    pub fn from_ast_node(db: &dyn Db, name: ast::Name) -> Self {
+    pub fn from_ast_node(db: &dyn Db, name: ast::NameRef) -> Self {
         Self::from_str(
             db,
             name.name().as_ref().map_or_else(|| "", |name| name.text()),

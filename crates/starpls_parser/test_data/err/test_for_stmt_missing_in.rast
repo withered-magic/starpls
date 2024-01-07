@@ -3,7 +3,7 @@ MODULE
     FOR "for"
     WHITESPACE " "
     LOOP_VARIABLES
-      NAME
+      NAME_REF
         IDENT "x"
     WHITESPACE " "
     ERROR

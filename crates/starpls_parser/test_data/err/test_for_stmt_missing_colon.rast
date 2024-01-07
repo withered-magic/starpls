@@ -3,11 +3,11 @@ MODULE
     FOR "for"
     WHITESPACE " "
     LOOP_VARIABLES
-      NAME
+      NAME_REF
         IDENT "x"
     WHITESPACE " "
     IN "in"
     WHITESPACE " "
-    NAME
+    NAME_REF
       IDENT "y"
 error 7: Expected ":"

@@ -69,26 +69,20 @@ impl Scopes {
         };
 
         // Allocate the root module scope.
-        let mut root = scopes.scopes.alloc(Scope {
+        let root = scopes.scopes.alloc(Scope {
             declarations: Default::default(),
             parent: None,
         });
+        scopes.scopes_by_hir_id.insert(ScopeHirId::Module, root);
 
         let mut defer = VecDeque::new();
 
         // Compute scopes by walking the module HIR, starting at the top-level statements.
-        compute_stmt_list_scopes_deferred(
-            &mut scopes,
-            &mut defer,
-            &module.top_level,
-            module,
-            &mut root,
-        );
-        scopes.scopes_by_hir_id.insert(ScopeHirId::Module, root);
+        compute_stmt_list_scopes_deferred(&mut scopes, &mut defer, &module.top_level, module, root);
 
         // Compute deferred scopes. This mainly applies to function definitions.
         while let Some(DeferredScope { parent, data }) = defer.pop_front() {
-            let mut scope = scopes.alloc_scope(parent);
+            let scope = scopes.alloc_scope(parent);
             for param in data.params.into_iter().copied() {
                 match &module.params[param] {
                     Param::Simple { name, .. }
@@ -98,13 +92,7 @@ impl Scopes {
                     }
                 }
             }
-            compute_stmt_list_scopes_deferred(
-                &mut scopes,
-                &mut defer,
-                &data.stmts,
-                module,
-                &mut scope,
-            );
+            compute_stmt_list_scopes_deferred(&mut scopes, &mut defer, &data.stmts, module, scope);
         }
 
         scopes
@@ -151,7 +139,6 @@ fn compute_expr_scopes(
             if is_assign_target {
                 scopes.add_decl(current, *name, Declaration::Variable { id: expr });
             } else {
-                eprintln!("insert into scope by hir");
                 scopes.scopes_by_hir_id.insert(expr.into(), current);
             }
         }
@@ -209,15 +196,15 @@ fn compute_stmt_list_scopes_deferred(
     defer: &mut VecDeque<DeferredScope>,
     stmts: &Box<[StmtId]>,
     module: &Module,
-    current: &mut ScopeId,
+    mut current: ScopeId,
 ) {
     let mut deferred_functions = VecDeque::new();
     for stmt in stmts.iter().copied() {
-        compute_stmt_scopes(scopes, &mut deferred_functions, stmt, module, current);
+        compute_stmt_scopes(scopes, &mut deferred_functions, stmt, module, &mut current);
     }
     while let Some(data) = deferred_functions.pop_front() {
         defer.push_back(DeferredScope {
-            parent: *current,
+            parent: current,
             data,
         });
     }
@@ -248,8 +235,9 @@ fn compute_stmt_scopes(
             params,
             stmts,
         } => {
-            scopes.add_decl(*current, *name, Declaration::Function { id: stmt });
+            eprintln!("add def {:?} to scope {:?}", *name, *current);
             *current = scopes.alloc_scope(*current);
+            scopes.add_decl(*current, *name, Declaration::Function { id: stmt });
             deferred_functions.push_back(DeferredFunctionData {
                 params: params.clone(),
                 stmts: stmts.clone(),
@@ -289,9 +277,13 @@ fn compute_stmt_scopes(
                 compute_expr_scopes(scopes, *expr, module, *current, false);
             }
         }
-        Stmt::Expr { expr } => compute_expr_scopes(scopes, *expr, module, *current, false),
+        Stmt::Expr { expr } => {
+            eprintln!("expr {:?}", &module.exprs[*expr]);
+            compute_expr_scopes(scopes, *expr, module, *current, false);
+        }
         _ => return,
     }
+    eprintln!("insert stmt scope {:?} {:?}", stmt, &module.stmts[stmt]);
     scopes.scopes_by_hir_id.insert(stmt.into(), *current);
 }
 

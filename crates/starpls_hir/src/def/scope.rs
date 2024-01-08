@@ -88,7 +88,7 @@ impl Scopes {
                     Param::Simple { name, .. }
                     | Param::ArgsList { name }
                     | Param::KwargsList { name } => {
-                        scopes.add_decl(scope, *name, Declaration::Parameter { id: param });
+                        scopes.add_decl(scope, name.clone(), Declaration::Parameter { id: param });
                     }
                 }
             }
@@ -137,7 +137,7 @@ fn compute_expr_scopes(
         Expr::Missing => {}
         Expr::Name { name } => {
             if is_assign_target {
-                scopes.add_decl(current, *name, Declaration::Variable { id: expr });
+                scopes.add_decl(current, name.clone(), Declaration::Variable { id: expr });
             } else {
                 scopes.scopes_by_hir_id.insert(expr.into(), current);
             }
@@ -149,19 +149,27 @@ fn compute_expr_scopes(
                     Param::Simple { name, .. }
                     | Param::ArgsList { name }
                     | Param::KwargsList { name } => {
-                        scopes.add_decl(scope, *name, Declaration::Parameter { id: param });
+                        scopes.add_decl(scope, name.clone(), Declaration::Parameter { id: param });
                     }
                 }
             }
             compute_expr_scopes(scopes, *body, module, scope, false);
             scopes.scopes_by_hir_id.insert(expr.into(), current);
         }
-        Expr::Tuple { exprs } => exprs.iter().copied().for_each(|expr| {
-            compute_expr_scopes(scopes, expr, module, current, is_assign_target);
+        Expr::Tuple { exprs } => {
+            exprs.iter().copied().for_each(|expr| {
+                compute_expr_scopes(scopes, expr, module, current, is_assign_target);
+            });
             scopes.scopes_by_hir_id.insert(expr.into(), current);
-        }),
+        }
         Expr::Paren { expr: paren_expr } => {
             compute_expr_scopes(scopes, *paren_expr, module, current, is_assign_target);
+            scopes.scopes_by_hir_id.insert(expr.into(), current);
+        }
+        Expr::List { exprs } => {
+            exprs.iter().copied().for_each(|expr| {
+                compute_expr_scopes(scopes, expr, module, current, is_assign_target);
+            });
             scopes.scopes_by_hir_id.insert(expr.into(), current);
         }
         Expr::DictComp {
@@ -236,7 +244,7 @@ fn compute_stmt_scopes(
             stmts,
         } => {
             *current = scopes.alloc_scope(*current);
-            scopes.add_decl(*current, *name, Declaration::Function { id: stmt });
+            scopes.add_decl(*current, name.clone(), Declaration::Function { id: stmt });
             deferred_functions.push_back(DeferredFunctionData {
                 params: params.clone(),
                 stmts: stmts.clone(),

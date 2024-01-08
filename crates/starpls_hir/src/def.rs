@@ -1,6 +1,7 @@
 use crate::Db;
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
+use smol_str::SmolStr;
 use starpls_syntax::ast::{self, AssignOp, AstPtr, BinaryOp, UnaryOp};
 
 pub mod lower;
@@ -289,29 +290,35 @@ pub enum Declaration {
     LoadItem {},
 }
 
-#[salsa::interned]
-pub struct Name {
-    #[return_ref]
-    pub inner: String,
-}
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Name(SmolStr);
 
 impl Name {
-    pub(crate) fn from_str(db: &dyn Db, name: &str) -> Self {
-        Self::new(db, name.to_string())
+    pub(crate) fn from_str(name: &str) -> Self {
+        Self::new(SmolStr::new(name))
     }
 
-    pub(crate) fn missing(db: &dyn Db) -> Self {
-        Name::new(db, "[missing name]".to_string())
+    pub(crate) fn missing() -> Self {
+        Self::new(SmolStr::new_inline("[missing name]"))
     }
 
-    pub(crate) fn is_missing(&self, db: &dyn Db) -> bool {
-        self.inner(db).eq("[missing name]")
+    pub(crate) fn is_missing(&self) -> bool {
+        &self.0 == "[missing name]"
     }
 
-    pub fn from_ast_node(db: &dyn Db, name: ast::NameRef) -> Self {
-        Self::from_str(
-            db,
-            name.name().as_ref().map_or_else(|| "", |name| name.text()),
-        )
+    pub fn from_ast_node(name: ast::NameRef) -> Self {
+        Self::from_str(name.name().as_ref().map_or_else(|| "", |name| name.text()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    pub fn to_string(&self) -> String {
+        self.0.to_string()
+    }
+
+    fn new(repr: SmolStr) -> Self {
+        Self(repr)
     }
 }

@@ -33,7 +33,7 @@ impl Resolver {
         let mut names = HashMap::new();
         for scope in self.scopes() {
             for (name, decl) in scope.declarations.iter() {
-                if let Entry::Vacant(entry) = names.entry(*name) {
+                if let Entry::Vacant(entry) = names.entry(name.clone()) {
                     if let Some(decl) = decl.first().cloned() {
                         entry.insert(decl);
                     }

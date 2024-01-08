@@ -6,7 +6,7 @@ pub use crate::def::{resolver::Resolver, Declaration, Module, Name};
 mod api;
 mod def;
 mod test_database;
-mod ty;
+mod typeck;
 
 #[salsa::tracked]
 pub struct ModuleInfo {
@@ -16,16 +16,10 @@ pub struct ModuleInfo {
     pub source_map: ModuleSourceMap,
 }
 
-// #[salsa::tracked]
-// pub struct BindResult {
-//     pub module_info: ModuleInfo,
-// }
-
 #[salsa::jar(db = Db)]
 pub struct Jar(
     lower,
     ModuleInfo,
-    Name,
     def::scope::ModuleScopes,
     def::scope::module_scopes,
 );

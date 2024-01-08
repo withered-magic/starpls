@@ -57,7 +57,7 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
         }) => {
             for (name, decl) in names {
                 items.push(CompletionItem {
-                    label: name.inner(db).clone(),
+                    label: name.to_string(),
                     kind: match decl {
                         Declaration::Function { .. } => CompletionItemKind::Function,
                         Declaration::Variable { .. } | Declaration::Parameter { .. } => {

@@ -10,23 +10,10 @@ fn check_scope(fixture: &str, expected: &[&str]) {
     let parse = parse(&test_db, file);
     let info = lower(&test_db, parse);
     let resolver = Resolver::new_for_offset(&test_db, info, offset);
-    let mut actual = resolver
-        .names()
-        .keys()
-        .map(|name| name.inner(&test_db).as_str())
-        .collect::<Vec<_>>();
+    let names = resolver.names();
+    let mut actual = names.keys().map(|name| name.as_str()).collect::<Vec<_>>();
     actual.sort();
     assert_eq!(expected, &actual[..]);
-}
-
-#[test]
-fn test_empty_scope() {
-    check_scope(
-        r"
-        $0
-    ",
-        &[],
-    )
 }
 
 #[test]
@@ -47,6 +34,30 @@ def bar():
 }
 
 #[test]
+fn test_empty_scope() {
+    check_scope(
+        r"
+        $0
+    ",
+        &[],
+    )
+}
+
+#[test]
+fn test_assign() {
+    check_scope(
+        r"
+a = 0
+b, c = 1, 2
+d, e = 3, 4
+[f, g] = 5, 6
+$0
+        ",
+        &["a", "b", "c", "d", "e", "f", "g"],
+    )
+}
+
+#[test]
 fn test_params() {
     check_scope(
         r"
@@ -55,5 +66,28 @@ def foo(x, *args, **kwargs):
     $0
 ",
         &["args", "foo", "kwargs", "x"],
+    )
+}
+
+#[test]
+fn test_loop_variables() {
+    check_scope(
+        r"
+for x, y in 1, 2, 3:
+    print(x, y)
+    $0
+    ",
+        &["x", "y"],
+    )
+}
+
+#[test]
+fn test_lambda() {
+    check_scope(
+        r"
+a = 1
+f = lambda x: x + 1$0
+    ",
+        &["a", "x"],
     )
 }

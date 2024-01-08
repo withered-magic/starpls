@@ -285,10 +285,7 @@ impl<'a> LoweringContext<'a> {
             .and_then(|name| name.name())
             .as_ref()
             .map(|token| token.text())
-            .map_or_else(
-                || Name::missing(self.db),
-                |text| Name::from_str(self.db, text),
-            )
+            .map_or_else(|| Name::missing(), |text| Name::from_str(text))
     }
 
     fn lower_name_ref_opt(&mut self, syntax: Option<ast::NameRef>) -> Name {
@@ -296,10 +293,7 @@ impl<'a> LoweringContext<'a> {
             .and_then(|name| name.name())
             .as_ref()
             .map(|token| token.text())
-            .map_or_else(
-                || Name::missing(self.db),
-                |text| Name::from_str(self.db, text),
-            )
+            .map_or_else(|| Name::missing(), |text| Name::from_str(text))
     }
 
     fn lower_suite_opt(&mut self, syntax: Option<ast::Suite>) -> Box<[StmtId]> {

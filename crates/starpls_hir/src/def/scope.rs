@@ -86,8 +86,8 @@ impl Scopes {
             for param in data.params.into_iter().copied() {
                 match &module.params[param] {
                     Param::Simple { name, .. }
-                    | Param::ArgsList { name }
-                    | Param::KwargsList { name } => {
+                    | Param::ArgsList { name, .. }
+                    | Param::KwargsList { name, .. } => {
                         scopes.add_decl(scope, name.clone(), Declaration::Parameter { id: param });
                     }
                 }
@@ -147,8 +147,8 @@ fn compute_expr_scopes(
             for param in params.into_iter().copied() {
                 match &module.params[param] {
                     Param::Simple { name, .. }
-                    | Param::ArgsList { name }
-                    | Param::KwargsList { name } => {
+                    | Param::ArgsList { name, .. }
+                    | Param::KwargsList { name, .. } => {
                         scopes.add_decl(scope, name.clone(), Declaration::Parameter { id: param });
                     }
                 }

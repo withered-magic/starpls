@@ -1,4 +1,4 @@
-use crate::Db;
+use crate::{typeck::TypeRef, Db};
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
@@ -244,9 +244,20 @@ pub enum Argument {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Param {
-    Simple { name: Name, default: Option<ExprId> },
-    ArgsList { name: Name },
-    KwargsList { name: Name },
+    Simple {
+        name: Name,
+        default: Option<ExprId>,
+        type_ref: Option<TypeRef>,
+    },
+    ArgsList {
+        name: Name,
+        type_ref: Option<TypeRef>,
+    },
+
+    KwargsList {
+        name: Name,
+        type_ref: Option<TypeRef>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -316,6 +327,10 @@ impl Name {
 
     pub fn to_string(&self) -> String {
         self.0.to_string()
+    }
+
+    pub(crate) fn new_inline(name: &'static str) -> Self {
+        Self::new(SmolStr::new_inline(name))
     }
 
     fn new(repr: SmolStr) -> Self {

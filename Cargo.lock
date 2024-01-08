@@ -626,6 +626,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "stable_deref_trait"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
+
+[[package]]
 name = "starpls"
 version = "0.1.0"
 dependencies = [
@@ -666,6 +672,7 @@ dependencies = [
  "salsa-2022",
  "smol_str",
  "starpls_common",
+ "starpls_intern",
  "starpls_syntax",
  "starpls_test_util",
 ]
@@ -679,6 +686,16 @@ dependencies = [
  "starpls_common",
  "starpls_hir",
  "starpls_syntax",
+]
+
+[[package]]
+name = "starpls_intern"
+version = "0.1.0"
+dependencies = [
+ "dashmap",
+ "hashbrown",
+ "rustc-hash",
+ "triomphe",
 ]
 
 [[package]]
@@ -762,6 +779,16 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+
+[[package]]
+name = "triomphe"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "859eb650cfee7434994602c3a68b25d77ad9e68c8a6cd491616ef86661382eb3"
+dependencies = [
+ "serde",
+ "stable_deref_trait",
+]
 
 [[package]]
 name = "unicode-bidi"

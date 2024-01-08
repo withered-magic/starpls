@@ -239,13 +239,19 @@ impl<'a> LoweringContext<'a> {
                 ast::Parameter::Simple(param) => {
                     let name = self.lower_name_opt(param.name());
                     let default = self.lower_expr_maybe(param.default());
-                    Param::Simple { name, default }
+                    Param::Simple {
+                        name,
+                        default,
+                        type_ref: None,
+                    }
                 }
                 ast::Parameter::ArgsList(param) => Param::ArgsList {
                     name: self.lower_name_opt(param.name()),
+                    type_ref: None,
                 },
                 ast::Parameter::KwargsList(param) => Param::KwargsList {
                     name: self.lower_name_opt(param.name()),
+                    type_ref: None,
                 },
             };
             params.push(self.alloc_param(param, ptr));

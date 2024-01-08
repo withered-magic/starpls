@@ -1,0 +1,12 @@
+[package]
+name = "starpls_intern"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dashmap = { version = "=5.5.3", features = ["raw-api"] }
+hashbrown = "0.14.3"
+rustc-hash = "1.1.0"
+triomphe = "0.1.11"

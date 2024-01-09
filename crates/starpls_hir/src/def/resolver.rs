@@ -3,8 +3,9 @@ use crate::{
         scope::{module_scopes, Scope, ScopeHirId, ScopeId, Scopes},
         Declaration, ExprId, ModuleSourceMap,
     },
-    Db, ModuleInfo, Name,
+    lower, Db, ModuleInfo, Name,
 };
+use starpls_common::File;
 use starpls_syntax::{TextRange, TextSize};
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -20,7 +21,7 @@ pub struct Resolver {
 }
 
 impl Resolver {
-    pub fn resolve_name(&self, name: Name) -> Option<Vec<Declaration>> {
+    pub fn resolve_name(&self, name: &Name) -> Option<Vec<Declaration>> {
         for scope in self.scopes() {
             if let Some(declarations) = scope.declarations.get(&name) {
                 return Some(declarations.clone());
@@ -50,8 +51,8 @@ impl Resolver {
             .map(|scope| &self.scopes.scopes[*scope])
     }
 
-    pub fn new_for_expr(db: &dyn Db, info: ModuleInfo, expr: ExprId) -> Self {
-        let scopes = module_scopes(db, info).scopes(db);
+    pub fn new_for_expr(db: &dyn Db, file: File, expr: ExprId) -> Self {
+        let scopes = module_scopes(db, file).scopes(db);
         let scope = scopes.scope_for_hir_id(expr);
         let mut scope_chain = scopes.scope_chain(scope).collect::<Vec<_>>();
         scope_chain.reverse();
@@ -61,8 +62,9 @@ impl Resolver {
         }
     }
 
-    pub fn new_for_offset(db: &dyn Db, info: ModuleInfo, offset: TextSize) -> Self {
-        let scopes = module_scopes(db, info).scopes(db);
+    pub fn new_for_offset(db: &dyn Db, file: File, offset: TextSize) -> Self {
+        let info = lower(db, file);
+        let scopes = module_scopes(db, file).scopes(db);
         let source_map = info.source_map(db);
         let scope = scopes
             .scopes_by_hir_id

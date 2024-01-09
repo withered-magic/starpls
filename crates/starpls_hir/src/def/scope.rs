@@ -1,9 +1,10 @@
 use crate::{
     def::{CompClause, Declaration, Expr, ExprId, Param, ParamId, Stmt, StmtId},
-    Db, Module, ModuleInfo, Name,
+    lower, Db, Module, ModuleInfo, Name,
 };
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
+use starpls_common::File;
 use std::collections::{hash_map::Entry, VecDeque};
 use std::sync::Arc;
 
@@ -15,9 +16,14 @@ pub(crate) struct ModuleScopes {
 }
 
 #[salsa::tracked]
-pub(crate) fn module_scopes(db: &dyn Db, info: ModuleInfo) -> ModuleScopes {
+pub(crate) fn module_scopes_query(db: &dyn Db, info: ModuleInfo) -> ModuleScopes {
     let scopes = Scopes::new_for_module(&info.module(db));
     ModuleScopes::new(db, Arc::new(scopes))
+}
+
+pub(crate) fn module_scopes(db: &dyn Db, file: File) -> ModuleScopes {
+    let info = lower(db, file);
+    module_scopes_query(db, info)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

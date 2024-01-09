@@ -20,6 +20,52 @@ pub struct Builtins {
     dict_ty: Ty,
 }
 
+impl Builtins {
+    pub fn none_ty(&self) -> Ty {
+        self.none_ty.clone()
+    }
+
+    pub fn bool_ty(&self) -> Ty {
+        self.bool_ty.clone()
+    }
+
+    pub fn int_ty(&self) -> Ty {
+        self.int_ty.clone()
+    }
+
+    pub fn float_ty(&self) -> Ty {
+        self.float_ty.clone()
+    }
+
+    pub fn string_ty(&self) -> Ty {
+        self.string_ty.clone()
+    }
+
+    pub fn string_elems_ty(&self) -> Ty {
+        self.string_elems_ty.clone()
+    }
+
+    pub fn bytes_ty(&self) -> Ty {
+        self.bytes_ty.clone()
+    }
+
+    pub fn bytes_elems_ty(&self) -> Ty {
+        self.bytes_elems_ty.clone()
+    }
+
+    pub fn list_ty(&self) -> Ty {
+        self.list_ty.clone()
+    }
+
+    pub fn tuple_ty(&self) -> Ty {
+        self.tuple_ty.clone()
+    }
+
+    pub fn dict_ty(&self) -> Ty {
+        self.dict_ty.clone()
+    }
+}
+
 pub(crate) fn intern_builtin_types_and_functions() -> Builtins {
     Builtins {
         none_ty: intern_none_ty(),
@@ -54,36 +100,61 @@ fn intern_float_ty() -> Ty {
 
 fn intern_string_ty() -> Ty {
     let mut fields = Vec::new();
-    add_method(&mut fields, "capitalize");
-    add_method(&mut fields, "count");
-    add_method(&mut fields, "elems");
-    add_method(&mut fields, "endswith");
-    add_method(&mut fields, "find");
-    add_method(&mut fields, "format");
-    add_method(&mut fields, "index");
-    add_method(&mut fields, "isalnum");
-    add_method(&mut fields, "isdigit");
-    add_method(&mut fields, "islower");
-    add_method(&mut fields, "isspace");
-    add_method(&mut fields, "istitle");
-    add_method(&mut fields, "isupper");
-    add_method(&mut fields, "join");
-    add_method(&mut fields, "lower");
-    add_method(&mut fields, "lstrip");
-    add_method(&mut fields, "partition");
-    add_method(&mut fields, "removeprefix");
-    add_method(&mut fields, "replace");
-    add_method(&mut fields, "rfind");
-    add_method(&mut fields, "rindex");
-    add_method(&mut fields, "rpartition");
-    add_method(&mut fields, "rsplit");
-    add_method(&mut fields, "rstrip");
-    add_method(&mut fields, "split");
-    add_method(&mut fields, "splitlines");
-    add_method(&mut fields, "startswith");
-    add_method(&mut fields, "strip");
-    add_method(&mut fields, "title");
-    add_method(&mut fields, "upper");
+    add_method(
+        &mut fields,
+        "capitalize",
+        Vec::new(),
+        Some(BuiltinType::String.into()),
+    );
+    add_method(
+        &mut fields,
+        "count",
+        vec![BuiltinType::String.into()],
+        Some(BuiltinType::Int.into()),
+    );
+    add_method(
+        &mut fields,
+        "elems",
+        Vec::new(),
+        Some(BuiltinType::StringElems.into()),
+    );
+    add_method(
+        &mut fields,
+        "endswith",
+        vec![BuiltinType::String.into()],
+        Some(BuiltinType::Bool.into()),
+    );
+    add_method(
+        &mut fields,
+        "find",
+        vec![BuiltinType::String.into()],
+        Some(BuiltinType::Int.into()),
+    );
+    // add_method(&mut fields, "format");
+    // add_method(&mut fields, "index");
+    // add_method(&mut fields, "isalnum");
+    // add_method(&mut fields, "isdigit");
+    // add_method(&mut fields, "islower");
+    // add_method(&mut fields, "isspace");
+    // add_method(&mut fields, "istitle");
+    // add_method(&mut fields, "isupper");
+    // add_method(&mut fields, "join");
+    // add_method(&mut fields, "lower");
+    // add_method(&mut fields, "lstrip");
+    // add_method(&mut fields, "partition");
+    // add_method(&mut fields, "removeprefix");
+    // add_method(&mut fields, "replace");
+    // add_method(&mut fields, "rfind");
+    // add_method(&mut fields, "rindex");
+    // add_method(&mut fields, "rpartition");
+    // add_method(&mut fields, "rsplit");
+    // add_method(&mut fields, "rstrip");
+    // add_method(&mut fields, "split");
+    // add_method(&mut fields, "splitlines");
+    // add_method(&mut fields, "startswith");
+    // add_method(&mut fields, "strip");
+    // add_method(&mut fields, "title");
+    // add_method(&mut fields, "upper");
     intern_builtin_class("string", fields)
 }
 
@@ -93,7 +164,7 @@ fn intern_string_elems_ty() -> Ty {
 
 fn intern_bytes_ty() -> Ty {
     let mut fields = Vec::new();
-    add_method(&mut fields, "elems");
+    // add_method(&mut fields, "elems");
     intern_builtin_class("bytes", fields)
 }
 
@@ -103,13 +174,13 @@ fn intern_bytes_elems_ty() -> Ty {
 
 fn intern_list_ty() -> Ty {
     let mut fields = Vec::new();
-    add_method(&mut fields, "append");
-    add_method(&mut fields, "clear");
-    add_method(&mut fields, "extend");
-    add_method(&mut fields, "index");
-    add_method(&mut fields, "insert");
-    add_method(&mut fields, "pop");
-    add_method(&mut fields, "remove");
+    // add_method(&mut fields, "append");
+    // add_method(&mut fields, "clear");
+    // add_method(&mut fields, "extend");
+    // add_method(&mut fields, "index");
+    // add_method(&mut fields, "insert");
+    // add_method(&mut fields, "pop");
+    // add_method(&mut fields, "remove");
     intern_builtin_class("list", fields)
 }
 

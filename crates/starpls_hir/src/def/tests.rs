@@ -1,5 +1,5 @@
-use crate::{lower, test_database::TestDatabase, Resolver};
-use starpls_common::{parse, File, FileId};
+use crate::{test_database::TestDatabase, Resolver};
+use starpls_common::{File, FileId};
 use starpls_test_util::parse_fixture;
 
 fn check_scope(fixture: &str, expected: &[&str]) {
@@ -7,9 +7,7 @@ fn check_scope(fixture: &str, expected: &[&str]) {
     let file_id = FileId(0);
     let (text, offset) = parse_fixture(fixture);
     let file = File::new(&test_db, file_id, text);
-    let parse = parse(&test_db, file);
-    let info = lower(&test_db, parse);
-    let resolver = Resolver::new_for_offset(&test_db, info, offset);
+    let resolver = Resolver::new_for_offset(&test_db, file, offset);
     let names = resolver.names();
     let mut actual = names.keys().map(|name| name.as_str()).collect::<Vec<_>>();
     actual.sort();

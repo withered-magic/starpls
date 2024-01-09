@@ -1,17 +1,24 @@
 use crate::{
-    def::{ExprId, ParamId},
-    Name,
+    def::{scope::module_scopes, Expr, ExprId, ModuleSourceMap, ParamId},
+    lower, Db, Module, Name, Resolver,
 };
 use crossbeam::atomic::AtomicCell;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
+use starpls_common::File;
 use starpls_intern::{impl_internable, Interned};
 use std::sync::Arc;
+
+use self::builtins::Builtins;
 
 mod builtins;
 mod lower;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct FileExprId(File, ExprId);
+
 #[derive(Debug)]
+
 pub struct Cancelled;
 
 impl Cancelled {
@@ -28,9 +35,9 @@ impl std::fmt::Display for Cancelled {
 
 impl std::error::Error for Cancelled {}
 
-#[derive(Default)]
 struct SharedState {
     cancelled: AtomicCell<bool>,
+    builtins: Builtins,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -139,22 +146,64 @@ pub struct TyCtxt {
 }
 
 impl TyCtxt {
-    pub fn type_of_expr(&self) {
-        self.gcx.lock().type_of_expr()
+    pub fn new_with_builtins(builtins: Builtins) -> Self {
+        let shared_state = Arc::new(SharedState {
+            builtins,
+            cancelled: Default::default(),
+        });
+        let gcx = Arc::new(Mutex::new(GlobalCtxt {
+            shared_state: Arc::clone(&shared_state),
+            type_of_expr: Default::default(),
+        }));
+        Self { shared_state, gcx }
     }
 
-    pub fn cancel(&self) {}
+    pub fn type_of_expr(&self, db: &dyn Db, expr: FileExprId) -> Ty {
+        self.gcx.lock().type_of_expr(db, expr)
+    }
+
+    pub fn cancel(&self) {
+        self.shared_state.cancelled.store(true);
+        let mut gcx = self.gcx.lock();
+        self.shared_state.cancelled.store(false);
+        *gcx = GlobalCtxt {
+            shared_state: Arc::clone(&self.shared_state),
+            type_of_expr: FxHashMap::default(),
+        }
+    }
 }
 
 struct GlobalCtxt {
     shared_state: Arc<SharedState>,
-    type_of_expr: FxHashMap<ExprId, ExprId>,
+    type_of_expr: FxHashMap<FileExprId, Ty>,
 }
 
 impl GlobalCtxt {
-    fn type_of_expr(&mut self) {
+    fn type_of_expr(&mut self, db: &dyn Db, expr: FileExprId) -> Ty {
+        if let Some(ty) = self.type_of_expr.get(&expr).cloned() {
+            return ty;
+        }
+
         if self.shared_state.cancelled.load() {
             Cancelled.throw();
         }
+
+        let info = lower(db, expr.0);
+
+        match &info.module(db).exprs[expr.1] {
+            Expr::Name { name } => {
+                let resolver = Resolver::new_for_expr(db, expr.0, expr.1);
+                let decls = match resolver.resolve_name(name) {
+                    Some(decls) => decls,
+                    None => return self.set_type_of_expr(expr, TyKind::Any.intern()),
+                };
+            }
+            _ => todo!(),
+        }
+    }
+
+    fn set_type_of_expr(&mut self, expr: FileExprId, ty: Ty) -> Ty {
+        self.type_of_expr.insert(expr, ty.clone());
+        ty
     }
 }

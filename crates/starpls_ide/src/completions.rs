@@ -104,7 +104,8 @@ fn add_keywords(items: &mut Vec<CompletionItem>, is_in_def: bool, is_in_for: boo
 impl CompletionContext {
     fn new(db: &dyn Db, FilePosition { file_id, pos }: FilePosition) -> Option<Self> {
         // Reparse the file with a dummy identifier inserted at the current offset.
-        let parse = parse(db, db.get_file(file_id)?);
+        let file = db.get_file(file_id)?;
+        let parse = parse(db, file);
         let mut text = parse.syntax(db).text().to_string();
         let insert_pos: usize = pos.into();
         if insert_pos > text.len() {
@@ -121,8 +122,7 @@ impl CompletionContext {
             .parent()?;
 
         let analysis = if let Some(_name_ref) = ast::NameRef::cast(parent.clone()) {
-            let info = lower(db, parse);
-            let resolver = Resolver::new_for_offset(db, info, pos);
+            let resolver = Resolver::new_for_offset(db, file, pos);
             let (is_in_def, is_in_for) = parent.ancestors().map(|node| node.kind()).fold(
                 (false, false),
                 |(is_in_def, is_in_for), kind| {

@@ -1,6 +1,6 @@
 use crate::{
     def::{scope::module_scopes, Expr, ExprId, ModuleSourceMap, ParamId},
-    lower, Db, Module, Name, Resolver,
+    lower as lower_, Db, Module, Name, Resolver,
 };
 use crossbeam::atomic::AtomicCell;
 use parking_lot::Mutex;
@@ -188,7 +188,7 @@ impl GlobalCtxt {
             Cancelled.throw();
         }
 
-        let info = lower(db, expr.0);
+        let info = lower_(db, expr.0);
 
         match &info.module(db).exprs[expr.1] {
             Expr::Name { name } => {
@@ -197,6 +197,7 @@ impl GlobalCtxt {
                     Some(decls) => decls,
                     None => return self.set_type_of_expr(expr, TyKind::Any.intern()),
                 };
+                todo!()
             }
             _ => todo!(),
         }

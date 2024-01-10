@@ -21,6 +21,7 @@ pub(crate) fn module_scopes_query(db: &dyn Db, info: ModuleInfo) -> ModuleScopes
     ModuleScopes::new(db, Arc::new(scopes))
 }
 
+#[salsa::tracked]
 pub(crate) fn module_scopes(db: &dyn Db, file: File) -> ModuleScopes {
     let info = lower(db, file);
     module_scopes_query(db, info)
@@ -143,7 +144,14 @@ fn compute_expr_scopes(
         Expr::Missing => {}
         Expr::Name { name } => {
             if is_assign_target {
-                scopes.add_decl(current, name.clone(), Declaration::Variable { id: expr });
+                scopes.add_decl(
+                    current,
+                    name.clone(),
+                    Declaration::Variable {
+                        id: expr,
+                        source: None,
+                    },
+                );
             } else {
                 scopes.scopes_by_hir_id.insert(expr.into(), current);
             }

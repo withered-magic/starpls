@@ -296,7 +296,7 @@ pub enum Literal {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Declaration {
     Function { id: StmtId },
-    Variable { id: ExprId, source: ExprId },
+    Variable { id: ExprId, source: Option<ExprId> },
     Parameter { id: ParamId },
     LoadItem {},
 }

@@ -1,5 +1,5 @@
 use crate::def::ModuleSourceMap;
-use starpls_common::{parse, File, FileId, Parse};
+use starpls_common::{parse, File, Parse};
 
 pub use crate::def::{resolver::Resolver, Declaration, Module, Name};
 
@@ -18,9 +18,11 @@ pub struct ModuleInfo {
 
 #[salsa::jar(db = Db)]
 pub struct Jar(
+    lower,
     lower_query,
     ModuleInfo,
     def::scope::ModuleScopes,
+    def::scope::module_scopes,
     def::scope::module_scopes_query,
 );
 
@@ -32,6 +34,7 @@ fn lower_query(db: &dyn Db, parse: Parse) -> ModuleInfo {
     ModuleInfo::new(db, module, source_map)
 }
 
+#[salsa::tracked]
 pub fn lower(db: &dyn Db, file: File) -> ModuleInfo {
     let parse = parse(db, file);
     lower_query(db, parse)

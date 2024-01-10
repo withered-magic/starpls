@@ -17,7 +17,7 @@ pub(crate) struct ModuleScopes {
 
 #[salsa::tracked]
 pub(crate) fn module_scopes_query(db: &dyn Db, info: ModuleInfo) -> ModuleScopes {
-    let scopes = Scopes::new_for_module(&info.module(db));
+    let scopes = Scopes::new_for_module(db, &info.module(db));
     ModuleScopes::new(db, Arc::new(scopes))
 }
 
@@ -60,49 +60,26 @@ pub struct Scopes {
 
 struct DeferredScope {
     parent: ScopeId,
-    data: DeferredFunctionData,
+    data: Function,
 }
 
-struct DeferredFunctionData {
+struct Function {
     params: Box<[ParamId]>,
     stmts: Box<[StmtId]>,
 }
 
 impl Scopes {
-    fn new_for_module(module: &Module) -> Self {
-        let mut scopes = Scopes {
-            scopes: Default::default(),
-            scopes_by_hir_id: Default::default(),
-        };
-
-        // Allocate the root module scope.
-        let root = scopes.scopes.alloc(Scope {
-            declarations: Default::default(),
-            parent: None,
-        });
-        scopes.scopes_by_hir_id.insert(ScopeHirId::Module, root);
-
-        let mut defer = VecDeque::new();
-
-        // Compute scopes by walking the module HIR, starting at the top-level statements.
-        compute_stmt_list_scopes_deferred(&mut scopes, &mut defer, &module.top_level, module, root);
-
-        // Compute deferred scopes. This mainly applies to function definitions.
-        while let Some(DeferredScope { parent, data }) = defer.pop_front() {
-            let scope = scopes.alloc_scope(parent);
-            for param in data.params.into_iter().copied() {
-                match &module.params[param] {
-                    Param::Simple { name, .. }
-                    | Param::ArgsList { name, .. }
-                    | Param::KwargsList { name, .. } => {
-                        scopes.add_decl(scope, name.clone(), Declaration::Parameter { id: param });
-                    }
-                }
-            }
-            compute_stmt_list_scopes_deferred(&mut scopes, &mut defer, &data.stmts, module, scope);
+    fn new_for_module(db: &dyn Db, module: &Module) -> Self {
+        ScopeCollector {
+            db,
+            deferred: VecDeque::new(),
+            module,
+            scopes: Scopes {
+                scopes: Default::default(),
+                scopes_by_hir_id: Default::default(),
+            },
         }
-
-        scopes
+        .collect()
     }
 
     fn alloc_scope(&mut self, parent: ScopeId) -> ScopeId {
@@ -132,196 +109,252 @@ impl Scopes {
     }
 }
 
-fn compute_expr_scopes(
-    scopes: &mut Scopes,
-    expr: ExprId,
-    module: &Module,
-    current: ScopeId,
-    is_assign_target: bool,
-) {
-    // TODO(withered-magic): Handle list and dict comprehensions, whose CompClauses create scopes.
-    match &module.exprs[expr] {
-        Expr::Missing => {}
-        Expr::Name { name } => {
-            if is_assign_target {
-                scopes.add_decl(
+struct ScopeCollector<'a> {
+    db: &'a dyn Db,
+    deferred: VecDeque<DeferredScope>,
+    module: &'a Module,
+    scopes: Scopes,
+}
+
+impl ScopeCollector<'_> {
+    fn collect(mut self) -> Scopes {
+        // Allocate the root module scope.
+        let root = self.scopes.scopes.alloc(Scope {
+            declarations: Default::default(),
+            parent: None,
+        });
+        self.scopes
+            .scopes_by_hir_id
+            .insert(ScopeHirId::Module, root);
+
+        // Compute scopes by walking the module HIR, starting at the top-level statements.
+        self.collect_stmts_defer(&self.module.top_level, root);
+
+        // Compute deferred scopes. This mainly applies to function definitions.
+        while let Some(DeferredScope { parent, data }) = self.deferred.pop_front() {
+            let scope = self.scopes.alloc_scope(parent);
+            for param in data.params.into_iter().copied() {
+                match &self.module.params[param] {
+                    Param::Simple { name, .. }
+                    | Param::ArgsList { name, .. }
+                    | Param::KwargsList { name, .. } => {
+                        self.scopes.add_decl(
+                            scope,
+                            name.clone(),
+                            Declaration::Parameter { id: param },
+                        );
+                    }
+                }
+            }
+            self.collect_stmts_defer(&data.stmts, scope);
+        }
+
+        self.scopes
+    }
+
+    fn collect_stmts_defer(&mut self, stmts: &Box<[StmtId]>, mut current: ScopeId) {
+        let mut deferred = VecDeque::new();
+        for stmt in stmts.iter().copied() {
+            self.collect_stmt(&mut deferred, stmt, &mut current);
+        }
+        while let Some(data) = deferred.pop_front() {
+            self.deferred.push_back(DeferredScope {
+                parent: current,
+                data,
+            });
+        }
+    }
+
+    fn collect_stmts(
+        &mut self,
+        deferred: &mut VecDeque<Function>,
+        stmts: &Box<[StmtId]>,
+        current: &mut ScopeId,
+    ) {
+        for stmt in stmts.iter().copied() {
+            self.collect_stmt(deferred, stmt, current);
+        }
+    }
+
+    fn collect_stmt(
+        &mut self,
+        deferred: &mut VecDeque<Function>,
+        stmt: StmtId,
+        current: &mut ScopeId,
+    ) {
+        match &self.module.stmts[stmt] {
+            Stmt::Def {
+                name,
+                params,
+                stmts,
+            } => {
+                *current = self.scopes.alloc_scope(*current);
+                self.scopes
+                    .add_decl(*current, name.clone(), Declaration::Function { id: stmt });
+                deferred.push_back(Function {
+                    params: params.clone(),
+                    stmts: stmts.clone(),
+                });
+            }
+            Stmt::If {
+                if_stmts,
+                elif_stmt,
+                else_stmts,
+                ..
+            } => {
+                self.collect_stmts(deferred, if_stmts, current);
+                if let Some(elif_stmt) = elif_stmt {
+                    self.collect_stmt(deferred, *elif_stmt, current);
+                }
+                self.collect_stmts(deferred, else_stmts, current);
+            }
+            Stmt::For {
+                iterable,
+                targets,
+                stmts,
+            } => {
+                self.collect_expr(*iterable, *current, None);
+                targets.iter().copied().for_each(|expr| {
+                    self.collect_expr(expr, *current, Some(*iterable));
+                });
+                self.collect_stmts(deferred, stmts, current);
+            }
+            Stmt::Assign { lhs, rhs, .. } => {
+                self.collect_expr(*rhs, *current, None);
+                *current = self.scopes.alloc_scope(*current);
+                self.collect_expr(*lhs, *current, Some(*rhs));
+            }
+            Stmt::Load { .. } => {}
+            Stmt::Return { expr } => {
+                if let Some(expr) = expr {
+                    self.collect_expr(*expr, *current, None);
+                }
+            }
+            Stmt::Expr { expr } => {
+                self.collect_expr(*expr, *current, None);
+            }
+            _ => return,
+        }
+        self.scopes.scopes_by_hir_id.insert(stmt.into(), *current);
+    }
+
+    fn collect_expr(&mut self, expr: ExprId, current: ScopeId, source: Option<ExprId>) {
+        if let Some(source) = source {
+            // Possible assignment targets: NAME, LIST, TUPLE, PAREN, DOT, INDEX, SLICE.
+            match &self.module.exprs[expr] {
+                Expr::Name { name } => self.scopes.add_decl(
                     current,
                     name.clone(),
                     Declaration::Variable {
                         id: expr,
-                        source: None,
+                        source: Some(source),
                     },
-                );
-            } else {
-                scopes.scopes_by_hir_id.insert(expr.into(), current);
+                ),
+                Expr::List { exprs } | Expr::Tuple { exprs } => {
+                    exprs.iter().copied().for_each(|expr| {
+                        self.collect_expr(expr, current, Some(source));
+                    });
+                    self.scopes.scopes_by_hir_id.insert(expr.into(), current);
+                }
+                Expr::Paren { expr: paren_expr } => {
+                    self.collect_expr(*paren_expr, current, Some(source));
+                    self.scopes.scopes_by_hir_id.insert(expr.into(), current);
+                }
+                hir_expr @ (Expr::Dot { .. } | Expr::Index { .. } | Expr::Slice { .. }) => {
+                    hir_expr.walk_child_exprs(|expr| self.collect_expr(expr, current, None));
+                    self.scopes.scopes_by_hir_id.insert(expr.into(), current);
+                }
+                _ => {}
             }
-        }
-        Expr::Lambda { params, body } => {
-            let scope = scopes.alloc_scope(current);
-            for param in params.into_iter().copied() {
-                match &module.params[param] {
-                    Param::Simple { name, .. }
-                    | Param::ArgsList { name, .. }
-                    | Param::KwargsList { name, .. } => {
-                        scopes.add_decl(scope, name.clone(), Declaration::Parameter { id: param });
+        } else {
+            match &self.module.exprs[expr] {
+                Expr::Missing => {}
+                Expr::Name { name } => match source {
+                    Some(expr) => self.scopes.add_decl(
+                        current,
+                        name.clone(),
+                        Declaration::Variable {
+                            id: expr,
+                            source: None,
+                        },
+                    ),
+                    None => {
+                        self.scopes.scopes_by_hir_id.insert(expr.into(), current);
                     }
+                },
+                Expr::Lambda { params, body } => {
+                    let scope = self.scopes.alloc_scope(current);
+                    for param in params.into_iter().copied() {
+                        match &self.module.params[param] {
+                            Param::Simple { name, .. }
+                            | Param::ArgsList { name, .. }
+                            | Param::KwargsList { name, .. } => {
+                                self.scopes.add_decl(
+                                    scope,
+                                    name.clone(),
+                                    Declaration::Parameter { id: param },
+                                );
+                            }
+                        }
+                    }
+                    self.collect_expr(*body, scope, None);
+                    self.scopes.scopes_by_hir_id.insert(expr.into(), current);
+                }
+                Expr::Tuple { exprs } => {
+                    exprs.iter().copied().for_each(|expr| {
+                        self.collect_expr(expr, current, source);
+                    });
+                    self.scopes.scopes_by_hir_id.insert(expr.into(), current);
+                }
+                Expr::Paren { expr: paren_expr } => {
+                    self.collect_expr(*paren_expr, current, source);
+                    self.scopes.scopes_by_hir_id.insert(expr.into(), current);
+                }
+                Expr::List { exprs } => {
+                    exprs.iter().copied().for_each(|expr| {
+                        self.collect_expr(expr, current, source);
+                    });
+                    self.scopes.scopes_by_hir_id.insert(expr.into(), current);
+                }
+                Expr::DictComp {
+                    entry,
+                    comp_clauses,
+                } => {
+                    let mut comp = current;
+                    self.collect_comp_clause(comp_clauses, &mut comp);
+                    self.collect_expr(entry.key, comp, None);
+                    self.collect_expr(entry.value, comp, None);
+                    self.scopes.scopes_by_hir_id.insert(expr.into(), current);
+                }
+                Expr::ListComp {
+                    expr: list_expr,
+                    comp_clauses,
+                } => {
+                    let mut comp = current;
+                    self.collect_comp_clause(comp_clauses, &mut comp);
+                    self.collect_expr(*list_expr, comp, None);
+                    self.scopes.scopes_by_hir_id.insert(expr.into(), current);
+                }
+                hir_expr => {
+                    hir_expr.walk_child_exprs(|expr| self.collect_expr(expr, current, None));
+                    self.scopes.scopes_by_hir_id.insert(expr.into(), current);
                 }
             }
-            compute_expr_scopes(scopes, *body, module, scope, false);
-            scopes.scopes_by_hir_id.insert(expr.into(), current);
-        }
-        Expr::Tuple { exprs } => {
-            exprs.iter().copied().for_each(|expr| {
-                compute_expr_scopes(scopes, expr, module, current, is_assign_target);
-            });
-            scopes.scopes_by_hir_id.insert(expr.into(), current);
-        }
-        Expr::Paren { expr: paren_expr } => {
-            compute_expr_scopes(scopes, *paren_expr, module, current, is_assign_target);
-            scopes.scopes_by_hir_id.insert(expr.into(), current);
-        }
-        Expr::List { exprs } => {
-            exprs.iter().copied().for_each(|expr| {
-                compute_expr_scopes(scopes, expr, module, current, is_assign_target);
-            });
-            scopes.scopes_by_hir_id.insert(expr.into(), current);
-        }
-        Expr::DictComp {
-            entry,
-            comp_clauses,
-        } => {
-            let mut comp = current;
-            compute_comp_clause_scopes(scopes, module, comp_clauses, &mut comp);
-            compute_expr_scopes(scopes, entry.key, module, comp, false);
-            compute_expr_scopes(scopes, entry.value, module, comp, false);
-            scopes.scopes_by_hir_id.insert(expr.into(), current);
-        }
-        Expr::ListComp {
-            expr: list_expr,
-            comp_clauses,
-        } => {
-            let mut comp = current;
-            compute_comp_clause_scopes(scopes, module, comp_clauses, &mut comp);
-            compute_expr_scopes(scopes, *list_expr, module, comp, false);
-            scopes.scopes_by_hir_id.insert(expr.into(), current);
-        }
-        hir_expr => {
-            hir_expr
-                .walk_child_exprs(|expr| compute_expr_scopes(scopes, expr, module, current, false));
-            scopes.scopes_by_hir_id.insert(expr.into(), current);
         }
     }
-}
 
-fn compute_stmt_list_scopes_deferred(
-    scopes: &mut Scopes,
-    defer: &mut VecDeque<DeferredScope>,
-    stmts: &Box<[StmtId]>,
-    module: &Module,
-    mut current: ScopeId,
-) {
-    let mut deferred_functions = VecDeque::new();
-    for stmt in stmts.iter().copied() {
-        compute_stmt_scopes(scopes, &mut deferred_functions, stmt, module, &mut current);
-    }
-    while let Some(data) = deferred_functions.pop_front() {
-        defer.push_back(DeferredScope {
-            parent: current,
-            data,
-        });
-    }
-}
-
-fn compute_stmt_list_scopes(
-    scopes: &mut Scopes,
-    deferred_functions: &mut VecDeque<DeferredFunctionData>,
-    stmts: &Box<[StmtId]>,
-    module: &Module,
-    current: &mut ScopeId,
-) {
-    for stmt in stmts.iter().copied() {
-        compute_stmt_scopes(scopes, deferred_functions, stmt, module, current);
-    }
-}
-
-fn compute_stmt_scopes(
-    scopes: &mut Scopes,
-    deferred_functions: &mut VecDeque<DeferredFunctionData>,
-    stmt: StmtId,
-    module: &Module,
-    current: &mut ScopeId,
-) {
-    match &module.stmts[stmt] {
-        Stmt::Def {
-            name,
-            params,
-            stmts,
-        } => {
-            *current = scopes.alloc_scope(*current);
-            scopes.add_decl(*current, name.clone(), Declaration::Function { id: stmt });
-            deferred_functions.push_back(DeferredFunctionData {
-                params: params.clone(),
-                stmts: stmts.clone(),
-            });
-        }
-        Stmt::If {
-            if_stmts,
-            elif_stmt,
-            else_stmts,
-            ..
-        } => {
-            compute_stmt_list_scopes(scopes, deferred_functions, if_stmts, module, current);
-            if let Some(elif_stmt) = elif_stmt {
-                compute_stmt_scopes(scopes, deferred_functions, *elif_stmt, module, current);
-            }
-            compute_stmt_list_scopes(scopes, deferred_functions, else_stmts, module, current);
-        }
-        Stmt::For {
-            iterable,
-            targets,
-            stmts,
-        } => {
-            compute_expr_scopes(scopes, *iterable, module, *current, false);
-            targets.iter().copied().for_each(|expression| {
-                compute_expr_scopes(scopes, expression, module, *current, true)
-            });
-            compute_stmt_list_scopes(scopes, deferred_functions, stmts, module, current);
-        }
-        Stmt::Assign { lhs, rhs, .. } => {
-            compute_expr_scopes(scopes, *rhs, module, *current, false);
-            *current = scopes.alloc_scope(*current);
-            compute_expr_scopes(scopes, *lhs, module, *current, true);
-        }
-        Stmt::Load { items } => {}
-        Stmt::Return { expr } => {
-            if let Some(expr) = expr {
-                compute_expr_scopes(scopes, *expr, module, *current, false);
-            }
-        }
-        Stmt::Expr { expr } => {
-            compute_expr_scopes(scopes, *expr, module, *current, false);
-        }
-        _ => return,
-    }
-    scopes.scopes_by_hir_id.insert(stmt.into(), *current);
-}
-
-fn compute_comp_clause_scopes(
-    scopes: &mut Scopes,
-    module: &Module,
-    comp_clauses: &Box<[CompClause]>,
-    current: &mut ScopeId,
-) {
-    for comp_clause in comp_clauses.into_iter() {
-        match comp_clause {
-            CompClause::For { iterable, targets } => {
-                compute_expr_scopes(scopes, *iterable, module, *current, false);
-                targets.iter().copied().for_each(|expr| {
-                    compute_expr_scopes(scopes, expr, module, *current, true);
-                });
-            }
-            CompClause::If { test } => {
-                compute_expr_scopes(scopes, *test, module, *current, false);
+    fn collect_comp_clause(&mut self, comp_clauses: &Box<[CompClause]>, current: &mut ScopeId) {
+        for comp_clause in comp_clauses.into_iter() {
+            match comp_clause {
+                CompClause::For { iterable, targets } => {
+                    self.collect_expr(*iterable, *current, None);
+                    targets.iter().copied().for_each(|expr| {
+                        self.collect_expr(expr, *current, Some(*iterable));
+                    });
+                }
+                CompClause::If { test } => {
+                    self.collect_expr(*test, *current, None);
+                }
             }
         }
     }

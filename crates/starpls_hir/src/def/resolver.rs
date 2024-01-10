@@ -105,6 +105,7 @@ fn find_nearest_predecessor(
     hir_range: TextRange,
     offset: TextSize,
 ) -> Option<ScopeId> {
+    eprintln!("finding nearest predecessor");
     scopes
         .scopes_by_hir_id
         .iter()
@@ -125,9 +126,11 @@ fn find_nearest_predecessor(
             (ptr.text_range(), *scope)
         })
         .filter(|(range, _)| {
+            eprintln!("filtered {:?}", range);
             range.start() <= offset && hir_range.contains_range(*range) && hir_range != *range
         })
         .max_by(|(lhs, _), (rhs, _)| {
+            eprintln!("lhs {:?}, rhs {:?}", lhs, rhs);
             if lhs.contains_range(*rhs) {
                 std::cmp::Ordering::Greater
             } else if rhs.contains_range(*lhs) {
@@ -136,5 +139,8 @@ fn find_nearest_predecessor(
                 lhs.start().cmp(&rhs.start())
             }
         })
-        .map(|(_, scope)| scope)
+        .map(|(range, scope)| {
+            eprintln!("end range {:?}", range);
+            scope
+        })
 }

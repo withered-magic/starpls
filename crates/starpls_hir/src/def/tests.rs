@@ -89,3 +89,13 @@ f = lambda x: x + 1$0
         &["a", "x"],
     )
 }
+
+#[test]
+fn test_def() {
+    check_scope(
+        r"def foo():
+    x = 1
+$0",
+        &["foo", "x"],
+    )
+}

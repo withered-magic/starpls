@@ -1,12 +1,13 @@
 use crate::{
     typeck::{
-        BuiltinField, BuiltinFunction, BuiltinType, Class, Field, Fields, FunctionKind, Ty, TyKind,
+        BuiltinField, BuiltinFunction, BuiltinType, Class, Fields, FunctionKind, Ty, TyKind,
         TypeRef,
     },
     Name,
 };
 
 pub struct Builtins {
+    any_ty: Ty,
     none_ty: Ty,
     bool_ty: Ty,
     int_ty: Ty,
@@ -21,6 +22,10 @@ pub struct Builtins {
 }
 
 impl Builtins {
+    pub fn any_ty(&self) -> Ty {
+        self.any_ty.clone()
+    }
+
     pub fn none_ty(&self) -> Ty {
         self.none_ty.clone()
     }
@@ -68,6 +73,7 @@ impl Builtins {
 
 pub(crate) fn intern_builtin_types_and_functions() -> Builtins {
     Builtins {
+        any_ty: intern_any_ty(),
         none_ty: intern_none_ty(),
         bool_ty: intern_bool_ty(),
         int_ty: intern_int_ty(),
@@ -80,6 +86,10 @@ pub(crate) fn intern_builtin_types_and_functions() -> Builtins {
         tuple_ty: intern_tuple_ty(),
         dict_ty: intern_dict_ty(),
     }
+}
+
+fn intern_any_ty() -> Ty {
+    TyKind::Any.intern()
 }
 
 fn intern_none_ty() -> Ty {

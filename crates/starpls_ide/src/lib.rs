@@ -3,6 +3,7 @@ use completions::CompletionItem;
 use dashmap::{mapref::entry::Entry, DashMap};
 use salsa::ParallelDatabase;
 use starpls_common::{Db, Diagnostic, File, FileId};
+use starpls_hir::{TyCtxt, TyCtxtSnapshot};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use std::sync::Arc;
 
@@ -59,13 +60,14 @@ impl Change {
 }
 
 /// Provides the main API for querying facts about the source code. This wraps the main `Database` struct.
-#[derive(Default)]
 pub struct Analysis {
     db: Database,
+    tcx: TyCtxt,
 }
 
 impl Analysis {
     pub fn apply_change(&mut self, change: Change) {
+        self.tcx.cancel();
         for (path, contents) in change.changed_files {
             self.db.set_file_contents(path, contents);
         }
@@ -74,12 +76,14 @@ impl Analysis {
     pub fn snapshot(&self) -> AnalysisSnapshot {
         AnalysisSnapshot {
             db: self.db.snapshot(),
+            tcx: self.tcx.snapshot(),
         }
     }
 }
 
 pub struct AnalysisSnapshot {
     db: salsa::Snapshot<Database>,
+    tcx: TyCtxtSnapshot,
 }
 
 impl AnalysisSnapshot {
@@ -116,6 +120,13 @@ impl AnalysisSnapshot {
         F: FnOnce(&Database) -> T + std::panic::UnwindSafe,
     {
         salsa::Cancelled::catch(|| f(&self.db))
+    }
+
+    fn query_with_tcx<F, T>(&self, f: F) -> Cancellable<T>
+    where
+        F: FnOnce(&Database, &TyCtxtSnapshot) -> T + std::panic::UnwindSafe,
+    {
+        salsa::Cancelled::catch(|| f(&self.db, &self.tcx))
     }
 }
 

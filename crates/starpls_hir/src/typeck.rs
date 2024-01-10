@@ -145,6 +145,11 @@ pub struct TyCtxt {
     gcx: Arc<Mutex<GlobalCtxt>>,
 }
 
+pub struct TyCtxtSnapshot {
+    shared_state: Arc<SharedState>,
+    gcx: Arc<Mutex<GlobalCtxt>>,
+}
+
 impl TyCtxt {
     pub fn new_with_builtins(builtins: Builtins) -> Self {
         let shared_state = Arc::new(SharedState {
@@ -171,6 +176,13 @@ impl TyCtxt {
             type_of_expr: FxHashMap::default(),
         }
     }
+
+    pub fn snapshot(&self) -> TyCtxtSnapshot {
+        TyCtxtSnapshot {
+            shared_state: Arc::clone(&self.shared_state),
+            gcx: Arc::clone(&self.gcx),
+        }
+    }
 }
 
 struct GlobalCtxt {
@@ -195,16 +207,20 @@ impl GlobalCtxt {
                 let resolver = Resolver::new_for_expr(db, expr.0, expr.1);
                 let decls = match resolver.resolve_name(name) {
                     Some(decls) => decls,
-                    None => return self.set_type_of_expr(expr, TyKind::Any.intern()),
+                    None => return self.set_type_of_expr(expr, self.builtins().any_ty()),
                 };
-                todo!()
+                self.set_type_of_expr(expr, self.builtins().any_ty())
             }
-            _ => todo!(),
+            _ => self.set_type_of_expr(expr, self.builtins().any_ty()),
         }
     }
 
     fn set_type_of_expr(&mut self, expr: FileExprId, ty: Ty) -> Ty {
         self.type_of_expr.insert(expr, ty.clone());
         ty
+    }
+
+    fn builtins(&self) -> &Builtins {
+        &self.shared_state.builtins
     }
 }

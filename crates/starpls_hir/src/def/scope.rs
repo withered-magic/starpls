@@ -1,10 +1,10 @@
 use crate::{
     def::{CompClause, Declaration, Expr, ExprId, Param, ParamId, Stmt, StmtId},
-    lower, Db, Module, ModuleInfo, Name,
+    lower, Db, Module, ModuleInfo, ModuleSourceMap, Name,
 };
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
-use starpls_common::File;
+use starpls_common::{Diagnostic, Diagnostics, File, FileRange, Severity};
 use std::collections::{hash_map::Entry, VecDeque};
 use std::sync::Arc;
 
@@ -16,15 +16,15 @@ pub(crate) struct ModuleScopes {
 }
 
 #[salsa::tracked]
-pub(crate) fn module_scopes_query(db: &dyn Db, info: ModuleInfo) -> ModuleScopes {
-    let scopes = Scopes::new_for_module(db, &info.module(db));
+pub(crate) fn module_scopes_query(db: &dyn Db, file: File, info: ModuleInfo) -> ModuleScopes {
+    let scopes = Scopes::new_for_module(db, file, info);
     ModuleScopes::new(db, Arc::new(scopes))
 }
 
 #[salsa::tracked]
 pub(crate) fn module_scopes(db: &dyn Db, file: File) -> ModuleScopes {
     let info = lower(db, file);
-    module_scopes_query(db, info)
+    module_scopes_query(db, file, info)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -69,11 +69,13 @@ struct Function {
 }
 
 impl Scopes {
-    fn new_for_module(db: &dyn Db, module: &Module) -> Self {
+    fn new_for_module(db: &dyn Db, file: File, info: ModuleInfo) -> Self {
         ScopeCollector {
             db,
             deferred: VecDeque::new(),
-            module,
+            file,
+            module: info.module(db),
+            source_map: info.source_map(db),
             scopes: Scopes {
                 scopes: Default::default(),
                 scopes_by_hir_id: Default::default(),
@@ -112,7 +114,9 @@ impl Scopes {
 struct ScopeCollector<'a> {
     db: &'a dyn Db,
     deferred: VecDeque<DeferredScope>,
+    file: File,
     module: &'a Module,
+    source_map: &'a ModuleSourceMap,
     scopes: Scopes,
 }
 
@@ -264,7 +268,24 @@ impl ScopeCollector<'_> {
                     hir_expr.walk_child_exprs(|expr| self.collect_expr(expr, current, None));
                     self.scopes.scopes_by_hir_id.insert(expr.into(), current);
                 }
-                _ => {}
+                Expr::Missing => {}
+                _ => Diagnostics::push(
+                    self.db,
+                    Diagnostic {
+                        message: "Expression is not assignable".to_string(),
+                        severity: Severity::Error,
+                        range: FileRange {
+                            file_id: self.file.id(self.db),
+                            range: self
+                                .source_map
+                                .expr_map_back
+                                .get(&expr)
+                                .expect("expected expr to exist in source map")
+                                .syntax_node_ptr()
+                                .text_range(),
+                        },
+                    },
+                ),
             }
         } else {
             match &self.module.exprs[expr] {

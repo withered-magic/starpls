@@ -119,3 +119,44 @@ pub(crate) fn completion(
         .collect::<Vec<_>>()
         .into())
 }
+
+pub(crate) fn hover(
+    snapshot: &ServerSnapshot,
+    params: lsp_types::HoverParams,
+) -> anyhow::Result<lsp_types::Hover> {
+    let empty = || lsp_types::Hover {
+        contents: lsp_types::HoverContents::Markup(lsp_types::MarkupContent {
+            kind: lsp_types::MarkupKind::PlainText,
+            value: String::new(),
+        }),
+        range: None,
+    };
+
+    let path = path_buf_from_url(&params.text_document_position_params.text_document.uri)?;
+
+    let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
+        Some(file_id) => file_id,
+        None => return Ok(empty()),
+    };
+
+    let pos = match convert::text_size_from_lsp_position(
+        snapshot,
+        file_id,
+        params.text_document_position_params.position,
+    )? {
+        Some(pos) => pos,
+        None => return Ok(empty()),
+    };
+
+    Ok(snapshot
+        .analysis_snapshot
+        .hover(FilePosition { file_id, pos })?
+        .map(|hover| lsp_types::Hover {
+            contents: lsp_types::HoverContents::Markup(lsp_types::MarkupContent {
+                kind: lsp_types::MarkupKind::Markdown,
+                value: hover.contents.value,
+            }),
+            range: None,
+        })
+        .unwrap_or_else(empty))
+}

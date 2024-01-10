@@ -11,7 +11,7 @@ use std::sync::Arc;
 pub(crate) type ScopeId = Id<Scope>;
 
 #[salsa::tracked]
-pub(crate) struct ModuleScopes {
+pub struct ModuleScopes {
     pub(crate) scopes: Arc<Scopes>,
 }
 
@@ -22,7 +22,7 @@ pub(crate) fn module_scopes_query(db: &dyn Db, file: File, info: ModuleInfo) -> 
 }
 
 #[salsa::tracked]
-pub(crate) fn module_scopes(db: &dyn Db, file: File) -> ModuleScopes {
+pub fn module_scopes(db: &dyn Db, file: File) -> ModuleScopes {
     let info = lower(db, file);
     module_scopes_query(db, file, info)
 }

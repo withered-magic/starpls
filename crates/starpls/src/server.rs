@@ -36,7 +36,7 @@ impl Server {
             task_pool_handle,
             document_manager: Default::default(),
             diagnostics_manager: Default::default(),
-            analysis: Default::default(),
+            analysis: Analysis::new(),
         })
     }
 

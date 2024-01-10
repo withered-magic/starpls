@@ -1,5 +1,8 @@
 use lsp_server::Connection;
-use lsp_types::{OneOf, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind};
+use lsp_types::{
+    HoverProviderCapability, OneOf, ServerCapabilities, TextDocumentSyncCapability,
+    TextDocumentSyncKind,
+};
 
 mod convert;
 mod diagnostics;
@@ -22,6 +25,7 @@ fn main() -> anyhow::Result<()> {
     let server_capabilities = serde_json::to_value(&ServerCapabilities {
         completion_provider: Some(Default::default()),
         definition_provider: Some(OneOf::Left(true)),
+        hover_provider: Some(HoverProviderCapability::Simple(true)),
         text_document_sync: Some(TextDocumentSyncCapability::Kind(
             TextDocumentSyncKind::INCREMENTAL,
         )),

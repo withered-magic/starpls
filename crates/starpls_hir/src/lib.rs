@@ -2,8 +2,8 @@ use crate::def::ModuleSourceMap;
 use starpls_common::{parse, File, Parse};
 
 pub use crate::{
-    def::{resolver::Resolver, Declaration, Module, Name},
-    typeck::{TyCtxt, TyCtxtSnapshot},
+    def::{resolver::Resolver, scope::module_scopes, Declaration, Module, Name},
+    typeck::{intern_builtins, Builtins, TyCtxt, TyCtxtSnapshot},
 };
 
 mod api;

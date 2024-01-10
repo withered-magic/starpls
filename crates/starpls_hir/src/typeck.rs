@@ -1,7 +1,8 @@
 use crate::{
-    def::{scope::module_scopes, Expr, ExprId, ModuleSourceMap, ParamId},
-    lower as lower_, Db, Module, Name, Resolver,
+    def::{Expr, ExprId, ParamId},
+    lower as lower_, Db, Name, Resolver,
 };
+
 use crossbeam::atomic::AtomicCell;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -9,7 +10,7 @@ use starpls_common::File;
 use starpls_intern::{impl_internable, Interned};
 use std::sync::Arc;
 
-use self::builtins::Builtins;
+pub use crate::typeck::builtins::{intern_builtins, Builtins};
 
 mod builtins;
 mod lower;
@@ -146,7 +147,6 @@ pub struct TyCtxt {
 }
 
 pub struct TyCtxtSnapshot {
-    shared_state: Arc<SharedState>,
     gcx: Arc<Mutex<GlobalCtxt>>,
 }
 
@@ -163,10 +163,6 @@ impl TyCtxt {
         Self { shared_state, gcx }
     }
 
-    pub fn type_of_expr(&self, db: &dyn Db, expr: FileExprId) -> Ty {
-        self.gcx.lock().type_of_expr(db, expr)
-    }
-
     pub fn cancel(&self) {
         self.shared_state.cancelled.store(true);
         let mut gcx = self.gcx.lock();
@@ -179,9 +175,14 @@ impl TyCtxt {
 
     pub fn snapshot(&self) -> TyCtxtSnapshot {
         TyCtxtSnapshot {
-            shared_state: Arc::clone(&self.shared_state),
             gcx: Arc::clone(&self.gcx),
         }
+    }
+}
+
+impl TyCtxtSnapshot {
+    pub fn type_of_expr(&self, db: &dyn Db, expr: FileExprId) -> Ty {
+        self.gcx.lock().type_of_expr(db, expr)
     }
 }
 

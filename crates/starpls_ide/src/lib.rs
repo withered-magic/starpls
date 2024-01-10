@@ -1,15 +1,17 @@
-use crate::handlers::*;
+use crate::{handlers::*, hover::Hover};
 use completions::CompletionItem;
 use dashmap::{mapref::entry::Entry, DashMap};
 use salsa::ParallelDatabase;
 use starpls_common::{Db, Diagnostic, File, FileId};
-use starpls_hir::{TyCtxt, TyCtxtSnapshot};
+use starpls_hir::{intern_builtins, TyCtxt, TyCtxtSnapshot};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use std::sync::Arc;
 
-pub mod completions;
 mod handlers;
 mod util;
+
+pub mod completions;
+pub mod hover;
 
 pub type Cancellable<T> = Result<T, salsa::Cancelled>;
 
@@ -66,6 +68,13 @@ pub struct Analysis {
 }
 
 impl Analysis {
+    pub fn new() -> Self {
+        Self {
+            db: Default::default(),
+            tcx: TyCtxt::new_with_builtins(intern_builtins()),
+        }
+    }
+
     pub fn apply_change(&mut self, change: Change) {
         self.tcx.cancel();
         for (path, contents) in change.changed_files {
@@ -100,6 +109,10 @@ impl AnalysisSnapshot {
             let res = goto_definition::goto_definition(db, pos);
             res
         })
+    }
+
+    pub fn hover(&self, pos: FilePosition) -> Cancellable<Option<Hover>> {
+        self.query(|db| hover::hover(db, pos))
     }
 
     pub fn line_index(&self, file_id: FileId) -> Cancellable<Option<LineIndex>> {

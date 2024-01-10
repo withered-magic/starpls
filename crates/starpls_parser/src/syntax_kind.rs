@@ -218,6 +218,26 @@ impl SyntaxKind {
     pub fn is_trivia_token(&self) -> bool {
         matches!(*self, WHITESPACE | COMMENT)
     }
+
+    pub fn is_keyword(&self) -> bool {
+        matches!(
+            *self,
+            AND | BREAK
+                | CONTINUE
+                | DEF
+                | ELIF
+                | ELSE
+                | FOR
+                | IF
+                | IN
+                | LAMBDA
+                | LOAD
+                | NOT
+                | OR
+                | PASS
+                | RETURN
+        )
+    }
 }
 
 impl From<starpls_lexer::TokenKind> for SyntaxKind {

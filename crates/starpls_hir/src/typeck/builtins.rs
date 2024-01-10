@@ -71,7 +71,7 @@ impl Builtins {
     }
 }
 
-pub(crate) fn intern_builtin_types_and_functions() -> Builtins {
+pub fn intern_builtins() -> Builtins {
     Builtins {
         any_ty: intern_any_ty(),
         none_ty: intern_none_ty(),

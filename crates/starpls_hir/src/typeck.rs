@@ -1,8 +1,7 @@
 use crate::{
-    def::{Expr, ExprId, ParamId},
-    lower as lower_, Db, Name, Resolver,
+    def::{Expr, ExprId, Literal, ParamId},
+    lower as lower_, Db, Declaration, Name, Resolver,
 };
-
 use crossbeam::atomic::AtomicCell;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -16,7 +15,10 @@ mod builtins;
 mod lower;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct FileExprId(File, ExprId);
+pub struct FileExprId {
+    pub file: File,
+    pub expr: ExprId,
+}
 
 #[derive(Debug)]
 
@@ -76,6 +78,18 @@ pub struct Ty(Interned<TyKind>);
 impl Ty {
     pub fn kind(&self) -> &TyKind {
         &self.0
+    }
+}
+
+impl std::fmt::Display for Ty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.kind() {
+            TyKind::Unbound => f.write_str("Unbound"),
+            TyKind::Any => f.write_str("Any"),
+            TyKind::None => f.write_str("NoneType"),
+            TyKind::Function(_) => f.write_str("function"),
+            TyKind::Class(class) => f.write_str(&class.name.as_str()),
+        }
     }
 }
 
@@ -201,22 +215,72 @@ impl GlobalCtxt {
             Cancelled.throw();
         }
 
-        let info = lower_(db, expr.0);
+        let info = lower_(db, expr.file);
 
-        match &info.module(db).exprs[expr.1] {
+        let ty = match &info.module(db).exprs[expr.expr] {
             Expr::Name { name } => {
-                let resolver = Resolver::new_for_expr(db, expr.0, expr.1);
+                let resolver = Resolver::new_for_expr(db, expr.file, expr.expr);
                 let decls = match resolver.resolve_name(name) {
                     Some(decls) => decls,
-                    None => return self.set_type_of_expr(expr, self.builtins().any_ty()),
+                    None => return self.set_expr_type(expr, self.builtins().unbound_ty()),
                 };
-                self.set_type_of_expr(expr, self.builtins().any_ty())
+                match decls.last() {
+                    Some(Declaration::Variable { id, source }) => {
+                        let source_ty = match source {
+                            Some(source) => self.type_of_expr(
+                                db,
+                                FileExprId {
+                                    file: expr.file,
+                                    expr: *source,
+                                },
+                            ),
+                            None => self.builtins().any_ty(),
+                        };
+                        // TODO(withered-magic): Find the parent assignment node and call assign_expr_type_rec on the real lhs.
+                        self.assign_expr_type_rec(
+                            FileExprId {
+                                file: expr.file,
+                                expr: *id,
+                            },
+                            source_ty,
+                        );
+                        self.type_of_expr
+                            .get(&FileExprId {
+                                file: expr.file,
+                                expr: *id,
+                            })
+                            .cloned()
+                            .unwrap()
+                    }
+                    Some(
+                        Declaration::Function { .. }
+                        | Declaration::Parameter { .. }
+                        | Declaration::LoadItem {},
+                    ) => self.builtins().any_ty(),
+                    _ => self.builtins().unbound_ty(),
+                }
             }
-            _ => self.set_type_of_expr(expr, self.builtins().any_ty()),
-        }
+            Expr::List { .. } | Expr::ListComp { .. } => self.builtins().list_ty(),
+            Expr::Dict { .. } | Expr::DictComp { .. } => self.builtins().dict_ty(),
+            Expr::Literal { literal } => match literal {
+                Literal::Int => self.builtins().int_ty(),
+                Literal::Float => self.builtins().float_ty(),
+                Literal::String => self.builtins().string_ty(),
+                Literal::Bytes => self.builtins().bytes_ty(),
+                Literal::Bool => self.builtins().bool_ty(),
+                Literal::None => self.builtins().none_ty(),
+            },
+            _ => self.builtins().any_ty(),
+        };
+
+        self.set_expr_type(expr, ty)
     }
 
-    fn set_type_of_expr(&mut self, expr: FileExprId, ty: Ty) -> Ty {
+    fn assign_expr_type_rec(&mut self, lhs: FileExprId, rhs_ty: Ty) {
+        self.type_of_expr.insert(lhs, rhs_ty);
+    }
+
+    fn set_expr_type(&mut self, expr: FileExprId, ty: Ty) -> Ty {
         self.type_of_expr.insert(expr, ty.clone());
         ty
     }

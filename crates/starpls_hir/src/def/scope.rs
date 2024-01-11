@@ -246,14 +246,17 @@ impl ScopeCollector<'_> {
         if let Some(source) = source {
             // Possible assignment targets: NAME, LIST, TUPLE, PAREN, DOT, INDEX, SLICE.
             match &self.module.exprs[expr] {
-                Expr::Name { name } => self.scopes.add_decl(
-                    current,
-                    name.clone(),
-                    Declaration::Variable {
-                        id: expr,
-                        source: Some(source),
-                    },
-                ),
+                Expr::Name { name } => {
+                    self.scopes.add_decl(
+                        current,
+                        name.clone(),
+                        Declaration::Variable {
+                            id: expr,
+                            source: Some(source),
+                        },
+                    );
+                    self.scopes.scopes_by_hir_id.insert(expr.into(), current);
+                }
                 Expr::List { exprs } | Expr::Tuple { exprs } => {
                     exprs.iter().copied().for_each(|expr| {
                         self.collect_expr(expr, current, Some(source));
@@ -290,19 +293,9 @@ impl ScopeCollector<'_> {
         } else {
             match &self.module.exprs[expr] {
                 Expr::Missing => {}
-                Expr::Name { name } => match source {
-                    Some(expr) => self.scopes.add_decl(
-                        current,
-                        name.clone(),
-                        Declaration::Variable {
-                            id: expr,
-                            source: None,
-                        },
-                    ),
-                    None => {
-                        self.scopes.scopes_by_hir_id.insert(expr.into(), current);
-                    }
-                },
+                Expr::Name { .. } => {
+                    self.scopes.scopes_by_hir_id.insert(expr.into(), current);
+                }
                 Expr::Lambda { params, body } => {
                     let scope = self.scopes.alloc_scope(current);
                     for param in params.into_iter().copied() {

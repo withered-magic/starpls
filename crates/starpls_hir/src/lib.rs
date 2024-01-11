@@ -3,7 +3,7 @@ use starpls_common::{parse, File, Parse};
 
 pub use crate::{
     def::{resolver::Resolver, scope::module_scopes, Declaration, Module, Name},
-    typeck::{intern_builtins, Builtins, TyCtxt, TyCtxtSnapshot},
+    typeck::{intern_builtins, Builtins, FileExprId, TyCtxt, TyCtxtSnapshot},
 };
 
 mod api;

@@ -145,6 +145,117 @@ It is a static error to use a `break` or `continue` statement outside a
 loop.
 "#;
 
+pub(crate) const DEF_DOCS: &str = r#"
+```python
+def
+```
+
+A `def` statement creates a named function and assigns it to a variable.
+
+```text
+DefStmt = 'def' identifier '(' [Parameters [',']] ')' ':' Suite .
+```
+
+Example:
+
+```python
+def twice(x):
+    return x * 2
+
+str(twice)              # "<function f>"
+twice(2)                # 4
+twice("two")            # "twotwo"
+```
+
+The function's name is preceded by the `def` keyword and followed by
+the parameter list (which is enclosed in parentheses), a colon, and
+then an indented block of statements which form the body of the function.
+
+The parameter list is a comma-separated list whose elements are of
+several kinds.  First come zero or more required parameters, which are
+simple identifiers; all calls must provide an argument value for these parameters.
+
+The required parameters are followed by zero or more optional
+parameters, of the form `name=expression`.  The expression specifies
+the default value for the parameter for use in calls that do not
+provide an argument value for it.
+
+The required parameters are optionally followed by a single parameter
+name preceded by a `*`.  This is the called the _varargs_ parameter,
+and it accumulates surplus positional arguments specified by a call.
+It is conventionally named `*args`.
+
+The varargs parameter may be followed by zero or more
+parameters, again of the forms `name` or `name=expression`,
+but these parameters differ from earlier ones in that they are
+_keyword-only_: if a call provides their values, it must do so as
+keyword arguments, not positional ones.
+
+Note that even though keyword-only arguments are declared after `*args` in a
+function's definition, they nevertheless must appear before `*args` in a call
+to the function.
+
+```python
+def g(a, *args, b=2, c):
+  print(a, b, c, args)
+
+g(1, 3)                 # error: function g missing 1 argument (c)
+g(1, *[4, 5], c=3)      # error: keyword argument c may not follow *args
+g(1, 4, c=3)            # "1 2 3 (4,)"
+g(1, c=3, *[4, 5])      # "1 2 3 (4, 5)"
+```
+
+A non-variadic function may also declare keyword-only parameters,
+by using a bare `*` in place of the `*args` parameter.
+This form does not declare a parameter but marks the boundary
+between the earlier parameters and the keyword-only parameters.
+This form must be followed by at least one optional parameter.
+
+```python
+def f(a, *, b=2, c):
+  print(a, b, c)
+
+f(1)                    # error: function f missing 1 argument (c)
+f(1, 3)                 # error: function f accepts 1 positional argument (2 given)
+f(1, c=3)               # "1 2 3"
+```
+
+Finally, there may be an optional parameter name preceded by `**`.
+This is called the _keyword arguments_ parameter, and accumulates in a
+dictionary any surplus `name=value` arguments that do not match a
+prior parameter. It is conventionally named `**kwargs`.
+
+Here are some example parameter lists:
+
+```python
+def f(): pass
+def f(a, b, c): pass
+def f(a, b, c=1): pass
+def f(a, b, c=1, *args): pass
+def f(a, b, c=1, *args, **kwargs): pass
+def f(**kwargs): pass
+def f(a, b, c=1, *, d=1): pass
+```
+
+Execution of a `def` statement creates a new function object.  The
+function object contains: the syntax of the function body; the default
+value for each optional parameter; a reference to each free variable
+appearing within the function body; and the global dictionary of the
+current module.
+
+```python
+def f(x):
+  res = []
+  def get_x():
+    res.append(x)
+  get_x()
+  x = 2
+  get_x()
+
+f(1) # returns [1, 2]
+```
+"#;
+
 pub(crate) const LOAD_DOCS: &str = r#"
 ```python
 load
@@ -218,3 +329,27 @@ def list_to_dict(items):
   return m
 ```
 "#;
+
+pub(crate) const RETURN_DOCS: &str = r#"
+```python
+return
+```
+
+A `return` statement ends the execution of a function and returns a
+value to the caller of the function.
+
+```text
+ReturnStmt = 'return' [Expression] .
+```
+
+A return statement may have zero, one, or more
+result expressions separated by commas.
+With no expressions, the function has the result `None`.
+With a single expression, the function's result is the value of that expression.
+With multiple expressions, the function's result is a tuple.
+
+```python
+return                  # returns None
+return 1                # returns 1
+return 1, 2             # returns (1, 2)
+```"#;

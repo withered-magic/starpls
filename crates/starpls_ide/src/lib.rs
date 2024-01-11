@@ -112,7 +112,7 @@ impl AnalysisSnapshot {
     }
 
     pub fn hover(&self, pos: FilePosition) -> Cancellable<Option<Hover>> {
-        self.query(|db| hover::hover(db, pos))
+        self.query_with_tcx(|db, tcx| hover::hover(db, tcx, pos))
     }
 
     pub fn line_index(&self, file_id: FileId) -> Cancellable<Option<LineIndex>> {

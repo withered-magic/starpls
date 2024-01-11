@@ -63,7 +63,7 @@ pub(crate) fn hover(
     if let Some(name_ref) = ast::NameRef::cast(parent) {
         let expr_ptr = AstPtr::new(&ast::Expression::cast(name_ref.syntax().clone())?);
         let expr = *lower(db, file).source_map(db).expr_map.get(&expr_ptr)?;
-        let ty = tcx.type_of_expr(db, FileExprId { file, expr });
+        let ty = tcx.type_of_expr(db, file, expr);
         let mut text = String::new();
         text.push_str("```text\n");
         text.push_str("(variable) ");

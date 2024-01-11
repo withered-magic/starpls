@@ -9,6 +9,7 @@ use crate::{
 pub struct Builtins {
     any_ty: Ty,
     unbound_ty: Ty,
+    unknown_ty: Ty,
     none_ty: Ty,
     bool_ty: Ty,
     int_ty: Ty,
@@ -29,6 +30,10 @@ impl Builtins {
 
     pub fn unbound_ty(&self) -> Ty {
         self.unbound_ty.clone()
+    }
+
+    pub fn unknown_ty(&self) -> Ty {
+        self.unknown_ty.clone()
     }
 
     pub fn none_ty(&self) -> Ty {
@@ -80,6 +85,7 @@ pub fn intern_builtins() -> Builtins {
     Builtins {
         any_ty: intern_any_ty(),
         unbound_ty: intern_unbound_ty(),
+        unknown_ty: intern_unknown_ty(),
         none_ty: intern_none_ty(),
         bool_ty: intern_bool_ty(),
         int_ty: intern_int_ty(),
@@ -102,20 +108,24 @@ fn intern_unbound_ty() -> Ty {
     TyKind::Unbound.intern()
 }
 
+fn intern_unknown_ty() -> Ty {
+    TyKind::Unknown.intern()
+}
+
 fn intern_none_ty() -> Ty {
     TyKind::None.intern()
 }
 
 fn intern_bool_ty() -> Ty {
-    intern_builtin_class("bool", Vec::new())
+    TyKind::Bool.intern()
 }
 
 fn intern_int_ty() -> Ty {
-    intern_builtin_class("int", Vec::new())
+    TyKind::Int.intern()
 }
 
 fn intern_float_ty() -> Ty {
-    intern_builtin_class("float", Vec::new())
+    TyKind::Float.intern()
 }
 
 fn intern_string_ty() -> Ty {

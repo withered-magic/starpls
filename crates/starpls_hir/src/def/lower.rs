@@ -5,12 +5,18 @@ use crate::{
     },
     Db,
 };
-use starpls_syntax::ast::{self, AstPtr, LoopVariables};
+use starpls_common::{Diagnostic, Diagnostics, File, FileRange, Severity};
+use starpls_syntax::ast::{self, AstNode, AstPtr, LoopVariables};
 
-pub(super) fn lower_module(db: &dyn Db, syntax: ast::Module) -> (Module, ModuleSourceMap) {
+pub(super) fn lower_module(
+    db: &dyn Db,
+    file: File,
+    syntax: ast::Module,
+) -> (Module, ModuleSourceMap) {
     let root = AstPtr::new(&syntax);
     LoweringContext {
         db,
+        file,
         module: Module {
             exprs: Default::default(),
             stmts: Default::default(),
@@ -32,6 +38,7 @@ pub(super) fn lower_module(db: &dyn Db, syntax: ast::Module) -> (Module, ModuleS
 
 struct LoweringContext<'a> {
     db: &'a dyn Db,
+    file: File,
     module: Module,
     source_map: ModuleSourceMap,
 }
@@ -40,7 +47,33 @@ impl<'a> LoweringContext<'a> {
     fn lower(mut self, syntax: ast::Module) -> (Module, ModuleSourceMap) {
         let mut top_level = Vec::new();
         for statement in syntax.statements() {
-            top_level.push(self.lower_stmt(statement));
+            let stmt = self.lower_stmt(statement.clone());
+            top_level.push(stmt);
+            match &self.module.stmts[stmt] {
+                Stmt::If { .. } => Diagnostics::push(
+                    self.db,
+                    Diagnostic {
+                        message: "Top-level if statements are not allowed".to_string(),
+                        severity: Severity::Error,
+                        range: FileRange {
+                            file_id: self.file.id(self.db),
+                            range: statement.syntax().text_range(),
+                        },
+                    },
+                ),
+                Stmt::For { .. } => Diagnostics::push(
+                    self.db,
+                    Diagnostic {
+                        message: "Top-level for statements are not allowed".to_string(),
+                        severity: Severity::Error,
+                        range: FileRange {
+                            file_id: self.file.id(self.db),
+                            range: statement.syntax().text_range(),
+                        },
+                    },
+                ),
+                _ => {}
+            }
         }
         self.module.top_level = top_level.into_boxed_slice();
         (self.module, self.source_map)

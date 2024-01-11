@@ -2,6 +2,7 @@ use crate::{typeck::TypeRef, Db};
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
+use starpls_common::File;
 use starpls_syntax::ast::{self, AssignOp, AstPtr, BinaryOp, UnaryOp};
 
 pub mod lower;
@@ -44,9 +45,10 @@ pub struct ModuleSourceMap {
 impl Module {
     pub(crate) fn new_with_source_map(
         db: &dyn Db,
+        file: File,
         syntax: ast::Module,
     ) -> (Module, ModuleSourceMap) {
-        lower::lower_module(db, syntax)
+        lower::lower_module(db, file, syntax)
     }
 }
 

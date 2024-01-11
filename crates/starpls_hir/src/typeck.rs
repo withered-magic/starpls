@@ -5,8 +5,9 @@ use crate::{
 use crossbeam::atomic::AtomicCell;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
-use starpls_common::File;
+use starpls_common::{Diagnostics, File};
 use starpls_intern::{impl_internable, Interned};
+use starpls_syntax::ast::{BinaryOp, UnaryOp};
 use std::sync::Arc;
 
 pub use crate::typeck::builtins::{intern_builtins, Builtins};
@@ -86,7 +87,11 @@ impl std::fmt::Display for Ty {
         match self.kind() {
             TyKind::Unbound => f.write_str("Unbound"),
             TyKind::Any => f.write_str("Any"),
+            TyKind::Unknown => f.write_str("Unknown"),
             TyKind::None => f.write_str("NoneType"),
+            TyKind::Bool => f.write_str("bool"),
+            TyKind::Int => f.write_str("int"),
+            TyKind::Float => f.write_str("float"),
             TyKind::Function(_) => f.write_str("function"),
             TyKind::Class(class) => f.write_str(&class.name.as_str()),
         }
@@ -96,8 +101,12 @@ impl std::fmt::Display for Ty {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TyKind {
     Unbound,
+    Unknown,
     Any,
     None,
+    Bool,
+    Int,
+    Float,
     Function(FunctionKind),
     /// An instantiable type with methods.
     Class(Class),
@@ -195,8 +204,8 @@ impl TyCtxt {
 }
 
 impl TyCtxtSnapshot {
-    pub fn type_of_expr(&self, db: &dyn Db, expr: FileExprId) -> Ty {
-        self.gcx.lock().type_of_expr(db, expr)
+    pub fn type_of_expr(&self, db: &dyn Db, file: File, expr: ExprId) -> Ty {
+        self.gcx.lock().type_of_expr(db, file, expr)
     }
 }
 
@@ -206,8 +215,8 @@ struct GlobalCtxt {
 }
 
 impl GlobalCtxt {
-    fn type_of_expr(&mut self, db: &dyn Db, expr: FileExprId) -> Ty {
-        if let Some(ty) = self.type_of_expr.get(&expr).cloned() {
+    fn type_of_expr(&mut self, db: &dyn Db, file: File, expr: ExprId) -> Ty {
+        if let Some(ty) = self.type_of_expr.get(&FileExprId { file, expr }).cloned() {
             return ty;
         }
 
@@ -215,40 +224,24 @@ impl GlobalCtxt {
             Cancelled.throw();
         }
 
-        let info = lower_(db, expr.file);
-
-        let ty = match &info.module(db).exprs[expr.expr] {
+        let info = lower_(db, file);
+        let ty = match &info.module(db).exprs[expr] {
             Expr::Name { name } => {
-                let resolver = Resolver::new_for_expr(db, expr.file, expr.expr);
+                let resolver = Resolver::new_for_expr(db, file, expr);
                 let decls = match resolver.resolve_name(name) {
                     Some(decls) => decls,
-                    None => return self.set_expr_type(expr, self.builtins().unbound_ty()),
+                    None => return self.set_expr_type(file, expr, self.builtins().unbound_ty()),
                 };
                 match decls.last() {
                     Some(Declaration::Variable { id, source }) => {
                         let source_ty = match source {
-                            Some(source) => self.type_of_expr(
-                                db,
-                                FileExprId {
-                                    file: expr.file,
-                                    expr: *source,
-                                },
-                            ),
+                            Some(source) => self.type_of_expr(db, file, *source),
                             None => self.builtins().any_ty(),
                         };
                         // TODO(withered-magic): Find the parent assignment node and call assign_expr_type_rec on the real lhs.
-                        self.assign_expr_type_rec(
-                            FileExprId {
-                                file: expr.file,
-                                expr: *id,
-                            },
-                            source_ty,
-                        );
+                        self.assign_expr_type_rec(file, *id, source_ty);
                         self.type_of_expr
-                            .get(&FileExprId {
-                                file: expr.file,
-                                expr: *id,
-                            })
+                            .get(&FileExprId { file, expr: *id })
                             .cloned()
                             .unwrap()
                     }
@@ -270,18 +263,82 @@ impl GlobalCtxt {
                 Literal::Bool => self.builtins().bool_ty(),
                 Literal::None => self.builtins().none_ty(),
             },
+            Expr::Unary { op, expr } => op
+                .as_ref()
+                .map(|op| self.type_of_unary_expr(db, file, *expr, op.clone()))
+                .unwrap_or_else(|| self.builtins().unknown_ty()),
+            Expr::Binary { lhs, rhs, op } => op
+                .as_ref()
+                .map(|op| self.type_of_binary_expr(db, file, *lhs, *rhs, op.clone()))
+                .unwrap_or_else(|| self.builtins().unknown_ty()),
+
             _ => self.builtins().any_ty(),
         };
-
-        self.set_expr_type(expr, ty)
+        self.set_expr_type(file, expr, ty)
     }
 
-    fn assign_expr_type_rec(&mut self, lhs: FileExprId, rhs_ty: Ty) {
-        self.type_of_expr.insert(lhs, rhs_ty);
+    fn type_of_unary_expr(&mut self, db: &dyn Db, file: File, expr: ExprId, op: UnaryOp) -> Ty {
+        let ty = self.type_of_expr(db, file, expr);
+        let kind = ty.kind();
+        if kind == &TyKind::Any {
+            return self.builtins().any_ty();
+        }
+
+        match op {
+            UnaryOp::Arith(_) => match kind {
+                TyKind::Int => self.builtins().int_ty(),
+                TyKind::Float => self.builtins().float_ty(),
+                _ => self.builtins().unknown_ty(),
+            },
+            UnaryOp::Inv => match kind {
+                TyKind::Int => self.builtins().int_ty(),
+                _ => self.builtins().unknown_ty(),
+            },
+            UnaryOp::Not => self.builtins().bool_ty(),
+        }
     }
 
-    fn set_expr_type(&mut self, expr: FileExprId, ty: Ty) -> Ty {
-        self.type_of_expr.insert(expr, ty.clone());
+    fn type_of_binary_expr(
+        &mut self,
+        db: &dyn Db,
+        file: File,
+        lhs: ExprId,
+        rhs: ExprId,
+        op: BinaryOp,
+    ) -> Ty {
+        let lhs = self.type_of_expr(db, file, lhs);
+        let rhs = self.type_of_expr(db, file, rhs);
+        let lhs = lhs.kind();
+        let rhs = rhs.kind();
+
+        if lhs == &TyKind::Any || rhs == &TyKind::Any {
+            return self.builtins().any_ty();
+        }
+
+        match op {
+            // TODO(withered-magic): Handle string interoplation with "%".
+            BinaryOp::Arith(_) => match (lhs, rhs) {
+                (TyKind::Int, TyKind::Int) => self.builtins().int_ty(),
+                (TyKind::Float, TyKind::Int)
+                | (TyKind::Int, TyKind::Float)
+                | (TyKind::Float, TyKind::Float) => self.builtins().float_ty(),
+                _ => self.builtins().unknown_ty(),
+            },
+            BinaryOp::Bitwise(_) => match (lhs, rhs) {
+                (TyKind::Int, TyKind::Int) => self.builtins().int_ty(),
+                _ => self.builtins().unknown_ty(),
+            },
+            _ => self.builtins().bool_ty(),
+        }
+    }
+
+    fn assign_expr_type_rec(&mut self, file: File, lhs: ExprId, rhs_ty: Ty) {
+        self.set_expr_type(file, lhs, rhs_ty);
+    }
+
+    fn set_expr_type(&mut self, file: File, expr: ExprId, ty: Ty) -> Ty {
+        self.type_of_expr
+            .insert(FileExprId { file, expr }, ty.clone());
         ty
     }
 

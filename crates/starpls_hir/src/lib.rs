@@ -32,15 +32,15 @@ pub struct Jar(
 pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {}
 
 #[salsa::tracked]
-fn lower_query(db: &dyn Db, parse: Parse) -> ModuleInfo {
-    let (module, source_map) = Module::new_with_source_map(db, parse.tree(db));
+fn lower_query(db: &dyn Db, file: File, parse: Parse) -> ModuleInfo {
+    let (module, source_map) = Module::new_with_source_map(db, file, parse.tree(db));
     ModuleInfo::new(db, module, source_map)
 }
 
 #[salsa::tracked]
 pub fn lower(db: &dyn Db, file: File) -> ModuleInfo {
     let parse = parse(db, file);
-    lower_query(db, parse)
+    lower_query(db, file, parse)
 }
 
 impl<DB> Db for DB where DB: ?Sized + salsa::DbWithJar<Jar> + starpls_common::Db {}

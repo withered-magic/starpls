@@ -5,9 +5,9 @@ use crate::{
 use crossbeam::atomic::AtomicCell;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
-use starpls_common::{Diagnostics, File};
+use starpls_common::{parse, File};
 use starpls_intern::{impl_internable, Interned};
-use starpls_syntax::ast::{BinaryOp, UnaryOp};
+use starpls_syntax::ast::{self, AstNode, AstPtr, BinaryOp, UnaryOp};
 use std::sync::Arc;
 
 pub use crate::typeck::builtins::{intern_builtins, Builtins};
@@ -204,8 +204,8 @@ impl TyCtxt {
 }
 
 impl TyCtxtSnapshot {
-    pub fn type_of_expr(&self, db: &dyn Db, file: File, expr: ExprId) -> Ty {
-        self.gcx.lock().type_of_expr(db, file, expr)
+    pub fn infer_expr(&self, db: &dyn Db, file: File, expr: ExprId) -> Ty {
+        self.gcx.lock().infer_expr(db, file, expr)
     }
 }
 
@@ -215,7 +215,7 @@ struct GlobalCtxt {
 }
 
 impl GlobalCtxt {
-    fn type_of_expr(&mut self, db: &dyn Db, file: File, expr: ExprId) -> Ty {
+    fn infer_expr(&mut self, db: &dyn Db, file: File, expr: ExprId) -> Ty {
         if let Some(ty) = self.type_of_expr.get(&FileExprId { file, expr }).cloned() {
             return ty;
         }
@@ -234,16 +234,14 @@ impl GlobalCtxt {
                 };
                 match decls.last() {
                     Some(Declaration::Variable { id, source }) => {
-                        let source_ty = match source {
-                            Some(source) => self.type_of_expr(db, file, *source),
-                            None => self.builtins().any_ty(),
-                        };
-                        // TODO(withered-magic): Find the parent assignment node and call assign_expr_type_rec on the real lhs.
-                        self.assign_expr_type_rec(file, *id, source_ty);
-                        self.type_of_expr
-                            .get(&FileExprId { file, expr: *id })
-                            .cloned()
-                            .unwrap()
+                        return source
+                            .and_then(|source| {
+                                self.infer_source_expr_assign(db, file, source);
+                                self.type_of_expr
+                                    .get(&FileExprId { file, expr: *id })
+                                    .cloned()
+                            })
+                            .unwrap_or_else(|| self.builtins().unknown_ty())
                     }
                     Some(
                         Declaration::Function { .. }
@@ -265,20 +263,19 @@ impl GlobalCtxt {
             },
             Expr::Unary { op, expr } => op
                 .as_ref()
-                .map(|op| self.type_of_unary_expr(db, file, *expr, op.clone()))
+                .map(|op| self.infer_unary_expr(db, file, *expr, op.clone()))
                 .unwrap_or_else(|| self.builtins().unknown_ty()),
             Expr::Binary { lhs, rhs, op } => op
                 .as_ref()
-                .map(|op| self.type_of_binary_expr(db, file, *lhs, *rhs, op.clone()))
+                .map(|op| self.infer_binary_expr(db, file, *lhs, *rhs, op.clone()))
                 .unwrap_or_else(|| self.builtins().unknown_ty()),
-
             _ => self.builtins().any_ty(),
         };
         self.set_expr_type(file, expr, ty)
     }
 
-    fn type_of_unary_expr(&mut self, db: &dyn Db, file: File, expr: ExprId, op: UnaryOp) -> Ty {
-        let ty = self.type_of_expr(db, file, expr);
+    fn infer_unary_expr(&mut self, db: &dyn Db, file: File, expr: ExprId, op: UnaryOp) -> Ty {
+        let ty = self.infer_expr(db, file, expr);
         let kind = ty.kind();
         if kind == &TyKind::Any {
             return self.builtins().any_ty();
@@ -298,7 +295,7 @@ impl GlobalCtxt {
         }
     }
 
-    fn type_of_binary_expr(
+    fn infer_binary_expr(
         &mut self,
         db: &dyn Db,
         file: File,
@@ -306,8 +303,8 @@ impl GlobalCtxt {
         rhs: ExprId,
         op: BinaryOp,
     ) -> Ty {
-        let lhs = self.type_of_expr(db, file, lhs);
-        let rhs = self.type_of_expr(db, file, rhs);
+        let lhs = self.infer_expr(db, file, lhs);
+        let rhs = self.infer_expr(db, file, rhs);
         let lhs = lhs.kind();
         let rhs = rhs.kind();
 
@@ -332,8 +329,49 @@ impl GlobalCtxt {
         }
     }
 
-    fn assign_expr_type_rec(&mut self, file: File, lhs: ExprId, rhs_ty: Ty) {
-        self.set_expr_type(file, lhs, rhs_ty);
+    fn infer_source_expr_assign(&mut self, db: &dyn Db, file: File, source: ExprId) {
+        // Find the parent assignment node. This can be either an assignment statement (`x = 0`), a `for` statement (`for x in 1, 2, 3`), or
+        // a for comp clause in a list/dict comprehension (`[x + 1 for x in [1, 2, 3]]`).
+        let source_ty = self.infer_expr(db, file, source);
+        let info = lower_(db, file);
+        let source_ptr = info.source_map(db).expr_map_back.get(&source).unwrap();
+        let parent = source_ptr
+            .to_node(&parse(db, file).syntax(db))
+            .syntax()
+            .parent()
+            .unwrap();
+
+        if let Some(stmt) = ast::AssignStmt::cast(parent.clone()) {
+            if let Some(lhs) = stmt.lhs() {
+                let lhs_ptr = AstPtr::new(&lhs);
+                let expr = info.source_map(db).expr_map.get(&lhs_ptr).unwrap();
+                self.assign_expr_source_ty(db, file, *expr, source_ty);
+            }
+        }
+    }
+
+    fn assign_expr_source_ty(&mut self, db: &dyn Db, file: File, expr: ExprId, source_ty: Ty) {
+        let module = lower_(db, file);
+        match module.module(db).exprs.get(expr).unwrap() {
+            Expr::Name { .. } => {
+                self.set_expr_type(file, expr, source_ty);
+            }
+            Expr::List { exprs } | Expr::Tuple { exprs } => {
+                let source_ty = if source_ty == self.builtins().list_ty()
+                    || source_ty == self.builtins().tuple_ty()
+                    || source_ty == self.builtins().any_ty()
+                {
+                    self.builtins().any_ty()
+                } else {
+                    self.builtins().unknown_ty()
+                };
+                for expr in exprs.iter().copied() {
+                    self.assign_expr_source_ty(db, file, expr, source_ty.clone());
+                }
+            }
+            Expr::Paren { expr } => self.assign_expr_source_ty(db, file, *expr, source_ty),
+            _ => {}
+        }
     }
 
     fn set_expr_type(&mut self, file: File, expr: ExprId, ty: Ty) -> Ty {

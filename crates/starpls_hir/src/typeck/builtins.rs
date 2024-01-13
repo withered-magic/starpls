@@ -11,6 +11,7 @@ pub enum BuiltinTypeRef {
     Bool,
     Int,
     Float,
+    Function,
     Name(Name),
 }
 
@@ -34,15 +35,15 @@ pub struct BuiltinTypes {
 
 #[salsa::tracked]
 pub struct BuiltinClass {
-    name: Name,
+    pub name: Name,
     #[return_ref]
-    fields: Vec<BuiltinField>,
+    pub fields: Vec<BuiltinField>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BuiltinField {
-    name: Name,
-    type_ref: BuiltinTypeRef,
+    pub name: Name,
+    pub type_ref: BuiltinTypeRef,
 }
 
 impl BuiltinField {
@@ -71,6 +72,8 @@ pub fn builtin_field_types(db: &dyn Db, class: BuiltinClass) -> BuiltinFieldType
             BuiltinTypeRef::Bool => types.bool(db),
             BuiltinTypeRef::Int => types.int(db),
             BuiltinTypeRef::Float => types.float(db),
+            BuiltinTypeRef::Function => types.any(db),
+
             BuiltinTypeRef::Name(ref name) => match name.as_str() {
                 "string" => types.string(db),
                 "string.elems" => types.string_elems(db),

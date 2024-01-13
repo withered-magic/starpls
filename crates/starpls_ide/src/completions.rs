@@ -2,9 +2,9 @@
 
 use crate::FilePosition;
 use starpls_common::parse;
-use starpls_hir::{lower, Db, Declaration, Name, Resolver};
+use starpls_hir::{lower, BuiltinTypeRef, Db, Declaration, Name, Resolver, Ty, TyKind};
 use starpls_syntax::{
-    ast::{self, AstNode},
+    ast::{self, AstNode, AstPtr},
     parse_module,
     SyntaxKind::*,
 };
@@ -29,8 +29,13 @@ pub enum CompletionItemKind {
 }
 
 enum CompletionAnalysis {
-    Name,
+    Name(NameContext),
     NameRef(NameRefContext),
+}
+
+enum NameContext {
+    Def,
+    Dot { receiver_ty: Ty },
 }
 
 struct NameRefContext {
@@ -72,7 +77,21 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
                 add_keywords(&mut items, *is_in_def, *is_in_for);
             }
         }
-        _ => (),
+        CompletionAnalysis::Name(NameContext::Dot { receiver_ty }) => {
+            if let TyKind::BuiltinClass(class) = receiver_ty.kind() {
+                for field in class.fields(db).iter() {
+                    items.push(CompletionItem {
+                        label: field.name.to_string(),
+                        kind: match field.type_ref {
+                            BuiltinTypeRef::Function => CompletionItemKind::Function,
+                            _ => CompletionItemKind::Variable,
+                        },
+                        mode: None,
+                    })
+                }
+            }
+        }
+        _ => {}
     }
     Some(items)
 }
@@ -142,8 +161,16 @@ impl CompletionContext {
                 is_in_for,
                 is_lone_expr,
             })
-        } else if let Some(_name) = ast::Name::cast(parent.clone()) {
-            CompletionAnalysis::Name
+        } else if let Some(name) = ast::Name::cast(parent.clone()) {
+            let parent = name.syntax().parent()?;
+            CompletionAnalysis::Name(if let Some(expr) = ast::DotExpr::cast(parent) {
+                let ptr = AstPtr::new(&expr.expr()?);
+                let receiver_ty =
+                    db.infer_expr(file, *lower(db, file).source_map(db).expr_map.get(&ptr)?);
+                NameContext::Dot { receiver_ty }
+            } else {
+                NameContext::Def
+            })
         } else {
             return None;
         };

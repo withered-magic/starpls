@@ -3,7 +3,7 @@ use completions::CompletionItem;
 use dashmap::{mapref::entry::Entry, DashMap};
 use salsa::ParallelDatabase;
 use starpls_common::{Db, Diagnostic, File, FileId};
-use starpls_hir::{intern_builtins, TyCtxt, TyCtxtSnapshot};
+use starpls_hir::{ExprId, GlobalCtxt, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use std::sync::Arc;
 
@@ -13,13 +13,14 @@ mod util;
 pub mod completions;
 pub mod hover;
 
-pub type Cancellable<T> = Result<T, salsa::Cancelled>;
+pub type Cancellable<T> = Result<T, starpls_hir::Cancelled>;
 
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, starpls_hir::Jar)]
 pub(crate) struct Database {
     storage: salsa::Storage<Self>,
     files: Arc<DashMap<FileId, File>>,
+    gcx: Arc<GlobalCtxt>,
 }
 
 impl salsa::Database for Database {}
@@ -29,6 +30,7 @@ impl salsa::ParallelDatabase for Database {
         salsa::Snapshot::new(Database {
             storage: self.storage.snapshot(),
             files: self.files.clone(),
+            gcx: self.gcx.clone(),
         })
     }
 }
@@ -48,6 +50,12 @@ impl starpls_common::Db for Database {
     }
 }
 
+impl starpls_hir::Db for Database {
+    fn infer_expr(&self, file: File, expr: ExprId) -> Ty {
+        self.gcx.with_tcx(self, |tcx| tcx.infer_expr(file, expr))
+    }
+}
+
 /// A batch of changes to be applied to the database. For now, this consists simply of a map of changed file IDs to
 /// their updated contents.
 #[derive(Default)]
@@ -64,19 +72,17 @@ impl Change {
 /// Provides the main API for querying facts about the source code. This wraps the main `Database` struct.
 pub struct Analysis {
     db: Database,
-    tcx: TyCtxt,
 }
 
 impl Analysis {
     pub fn new() -> Self {
         Self {
             db: Default::default(),
-            tcx: TyCtxt::new_with_builtins(intern_builtins()),
         }
     }
 
     pub fn apply_change(&mut self, change: Change) {
-        self.tcx.cancel();
+        // self.tcx.cancel();
         for (path, contents) in change.changed_files {
             self.db.set_file_contents(path, contents);
         }
@@ -85,14 +91,12 @@ impl Analysis {
     pub fn snapshot(&self) -> AnalysisSnapshot {
         AnalysisSnapshot {
             db: self.db.snapshot(),
-            tcx: self.tcx.snapshot(),
         }
     }
 }
 
 pub struct AnalysisSnapshot {
     db: salsa::Snapshot<Database>,
-    tcx: TyCtxtSnapshot,
 }
 
 impl AnalysisSnapshot {
@@ -112,7 +116,7 @@ impl AnalysisSnapshot {
     }
 
     pub fn hover(&self, pos: FilePosition) -> Cancellable<Option<Hover>> {
-        self.query_with_tcx(|db, tcx| hover::hover(db, tcx, pos))
+        self.query(|db| hover::hover(db, pos))
     }
 
     pub fn line_index(&self, file_id: FileId) -> Cancellable<Option<LineIndex>> {
@@ -132,14 +136,7 @@ impl AnalysisSnapshot {
     where
         F: FnOnce(&Database) -> T + std::panic::UnwindSafe,
     {
-        salsa::Cancelled::catch(|| f(&self.db))
-    }
-
-    fn query_with_tcx<F, T>(&self, f: F) -> Cancellable<T>
-    where
-        F: FnOnce(&Database, &TyCtxtSnapshot) -> T + std::panic::UnwindSafe,
-    {
-        salsa::Cancelled::catch(|| f(&self.db, &self.tcx))
+        starpls_hir::Cancelled::catch(|| f(&self.db))
     }
 }
 

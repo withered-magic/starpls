@@ -53,7 +53,7 @@ impl<'a> LoweringContext<'a> {
                 Stmt::If { .. } => Diagnostics::push(
                     self.db,
                     Diagnostic {
-                        message: "Top-level if statements are not allowed".to_string(),
+                        message: "Starlark does not allow top-level if statements".to_string(),
                         severity: Severity::Error,
                         range: FileRange {
                             file_id: self.file.id(self.db),
@@ -64,7 +64,7 @@ impl<'a> LoweringContext<'a> {
                 Stmt::For { .. } => Diagnostics::push(
                     self.db,
                     Diagnostic {
-                        message: "Top-level for statements are not allowed".to_string(),
+                        message: "Starlark does not allow top-level for statements".to_string(),
                         severity: Severity::Error,
                         range: FileRange {
                             file_id: self.file.id(self.db),

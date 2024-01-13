@@ -1,6 +1,6 @@
 use crate::{util::pick_best_token, Database, FilePosition};
-use starpls_common::{parse, Db};
-use starpls_hir::{lower, TyCtxtSnapshot};
+use starpls_common::{parse, Db as _};
+use starpls_hir::{lower, Db as _};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr},
     SyntaxKind::*,
@@ -28,11 +28,7 @@ impl From<String> for Hover {
     }
 }
 
-pub(crate) fn hover(
-    db: &Database,
-    tcx: &TyCtxtSnapshot,
-    FilePosition { file_id, pos }: FilePosition,
-) -> Option<Hover> {
+pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) -> Option<Hover> {
     let file = db.get_file(file_id)?;
     let parse = parse(db, file);
     let token = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
@@ -63,7 +59,7 @@ pub(crate) fn hover(
     if let Some(name_ref) = ast::NameRef::cast(parent) {
         let expr_ptr = AstPtr::new(&ast::Expression::cast(name_ref.syntax().clone())?);
         let expr = *lower(db, file).source_map(db).expr_map.get(&expr_ptr)?;
-        let ty = tcx.infer_expr(db, file, expr);
+        let ty = db.infer_expr(file, expr);
         let mut text = String::new();
         text.push_str("```text\n");
         text.push_str("(variable) ");

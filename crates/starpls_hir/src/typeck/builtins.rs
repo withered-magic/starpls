@@ -1,287 +1,123 @@
 use crate::{
-    typeck::{
-        BuiltinField, BuiltinFunction, BuiltinType, Class, Fields, FunctionKind, Ty, TyKind,
-        TypeRef,
-    },
-    Name,
+    typeck::{Ty, TyKind},
+    Db, Name,
 };
 
-pub struct Builtins {
-    any_ty: Ty,
-    unbound_ty: Ty,
-    unknown_ty: Ty,
-    none_ty: Ty,
-    bool_ty: Ty,
-    int_ty: Ty,
-    float_ty: Ty,
-    string_ty: Ty,
-    string_elems_ty: Ty,
-    bytes_ty: Ty,
-    bytes_elems_ty: Ty,
-    list_ty: Ty,
-    tuple_ty: Ty,
-    dict_ty: Ty,
+// A reference to a builtin type. This is mainly used to avoid circular dependencies when
+// constructing the types of a class's fields.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BuiltinTypeRef {
+    None,
+    Bool,
+    Int,
+    Float,
+    Name(Name),
 }
 
-impl Builtins {
-    pub fn any_ty(&self) -> Ty {
-        self.any_ty.clone()
-    }
+#[salsa::tracked]
+pub struct BuiltinTypes {
+    pub(crate) any: Ty,
+    pub(crate) unbound: Ty,
+    pub(crate) unknown: Ty,
+    pub(crate) none: Ty,
+    pub(crate) bool: Ty,
+    pub(crate) int: Ty,
+    pub(crate) float: Ty,
+    pub(crate) string: Ty,
+    pub(crate) string_elems: Ty,
+    pub(crate) bytes: Ty,
+    pub(crate) bytes_elems: Ty,
+    pub(crate) list: Ty,
+    pub(crate) tuple: Ty,
+    pub(crate) dict: Ty,
+}
 
-    pub fn unbound_ty(&self) -> Ty {
-        self.unbound_ty.clone()
-    }
+#[salsa::tracked]
+pub struct BuiltinClass {
+    name: Name,
+    #[return_ref]
+    fields: Vec<BuiltinField>,
+}
 
-    pub fn unknown_ty(&self) -> Ty {
-        self.unknown_ty.clone()
-    }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BuiltinField {
+    name: Name,
+    type_ref: BuiltinTypeRef,
+}
 
-    pub fn none_ty(&self) -> Ty {
-        self.none_ty.clone()
-    }
-
-    pub fn bool_ty(&self) -> Ty {
-        self.bool_ty.clone()
-    }
-
-    pub fn int_ty(&self) -> Ty {
-        self.int_ty.clone()
-    }
-
-    pub fn float_ty(&self) -> Ty {
-        self.float_ty.clone()
-    }
-
-    pub fn string_ty(&self) -> Ty {
-        self.string_ty.clone()
-    }
-
-    pub fn string_elems_ty(&self) -> Ty {
-        self.string_elems_ty.clone()
-    }
-
-    pub fn bytes_ty(&self) -> Ty {
-        self.bytes_ty.clone()
-    }
-
-    pub fn bytes_elems_ty(&self) -> Ty {
-        self.bytes_elems_ty.clone()
-    }
-
-    pub fn list_ty(&self) -> Ty {
-        self.list_ty.clone()
-    }
-
-    pub fn tuple_ty(&self) -> Ty {
-        self.tuple_ty.clone()
-    }
-
-    pub fn dict_ty(&self) -> Ty {
-        self.dict_ty.clone()
+impl BuiltinField {
+    fn new_inline(name: &'static str, type_ref: BuiltinTypeRef) -> Self {
+        Self {
+            name: Name::new_inline(name),
+            type_ref,
+        }
     }
 }
 
-pub fn intern_builtins() -> Builtins {
-    Builtins {
-        any_ty: intern_any_ty(),
-        unbound_ty: intern_unbound_ty(),
-        unknown_ty: intern_unknown_ty(),
-        none_ty: intern_none_ty(),
-        bool_ty: intern_bool_ty(),
-        int_ty: intern_int_ty(),
-        float_ty: intern_float_ty(),
-        string_ty: intern_string_ty(),
-        string_elems_ty: intern_string_elems_ty(),
-        bytes_ty: intern_bytes_ty(),
-        bytes_elems_ty: intern_bytes_elems_ty(),
-        list_ty: intern_list_ty(),
-        tuple_ty: intern_tuple_ty(),
-        dict_ty: intern_dict_ty(),
-    }
+#[salsa::tracked]
+pub struct BuiltinFieldTypes {
+    #[return_ref]
+    field_tys: Vec<Ty>,
 }
 
-fn intern_any_ty() -> Ty {
-    TyKind::Any.intern()
+#[salsa::tracked]
+pub fn builtin_field_types(db: &dyn Db, class: BuiltinClass) -> BuiltinFieldTypes {
+    let types = builtin_types(db);
+    let field_tys = class
+        .fields(db)
+        .iter()
+        .map(|field| match field.type_ref {
+            BuiltinTypeRef::None => types.none(db),
+            BuiltinTypeRef::Bool => types.bool(db),
+            BuiltinTypeRef::Int => types.int(db),
+            BuiltinTypeRef::Float => types.float(db),
+            BuiltinTypeRef::Name(ref name) => match name.as_str() {
+                "string" => types.string(db),
+                "string.elems" => types.string_elems(db),
+                "bytes" => types.bytes(db),
+                "bytes.elems" => types.bytes_elems(db),
+                "list" => types.list(db),
+                "tuple" => types.tuple(db),
+                "dict" => types.dict(db),
+                _ => panic!("undefined builtin type: {}", name.as_str()),
+            },
+        })
+        .collect();
+    BuiltinFieldTypes::new(db, field_tys)
 }
 
-fn intern_unbound_ty() -> Ty {
-    TyKind::Unbound.intern()
+#[salsa::tracked]
+pub struct BuiltinFunction {
+    param_type_refs: Vec<BuiltinTypeRef>,
+    ret_type_ref: BuiltinTypeRef,
 }
 
-fn intern_unknown_ty() -> Ty {
-    TyKind::Unknown.intern()
+#[salsa::tracked]
+pub(crate) fn builtin_types(db: &dyn Db) -> BuiltinTypes {
+    BuiltinTypes::new(
+        db,
+        TyKind::Any.intern(),
+        TyKind::Unbound.intern(),
+        TyKind::Unknown.intern(),
+        TyKind::None.intern(),
+        TyKind::Bool.intern(),
+        TyKind::Int.intern(),
+        TyKind::Float.intern(),
+        intern_class(db, "string"),
+        intern_class(db, "string.elems"),
+        intern_class(db, "bytes"),
+        intern_class(db, "bytes.elems"),
+        intern_class(db, "list"),
+        intern_class(db, "tuple"),
+        intern_class(db, "dict"),
+    )
 }
 
-fn intern_none_ty() -> Ty {
-    TyKind::None.intern()
-}
-
-fn intern_bool_ty() -> Ty {
-    TyKind::Bool.intern()
-}
-
-fn intern_int_ty() -> Ty {
-    TyKind::Int.intern()
-}
-
-fn intern_float_ty() -> Ty {
-    TyKind::Float.intern()
-}
-
-fn intern_string_ty() -> Ty {
-    let mut fields = Vec::new();
-    add_method(
-        &mut fields,
-        "capitalize",
-        Vec::new(),
-        Some(BuiltinType::String.into()),
-    );
-    add_method(
-        &mut fields,
-        "count",
-        vec![BuiltinType::String.into()],
-        Some(BuiltinType::Int.into()),
-    );
-    add_method(
-        &mut fields,
-        "elems",
-        Vec::new(),
-        Some(BuiltinType::StringElems.into()),
-    );
-    add_method(
-        &mut fields,
-        "endswith",
-        vec![BuiltinType::String.into()],
-        Some(BuiltinType::Bool.into()),
-    );
-    add_method(
-        &mut fields,
-        "find",
-        vec![BuiltinType::String.into()],
-        Some(BuiltinType::Int.into()),
-    );
-    // add_method(&mut fields, "format");
-    // add_method(&mut fields, "index");
-    // add_method(&mut fields, "isalnum");
-    // add_method(&mut fields, "isdigit");
-    // add_method(&mut fields, "islower");
-    // add_method(&mut fields, "isspace");
-    // add_method(&mut fields, "istitle");
-    // add_method(&mut fields, "isupper");
-    // add_method(&mut fields, "join");
-    // add_method(&mut fields, "lower");
-    // add_method(&mut fields, "lstrip");
-    // add_method(&mut fields, "partition");
-    // add_method(&mut fields, "removeprefix");
-    // add_method(&mut fields, "replace");
-    // add_method(&mut fields, "rfind");
-    // add_method(&mut fields, "rindex");
-    // add_method(&mut fields, "rpartition");
-    // add_method(&mut fields, "rsplit");
-    // add_method(&mut fields, "rstrip");
-    // add_method(&mut fields, "split");
-    // add_method(&mut fields, "splitlines");
-    // add_method(&mut fields, "startswith");
-    // add_method(&mut fields, "strip");
-    // add_method(&mut fields, "title");
-    // add_method(&mut fields, "upper");
-    intern_builtin_class("string", fields)
-}
-
-fn intern_string_elems_ty() -> Ty {
-    intern_builtin_class("string.elems", Vec::new())
-}
-
-fn intern_bytes_ty() -> Ty {
-    let mut fields = Vec::new();
-    // add_method(&mut fields, "elems");
-    intern_builtin_class("bytes", fields)
-}
-
-fn intern_bytes_elems_ty() -> Ty {
-    intern_builtin_class("bytes.elems", Vec::new())
-}
-
-fn intern_list_ty() -> Ty {
-    let mut fields = Vec::new();
-    // add_method(&mut fields, "append");
-    // add_method(&mut fields, "clear");
-    // add_method(&mut fields, "extend");
-    // add_method(&mut fields, "index");
-    // add_method(&mut fields, "insert");
-    // add_method(&mut fields, "pop");
-    // add_method(&mut fields, "remove");
-    intern_builtin_class("list", fields)
-}
-
-fn intern_tuple_ty() -> Ty {
-    let mut fields = Vec::new();
-    intern_builtin_class("tuple", fields)
-}
-
-fn intern_dict_ty() -> Ty {
-    let mut fields = Vec::new();
-    add_method(
-        &mut fields,
-        "clear",
-        Vec::new(),
-        Some(BuiltinType::None.into()),
-    );
-    add_method(&mut fields, "get", vec![TypeRef::Any], Some(TypeRef::Any));
-    add_method(
-        &mut fields,
-        "items",
-        Vec::new(),
-        Some(BuiltinType::List.into()),
-    );
-    add_method(
-        &mut fields,
-        "keys",
-        Vec::new(),
-        Some(BuiltinType::List.into()),
-    );
-    add_method(&mut fields, "pop", vec![TypeRef::Any], Some(TypeRef::Any));
-    add_method(
-        &mut fields,
-        "popitem",
-        Vec::new(),
-        Some(BuiltinType::Tuple.into()),
-    );
-    add_method(
-        &mut fields,
-        "setdefault",
-        vec![TypeRef::Any],
-        Some(TypeRef::Any),
-    );
-    add_method(
-        &mut fields,
-        "values",
-        Vec::new(),
-        Some(BuiltinType::List.into()),
-    );
-    intern_builtin_class("dict", fields)
-}
-
-fn add_method(
-    methods: &mut Vec<BuiltinField>,
-    name: &'static str,
-    params: Vec<TypeRef>,
-    ret_type_ref: Option<TypeRef>,
-) {
-    methods.push(BuiltinField {
-        name: Name::new_inline(name),
-        ty: TyKind::Function(FunctionKind::Builtin(BuiltinFunction {
-            params: params.into_boxed_slice(),
-            ret_type_ref,
-        }))
-        .intern(),
-    })
-}
-
-fn intern_builtin_class(name: &'static str, fields: Vec<BuiltinField>) -> Ty {
-    TyKind::Class(Class {
-        name: Name::new_inline(name),
-        fields: Fields::Builtin(fields.into_boxed_slice()),
-    })
+fn intern_class(db: &dyn Db, name: &'static str) -> Ty {
+    TyKind::BuiltinClass(BuiltinClass::new(
+        db,
+        Name::new_inline(name),
+        vec![BuiltinField::new_inline("len", BuiltinTypeRef::Int)],
+    ))
     .intern()
 }

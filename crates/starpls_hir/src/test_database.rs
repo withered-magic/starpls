@@ -2,6 +2,8 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use starpls_common::{File, FileId};
 use std::sync::Arc;
 
+use crate::{Ty, TyKind};
+
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, crate::Jar)]
 pub(crate) struct TestDatabase {
@@ -23,5 +25,11 @@ impl starpls_common::Db for TestDatabase {
 
     fn get_file(&self, file_id: FileId) -> Option<File> {
         self.files.get(&file_id).map(|file| *file)
+    }
+}
+
+impl crate::Db for TestDatabase {
+    fn infer_expr(&self, _file: File, _expr: crate::def::ExprId) -> Ty {
+        TyKind::Any.intern()
     }
 }

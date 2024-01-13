@@ -2,8 +2,8 @@ use crate::def::ModuleSourceMap;
 use starpls_common::{parse, File, Parse};
 
 pub use crate::{
-    def::{resolver::Resolver, scope::module_scopes, Declaration, Module, Name},
-    typeck::{intern_builtins, Builtins, FileExprId, TyCtxt, TyCtxtSnapshot},
+    def::{resolver::Resolver, scope::module_scopes, Declaration, ExprId, Module, Name},
+    typeck::{Cancelled, FileExprId, GlobalCtxt, Ty, TyCtxt, TyKind, TypeRef},
 };
 
 mod api;
@@ -27,9 +27,17 @@ pub struct Jar(
     def::scope::ModuleScopes,
     def::scope::module_scopes,
     def::scope::module_scopes_query,
+    typeck::builtins::BuiltinClass,
+    typeck::builtins::BuiltinFieldTypes,
+    typeck::builtins::BuiltinFunction,
+    typeck::builtins::BuiltinTypes,
+    typeck::builtins::builtin_field_types,
+    typeck::builtins::builtin_types,
 );
 
-pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {}
+pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
+    fn infer_expr(&self, file: File, expr: ExprId) -> Ty;
+}
 
 #[salsa::tracked]
 fn lower_query(db: &dyn Db, file: File, parse: Parse) -> ModuleInfo {
@@ -42,5 +50,3 @@ pub fn lower(db: &dyn Db, file: File) -> ModuleInfo {
     let parse = parse(db, file);
     lower_query(db, file, parse)
 }
-
-impl<DB> Db for DB where DB: ?Sized + salsa::DbWithJar<Jar> + starpls_common::Db {}

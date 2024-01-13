@@ -1,6 +1,8 @@
 use crate::{
     def::{Expr, ExprId, Literal, ParamId},
-    lower as lower_, Db, Declaration, Name, Resolver,
+    lower as lower_,
+    typeck::builtins::{BuiltinClass, BuiltinFunction, BuiltinTypes},
+    Db, Declaration, Name, Resolver,
 };
 use crossbeam::atomic::AtomicCell;
 use parking_lot::Mutex;
@@ -8,12 +10,16 @@ use rustc_hash::FxHashMap;
 use starpls_common::{parse, File};
 use starpls_intern::{impl_internable, Interned};
 use starpls_syntax::ast::{self, AstNode, AstPtr, BinaryOp, UnaryOp};
-use std::sync::Arc;
+use std::{
+    panic::{self, UnwindSafe},
+    sync::Arc,
+};
 
-pub use crate::typeck::builtins::{intern_builtins, Builtins};
+use self::builtins::builtin_types;
 
-mod builtins;
 mod lower;
+
+pub(crate) mod builtins;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FileExprId {
@@ -23,25 +29,47 @@ pub struct FileExprId {
 
 #[derive(Debug)]
 
-pub struct Cancelled;
+pub enum Cancelled {
+    Salsa(salsa::Cancelled),
+    Typecheck,
+}
 
 impl Cancelled {
     pub(crate) fn throw(self) -> ! {
         std::panic::resume_unwind(Box::new(self))
     }
+
+    pub fn catch<F, T>(f: F) -> Result<T, Cancelled>
+    where
+        F: FnOnce() -> T + UnwindSafe,
+    {
+        match panic::catch_unwind(f) {
+            Ok(t) => Ok(t),
+            Err(payload) => match payload.downcast::<salsa::Cancelled>() {
+                Ok(cancelled) => Err(Cancelled::Salsa(*cancelled)),
+                Err(payload) => match payload.downcast::<Cancelled>() {
+                    Ok(cancelled) => Err(*cancelled),
+                    Err(payload) => panic::resume_unwind(payload),
+                },
+            },
+        }
+    }
 }
 
 impl std::fmt::Display for Cancelled {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("type inference cancelled")
+        match self {
+            err @ Cancelled::Salsa(_) => err.fmt(f),
+            Cancelled::Typecheck => f.write_str("type inference cancelled"),
+        }
     }
 }
 
 impl std::error::Error for Cancelled {}
 
+#[derive(Default)]
 struct SharedState {
     cancelled: AtomicCell<bool>,
-    builtins: Builtins,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -92,8 +120,8 @@ impl std::fmt::Display for Ty {
             TyKind::Bool => f.write_str("bool"),
             TyKind::Int => f.write_str("int"),
             TyKind::Float => f.write_str("float"),
-            TyKind::Function(_) => f.write_str("function"),
-            TyKind::Class(class) => f.write_str(&class.name.as_str()),
+            TyKind::BuiltinFunction(_) => f.write_str("function"),
+            TyKind::BuiltinClass(class) => f.write_str("class"),
         }
     }
 }
@@ -107,236 +135,170 @@ pub enum TyKind {
     Bool,
     Int,
     Float,
-    Function(FunctionKind),
-    /// An instantiable type with methods.
-    Class(Class),
+    BuiltinFunction(BuiltinFunction),
+    BuiltinClass(BuiltinClass),
 }
 
 impl_internable!(TyKind);
 
 impl TyKind {
-    fn intern(self) -> Ty {
+    pub fn intern(self) -> Ty {
         Ty(Interned::new(self))
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum FunctionKind {
-    Builtin(BuiltinFunction),
-    Source(Function),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BuiltinFunction {
-    // Parameters for builtin functions are positional only and don't have names.
-    params: Box<[TypeRef]>,
-    ret_type_ref: Option<TypeRef>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Function {
-    name: Option<Name>,
-    params: Box<[ParamId]>,
-    ret_type_ref: Option<TypeRef>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Class {
-    name: Name,
-    fields: Fields,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Fields {
-    Builtin(Box<[BuiltinField]>),
-    Source(Box<[Field]>),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BuiltinField {
-    name: Name,
-    ty: Ty,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Field {
-    name: Name,
-    type_ref: TypeRef,
-}
-
-pub struct TyCtxt {
+#[derive(Default)]
+pub struct GlobalCtxt {
     shared_state: Arc<SharedState>,
-    gcx: Arc<Mutex<GlobalCtxt>>,
-}
-
-pub struct TyCtxtSnapshot {
-    gcx: Arc<Mutex<GlobalCtxt>>,
-}
-
-impl TyCtxt {
-    pub fn new_with_builtins(builtins: Builtins) -> Self {
-        let shared_state = Arc::new(SharedState {
-            builtins,
-            cancelled: Default::default(),
-        });
-        let gcx = Arc::new(Mutex::new(GlobalCtxt {
-            shared_state: Arc::clone(&shared_state),
-            type_of_expr: Default::default(),
-        }));
-        Self { shared_state, gcx }
-    }
-
-    pub fn cancel(&self) {
-        self.shared_state.cancelled.store(true);
-        let mut gcx = self.gcx.lock();
-        self.shared_state.cancelled.store(false);
-        *gcx = GlobalCtxt {
-            shared_state: Arc::clone(&self.shared_state),
-            type_of_expr: FxHashMap::default(),
-        }
-    }
-
-    pub fn snapshot(&self) -> TyCtxtSnapshot {
-        TyCtxtSnapshot {
-            gcx: Arc::clone(&self.gcx),
-        }
-    }
-}
-
-impl TyCtxtSnapshot {
-    pub fn infer_expr(&self, db: &dyn Db, file: File, expr: ExprId) -> Ty {
-        self.gcx.lock().infer_expr(db, file, expr)
-    }
-}
-
-struct GlobalCtxt {
-    shared_state: Arc<SharedState>,
-    type_of_expr: FxHashMap<FileExprId, Ty>,
+    type_of_expr: Arc<Mutex<FxHashMap<FileExprId, Ty>>>,
 }
 
 impl GlobalCtxt {
-    fn infer_expr(&mut self, db: &dyn Db, file: File, expr: ExprId) -> Ty {
+    pub fn cancel(&self) {
+        self.shared_state.cancelled.store(true);
+        let mut type_of_exr = self.type_of_expr.lock();
+        self.shared_state.cancelled.store(false);
+        *type_of_exr = FxHashMap::default();
+    }
+
+    pub fn with_tcx<F, T>(&self, db: &dyn Db, mut f: F) -> T
+    where
+        F: FnMut(&mut TyCtxt) -> T + std::panic::UnwindSafe,
+    {
+        let mut type_of_expr = self.type_of_expr.lock();
+        let mut tcx = TyCtxt {
+            db,
+            types: builtin_types(db),
+            shared_state: Arc::clone(&self.shared_state),
+            type_of_expr: &mut type_of_expr,
+        };
+        f(&mut tcx)
+    }
+}
+
+pub struct TyCtxt<'a> {
+    db: &'a dyn Db,
+    types: BuiltinTypes,
+    shared_state: Arc<SharedState>,
+    type_of_expr: &'a mut FxHashMap<FileExprId, Ty>,
+}
+
+impl TyCtxt<'_> {
+    pub fn infer_expr(&mut self, file: File, expr: ExprId) -> Ty {
         if let Some(ty) = self.type_of_expr.get(&FileExprId { file, expr }).cloned() {
             return ty;
         }
 
         if self.shared_state.cancelled.load() {
-            Cancelled.throw();
+            Cancelled::Typecheck.throw()
         }
 
-        let info = lower_(db, file);
-        let ty = match &info.module(db).exprs[expr] {
+        let info = lower_(self.db, file);
+        let ty = match &info.module(self.db).exprs[expr] {
             Expr::Name { name } => {
-                let resolver = Resolver::new_for_expr(db, file, expr);
+                let resolver = Resolver::new_for_expr(self.db, file, expr);
                 let decls = match resolver.resolve_name(name) {
                     Some(decls) => decls,
-                    None => return self.set_expr_type(file, expr, self.builtins().unbound_ty()),
+                    None => return self.set_expr_type(file, expr, self.types.unbound(self.db)),
                 };
                 match decls.last() {
                     Some(Declaration::Variable { id, source }) => {
                         return source
                             .and_then(|source| {
-                                self.infer_source_expr_assign(db, file, source);
+                                self.infer_source_expr_assign(file, source);
                                 self.type_of_expr
                                     .get(&FileExprId { file, expr: *id })
                                     .cloned()
                             })
-                            .unwrap_or_else(|| self.builtins().unknown_ty())
+                            .unwrap_or_else(|| self.types.unknown(self.db))
                     }
                     Some(
                         Declaration::Function { .. }
                         | Declaration::Parameter { .. }
                         | Declaration::LoadItem {},
-                    ) => self.builtins().any_ty(),
-                    _ => self.builtins().unbound_ty(),
+                    ) => self.types.any(self.db),
+                    _ => self.types.unbound(self.db),
                 }
             }
-            Expr::List { .. } | Expr::ListComp { .. } => self.builtins().list_ty(),
-            Expr::Dict { .. } | Expr::DictComp { .. } => self.builtins().dict_ty(),
+            Expr::List { .. } | Expr::ListComp { .. } => self.types.list(self.db),
+            Expr::Dict { .. } | Expr::DictComp { .. } => self.types.dict(self.db),
             Expr::Literal { literal } => match literal {
-                Literal::Int => self.builtins().int_ty(),
-                Literal::Float => self.builtins().float_ty(),
-                Literal::String => self.builtins().string_ty(),
-                Literal::Bytes => self.builtins().bytes_ty(),
-                Literal::Bool => self.builtins().bool_ty(),
-                Literal::None => self.builtins().none_ty(),
+                Literal::Int => self.types.int(self.db),
+                Literal::Float => self.types.float(self.db),
+                Literal::String => self.types.string(self.db),
+                Literal::Bytes => self.types.bytes(self.db),
+                Literal::Bool => self.types.bool(self.db),
+                Literal::None => self.types.none(self.db),
             },
             Expr::Unary { op, expr } => op
                 .as_ref()
-                .map(|op| self.infer_unary_expr(db, file, *expr, op.clone()))
-                .unwrap_or_else(|| self.builtins().unknown_ty()),
+                .map(|op| self.infer_unary_expr(file, *expr, op.clone()))
+                .unwrap_or_else(|| self.types.unknown(self.db)),
             Expr::Binary { lhs, rhs, op } => op
                 .as_ref()
-                .map(|op| self.infer_binary_expr(db, file, *lhs, *rhs, op.clone()))
-                .unwrap_or_else(|| self.builtins().unknown_ty()),
-            _ => self.builtins().any_ty(),
+                .map(|op| self.infer_binary_expr(file, *lhs, *rhs, op.clone()))
+                .unwrap_or_else(|| self.types.unknown(self.db)),
+            _ => self.types.any(self.db),
         };
         self.set_expr_type(file, expr, ty)
     }
 
-    fn infer_unary_expr(&mut self, db: &dyn Db, file: File, expr: ExprId, op: UnaryOp) -> Ty {
-        let ty = self.infer_expr(db, file, expr);
+    fn infer_unary_expr(&mut self, file: File, expr: ExprId, op: UnaryOp) -> Ty {
+        let ty = self.infer_expr(file, expr);
         let kind = ty.kind();
         if kind == &TyKind::Any {
-            return self.builtins().any_ty();
+            return self.types.any(self.db);
         }
 
         match op {
             UnaryOp::Arith(_) => match kind {
-                TyKind::Int => self.builtins().int_ty(),
-                TyKind::Float => self.builtins().float_ty(),
-                _ => self.builtins().unknown_ty(),
+                TyKind::Int => self.types.int(self.db),
+                TyKind::Float => self.types.float(self.db),
+                _ => self.types.unknown(self.db),
             },
             UnaryOp::Inv => match kind {
-                TyKind::Int => self.builtins().int_ty(),
-                _ => self.builtins().unknown_ty(),
+                TyKind::Int => self.types.int(self.db),
+                _ => self.types.unknown(self.db),
             },
-            UnaryOp::Not => self.builtins().bool_ty(),
+            UnaryOp::Not => self.types.bool(self.db),
         }
     }
 
-    fn infer_binary_expr(
-        &mut self,
-        db: &dyn Db,
-        file: File,
-        lhs: ExprId,
-        rhs: ExprId,
-        op: BinaryOp,
-    ) -> Ty {
-        let lhs = self.infer_expr(db, file, lhs);
-        let rhs = self.infer_expr(db, file, rhs);
+    fn infer_binary_expr(&mut self, file: File, lhs: ExprId, rhs: ExprId, op: BinaryOp) -> Ty {
+        let lhs = self.infer_expr(file, lhs);
+        let rhs = self.infer_expr(file, rhs);
         let lhs = lhs.kind();
         let rhs = rhs.kind();
 
         if lhs == &TyKind::Any || rhs == &TyKind::Any {
-            return self.builtins().any_ty();
+            return self.types.any(self.db);
         }
 
         match op {
             // TODO(withered-magic): Handle string interoplation with "%".
             BinaryOp::Arith(_) => match (lhs, rhs) {
-                (TyKind::Int, TyKind::Int) => self.builtins().int_ty(),
+                (TyKind::Int, TyKind::Int) => self.types.int(self.db),
                 (TyKind::Float, TyKind::Int)
                 | (TyKind::Int, TyKind::Float)
-                | (TyKind::Float, TyKind::Float) => self.builtins().float_ty(),
-                _ => self.builtins().unknown_ty(),
+                | (TyKind::Float, TyKind::Float) => self.types.float(self.db),
+                _ => self.types.unknown(self.db),
             },
             BinaryOp::Bitwise(_) => match (lhs, rhs) {
-                (TyKind::Int, TyKind::Int) => self.builtins().int_ty(),
-                _ => self.builtins().unknown_ty(),
+                (TyKind::Int, TyKind::Int) => self.types.int(self.db),
+                _ => self.types.unknown(self.db),
             },
-            _ => self.builtins().bool_ty(),
+            _ => self.types.bool(self.db),
         }
     }
 
-    fn infer_source_expr_assign(&mut self, db: &dyn Db, file: File, source: ExprId) {
+    fn infer_source_expr_assign(&mut self, file: File, source: ExprId) {
         // Find the parent assignment node. This can be either an assignment statement (`x = 0`), a `for` statement (`for x in 1, 2, 3`), or
         // a for comp clause in a list/dict comprehension (`[x + 1 for x in [1, 2, 3]]`).
-        let source_ty = self.infer_expr(db, file, source);
-        let info = lower_(db, file);
-        let source_ptr = info.source_map(db).expr_map_back.get(&source).unwrap();
+        let source_ty = self.infer_expr(file, source);
+        let info = lower_(self.db, file);
+        let source_ptr = info.source_map(self.db).expr_map_back.get(&source).unwrap();
         let parent = source_ptr
-            .to_node(&parse(db, file).syntax(db))
+            .to_node(&parse(self.db, file).syntax(self.db))
             .syntax()
             .parent()
             .unwrap();
@@ -344,32 +306,32 @@ impl GlobalCtxt {
         if let Some(stmt) = ast::AssignStmt::cast(parent.clone()) {
             if let Some(lhs) = stmt.lhs() {
                 let lhs_ptr = AstPtr::new(&lhs);
-                let expr = info.source_map(db).expr_map.get(&lhs_ptr).unwrap();
-                self.assign_expr_source_ty(db, file, *expr, source_ty);
+                let expr = info.source_map(self.db).expr_map.get(&lhs_ptr).unwrap();
+                self.assign_expr_source_ty(file, *expr, source_ty);
             }
         }
     }
 
-    fn assign_expr_source_ty(&mut self, db: &dyn Db, file: File, expr: ExprId, source_ty: Ty) {
-        let module = lower_(db, file);
-        match module.module(db).exprs.get(expr).unwrap() {
+    fn assign_expr_source_ty(&mut self, file: File, expr: ExprId, source_ty: Ty) {
+        let module = lower_(self.db, file);
+        match module.module(self.db).exprs.get(expr).unwrap() {
             Expr::Name { .. } => {
                 self.set_expr_type(file, expr, source_ty);
             }
             Expr::List { exprs } | Expr::Tuple { exprs } => {
-                let source_ty = if source_ty == self.builtins().list_ty()
-                    || source_ty == self.builtins().tuple_ty()
-                    || source_ty == self.builtins().any_ty()
+                let source_ty = if source_ty == self.types.list(self.db)
+                    || source_ty == self.types.tuple(self.db)
+                    || source_ty == self.types.any(self.db)
                 {
-                    self.builtins().any_ty()
+                    self.types.any(self.db)
                 } else {
-                    self.builtins().unknown_ty()
+                    self.types.unknown(self.db)
                 };
                 for expr in exprs.iter().copied() {
-                    self.assign_expr_source_ty(db, file, expr, source_ty.clone());
+                    self.assign_expr_source_ty(file, expr, source_ty.clone());
                 }
             }
-            Expr::Paren { expr } => self.assign_expr_source_ty(db, file, *expr, source_ty),
+            Expr::Paren { expr } => self.assign_expr_source_ty(file, *expr, source_ty),
             _ => {}
         }
     }
@@ -378,9 +340,5 @@ impl GlobalCtxt {
         self.type_of_expr
             .insert(FileExprId { file, expr }, ty.clone());
         ty
-    }
-
-    fn builtins(&self) -> &Builtins {
-        &self.shared_state.builtins
     }
 }

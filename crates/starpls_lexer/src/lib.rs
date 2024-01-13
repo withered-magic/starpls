@@ -759,6 +759,11 @@ impl Cursor<'_> {
             false
         };
 
+        // TODO(withered-magic): Loop on self.first() instead.
+        if self.first() == '\n' {
+            return (false, triple_quoted);
+        }
+
         let mut closing_streak = 0;
         while let Some(c) = self.bump() {
             match c {
@@ -775,6 +780,9 @@ impl Cursor<'_> {
                 _ => {
                     closing_streak = 0;
                 }
+            }
+            if self.first() == '\n' {
+                break;
             }
         }
         // End-of-file was reached.

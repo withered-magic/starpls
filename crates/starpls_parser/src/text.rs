@@ -170,6 +170,16 @@ fn collect_token_lexer_errors(
         let contents_start = token_start + prefix_strip_len;
         let contents = &input[contents_start..token_end - suffix_strip_len];
 
+        // Check for unterminated string or byte literals.
+        if !terminated {
+            lexer_errors.push(LexerError {
+                start: token_start,
+                end: token_end,
+                message: "String literal is not terminated",
+            });
+        }
+
+        // Check for invalid escape sequences.
         if is_string {
             unescape_string(contents, raw, triple_quoted, &mut |range, res| {
                 if let Err(err) = res {
@@ -177,9 +187,9 @@ fn collect_token_lexer_errors(
                         start: contents_start + range.start,
                         end: contents_start + range.end,
                         message: escape_error_as_message(err),
-                    })
+                    });
                 }
-            })
+            });
         } else {
             unescape_byte_string(contents, &mut |range, res| {
                 if let Err(err) = res {
@@ -187,9 +197,9 @@ fn collect_token_lexer_errors(
                         start: contents_start + range.start,
                         end: contents_start + range.end,
                         message: escape_error_as_message(err),
-                    })
+                    });
                 }
-            })
+            });
         }
     }
 }

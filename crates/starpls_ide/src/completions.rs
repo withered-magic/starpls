@@ -83,7 +83,7 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
                     items.push(CompletionItem {
                         label: field.name.to_string(),
                         kind: match field.type_ref {
-                            BuiltinTypeRef::Function => CompletionItemKind::Function,
+                            BuiltinTypeRef::Function(_) => CompletionItemKind::Function,
                             _ => CompletionItemKind::Variable,
                         },
                         mode: None,
@@ -165,9 +165,8 @@ impl CompletionContext {
             let parent = name.syntax().parent()?;
             CompletionAnalysis::Name(if let Some(expr) = ast::DotExpr::cast(parent) {
                 let ptr = AstPtr::new(&expr.expr()?);
-                let receiver_ty =
-                    db.infer_expr(file, *lower(db, file).source_map(db).expr_map.get(&ptr)?);
-                NameContext::Dot { receiver_ty }
+                let ty = db.infer_expr(file, *lower(db, file).source_map(db).expr_map.get(&ptr)?);
+                NameContext::Dot { receiver_ty: ty }
             } else {
                 NameContext::Def
             })

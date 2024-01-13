@@ -120,6 +120,8 @@ impl std::fmt::Display for Ty {
             TyKind::Bool => f.write_str("bool"),
             TyKind::Int => f.write_str("int"),
             TyKind::Float => f.write_str("float"),
+            TyKind::StringElems => f.write_str("string.elems"),
+            TyKind::BytesElems => f.write_str("bytes.elems"),
             TyKind::BuiltinFunction(_) => f.write_str("function"),
             TyKind::BuiltinClass(class) => f.write_str("class"),
         }
@@ -135,6 +137,8 @@ pub enum TyKind {
     Bool,
     Int,
     Float,
+    StringElems,
+    BytesElems,
     BuiltinFunction(BuiltinFunction),
     BuiltinClass(BuiltinClass),
 }
@@ -238,6 +242,7 @@ impl TyCtxt<'_> {
                 .as_ref()
                 .map(|op| self.infer_binary_expr(file, *lhs, *rhs, op.clone()))
                 .unwrap_or_else(|| self.types.unknown(self.db)),
+
             _ => self.types.any(self.db),
         };
         self.set_expr_type(file, expr, ty)

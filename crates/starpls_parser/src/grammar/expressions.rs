@@ -10,6 +10,9 @@ pub(crate) const PRIMARY_EXPR_START: SyntaxKindSet = SyntaxKindSet::new(&[
     FLOAT,
     STRING,
     BYTES,
+    T![True],
+    T![False],
+    T![None],
     T![ident],
     // tuples
     T!['('],

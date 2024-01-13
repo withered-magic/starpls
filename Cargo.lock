@@ -670,6 +670,7 @@ dependencies = [
  "parking_lot",
  "rustc-hash",
  "salsa-2022",
+ "smallvec",
  "smol_str",
  "starpls_common",
  "starpls_intern",

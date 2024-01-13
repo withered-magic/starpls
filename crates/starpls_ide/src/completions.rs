@@ -2,7 +2,7 @@
 
 use crate::FilePosition;
 use starpls_common::parse;
-use starpls_hir::{lower, BuiltinTypeRef, Db, Declaration, Name, Resolver, Ty, TyKind};
+use starpls_hir::{lower, Db, Declaration, Name, Resolver, Ty};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr},
     parse_module,
@@ -60,6 +60,7 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
             is_in_def,
             is_in_for,
         }) => {
+            add_globals(&mut items);
             for (name, decl) in names {
                 items.push(CompletionItem {
                     label: name.to_string(),
@@ -78,13 +79,14 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
             }
         }
         CompletionAnalysis::Name(NameContext::Dot { receiver_ty }) => {
-            if let TyKind::BuiltinClass(class) = receiver_ty.kind() {
-                for field in class.fields(db).iter() {
+            if let Some(fields) = receiver_ty.fields(db) {
+                for (name, ty) in fields {
                     items.push(CompletionItem {
-                        label: field.name.to_string(),
-                        kind: match field.type_ref {
-                            BuiltinTypeRef::Function(_) => CompletionItemKind::Function,
-                            _ => CompletionItemKind::Variable,
+                        label: name.to_string(),
+                        kind: if ty.is_fn() {
+                            CompletionItemKind::Function
+                        } else {
+                            CompletionItemKind::Variable
                         },
                         mode: None,
                     })
@@ -94,6 +96,19 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
         _ => {}
     }
     Some(items)
+}
+
+pub(crate) fn add_globals(items: &mut Vec<CompletionItem>) {
+    let add_global = &mut |global: &'static str| {
+        items.push(CompletionItem {
+            label: global.to_string(),
+            kind: CompletionItemKind::Keyword,
+            mode: None,
+        })
+    };
+    add_global("True");
+    add_global("False");
+    add_global("None");
 }
 
 fn add_keywords(items: &mut Vec<CompletionItem>, is_in_def: bool, is_in_for: bool) {

@@ -16,8 +16,9 @@ pub enum BuiltinTypeRef {
     StringElems,
     Bytes,
     BytesElems,
-    List,
+    List(Box<BuiltinTypeRef>),
     Tuple,
+
     Dict,
     Function(BuiltinFunction),
     Name(Name),
@@ -36,9 +37,19 @@ pub struct BuiltinTypes {
     pub(crate) string_elems: Ty,
     pub(crate) bytes: Ty,
     pub(crate) bytes_elems: Ty,
-    pub(crate) list: Ty,
     pub(crate) tuple: Ty,
     pub(crate) dict: Ty,
+    list_base_class: BuiltinClass,
+}
+
+impl BuiltinTypes {
+    pub fn make_list_ty(&self, db: &dyn Db, ty: Ty) -> Ty {
+        TyKind::List {
+            ty,
+            base: self.list_base_class(db),
+        }
+        .intern()
+    }
 }
 
 #[salsa::tracked]
@@ -66,35 +77,39 @@ impl BuiltinField {
 #[salsa::tracked]
 pub struct BuiltinFieldTypes {
     #[return_ref]
-    field_tys: Vec<Ty>,
+    pub(crate) field_tys: Vec<Ty>,
 }
 
 #[salsa::tracked]
 pub fn builtin_field_types(db: &dyn Db, class: BuiltinClass) -> BuiltinFieldTypes {
-    let types = builtin_types(db);
     let field_tys = class
         .fields(db)
         .iter()
-        .map(|field| match field.type_ref {
-            BuiltinTypeRef::Any => types.any(db),
-            BuiltinTypeRef::None => types.none(db),
-            BuiltinTypeRef::Bool => types.bool(db),
-            BuiltinTypeRef::Int => types.int(db),
-            BuiltinTypeRef::Float => types.float(db),
-            BuiltinTypeRef::String => types.string(db),
-            BuiltinTypeRef::StringElems => types.string_elems(db),
-            BuiltinTypeRef::Bytes => types.bytes(db),
-            BuiltinTypeRef::BytesElems => types.bytes_elems(db),
-            BuiltinTypeRef::List => types.list(db),
-            BuiltinTypeRef::Tuple => types.tuple(db),
-            BuiltinTypeRef::Dict => types.dict(db),
-            BuiltinTypeRef::Function(function) => types.any(db),
-            BuiltinTypeRef::Name(ref name) => match name.as_str() {
-                _ => panic!("undefined builtin type: {}", name.as_str()),
-            },
-        })
+        .map(|field| lower_builtin_type_ref(db, &field.type_ref))
         .collect();
     BuiltinFieldTypes::new(db, field_tys)
+}
+
+fn lower_builtin_type_ref(db: &dyn Db, type_ref: &BuiltinTypeRef) -> Ty {
+    let types = builtin_types(db);
+    match type_ref {
+        BuiltinTypeRef::Any => types.any(db),
+        BuiltinTypeRef::None => types.none(db),
+        BuiltinTypeRef::Bool => types.bool(db),
+        BuiltinTypeRef::Int => types.int(db),
+        BuiltinTypeRef::Float => types.float(db),
+        BuiltinTypeRef::String => types.string(db),
+        BuiltinTypeRef::StringElems => types.string_elems(db),
+        BuiltinTypeRef::Bytes => types.bytes(db),
+        BuiltinTypeRef::BytesElems => types.bytes_elems(db),
+        BuiltinTypeRef::List(type_ref) => {
+            types.make_list_ty(db, lower_builtin_type_ref(db, type_ref))
+        }
+        BuiltinTypeRef::Tuple => types.tuple(db),
+        BuiltinTypeRef::Dict => types.dict(db),
+        BuiltinTypeRef::Function(_) => TyKind::BuiltinFunction.intern(),
+        BuiltinTypeRef::Name(_) => todo!(),
+    }
 }
 
 #[salsa::tracked]
@@ -118,9 +133,9 @@ pub(crate) fn builtin_types(db: &dyn Db) -> BuiltinTypes {
         TyKind::StringElems.intern(),
         intern_bytes(db),
         TyKind::BytesElems.intern(),
-        intern_list(db),
         intern_class(db, "tuple"),
         intern_dict(db),
+        make_list_base_class(db),
     )
 }
 
@@ -158,10 +173,10 @@ fn intern_string(db: &dyn Db) -> Ty {
             function_field(db, "rfind", vec![String, Int, Int], Int),
             function_field(db, "rindex", vec![String, Int, Int], Int),
             function_field(db, "rpartition", vec![String], Tuple),
-            function_field(db, "rsplit", vec![String, Int], List),
+            // function_field(db, "rsplit", vec![String, Int], List),
             function_field(db, "rstrip", vec![String], String),
-            function_field(db, "split", vec![String, Int], List),
-            function_field(db, "splitlines", vec![Bool], List),
+            // function_field(db, "split", vec![String, Int], List),
+            // function_field(db, "splitlines", vec![Bool], List),
             function_field(db, "startswith", vec![String, Int, Int], Bool),
             function_field(db, "strip", vec![String], String),
             function_field(db, "title", vec![], String),
@@ -175,15 +190,15 @@ fn intern_bytes(db: &dyn Db) -> Ty {
     use BuiltinTypeRef::*;
     TyKind::BuiltinClass(BuiltinClass::new(
         db,
-        crate::Name::new_inline("string"),
+        crate::Name::new_inline("bytes"),
         vec![function_field(db, "elems", vec![], BytesElems)],
     ))
     .intern()
 }
 
-fn intern_list(db: &dyn Db) -> Ty {
+fn make_list_base_class(db: &dyn Db) -> BuiltinClass {
     use BuiltinTypeRef::*;
-    TyKind::BuiltinClass(BuiltinClass::new(
+    BuiltinClass::new(
         db,
         crate::Name::new_inline("list"),
         vec![
@@ -195,8 +210,7 @@ fn intern_list(db: &dyn Db) -> Ty {
             function_field(db, "pop", vec![Int], Any),
             function_field(db, "remove", vec![Any], None),
         ],
-    ))
-    .intern()
+    )
 }
 
 fn intern_dict(db: &dyn Db) -> Ty {
@@ -207,13 +221,13 @@ fn intern_dict(db: &dyn Db) -> Ty {
         vec![
             function_field(db, "clear", vec![], None),
             function_field(db, "get", vec![Any, Any], Any),
-            function_field(db, "items", vec![], List),
-            function_field(db, "keys", vec![], List),
+            // function_field(db, "items", vec![], List),
+            // function_field(db, "keys", vec![], List),
             function_field(db, "pop", vec![Any, Any], Any),
             function_field(db, "popitem", vec![], Tuple),
             function_field(db, "setdefault", vec![Any, Any], Any),
-            function_field(db, "update", vec![List], None),
-            function_field(db, "values", vec![], List),
+            // function_field(db, "update", vec![List], None),
+            // function_field(db, "values", vec![], List),
         ],
     ))
     .intern()

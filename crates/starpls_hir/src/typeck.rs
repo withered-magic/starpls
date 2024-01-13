@@ -1,7 +1,8 @@
 use crate::{
-    def::{Expr, ExprId, Literal, ParamId},
+    def::{Expr, ExprId, Literal},
+    display::DisplayWithDb,
     lower as lower_,
-    typeck::builtins::{BuiltinClass, BuiltinFunction, BuiltinTypes},
+    typeck::builtins::{builtin_types, BuiltinClass, BuiltinTypes},
     Db, Declaration, Name, Resolver,
 };
 use crossbeam::atomic::AtomicCell;
@@ -11,11 +12,12 @@ use starpls_common::{parse, File};
 use starpls_intern::{impl_internable, Interned};
 use starpls_syntax::ast::{self, AstNode, AstPtr, BinaryOp, UnaryOp};
 use std::{
+    fmt::Write,
     panic::{self, UnwindSafe},
     sync::Arc,
 };
 
-use self::builtins::builtin_types;
+use self::builtins::builtin_field_types;
 
 mod lower;
 
@@ -108,23 +110,31 @@ impl Ty {
     pub fn kind(&self) -> &TyKind {
         &self.0
     }
+
+    pub fn fields<'a>(&'a self, db: &'a dyn Db) -> Option<Vec<(&'a Name, Ty)>> {
+        Some(match self.kind() {
+            TyKind::List { base, .. }
+            | TyKind::Tuple { base }
+            | TyKind::Dict { base }
+            | TyKind::BuiltinClass(base) => base
+                .fields(db)
+                .iter()
+                .map(|field| &field.name)
+                .zip(builtin_field_types(db, *base).field_tys(db).iter().cloned())
+                .collect(),
+
+            _ => return None,
+        })
+    }
+
+    pub fn is_fn(&self) -> bool {
+        matches!(self.kind(), TyKind::BuiltinFunction)
+    }
 }
 
-impl std::fmt::Display for Ty {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.kind() {
-            TyKind::Unbound => f.write_str("Unbound"),
-            TyKind::Any => f.write_str("Any"),
-            TyKind::Unknown => f.write_str("Unknown"),
-            TyKind::None => f.write_str("NoneType"),
-            TyKind::Bool => f.write_str("bool"),
-            TyKind::Int => f.write_str("int"),
-            TyKind::Float => f.write_str("float"),
-            TyKind::StringElems => f.write_str("string.elems"),
-            TyKind::BytesElems => f.write_str("bytes.elems"),
-            TyKind::BuiltinFunction(_) => f.write_str("function"),
-            TyKind::BuiltinClass(class) => f.write_str("class"),
-        }
+impl DisplayWithDb for Ty {
+    fn fmt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        self.kind().fmt(db, f)
     }
 }
 
@@ -139,8 +149,38 @@ pub enum TyKind {
     Float,
     StringElems,
     BytesElems,
-    BuiltinFunction(BuiltinFunction),
+    List { ty: Ty, base: BuiltinClass },
+    Tuple { base: BuiltinClass },
+    Dict { base: BuiltinClass },
+    // Tuple(SmallVec<[Ty; 2]>),
+    BuiltinFunction,
     BuiltinClass(BuiltinClass),
+}
+
+impl DisplayWithDb for TyKind {
+    fn fmt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let text = match self {
+            TyKind::Unbound => "Unbound",
+            TyKind::Unknown => "Unknown",
+            TyKind::Any => "Any",
+            TyKind::None => "None",
+            TyKind::Bool => "bool",
+            TyKind::Int => "int",
+            TyKind::Float => "float",
+            TyKind::StringElems => "string.elems",
+            TyKind::BytesElems => "bytes.elems",
+            TyKind::List { ty, .. } => {
+                f.write_str("list[")?;
+                ty.fmt(db, f)?;
+                return f.write_char(']');
+            }
+            TyKind::Tuple { .. } => "tuple",
+            TyKind::Dict { .. } => "dict",
+            TyKind::BuiltinFunction => "function",
+            TyKind::BuiltinClass(class) => return f.write_str(class.name(db).as_str()),
+        };
+        f.write_str(text)
+    }
 }
 
 impl_internable!(TyKind);
@@ -224,7 +264,21 @@ impl TyCtxt<'_> {
                     _ => self.types.unbound(self.db),
                 }
             }
-            Expr::List { .. } | Expr::ListComp { .. } => self.types.list(self.db),
+            Expr::List { exprs } => {
+                let mut exprs = exprs.iter();
+                let first = exprs.next();
+                let ty = first
+                    .map(|first| self.infer_expr(file, *first))
+                    .and_then(|first_ty| {
+                        exprs
+                            .map(|expr| self.infer_expr(file, *expr))
+                            .all(|ty| ty == first_ty)
+                            .then_some(first_ty)
+                    })
+                    .unwrap_or_else(|| self.types.unknown(self.db));
+                self.types.make_list_ty(self.db, ty)
+            }
+            Expr::ListComp { .. } => self.types.make_list_ty(self.db, self.types.any(self.db)),
             Expr::Dict { .. } | Expr::DictComp { .. } => self.types.dict(self.db),
             Expr::Literal { literal } => match literal {
                 Literal::Int => self.types.int(self.db),
@@ -242,7 +296,14 @@ impl TyCtxt<'_> {
                 .as_ref()
                 .map(|op| self.infer_binary_expr(file, *lhs, *rhs, op.clone()))
                 .unwrap_or_else(|| self.types.unknown(self.db)),
-
+            Expr::Index { lhs, index } => {
+                let lhs_ty = self.infer_expr(file, *lhs);
+                let index_ty = self.infer_expr(file, *index);
+                match (lhs_ty.kind(), index_ty.kind()) {
+                    (TyKind::List { ty, .. }, TyKind::Int) => ty.clone(),
+                    _ => self.types.unknown(self.db),
+                }
+            }
             _ => self.types.any(self.db),
         };
         self.set_expr_type(file, expr, ty)
@@ -324,7 +385,7 @@ impl TyCtxt<'_> {
                 self.set_expr_type(file, expr, source_ty);
             }
             Expr::List { exprs } | Expr::Tuple { exprs } => {
-                let source_ty = if source_ty == self.types.list(self.db)
+                let source_ty = if matches!(source_ty.kind(), TyKind::List { .. })
                     || source_ty == self.types.tuple(self.db)
                     || source_ty == self.types.any(self.db)
                 {

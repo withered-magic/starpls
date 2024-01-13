@@ -1,6 +1,6 @@
 use crate::{util::pick_best_token, Database, FilePosition};
 use starpls_common::{parse, Db as _};
-use starpls_hir::{lower, Db as _};
+use starpls_hir::{lower, Db as _, DisplayWithDb};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr},
     SyntaxKind::*,
@@ -68,7 +68,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             .text()
             .for_each_chunk(|s| text.push_str(s));
         text.push_str(": ");
-        write!(&mut text, "{}", ty).unwrap();
+        write!(&mut text, "{}", ty.display(db)).unwrap();
         text.push_str("\n```\n");
         return Some(text.into());
     }

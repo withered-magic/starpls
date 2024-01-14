@@ -182,7 +182,13 @@ impl DisplayWithDb for TyKind {
                 return f.write_char(']');
             }
             TyKind::Tuple { .. } => "tuple",
-            TyKind::Dict { .. } => "dict",
+            TyKind::Dict(key_ty, value_ty) => {
+                f.write_str("dict[")?;
+                key_ty.fmt(db, f)?;
+                f.write_str(", ")?;
+                value_ty.fmt(db, f)?;
+                return f.write_char(']');
+            }
             TyKind::BuiltinFunction => "function",
             TyKind::BuiltinClass(class) => return f.write_str(class.name(db).as_str()),
         };
@@ -302,22 +308,37 @@ impl TyCtxt<'_> {
                 }
             }
             Expr::List { exprs } => {
-                let mut exprs = exprs.iter();
-                let first = exprs.next();
-                let ty = first
-                    .map(|first| self.infer_expr(file, *first))
-                    .and_then(|first_ty| {
-                        exprs
-                            .map(|expr| self.infer_expr(file, *expr))
-                            .all(|ty| ty == first_ty)
-                            .then_some(first_ty)
-                    })
-                    .unwrap_or_else(|| self.types.unknown(self.db));
-                TyKind::List(ty).intern()
+                // Determine the full type of the list. If all of the specified elements are of the same type T, then
+                // we assign the list the type `list[T]`. Otherwise, we assign it the type `list[Unknown]`.
+                TyKind::List(self.get_common_type(
+                    file,
+                    exprs.iter().cloned(),
+                    self.types.unknown(self.db),
+                ))
+                .intern()
             }
-
             Expr::ListComp { .. } => TyKind::List(self.types.any(self.db)).intern(),
-            Expr::Dict { .. } | Expr::DictComp { .. } => self.types.dict(self.db),
+            Expr::Dict { entries } => {
+                // Determine the dict's key type. For now, if all specified entries have the key type `T`, then we also
+                // use the type `T` as the dict's key tpe. Otherwise, we use `Any` as the key type.
+                // TODO:
+                let key_ty = self.get_common_type(
+                    file,
+                    entries.iter().map(|entry| entry.key),
+                    self.types.any(self.db),
+                );
+
+                // Similarly, determine the dict's value type.
+                let value_ty = self.get_common_type(
+                    file,
+                    entries.iter().map(|entry| entry.value),
+                    self.types.unknown(self.db),
+                );
+                TyKind::Dict(key_ty, value_ty).intern()
+            }
+            Expr::DictComp { .. } => {
+                TyKind::Dict(self.types.any(self.db), self.types.any(self.db)).intern()
+            }
             Expr::Literal { literal } => match literal {
                 Literal::Int => self.types.int(self.db),
                 Literal::Float => self.types.float(self.db),
@@ -339,6 +360,13 @@ impl TyCtxt<'_> {
                 let index_ty = self.infer_expr(file, *index);
                 match (lhs_ty.kind(), index_ty.kind()) {
                     (TyKind::List(ty), TyKind::Int) => ty.clone(),
+                    (TyKind::Dict(key_ty, value_ty), index_kind) => {
+                        if key_ty.kind() == index_kind {
+                            value_ty.clone()
+                        } else {
+                            self.types.unknown(self.db)
+                        }
+                    }
                     _ => self.types.unknown(self.db),
                 }
             }
@@ -444,5 +472,23 @@ impl TyCtxt<'_> {
         self.type_of_expr
             .insert(FileExprId { file, expr }, ty.clone());
         ty
+    }
+
+    fn get_common_type(
+        &mut self,
+        file: File,
+        mut exprs: impl Iterator<Item = ExprId>,
+        default: Ty,
+    ) -> Ty {
+        let first = exprs.next();
+        first
+            .map(|first| self.infer_expr(file, first))
+            .and_then(|first_ty| {
+                exprs
+                    .map(|expr| self.infer_expr(file, expr))
+                    .all(|ty| ty == first_ty)
+                    .then_some(first_ty)
+            })
+            .unwrap_or(default)
     }
 }

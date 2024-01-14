@@ -281,8 +281,8 @@ pub enum CompClause {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DictEntry {
-    key: ExprId,
-    value: ExprId,
+    pub key: ExprId,
+    pub value: ExprId,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

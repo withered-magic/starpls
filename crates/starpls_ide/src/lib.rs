@@ -23,6 +23,16 @@ pub(crate) struct Database {
     gcx: Arc<GlobalCtxt>,
 }
 
+impl Database {
+    fn apply_file_changes(&mut self, changes: Vec<(FileId, String)>) {
+        let gcx = self.gcx.clone();
+        let _guard = gcx.cancel();
+        for (file_id, contents) in changes {
+            self.set_file_contents(file_id, contents);
+        }
+    }
+}
+
 impl salsa::Database for Database {}
 
 impl salsa::ParallelDatabase for Database {
@@ -82,10 +92,7 @@ impl Analysis {
     }
 
     pub fn apply_change(&mut self, change: Change) {
-        // self.tcx.cancel();
-        for (path, contents) in change.changed_files {
-            self.db.set_file_contents(path, contents);
-        }
+        self.db.apply_file_changes(change.changed_files);
     }
 
     pub fn snapshot(&self) -> AnalysisSnapshot {

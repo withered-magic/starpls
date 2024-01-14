@@ -33,14 +33,10 @@ pub struct FileExprId {
 
 pub enum Cancelled {
     Salsa(salsa::Cancelled),
-    Typecheck,
+    Typecheck(TypecheckCancelled),
 }
 
 impl Cancelled {
-    pub(crate) fn throw(self) -> ! {
-        std::panic::resume_unwind(Box::new(self))
-    }
-
     pub fn catch<F, T>(f: F) -> Result<T, Cancelled>
     where
         F: FnOnce() -> T + UnwindSafe,
@@ -49,8 +45,8 @@ impl Cancelled {
             Ok(t) => Ok(t),
             Err(payload) => match payload.downcast::<salsa::Cancelled>() {
                 Ok(cancelled) => Err(Cancelled::Salsa(*cancelled)),
-                Err(payload) => match payload.downcast::<Cancelled>() {
-                    Ok(cancelled) => Err(*cancelled),
+                Err(payload) => match payload.downcast::<TypecheckCancelled>() {
+                    Ok(cancelled) => Err(Cancelled::Typecheck(*cancelled)),
                     Err(payload) => panic::resume_unwind(payload),
                 },
             },
@@ -61,9 +57,25 @@ impl Cancelled {
 impl std::fmt::Display for Cancelled {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            err @ Cancelled::Salsa(_) => err.fmt(f),
-            Cancelled::Typecheck => f.write_str("type inference cancelled"),
+            Cancelled::Salsa(err) => err.fmt(f),
+            Cancelled::Typecheck(err) => err.fmt(f),
         }
+    }
+}
+
+#[derive(Debug)]
+
+pub struct TypecheckCancelled;
+
+impl TypecheckCancelled {
+    pub(crate) fn throw(self) -> ! {
+        std::panic::resume_unwind(Box::new(self))
+    }
+}
+
+impl std::fmt::Display for TypecheckCancelled {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("type inference cancelled")
     }
 }
 
@@ -198,11 +210,8 @@ pub struct GlobalCtxt {
 }
 
 impl GlobalCtxt {
-    pub fn cancel(&self) {
-        self.shared_state.cancelled.store(true);
-        let mut type_of_exr = self.type_of_expr.lock();
-        self.shared_state.cancelled.store(false);
-        *type_of_exr = FxHashMap::default();
+    pub fn cancel(&self) -> CancelGuard {
+        CancelGuard::new(self)
     }
 
     pub fn with_tcx<F, T>(&self, db: &dyn Db, mut f: F) -> T
@@ -220,6 +229,29 @@ impl GlobalCtxt {
     }
 }
 
+pub struct CancelGuard<'a> {
+    gcx: &'a GlobalCtxt,
+    type_of_expr: &'a Mutex<FxHashMap<FileExprId, Ty>>,
+}
+
+impl<'a> CancelGuard<'a> {
+    fn new(gcx: &'a GlobalCtxt) -> Self {
+        gcx.shared_state.cancelled.store(true);
+        Self {
+            gcx: gcx,
+            type_of_expr: &gcx.type_of_expr,
+        }
+    }
+}
+
+impl Drop for CancelGuard<'_> {
+    fn drop(&mut self) {
+        let mut type_of_expr = self.type_of_expr.lock();
+        self.gcx.shared_state.cancelled.store(false);
+        *type_of_expr = FxHashMap::default();
+    }
+}
+
 pub struct TyCtxt<'a> {
     db: &'a dyn Db,
     types: BuiltinTypes,
@@ -234,7 +266,7 @@ impl TyCtxt<'_> {
         }
 
         if self.shared_state.cancelled.load() {
-            Cancelled::Typecheck.throw()
+            TypecheckCancelled.throw();
         }
 
         let info = lower_(self.db, file);

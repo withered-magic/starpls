@@ -8,6 +8,7 @@ use crate::{
 use crossbeam::atomic::AtomicCell;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
+use smallvec::SmallVec;
 use starpls_common::{parse, File};
 use starpls_intern::{impl_internable, Interned};
 use starpls_syntax::ast::{self, AstNode, AstPtr, BinaryOp, UnaryOp};
@@ -124,19 +125,14 @@ impl Ty {
     }
 
     pub fn fields<'a>(&'a self, db: &'a dyn Db) -> Option<Vec<(&'a Name, Ty)>> {
-        Some(match self.kind() {
-            TyKind::List { base, .. }
-            | TyKind::Tuple { base }
-            | TyKind::Dict { base }
-            | TyKind::BuiltinClass(base) => base
-                .fields(db)
+        let base = self.kind().builtin_class(db)?;
+        Some(
+            base.fields(db)
                 .iter()
                 .map(|field| &field.name)
-                .zip(builtin_field_types(db, *base).field_tys(db).iter().cloned())
+                .zip(builtin_field_types(db, base).field_tys(db).iter().cloned())
                 .collect(),
-
-            _ => return None,
-        })
+        )
     }
 
     pub fn is_fn(&self) -> bool {
@@ -161,10 +157,9 @@ pub enum TyKind {
     Float,
     StringElems,
     BytesElems,
-    List { ty: Ty, base: BuiltinClass },
-    Tuple { base: BuiltinClass },
-    Dict { base: BuiltinClass },
-    // Tuple(SmallVec<[Ty; 2]>),
+    List(Ty),
+    Tuple(SmallVec<[Ty; 2]>),
+    Dict(Ty, Ty),
     BuiltinFunction,
     BuiltinClass(BuiltinClass),
 }
@@ -181,7 +176,7 @@ impl DisplayWithDb for TyKind {
             TyKind::Float => "float",
             TyKind::StringElems => "string.elems",
             TyKind::BytesElems => "bytes.elems",
-            TyKind::List { ty, .. } => {
+            TyKind::List(ty) => {
                 f.write_str("list[")?;
                 ty.fmt(db, f)?;
                 return f.write_char(']');
@@ -200,6 +195,16 @@ impl_internable!(TyKind);
 impl TyKind {
     pub fn intern(self) -> Ty {
         Ty(Interned::new(self))
+    }
+
+    pub fn builtin_class(&self, db: &dyn Db) -> Option<BuiltinClass> {
+        let types = builtin_types(db);
+        Some(match self {
+            TyKind::List(_) => types.list_base_class(db),
+            TyKind::Dict(_, _) => types.dict_base_class(db),
+            TyKind::BuiltinClass(class) => *class,
+            _ => return None,
+        })
     }
 }
 
@@ -308,9 +313,10 @@ impl TyCtxt<'_> {
                             .then_some(first_ty)
                     })
                     .unwrap_or_else(|| self.types.unknown(self.db));
-                self.types.make_list_ty(self.db, ty)
+                TyKind::List(ty).intern()
             }
-            Expr::ListComp { .. } => self.types.make_list_ty(self.db, self.types.any(self.db)),
+
+            Expr::ListComp { .. } => TyKind::List(self.types.any(self.db)).intern(),
             Expr::Dict { .. } | Expr::DictComp { .. } => self.types.dict(self.db),
             Expr::Literal { literal } => match literal {
                 Literal::Int => self.types.int(self.db),
@@ -332,7 +338,7 @@ impl TyCtxt<'_> {
                 let lhs_ty = self.infer_expr(file, *lhs);
                 let index_ty = self.infer_expr(file, *index);
                 match (lhs_ty.kind(), index_ty.kind()) {
-                    (TyKind::List { ty, .. }, TyKind::Int) => ty.clone(),
+                    (TyKind::List(ty), TyKind::Int) => ty.clone(),
                     _ => self.types.unknown(self.db),
                 }
             }

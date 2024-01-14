@@ -18,8 +18,7 @@ pub enum BuiltinTypeRef {
     BytesElems,
     List(Box<BuiltinTypeRef>),
     Tuple,
-
-    Dict,
+    Dict(Box<BuiltinTypeRef>, Box<BuiltinTypeRef>),
     Function(BuiltinFunction),
     Name(Name),
 }
@@ -38,18 +37,8 @@ pub struct BuiltinTypes {
     pub(crate) bytes: Ty,
     pub(crate) bytes_elems: Ty,
     pub(crate) tuple: Ty,
-    pub(crate) dict: Ty,
-    list_base_class: BuiltinClass,
-}
-
-impl BuiltinTypes {
-    pub fn make_list_ty(&self, db: &dyn Db, ty: Ty) -> Ty {
-        TyKind::List {
-            ty,
-            base: self.list_base_class(db),
-        }
-        .intern()
-    }
+    pub(crate) list_base_class: BuiltinClass,
+    pub(crate) dict_base_class: BuiltinClass,
 }
 
 #[salsa::tracked]
@@ -103,10 +92,14 @@ fn lower_builtin_type_ref(db: &dyn Db, type_ref: &BuiltinTypeRef) -> Ty {
         BuiltinTypeRef::Bytes => types.bytes(db),
         BuiltinTypeRef::BytesElems => types.bytes_elems(db),
         BuiltinTypeRef::List(type_ref) => {
-            types.make_list_ty(db, lower_builtin_type_ref(db, type_ref))
+            TyKind::List(lower_builtin_type_ref(db, type_ref)).intern()
         }
         BuiltinTypeRef::Tuple => types.tuple(db),
-        BuiltinTypeRef::Dict => types.dict(db),
+        BuiltinTypeRef::Dict(key, value) => TyKind::Dict(
+            lower_builtin_type_ref(db, key),
+            lower_builtin_type_ref(db, value),
+        )
+        .intern(),
         BuiltinTypeRef::Function(_) => TyKind::BuiltinFunction.intern(),
         BuiltinTypeRef::Name(_) => todo!(),
     }
@@ -134,8 +127,8 @@ pub(crate) fn builtin_types(db: &dyn Db) -> BuiltinTypes {
         intern_bytes(db),
         TyKind::BytesElems.intern(),
         intern_class(db, "tuple"),
-        intern_dict(db),
         make_list_base_class(db),
+        make_dict_base_class(db),
     )
 }
 
@@ -213,9 +206,9 @@ fn make_list_base_class(db: &dyn Db) -> BuiltinClass {
     )
 }
 
-fn intern_dict(db: &dyn Db) -> Ty {
+fn make_dict_base_class(db: &dyn Db) -> BuiltinClass {
     use BuiltinTypeRef::*;
-    TyKind::BuiltinClass(BuiltinClass::new(
+    BuiltinClass::new(
         db,
         crate::Name::new_inline("dict"),
         vec![
@@ -229,8 +222,7 @@ fn intern_dict(db: &dyn Db) -> Ty {
             // function_field(db, "update", vec![List], None),
             // function_field(db, "values", vec![], List),
         ],
-    ))
-    .intern()
+    )
 }
 
 fn function_field(

@@ -95,6 +95,8 @@ pub enum SyntaxKind {
     CARET_EQ,
     LT_LT_EQ,
     GT_GT_EQ,
+    ARROW,
+    ELLIPSES,
 
     // Expressions.
     NAME,
@@ -125,6 +127,11 @@ pub enum SyntaxKind {
     PASS_STMT,
     ASSIGN_STMT,
     LOAD_STMT,
+
+    // Types.
+    TYPE_REF,
+    TYPE,
+    GENERICS,
 
     ARGUMENTS,
     SIMPLE_ARGUMENT,        // f(x)
@@ -335,6 +342,8 @@ impl From<starpls_lexer::TokenKind> for SyntaxKind {
             starpls_lexer::TokenKind::CaretEq => CARET_EQ,
             starpls_lexer::TokenKind::LtLtEq => LT_LT_EQ,
             starpls_lexer::TokenKind::GtGtEq => GT_GT_EQ,
+            starpls_lexer::TokenKind::Arrow => ARROW,
+            starpls_lexer::TokenKind::Ellipses => ELLIPSES,
             starpls_lexer::TokenKind::Unknown => ERROR,
             starpls_lexer::TokenKind::Eof => EOF,
         }

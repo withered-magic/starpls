@@ -15,6 +15,7 @@ pub(crate) enum CursorState {
 pub struct Cursor<'a> {
     pub(crate) state: CursorState,
     pub(crate) indents: Vec<u32>,
+    pub(crate) type_comment_tokens: bool,
     chars: Chars<'a>,
     len_remaining: usize,
     input: &'a str,
@@ -26,6 +27,7 @@ impl<'a> Cursor<'a> {
         Self {
             state: CursorState::BeforeLeadingSpaces,
             chars: input.chars(),
+            type_comment_tokens: false,
             len_remaining: input.len(),
             input,
             indents: Vec::new(),

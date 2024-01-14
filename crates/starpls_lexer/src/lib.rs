@@ -208,6 +208,10 @@ pub enum TokenKind {
     LtLtEq,
     /// ">>="
     GtGtEq,
+    /// "->"
+    Arrow,
+    /// "..."
+    Ellipses,
 
     /// Unknown token, unrecognized by the lexer.
     Unknown,
@@ -425,7 +429,17 @@ impl Cursor<'_> {
 
             // One-character operators and their corresponding augmented assignments.
             '+' => augmented_assign!(PlusEq, Plus),
-            '-' => augmented_assign!(MinusEq, Minus),
+            '-' => match self.first() {
+                '>' if self.type_comment_tokens => {
+                    self.bump();
+                    Arrow
+                }
+                '=' => {
+                    self.bump();
+                    MinusEq
+                }
+                _ => Minus,
+            },
             '%' => augmented_assign!(ModEq, Mod),
             '&' => augmented_assign!(AmpersandEq, Ampersand),
             '|' => augmented_assign!(BarEq, Bar),
@@ -591,6 +605,10 @@ impl Cursor<'_> {
                     TokenKind::Literal {
                         kind: Float { empty_exponent },
                     }
+                } else if self.type_comment_tokens && self.first() == '.' && self.second() == '.' {
+                    self.bump();
+                    self.bump();
+                    Ellipses
                 } else {
                     Dot
                 }

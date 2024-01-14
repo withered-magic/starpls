@@ -9,6 +9,7 @@ mod arguments;
 mod expressions;
 mod parameters;
 mod statements;
+mod type_comments;
 
 pub(crate) fn module(p: &mut Parser) {
     let m = p.start();

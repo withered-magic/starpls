@@ -43,6 +43,7 @@ struct NameRefContext {
     is_in_def: bool,
     is_in_for: bool,
     is_lone_expr: bool,
+    is_loop_variable: bool,
 }
 
 struct CompletionContext {
@@ -59,23 +60,26 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
             is_lone_expr,
             is_in_def,
             is_in_for,
+            is_loop_variable,
         }) => {
-            add_globals(&mut items);
-            for (name, decl) in names {
-                items.push(CompletionItem {
-                    label: name.to_string(),
-                    kind: match decl {
-                        Declaration::Function { .. } => CompletionItemKind::Function,
-                        Declaration::Variable { .. } | Declaration::Parameter { .. } => {
-                            CompletionItemKind::Variable
-                        }
-                        _ => CompletionItemKind::Variable,
-                    },
-                    mode: None,
-                });
-            }
-            if *is_lone_expr {
-                add_keywords(&mut items, *is_in_def, *is_in_for);
+            if !is_loop_variable {
+                add_globals(&mut items);
+                for (name, decl) in names {
+                    items.push(CompletionItem {
+                        label: name.to_string(),
+                        kind: match decl {
+                            Declaration::Function { .. } => CompletionItemKind::Function,
+                            Declaration::Variable { .. } | Declaration::Parameter { .. } => {
+                                CompletionItemKind::Variable
+                            }
+                            _ => CompletionItemKind::Variable,
+                        },
+                        mode: None,
+                    });
+                }
+                if *is_lone_expr {
+                    add_keywords(&mut items, *is_in_def, *is_in_for);
+                }
             }
         }
         CompletionAnalysis::Name(NameContext::Dot { receiver_ty }) => {
@@ -157,15 +161,18 @@ impl CompletionContext {
 
         let analysis = if let Some(_name_ref) = ast::NameRef::cast(parent.clone()) {
             let resolver = Resolver::new_for_offset(db, file, pos);
-            let (is_in_def, is_in_for) = parent.ancestors().map(|node| node.kind()).fold(
-                (false, false),
-                |(is_in_def, is_in_for), kind| {
-                    (
-                        is_in_def || kind == DEF_STMT,
-                        (is_in_for || (kind == FOR_STMT && !is_in_def)),
-                    )
-                },
-            );
+            let (is_in_def, is_in_for, is_loop_variable) =
+                parent.ancestors().map(|node| node.kind()).fold(
+                    (false, false, false),
+                    |(is_in_def, is_in_for, is_loop_variable), kind| {
+                        (
+                            is_in_def || kind == DEF_STMT,
+                            (is_in_for || (kind == FOR_STMT && !is_in_def)),
+                            (is_loop_variable || kind == LOOP_VARIABLES),
+                        )
+                    },
+                );
+
             let is_lone_expr = parent
                 .parent()
                 .map(|node| matches!(node.kind(), MODULE | SUITE))
@@ -175,6 +182,7 @@ impl CompletionContext {
                 is_in_def,
                 is_in_for,
                 is_lone_expr,
+                is_loop_variable,
             })
         } else if let Some(name) = ast::Name::cast(parent.clone()) {
             let parent = name.syntax().parent()?;

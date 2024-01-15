@@ -35,6 +35,13 @@ impl<'a> Cursor<'a> {
         }
     }
 
+    pub fn new_for_type_comment(input: &'a str) -> Self {
+        Self {
+            type_comment_tokens: true,
+            ..Self::new(input)
+        }
+    }
+
     pub(crate) fn first(&self) -> char {
         self.chars.clone().next().unwrap_or(EOF_CHAR)
     }

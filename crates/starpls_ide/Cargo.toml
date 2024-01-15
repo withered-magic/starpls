@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 dashmap = "5.5.3"
-salsa = { git = "https://github.com/salsa-rs/salsa", package = "salsa-2022", rev = "f1d318a2795e87081e316a5f31ef02f0cd6a1c83" }
+salsa = { git = "https://github.com/withered-magic/salsa", package = "salsa-2022", rev = "91fdda90b344ef74e9bf35c3a5bb0fbae22ed6fb" }
 starpls_common = { path = "../starpls_common" }
 starpls_hir = { path = "../starpls_hir" }
 starpls_syntax = { path = "../starpls_syntax" }

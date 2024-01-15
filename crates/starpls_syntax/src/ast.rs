@@ -6,6 +6,7 @@ use crate::{
 use std::marker::PhantomData;
 
 pub use rowan::ast::{AstNode, AstPtr};
+use rowan::Direction;
 pub type SyntaxNodePtr = rowan::ast::SyntaxNodePtr<StarlarkLanguage>;
 
 /// A trait that allows converting between untyped `SyntaxToken`s and typed AST tokens.
@@ -309,6 +310,14 @@ impl AssignStmt {
                 };
                 Some((token, op))
             })
+    }
+
+    pub fn type_comment(&self) -> Option<TypeComment> {
+        self.syntax
+            .siblings_with_tokens(Direction::Next)
+            .take_while(|node_or_token| !matches!(node_or_token.kind(), SEMI | NEWLINE))
+            .filter_map(|node_or_token| node_or_token.into_node())
+            .find_map(TypeComment::cast)
     }
 }
 
@@ -997,4 +1006,8 @@ pub enum LiteralKind {
     Bytes(Bytes),
     Bool(bool),
     None,
+}
+
+ast_node! {
+    TypeComment => TYPE_COMMENT
 }

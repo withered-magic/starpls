@@ -28,6 +28,14 @@ pub struct StrWithTokens<'a> {
 
 impl<'a> StrWithTokens<'a> {
     pub fn new(input: &'a str) -> Self {
+        Self::new_with_tokens(input, starpls_lexer::tokenize(input))
+    }
+
+    pub fn new_for_type_comment(input: &'a str) -> Self {
+        Self::new_with_tokens(input, starpls_lexer::tokenize_type_comment(input))
+    }
+
+    fn new_with_tokens(input: &'a str, tokens: impl Iterator<Item = Token>) -> Self {
         let mut current_start = 0;
         let mut str_with_tokens = Self {
             input,
@@ -36,7 +44,7 @@ impl<'a> StrWithTokens<'a> {
             lexer_errors: Vec::new(),
         };
 
-        for Token { kind, len } in starpls_lexer::tokenize(input) {
+        for Token { kind, len } in tokens {
             str_with_tokens.token_kinds.push(kind.into());
             str_with_tokens.token_start.push(current_start);
 

@@ -28,6 +28,12 @@ pub fn parse(input: &Input) -> Output {
     step::postprocess_step_events(p.events)
 }
 
+pub fn parse_type_list(input: &Input) -> Output {
+    let mut p = Parser::new(input);
+    grammar::type_list(&mut p);
+    step::postprocess_step_events(p.events)
+}
+
 /// The input to the parser, consisting of a list of tokens.
 pub struct Input {
     tokens: Vec<SyntaxKind>,

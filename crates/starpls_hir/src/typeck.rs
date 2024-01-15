@@ -249,7 +249,7 @@ impl<'a> CancelGuard<'a> {
     fn new(gcx: &'a GlobalCtxt) -> Self {
         gcx.shared_state.cancelled.store(true);
         Self {
-            gcx: gcx,
+            gcx,
             type_of_expr: &gcx.type_of_expr,
         }
     }

@@ -129,9 +129,15 @@ pub enum SyntaxKind {
     LOAD_STMT,
 
     // Types.
+    NAMED_TYPE,
+    NONE_TYPE,
+    FUNCTION_TYPE,
     TYPE_REF,
-    TYPE,
-    GENERICS,
+    GENERIC_ARGUMENTS,
+    PARAMETER_TYPES,
+    TYPE_COMMENT,
+    TYPE_COMMENT_PREFIX,
+    TYPE_LIST,
 
     ARGUMENTS,
     SIMPLE_ARGUMENT,        // f(x)

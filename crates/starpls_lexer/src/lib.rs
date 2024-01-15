@@ -272,6 +272,18 @@ pub fn tokenize(input: &str) -> impl Iterator<Item = Token> + '_ {
     })
 }
 
+pub fn tokenize_type_comment(input: &str) -> impl Iterator<Item = Token> + '_ {
+    let mut cursor = Cursor::new_for_type_comment(input);
+    std::iter::from_fn(move || {
+        let token = cursor.advance_token();
+        if token.kind != Eof {
+            Some(token)
+        } else {
+            None
+        }
+    })
+}
+
 pub fn is_whitespace(c: char) -> bool {
     matches!(c, ' ' | '\t' | '\r' | '\n')
 }

@@ -2,7 +2,7 @@ use crate::{
     def::{Expr, ExprId, Literal},
     display::DisplayWithDb,
     lower as lower_,
-    typeck::builtins::{builtin_types, BuiltinClass, BuiltinTypes},
+    typeck::builtins::{builtin_types, BuiltinClass, BuiltinFunction, BuiltinTypes},
     Db, Declaration, Name, Resolver,
 };
 use crossbeam::atomic::AtomicCell;
@@ -17,8 +17,6 @@ use std::{
     panic::{self, UnwindSafe},
     sync::Arc,
 };
-
-use self::builtins::builtin_field_types;
 
 mod lower;
 
@@ -126,17 +124,54 @@ impl Ty {
 
     pub fn fields<'a>(&'a self, db: &'a dyn Db) -> Option<Vec<(&'a Name, Ty)>> {
         let base = self.kind().builtin_class(db)?;
-        Some(
-            base.fields(db)
-                .iter()
-                .map(|field| &field.name)
-                .zip(builtin_field_types(db, base).field_tys(db).iter().cloned())
-                .collect(),
-        )
+        todo!()
+        // match self.kind() {
+        //     TyKind::List(subst) => {}
+        //     TyKind::Tuple(_) => todo!(),
+        //     TyKind::Dict(key_subst, value_subst) => todo!(),
+        //     TyKind::BuiltinFunction => todo!(),
+        //     TyKind::BuiltinClass(_) => todo!(),
+        //     TyKind::BoundVar(_) => todo!(),
+        // }
+
+        // let base = self.kind().builtin_class(db)?;
+        // Some(
+        //     base.fields(db)
+        //         .iter()
+        //         .map(|field| &field.name)
+        //         .zip(builtin_field_types(db, base).field_tys(db).iter().cloned())
+        //         .collect(),
+        // )
     }
 
     pub fn is_fn(&self) -> bool {
-        matches!(self.kind(), TyKind::BuiltinFunction)
+        matches!(self.kind(), TyKind::BuiltinFunction(_))
+    }
+
+    pub fn is_any(&self) -> bool {
+        self.kind() == &TyKind::Any
+    }
+
+    fn substitute(&self, args: &[Ty]) -> Ty {
+        match self.kind() {
+            TyKind::Unbound => todo!(),
+            TyKind::Unknown => todo!(),
+            TyKind::Any => todo!(),
+            TyKind::None => todo!(),
+            TyKind::Bool => todo!(),
+            TyKind::Int => todo!(),
+            TyKind::Float => todo!(),
+            TyKind::StringElems => todo!(),
+            TyKind::BytesElems => todo!(),
+            TyKind::List(ty) => TyKind::List(ty.substitute(args)).intern(),
+            TyKind::Tuple(_) => todo!(),
+            TyKind::Dict(key_ty, value_ty) => {
+                TyKind::Dict(key_ty.substitute(args), value_ty.substitute(args)).intern()
+            }
+            TyKind::BuiltinFunction(data, _subst) => TyKind::BuiltinFunction(data, _subst),
+            TyKind::BuiltinClass(_, _) => todo!(),
+            TyKind::BoundVar(index) => args[*index].clone(),
+        }
     }
 }
 
@@ -160,8 +195,9 @@ pub enum TyKind {
     List(Ty),
     Tuple(SmallVec<[Ty; 2]>),
     Dict(Ty, Ty),
-    BuiltinFunction,
-    BuiltinClass(BuiltinClass),
+    BuiltinFunction(BuiltinFunction, Substitution),
+    BuiltinClass(BuiltinClass, Substitution),
+    BoundVar(usize),
 }
 
 impl DisplayWithDb for TyKind {
@@ -189,8 +225,9 @@ impl DisplayWithDb for TyKind {
                 value_ty.fmt(db, f)?;
                 return f.write_char(']');
             }
-            TyKind::BuiltinFunction => "function",
-            TyKind::BuiltinClass(class) => return f.write_str(class.name(db).as_str()),
+            TyKind::BuiltinFunction(_, _) => "function",
+            TyKind::BuiltinClass(class, _) => return f.write_str(class.name(db).as_str()),
+            TyKind::BoundVar(index) => return write!(f, "'{}", index),
         };
         f.write_str(text)
     }
@@ -208,10 +245,27 @@ impl TyKind {
         Some(match self {
             TyKind::List(_) => types.list_base_class(db),
             TyKind::Dict(_, _) => types.dict_base_class(db),
-            TyKind::BuiltinClass(class) => *class,
+            TyKind::BuiltinClass(class, _) => *class,
             _ => return None,
         })
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Binders {
+    num_vars: usize,
+    ty: Ty,
+}
+
+impl Binders {
+    pub(crate) fn new(num_vars: usize, ty: Ty) -> Self {
+        Self { num_vars, ty }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Substitution {
+    args: SmallVec<[Ty; 2]>,
 }
 
 #[derive(Default)]
@@ -321,7 +375,7 @@ impl TyCtxt<'_> {
             Expr::Dict { entries } => {
                 // Determine the dict's key type. For now, if all specified entries have the key type `T`, then we also
                 // use the type `T` as the dict's key tpe. Otherwise, we use `Any` as the key type.
-                // TODO:
+                // TODO(withered-magic): Eventually, we should use a union type here.
                 let key_ty = self.get_common_type(
                     file,
                     entries.iter().map(|entry| entry.key),
@@ -490,5 +544,12 @@ impl TyCtxt<'_> {
                     .then_some(first_ty)
             })
             .unwrap_or(default)
+    }
+
+    fn type_is_assignable(&self, source: Ty, target: Ty) -> bool {
+        if target.is_any() {
+            return true;
+        }
+        true
     }
 }

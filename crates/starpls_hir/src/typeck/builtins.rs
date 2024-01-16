@@ -1,5 +1,5 @@
 use crate::{
-    typeck::{Ty, TyKind},
+    typeck::{Binders, Ty, TyKind},
     Db, Name,
 };
 
@@ -21,6 +21,7 @@ pub enum BuiltinTypeRef {
     Dict(Box<BuiltinTypeRef>, Box<BuiltinTypeRef>),
     Function(BuiltinFunction),
     Name(Name),
+    BoundVar(usize),
 }
 
 #[salsa::tracked]
@@ -44,6 +45,7 @@ pub struct BuiltinTypes {
 #[salsa::tracked]
 pub struct BuiltinClass {
     pub name: Name,
+    pub num_vars: usize,
     #[return_ref]
     pub fields: Vec<BuiltinField>,
 }
@@ -66,7 +68,7 @@ impl BuiltinField {
 #[salsa::tracked]
 pub struct BuiltinFieldTypes {
     #[return_ref]
-    pub(crate) field_tys: Vec<Ty>,
+    pub(crate) field_tys: Vec<Binders>,
 }
 
 #[salsa::tracked]
@@ -75,6 +77,7 @@ pub fn builtin_field_types(db: &dyn Db, class: BuiltinClass) -> BuiltinFieldType
         .fields(db)
         .iter()
         .map(|field| lower_builtin_type_ref(db, &field.type_ref))
+        .map(|ty| Binders::new(class.num_vars(db), ty))
         .collect();
     BuiltinFieldTypes::new(db, field_tys)
 }
@@ -102,6 +105,7 @@ fn lower_builtin_type_ref(db: &dyn Db, type_ref: &BuiltinTypeRef) -> Ty {
         .intern(),
         BuiltinTypeRef::Function(_) => TyKind::BuiltinFunction.intern(),
         BuiltinTypeRef::Name(_) => todo!(),
+        BuiltinTypeRef::BoundVar(index) => TyKind::BoundVar(*index).intern(),
     }
 }
 
@@ -133,7 +137,7 @@ pub(crate) fn builtin_types(db: &dyn Db) -> BuiltinTypes {
 }
 
 fn intern_class(db: &dyn Db, name: &'static str) -> Ty {
-    TyKind::BuiltinClass(BuiltinClass::new(db, Name::new_inline(name), vec![])).intern()
+    TyKind::BuiltinClass(BuiltinClass::new(db, Name::new_inline(name), 0, vec![])).intern()
 }
 
 fn intern_string(db: &dyn Db) -> Ty {
@@ -141,6 +145,7 @@ fn intern_string(db: &dyn Db) -> Ty {
     TyKind::BuiltinClass(BuiltinClass::new(
         db,
         crate::Name::new_inline("string"),
+        0,
         vec![
             function_field(db, "capitalize", vec![], String),
             function_field(db, "count", vec![String, Int, Int], Int),
@@ -184,6 +189,7 @@ fn intern_bytes(db: &dyn Db) -> Ty {
     TyKind::BuiltinClass(BuiltinClass::new(
         db,
         crate::Name::new_inline("bytes"),
+        0,
         vec![function_field(db, "elems", vec![], BytesElems)],
     ))
     .intern()
@@ -194,14 +200,15 @@ fn make_list_base_class(db: &dyn Db) -> BuiltinClass {
     BuiltinClass::new(
         db,
         crate::Name::new_inline("list"),
+        1,
         vec![
-            function_field(db, "append", vec![], None),
+            function_field(db, "append", vec![BoundVar(0)], None),
             function_field(db, "clear", vec![], None),
             function_field(db, "extend", vec![Any], None),
-            function_field(db, "index", vec![Any, Int, Int], Int),
-            function_field(db, "insert", vec![Int, Any], None),
+            function_field(db, "index", vec![BoundVar(0), Int, Int], Int),
+            function_field(db, "insert", vec![Int, BoundVar(0)], None),
             function_field(db, "pop", vec![Int], Any),
-            function_field(db, "remove", vec![Any], None),
+            function_field(db, "remove", vec![BoundVar(0)], None),
         ],
     )
 }
@@ -211,14 +218,20 @@ fn make_dict_base_class(db: &dyn Db) -> BuiltinClass {
     BuiltinClass::new(
         db,
         crate::Name::new_inline("dict"),
+        2,
         vec![
             function_field(db, "clear", vec![], None),
-            function_field(db, "get", vec![Any, Any], Any),
+            function_field(db, "get", vec![BoundVar(0), Any], BoundVar(1)),
             // function_field(db, "items", vec![], List),
             // function_field(db, "keys", vec![], List),
-            function_field(db, "pop", vec![Any, Any], Any),
+            function_field(db, "pop", vec![BoundVar(0), BoundVar(1)], Any),
             function_field(db, "popitem", vec![], Tuple),
-            function_field(db, "setdefault", vec![Any, Any], Any),
+            function_field(
+                db,
+                "setdefault",
+                vec![BoundVar(0), BoundVar(1)],
+                BoundVar(1),
+            ),
             // function_field(db, "update", vec![List], None),
             // function_field(db, "values", vec![], List),
         ],

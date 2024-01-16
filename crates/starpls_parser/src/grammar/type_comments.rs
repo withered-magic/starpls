@@ -1,9 +1,4 @@
-use crate::{
-    grammar::*,
-    marker::{CompletedMarker, Marker},
-    syntax_kind::SyntaxKindSet,
-    SyntaxKind,
-};
+use crate::{grammar::*, marker::CompletedMarker, syntax_kind::SyntaxKindSet, SyntaxKind};
 
 const TYPE_START: SyntaxKindSet = SyntaxKindSet::new(&[T![ident], T!['(']]);
 

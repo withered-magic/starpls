@@ -1,28 +1,7 @@
 use crate::{
-    typeck::{Binders, Ty, TyKind},
+    typeck::{Binders, Substitution, Ty, TyKind},
     Db, Name,
 };
-
-// A reference to a builtin type. This is mainly used to avoid circular dependencies when
-// constructing the types of a class's fields.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum BuiltinTypeRef {
-    Any,
-    None,
-    Bool,
-    Int,
-    Float,
-    String,
-    StringElems,
-    Bytes,
-    BytesElems,
-    List(Box<BuiltinTypeRef>),
-    Tuple,
-    Dict(Box<BuiltinTypeRef>, Box<BuiltinTypeRef>),
-    Function(BuiltinFunction),
-    Name(Name),
-    BoundVar(usize),
-}
 
 #[salsa::tracked]
 pub struct BuiltinTypes {
@@ -38,6 +17,10 @@ pub struct BuiltinTypes {
     pub(crate) bytes: Ty,
     pub(crate) bytes_elems: Ty,
     pub(crate) tuple: Ty,
+
+    // Base classes for types with fields/methods.
+    pub(crate) string_base_class: BuiltinClass,
+    pub(crate) bytes_base_class: BuiltinClass,
     pub(crate) list_base_class: BuiltinClass,
     pub(crate) dict_base_class: BuiltinClass,
 }
@@ -53,14 +36,14 @@ pub struct BuiltinClass {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BuiltinField {
     pub name: Name,
-    pub type_ref: BuiltinTypeRef,
+    ty: Ty,
 }
 
 impl BuiltinField {
-    fn new_inline(name: &'static str, type_ref: BuiltinTypeRef) -> Self {
+    fn new_inline(name: &'static str, ty: Ty) -> Self {
         Self {
             name: Name::new_inline(name),
-            type_ref,
+            ty,
         }
     }
 }
@@ -76,43 +59,15 @@ pub fn builtin_field_types(db: &dyn Db, class: BuiltinClass) -> BuiltinFieldType
     let field_tys = class
         .fields(db)
         .iter()
-        .map(|field| lower_builtin_type_ref(db, &field.type_ref))
-        .map(|ty| Binders::new(class.num_vars(db), ty))
+        .map(|field| Binders::new(class.num_vars(db), field.ty.clone()))
         .collect();
     BuiltinFieldTypes::new(db, field_tys)
 }
 
-fn lower_builtin_type_ref(db: &dyn Db, type_ref: &BuiltinTypeRef) -> Ty {
-    let types = builtin_types(db);
-    match type_ref {
-        BuiltinTypeRef::Any => types.any(db),
-        BuiltinTypeRef::None => types.none(db),
-        BuiltinTypeRef::Bool => types.bool(db),
-        BuiltinTypeRef::Int => types.int(db),
-        BuiltinTypeRef::Float => types.float(db),
-        BuiltinTypeRef::String => types.string(db),
-        BuiltinTypeRef::StringElems => types.string_elems(db),
-        BuiltinTypeRef::Bytes => types.bytes(db),
-        BuiltinTypeRef::BytesElems => types.bytes_elems(db),
-        BuiltinTypeRef::List(type_ref) => {
-            TyKind::List(lower_builtin_type_ref(db, type_ref)).intern()
-        }
-        BuiltinTypeRef::Tuple => types.tuple(db),
-        BuiltinTypeRef::Dict(key, value) => TyKind::Dict(
-            lower_builtin_type_ref(db, key),
-            lower_builtin_type_ref(db, value),
-        )
-        .intern(),
-        BuiltinTypeRef::Function(_) => TyKind::BuiltinFunction.intern(),
-        BuiltinTypeRef::Name(_) => todo!(),
-        BuiltinTypeRef::BoundVar(index) => TyKind::BoundVar(*index).intern(),
-    }
-}
-
 #[salsa::tracked]
 pub struct BuiltinFunction {
-    param_type_refs: Vec<BuiltinTypeRef>,
-    ret_type_ref: BuiltinTypeRef,
+    param_tys: Vec<Ty>,
+    ret_ty: Ty,
 }
 
 #[salsa::tracked]
@@ -126,111 +81,108 @@ pub(crate) fn builtin_types(db: &dyn Db) -> BuiltinTypes {
         TyKind::Bool.intern(),
         TyKind::Int.intern(),
         TyKind::Float.intern(),
-        intern_string(db),
+        TyKind::String.intern(),
         TyKind::StringElems.intern(),
-        intern_bytes(db),
+        TyKind::Bytes.intern(),
         TyKind::BytesElems.intern(),
-        intern_class(db, "tuple"),
+        TyKind::Tuple.intern(),
+        make_string_base_class(db),
+        make_bytes_base_class(db),
         make_list_base_class(db),
         make_dict_base_class(db),
     )
 }
 
-fn intern_class(db: &dyn Db, name: &'static str) -> Ty {
-    TyKind::BuiltinClass(BuiltinClass::new(db, Name::new_inline(name), 0, vec![])).intern()
-}
-
-fn intern_string(db: &dyn Db) -> Ty {
-    use BuiltinTypeRef::*;
-    TyKind::BuiltinClass(BuiltinClass::new(
+fn make_string_base_class(db: &dyn Db) -> BuiltinClass {
+    use TyKind::*;
+    BuiltinClass::new(
         db,
         crate::Name::new_inline("string"),
         0,
         vec![
-            function_field(db, "capitalize", vec![], String),
-            function_field(db, "count", vec![String, Int, Int], Int),
-            function_field(db, "elems", vec![], StringElems),
-            function_field(db, "endswith", vec![String, Int, Int], Bool),
-            function_field(db, "find", vec![String, Int, Int], Int),
+            function_field(db, "capitalize", vec![], String, 0),
+            function_field(db, "count", vec![String, Int, Int], Int, 0),
+            function_field(db, "elems", vec![], StringElems, 0),
+            function_field(db, "endswith", vec![String, Int, Int], Bool, 0),
+            function_field(db, "find", vec![String, Int, Int], Int, 0),
             // function_field(db, "format", param_type_refs, ret_type_ref),
-            function_field(db, "index", vec![String, Int, Int], Int),
-            function_field(db, "isalnum", vec![], Bool),
-            function_field(db, "isalpha", vec![], Bool),
-            function_field(db, "isdigit", vec![], Bool),
-            function_field(db, "islower", vec![], Bool),
-            function_field(db, "isspace", vec![], Bool),
-            function_field(db, "istitle", vec![], Bool),
-            function_field(db, "isupper", vec![], Bool),
-            function_field(db, "join", vec![Any], Bool),
-            function_field(db, "lower", vec![], String),
-            function_field(db, "lstrip", vec![String], String),
-            function_field(db, "partition", vec![String], Tuple),
-            function_field(db, "removeprefix", vec![String], String),
-            function_field(db, "removesuffix", vec![String], String),
-            function_field(db, "replace", vec![String, String, Int], String),
-            function_field(db, "rfind", vec![String, Int, Int], Int),
-            function_field(db, "rindex", vec![String, Int, Int], Int),
-            function_field(db, "rpartition", vec![String], Tuple),
+            function_field(db, "index", vec![String, Int, Int], Int, 0),
+            function_field(db, "isalnum", vec![], Bool, 0),
+            function_field(db, "isalpha", vec![], Bool, 0),
+            function_field(db, "isdigit", vec![], Bool, 0),
+            function_field(db, "islower", vec![], Bool, 0),
+            function_field(db, "isspace", vec![], Bool, 0),
+            function_field(db, "istitle", vec![], Bool, 0),
+            function_field(db, "isupper", vec![], Bool, 0),
+            function_field(db, "join", vec![Any], Bool, 0),
+            function_field(db, "lower", vec![], String, 0),
+            function_field(db, "lstrip", vec![String], String, 0),
+            function_field(db, "partition", vec![String], Tuple, 0),
+            function_field(db, "removeprefix", vec![String], String, 0),
+            function_field(db, "removesuffix", vec![String], String, 0),
+            function_field(db, "replace", vec![String, String, Int], String, 0),
+            function_field(db, "rfind", vec![String, Int, Int], Int, 0),
+            function_field(db, "rindex", vec![String, Int, Int], Int, 0),
+            function_field(db, "rpartition", vec![String], Tuple, 0),
             // function_field(db, "rsplit", vec![String, Int], List),
-            function_field(db, "rstrip", vec![String], String),
+            function_field(db, "rstrip", vec![String], String, 0),
             // function_field(db, "split", vec![String, Int], List),
             // function_field(db, "splitlines", vec![Bool], List),
-            function_field(db, "startswith", vec![String, Int, Int], Bool),
-            function_field(db, "strip", vec![String], String),
-            function_field(db, "title", vec![], String),
-            function_field(db, "upper", vec![], String),
+            function_field(db, "startswith", vec![String, Int, Int], Bool, 0),
+            function_field(db, "strip", vec![String], String, 0),
+            function_field(db, "title", vec![], String, 0),
+            function_field(db, "upper", vec![], String, 0),
         ],
-    ))
-    .intern()
+    )
 }
 
-fn intern_bytes(db: &dyn Db) -> Ty {
-    use BuiltinTypeRef::*;
-    TyKind::BuiltinClass(BuiltinClass::new(
+fn make_bytes_base_class(db: &dyn Db) -> BuiltinClass {
+    use TyKind::*;
+    BuiltinClass::new(
         db,
         crate::Name::new_inline("bytes"),
         0,
-        vec![function_field(db, "elems", vec![], BytesElems)],
-    ))
-    .intern()
+        vec![function_field(db, "elems", vec![], BytesElems, 0)],
+    )
 }
 
 fn make_list_base_class(db: &dyn Db) -> BuiltinClass {
-    use BuiltinTypeRef::*;
+    use TyKind::*;
     BuiltinClass::new(
         db,
         crate::Name::new_inline("list"),
         1,
         vec![
-            function_field(db, "append", vec![BoundVar(0)], None),
-            function_field(db, "clear", vec![], None),
-            function_field(db, "extend", vec![Any], None),
-            function_field(db, "index", vec![BoundVar(0), Int, Int], Int),
-            function_field(db, "insert", vec![Int, BoundVar(0)], None),
-            function_field(db, "pop", vec![Int], Any),
-            function_field(db, "remove", vec![BoundVar(0)], None),
+            function_field(db, "append", vec![BoundVar(0)], None, 1),
+            function_field(db, "clear", vec![], None, 1),
+            function_field(db, "extend", vec![Any], None, 1),
+            function_field(db, "index", vec![BoundVar(0), Int, Int], Int, 1),
+            function_field(db, "insert", vec![Int, BoundVar(0)], None, 1),
+            function_field(db, "pop", vec![Int], Any, 1),
+            function_field(db, "remove", vec![BoundVar(0)], None, 1),
         ],
     )
 }
 
 fn make_dict_base_class(db: &dyn Db) -> BuiltinClass {
-    use BuiltinTypeRef::*;
+    use TyKind::*;
     BuiltinClass::new(
         db,
         crate::Name::new_inline("dict"),
         2,
         vec![
-            function_field(db, "clear", vec![], None),
-            function_field(db, "get", vec![BoundVar(0), Any], BoundVar(1)),
+            function_field(db, "clear", vec![], None, 2),
+            function_field(db, "get", vec![BoundVar(0), Any], BoundVar(1), 2),
             // function_field(db, "items", vec![], List),
             // function_field(db, "keys", vec![], List),
-            function_field(db, "pop", vec![BoundVar(0), BoundVar(1)], Any),
-            function_field(db, "popitem", vec![], Tuple),
+            function_field(db, "pop", vec![BoundVar(0), BoundVar(1)], Any, 2),
+            function_field(db, "popitem", vec![], Tuple, 2),
             function_field(
                 db,
                 "setdefault",
                 vec![BoundVar(0), BoundVar(1)],
                 BoundVar(1),
+                2,
             ),
             // function_field(db, "update", vec![List], None),
             // function_field(db, "values", vec![], List),
@@ -241,11 +193,17 @@ fn make_dict_base_class(db: &dyn Db) -> BuiltinClass {
 fn function_field(
     db: &dyn Db,
     name: &'static str,
-    param_type_refs: Vec<BuiltinTypeRef>,
-    ret_type_ref: BuiltinTypeRef,
+    param_tys: Vec<TyKind>,
+    ret_ty: TyKind,
+    num_vars: usize,
 ) -> BuiltinField {
+    let param_tys = param_tys.into_iter().map(TyKind::intern).collect();
     BuiltinField::new_inline(
         name,
-        BuiltinTypeRef::Function(BuiltinFunction::new(db, param_type_refs, ret_type_ref)),
+        TyKind::BuiltinFunction(
+            BuiltinFunction::new(db, param_tys, ret_ty.intern()),
+            Substitution::new_identity(num_vars),
+        )
+        .intern(),
     )
 }

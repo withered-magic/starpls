@@ -2,7 +2,9 @@ use crate::{
     def::{Expr, ExprId, Literal},
     display::DisplayWithDb,
     lower as lower_,
-    typeck::builtins::{builtin_types, BuiltinClass, BuiltinFunction, BuiltinTypes},
+    typeck::builtins::{
+        builtin_field_types, builtin_types, BuiltinClass, BuiltinFunction, BuiltinTypes,
+    },
     Db, Declaration, Name, Resolver,
 };
 use crossbeam::atomic::AtomicCell;
@@ -14,6 +16,7 @@ use starpls_intern::{impl_internable, Interned};
 use starpls_syntax::ast::{self, AstNode, AstPtr, BinaryOp, UnaryOp};
 use std::{
     fmt::Write,
+    ops::Sub,
     panic::{self, UnwindSafe},
     sync::Arc,
 };
@@ -123,29 +126,31 @@ impl Ty {
     }
 
     pub fn fields<'a>(&'a self, db: &'a dyn Db) -> Option<Vec<(&'a Name, Ty)>> {
-        let base = self.kind().builtin_class(db)?;
-        todo!()
-        // match self.kind() {
-        //     TyKind::List(subst) => {}
-        //     TyKind::Tuple(_) => todo!(),
-        //     TyKind::Dict(key_subst, value_subst) => todo!(),
-        //     TyKind::BuiltinFunction => todo!(),
-        //     TyKind::BuiltinClass(_) => todo!(),
-        //     TyKind::BoundVar(_) => todo!(),
-        // }
+        let class = self.kind().builtin_class(db)?;
+        let names = class.fields(db).iter().map(|field| &field.name);
+        let mut subst = Substitution::new();
 
-        // let base = self.kind().builtin_class(db)?;
-        // Some(
-        //     base.fields(db)
-        //         .iter()
-        //         .map(|field| &field.name)
-        //         .zip(builtin_field_types(db, base).field_tys(db).iter().cloned())
-        //         .collect(),
-        // )
+        // Build the substitution for lists and dicts.
+        match self.kind() {
+            TyKind::List(ty) => {
+                subst.args.push(ty.clone());
+            }
+            TyKind::Dict(key_ty, value_ty) => {
+                subst.args.push(key_ty.clone());
+                subst.args.push(value_ty.clone());
+            }
+            _ => {}
+        }
+
+        let types = builtin_field_types(db, class)
+            .field_tys(db)
+            .iter()
+            .map(|binders| binders.substitute(&subst));
+        Some(names.zip(types).collect())
     }
 
     pub fn is_fn(&self) -> bool {
-        matches!(self.kind(), TyKind::BuiltinFunction(_))
+        matches!(self.kind(), TyKind::BuiltinFunction(_, _))
     }
 
     pub fn is_any(&self) -> bool {
@@ -154,23 +159,16 @@ impl Ty {
 
     fn substitute(&self, args: &[Ty]) -> Ty {
         match self.kind() {
-            TyKind::Unbound => todo!(),
-            TyKind::Unknown => todo!(),
-            TyKind::Any => todo!(),
-            TyKind::None => todo!(),
-            TyKind::Bool => todo!(),
-            TyKind::Int => todo!(),
-            TyKind::Float => todo!(),
-            TyKind::StringElems => todo!(),
-            TyKind::BytesElems => todo!(),
             TyKind::List(ty) => TyKind::List(ty.substitute(args)).intern(),
-            TyKind::Tuple(_) => todo!(),
+            TyKind::Tuple => todo!(),
             TyKind::Dict(key_ty, value_ty) => {
                 TyKind::Dict(key_ty.substitute(args), value_ty.substitute(args)).intern()
             }
-            TyKind::BuiltinFunction(data, _subst) => TyKind::BuiltinFunction(data, _subst),
-            TyKind::BuiltinClass(_, _) => todo!(),
+            TyKind::BuiltinFunction(data, subst) => {
+                TyKind::BuiltinFunction(*data, subst.substitute(args)).intern()
+            }
             TyKind::BoundVar(index) => args[*index].clone(),
+            _ => self.clone(),
         }
     }
 }
@@ -190,13 +188,16 @@ pub enum TyKind {
     Bool,
     Int,
     Float,
+    String,
     StringElems,
+    Bytes,
     BytesElems,
     List(Ty),
-    Tuple(SmallVec<[Ty; 2]>),
+    // Tuple(SmallVec<[Ty; 2]>),
+    Tuple,
     Dict(Ty, Ty),
     BuiltinFunction(BuiltinFunction, Substitution),
-    BuiltinClass(BuiltinClass, Substitution),
+    // BuiltinClass(BuiltinClass, Substitution),
     BoundVar(usize),
 }
 
@@ -210,7 +211,9 @@ impl DisplayWithDb for TyKind {
             TyKind::Bool => "bool",
             TyKind::Int => "int",
             TyKind::Float => "float",
+            TyKind::String => "string",
             TyKind::StringElems => "string.elems",
+            TyKind::Bytes => "bytes",
             TyKind::BytesElems => "bytes.elems",
             TyKind::List(ty) => {
                 f.write_str("list[")?;
@@ -226,7 +229,6 @@ impl DisplayWithDb for TyKind {
                 return f.write_char(']');
             }
             TyKind::BuiltinFunction(_, _) => "function",
-            TyKind::BuiltinClass(class, _) => return f.write_str(class.name(db).as_str()),
             TyKind::BoundVar(index) => return write!(f, "'{}", index),
         };
         f.write_str(text)
@@ -245,7 +247,6 @@ impl TyKind {
         Some(match self {
             TyKind::List(_) => types.list_base_class(db),
             TyKind::Dict(_, _) => types.dict_base_class(db),
-            TyKind::BuiltinClass(class, _) => *class,
             _ => return None,
         })
     }
@@ -261,11 +262,35 @@ impl Binders {
     pub(crate) fn new(num_vars: usize, ty: Ty) -> Self {
         Self { num_vars, ty }
     }
+
+    pub(crate) fn substitute(&self, subst: &Substitution) -> Ty {
+        self.ty.substitute(&subst.args)
+    }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Substitution {
     args: SmallVec<[Ty; 2]>,
+}
+
+impl Substitution {
+    pub(crate) fn new() -> Self {
+        Self {
+            args: Default::default(),
+        }
+    }
+
+    pub(crate) fn new_identity(num_vars: usize) -> Self {
+        let args = (0..num_vars)
+            .map(|index| TyKind::BoundVar(index).intern())
+            .collect();
+        Self { args }
+    }
+
+    pub(crate) fn substitute(&self, args: &[Ty]) -> Self {
+        let args = self.args.iter().map(|ty| ty.substitute(args)).collect();
+        Self { args }
+    }
 }
 
 #[derive(Default)]
@@ -334,13 +359,14 @@ impl TyCtxt<'_> {
             TypecheckCancelled.throw();
         }
 
-        let info = lower_(self.db, file);
-        let ty = match &info.module(self.db).exprs[expr] {
+        let db = self.db;
+        let info = lower_(db, file);
+        let ty = match &info.module(db).exprs[expr] {
             Expr::Name { name } => {
-                let resolver = Resolver::new_for_expr(self.db, file, expr);
+                let resolver = Resolver::new_for_expr(db, file, expr);
                 let decls = match resolver.resolve_name(name) {
                     Some(decls) => decls,
-                    None => return self.set_expr_type(file, expr, self.types.unbound(self.db)),
+                    None => return self.set_expr_type(file, expr, self.types.unbound(db)),
                 };
                 match decls.last() {
                     Some(Declaration::Variable { id, source }) => {
@@ -351,14 +377,14 @@ impl TyCtxt<'_> {
                                     .get(&FileExprId { file, expr: *id })
                                     .cloned()
                             })
-                            .unwrap_or_else(|| self.types.unknown(self.db))
+                            .unwrap_or_else(|| self.types.unknown(db))
                     }
                     Some(
                         Declaration::Function { .. }
                         | Declaration::Parameter { .. }
                         | Declaration::LoadItem {},
-                    ) => self.types.any(self.db),
-                    _ => self.types.unbound(self.db),
+                    ) => self.types.any(db),
+                    _ => self.types.unbound(db),
                 }
             }
             Expr::List { exprs } => {
@@ -367,11 +393,11 @@ impl TyCtxt<'_> {
                 TyKind::List(self.get_common_type(
                     file,
                     exprs.iter().cloned(),
-                    self.types.unknown(self.db),
+                    self.types.unknown(db),
                 ))
                 .intern()
             }
-            Expr::ListComp { .. } => TyKind::List(self.types.any(self.db)).intern(),
+            Expr::ListComp { .. } => TyKind::List(self.types.any(db)).intern(),
             Expr::Dict { entries } => {
                 // Determine the dict's key type. For now, if all specified entries have the key type `T`, then we also
                 // use the type `T` as the dict's key tpe. Otherwise, we use `Any` as the key type.
@@ -379,36 +405,34 @@ impl TyCtxt<'_> {
                 let key_ty = self.get_common_type(
                     file,
                     entries.iter().map(|entry| entry.key),
-                    self.types.any(self.db),
+                    self.types.any(db),
                 );
 
                 // Similarly, determine the dict's value type.
                 let value_ty = self.get_common_type(
                     file,
                     entries.iter().map(|entry| entry.value),
-                    self.types.unknown(self.db),
+                    self.types.unknown(db),
                 );
                 TyKind::Dict(key_ty, value_ty).intern()
             }
-            Expr::DictComp { .. } => {
-                TyKind::Dict(self.types.any(self.db), self.types.any(self.db)).intern()
-            }
+            Expr::DictComp { .. } => TyKind::Dict(self.types.any(db), self.types.any(db)).intern(),
             Expr::Literal { literal } => match literal {
-                Literal::Int => self.types.int(self.db),
-                Literal::Float => self.types.float(self.db),
-                Literal::String => self.types.string(self.db),
-                Literal::Bytes => self.types.bytes(self.db),
-                Literal::Bool => self.types.bool(self.db),
-                Literal::None => self.types.none(self.db),
+                Literal::Int => self.types.int(db),
+                Literal::Float => self.types.float(db),
+                Literal::String => self.types.string(db),
+                Literal::Bytes => self.types.bytes(db),
+                Literal::Bool => self.types.bool(db),
+                Literal::None => self.types.none(db),
             },
             Expr::Unary { op, expr } => op
                 .as_ref()
                 .map(|op| self.infer_unary_expr(file, *expr, op.clone()))
-                .unwrap_or_else(|| self.types.unknown(self.db)),
+                .unwrap_or_else(|| self.types.unknown(db)),
             Expr::Binary { lhs, rhs, op } => op
                 .as_ref()
                 .map(|op| self.infer_binary_expr(file, *lhs, *rhs, op.clone()))
-                .unwrap_or_else(|| self.types.unknown(self.db)),
+                .unwrap_or_else(|| self.types.unknown(db)),
             Expr::Index { lhs, index } => {
                 let lhs_ty = self.infer_expr(file, *lhs);
                 let index_ty = self.infer_expr(file, *index);
@@ -418,13 +442,13 @@ impl TyCtxt<'_> {
                         if key_ty.kind() == index_kind {
                             value_ty.clone()
                         } else {
-                            self.types.unknown(self.db)
+                            self.types.unknown(db)
                         }
                     }
-                    _ => self.types.unknown(self.db),
+                    _ => self.types.unknown(db),
                 }
             }
-            _ => self.types.any(self.db),
+            _ => self.types.any(db),
         };
         self.set_expr_type(file, expr, ty)
     }

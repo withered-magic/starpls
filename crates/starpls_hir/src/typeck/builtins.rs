@@ -66,8 +66,8 @@ pub fn builtin_field_types(db: &dyn Db, class: BuiltinClass) -> BuiltinFieldType
 
 #[salsa::tracked]
 pub struct BuiltinFunction {
-    param_tys: Vec<Ty>,
-    ret_ty: Ty,
+    pub param_tys: Vec<Ty>,
+    pub ret_ty: Ty,
 }
 
 #[salsa::tracked]
@@ -172,7 +172,7 @@ fn make_dict_base_class(db: &dyn Db) -> BuiltinClass {
         2,
         vec![
             function_field(db, "clear", vec![], None, 2),
-            function_field(db, "get", vec![BoundVar(0), Any], BoundVar(1), 2),
+            function_field(db, "get", vec![BoundVar(0), BoundVar(1)], BoundVar(1), 2),
             // function_field(db, "items", vec![], List),
             // function_field(db, "keys", vec![], List),
             function_field(db, "pop", vec![BoundVar(0), BoundVar(1)], Any, 2),

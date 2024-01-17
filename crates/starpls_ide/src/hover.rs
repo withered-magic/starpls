@@ -56,7 +56,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
 
     // Otherwise, provide hover information for identifiers.
     let parent = token.parent()?;
-    if let Some(name_ref) = ast::NameRef::cast(parent) {
+    if let Some(name_ref) = ast::NameRef::cast(parent.clone()) {
         let expr_ptr = AstPtr::new(&ast::Expression::cast(name_ref.syntax().clone())?);
         let expr = *lower(db, file).source_map(db).expr_map.get(&expr_ptr)?;
         let ty = db.infer_expr(file, expr);
@@ -71,7 +71,25 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
         write!(&mut text, "{}", ty.display(db)).unwrap();
         text.push_str("\n```\n");
         return Some(text.into());
-    }
+    } else if let Some(name) = ast::Name::cast(parent.clone()) {
+        let dot_expr = ast::DotExpr::cast(name.syntax().parent()?)?;
+        let receiver_ptr = AstPtr::new(&dot_expr.expr()?);
+        let receiver_expr = *lower(db, file).source_map(db).expr_map.get(&receiver_ptr)?;
+        let receiver_ty = db.infer_expr(file, receiver_expr);
+        let field_ty = receiver_ty
+            .fields(db)?
+            .iter()
+            .find_map(|(field_name, ty)| {
+                (field_name.as_str() == name.syntax().text()).then_some(ty.clone())
+            })?;
 
+        let mut text = String::new();
+        text.push_str("```text\n(field) ");
+        name.syntax().text().for_each_chunk(|s| text.push_str(s));
+        text.push_str(": ");
+        write!(&mut text, "{}", field_ty.display(db)).unwrap();
+        text.push_str("\n```\n");
+        return Some(text.into());
+    }
     None
 }

@@ -16,7 +16,6 @@ use starpls_intern::{impl_internable, Interned};
 use starpls_syntax::ast::{self, AstNode, AstPtr, BinaryOp, UnaryOp};
 use std::{
     fmt::Write,
-    ops::Sub,
     panic::{self, UnwindSafe},
     sync::Arc,
 };
@@ -228,7 +227,17 @@ impl DisplayWithDb for TyKind {
                 value_ty.fmt(db, f)?;
                 return f.write_char(']');
             }
-            TyKind::BuiltinFunction(_, _) => "function",
+            TyKind::BuiltinFunction(fun, subst) => {
+                f.write_char('(')?;
+                for (i, param_ty) in fun.param_tys(db).iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(", ")?;
+                    }
+                    param_ty.substitute(&subst.args).fmt(db, f)?;
+                }
+                f.write_str(") -> ")?;
+                return fun.ret_ty(db).substitute(&subst.args).fmt(db, f);
+            }
             TyKind::BoundVar(index) => return write!(f, "'{}", index),
         };
         f.write_str(text)
@@ -433,6 +442,21 @@ impl TyCtxt<'_> {
                 .as_ref()
                 .map(|op| self.infer_binary_expr(file, *lhs, *rhs, op.clone()))
                 .unwrap_or_else(|| self.types.unknown(db)),
+            Expr::Dot { expr, field } => {
+                let receiver_ty = self.infer_expr(file, *expr);
+                receiver_ty
+                    .fields(db)
+                    .unwrap_or_else(|| Vec::new())
+                    .iter()
+                    .find_map(|(field2, ty)| {
+                        if field == *field2 {
+                            Some(ty.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| self.types.unknown(db))
+            }
             Expr::Index { lhs, index } => {
                 let lhs_ty = self.infer_expr(file, *lhs);
                 let index_ty = self.infer_expr(file, *index);
@@ -448,6 +472,10 @@ impl TyCtxt<'_> {
                     _ => self.types.unknown(db),
                 }
             }
+            Expr::Call { callee, .. } => match self.infer_expr(file, *callee).kind() {
+                TyKind::BuiltinFunction(fun, subst) => fun.ret_ty(db).substitute(&subst.args),
+                _ => self.types.unknown(db),
+            },
             _ => self.types.any(db),
         };
         self.set_expr_type(file, expr, ty)

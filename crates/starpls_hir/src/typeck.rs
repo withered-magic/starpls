@@ -700,6 +700,7 @@ impl TyCtxt<'_> {
                     .map(|expr| source_map.expr_map.get(&AstPtr::new(&expr)).unwrap())
                     .copied()
                     .collect::<Vec<_>>();
+
                 let sub_ty = match source_ty.kind() {
                     TyKind::List(ty) => ty.clone(),
                     TyKind::Tuple(_) | TyKind::Any => self.types.any(self.db),
@@ -715,7 +716,11 @@ impl TyCtxt<'_> {
                         return;
                     }
                 };
-                self.assign_exprs_source_ty(file, source, &targets, sub_ty);
+                if targets.len() == 1 {
+                    self.assign_expr_source_ty(file, targets[0], targets[0], sub_ty);
+                } else {
+                    self.assign_exprs_source_ty(file, source, &targets, sub_ty);
+                }
             }
         }
     }

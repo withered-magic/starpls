@@ -408,6 +408,22 @@ pub struct TyCtxt<'a> {
 }
 
 impl TyCtxt<'_> {
+    pub fn infer_all_exprs(&mut self, file: File) {
+        let info = lower_(self.db, file);
+        for (expr, _) in info.module(self.db).exprs.iter() {
+            self.infer_expr(file, expr);
+        }
+    }
+
+    pub fn diagnostics_for_file(&self, file: File) -> Vec<Diagnostic> {
+        self.cx
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.range.file_id == file.id(self.db))
+            .cloned()
+            .collect()
+    }
+
     pub fn infer_expr(&mut self, file: File, expr: ExprId) -> Ty {
         if let Some(ty) = self
             .cx
@@ -625,14 +641,17 @@ impl TyCtxt<'_> {
     fn infer_source_expr_assign(&mut self, file: File, source: ExprId) {
         // Find the parent assignment node. This can be either an assignment statement (`x = 0`), a `for` statement (`for x in 1, 2, 3`), or
         // a for comp clause in a list/dict comprehension (`[x + 1 for x in [1, 2, 3]]`).
-        let source_ty = self.infer_expr(file, source);
         let info = lower_(self.db, file);
-        let source_ptr = info.source_map(self.db).expr_map_back.get(&source).unwrap();
+        let source_ptr = match info.source_map(self.db).expr_map_back.get(&source) {
+            Some(ptr) => ptr,
+            _ => return,
+        };
         let parent = source_ptr
             .to_node(&parse(self.db, file).syntax(self.db))
             .syntax()
             .parent()
             .unwrap();
+        let source_ty = self.infer_expr(file, source);
 
         if let Some(stmt) = ast::AssignStmt::cast(parent.clone()) {
             if let Some(lhs) = stmt.lhs() {

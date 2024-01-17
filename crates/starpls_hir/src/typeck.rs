@@ -159,7 +159,9 @@ impl Ty {
     fn substitute(&self, args: &[Ty]) -> Ty {
         match self.kind() {
             TyKind::List(ty) => TyKind::List(ty.substitute(args)).intern(),
-            TyKind::Tuple => todo!(),
+            TyKind::Tuple(tys) => {
+                TyKind::Tuple(tys.iter().map(|ty| ty.substitute(args)).collect()).intern()
+            }
             TyKind::Dict(key_ty, value_ty) => {
                 TyKind::Dict(key_ty.substitute(args), value_ty.substitute(args)).intern()
             }
@@ -192,8 +194,7 @@ pub enum TyKind {
     Bytes,
     BytesElems,
     List(Ty),
-    // Tuple(SmallVec<[Ty; 2]>),
-    Tuple,
+    Tuple(SmallVec<[Ty; 2]>),
     Dict(Ty, Ty),
     BuiltinFunction(BuiltinFunction, Substitution),
     // BuiltinClass(BuiltinClass, Substitution),
@@ -219,7 +220,16 @@ impl DisplayWithDb for TyKind {
                 ty.fmt(db, f)?;
                 return f.write_char(']');
             }
-            TyKind::Tuple { .. } => "tuple",
+            TyKind::Tuple(tys) => {
+                f.write_str("tuple[")?;
+                for (i, ty) in tys.iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(", ")?;
+                    }
+                    ty.fmt(db, f)?;
+                }
+                return f.write_char(']');
+            }
             TyKind::Dict(key_ty, value_ty) => {
                 f.write_str("dict[")?;
                 key_ty.fmt(db, f)?;
@@ -254,6 +264,8 @@ impl TyKind {
     pub fn builtin_class(&self, db: &dyn Db) -> Option<BuiltinClass> {
         let types = builtin_types(db);
         Some(match self {
+            TyKind::String => types.string_base_class(db),
+            TyKind::Bytes => types.bytes_base_class(db),
             TyKind::List(_) => types.list_base_class(db),
             TyKind::Dict(_, _) => types.dict_base_class(db),
             _ => return None,
@@ -557,16 +569,13 @@ impl TyCtxt<'_> {
                 self.set_expr_type(file, expr, source_ty);
             }
             Expr::List { exprs } | Expr::Tuple { exprs } => {
-                let source_ty = if matches!(source_ty.kind(), TyKind::List { .. })
-                    || source_ty == self.types.tuple(self.db)
-                    || source_ty == self.types.any(self.db)
-                {
-                    self.types.any(self.db)
-                } else {
-                    self.types.unknown(self.db)
+                let sub_ty = match source_ty.kind() {
+                    TyKind::List(ty) => ty.clone(),
+                    TyKind::Tuple(_) | TyKind::Any => self.types.any(self.db),
+                    _ => self.types.unknown(self.db),
                 };
                 for expr in exprs.iter().copied() {
-                    self.assign_expr_source_ty(file, expr, source_ty.clone());
+                    self.assign_expr_source_ty(file, expr, sub_ty.clone());
                 }
             }
             Expr::Paren { expr } => self.assign_expr_source_ty(file, *expr, source_ty),

@@ -2,6 +2,7 @@ use crate::{
     typeck::{Binders, Substitution, Ty, TyKind},
     Db, Name,
 };
+use smallvec::smallvec;
 
 #[salsa::tracked]
 pub struct BuiltinTypes {
@@ -16,7 +17,6 @@ pub struct BuiltinTypes {
     pub(crate) string_elems: Ty,
     pub(crate) bytes: Ty,
     pub(crate) bytes_elems: Ty,
-    pub(crate) tuple: Ty,
 
     // Base classes for types with fields/methods.
     pub(crate) string_base_class: BuiltinClass,
@@ -85,7 +85,6 @@ pub(crate) fn builtin_types(db: &dyn Db) -> BuiltinTypes {
         TyKind::StringElems.intern(),
         TyKind::Bytes.intern(),
         TyKind::BytesElems.intern(),
-        TyKind::Tuple.intern(),
         make_string_base_class(db),
         make_bytes_base_class(db),
         make_list_base_class(db),
@@ -117,17 +116,29 @@ fn make_string_base_class(db: &dyn Db) -> BuiltinClass {
             function_field(db, "join", vec![Any], Bool, 0),
             function_field(db, "lower", vec![], String, 0),
             function_field(db, "lstrip", vec![String], String, 0),
-            function_field(db, "partition", vec![String], Tuple, 0),
+            function_field(
+                db,
+                "partition",
+                vec![String],
+                Tuple(smallvec![String.intern(), String.intern(), String.intern()]),
+                0,
+            ),
             function_field(db, "removeprefix", vec![String], String, 0),
             function_field(db, "removesuffix", vec![String], String, 0),
             function_field(db, "replace", vec![String, String, Int], String, 0),
             function_field(db, "rfind", vec![String, Int, Int], Int, 0),
             function_field(db, "rindex", vec![String, Int, Int], Int, 0),
-            function_field(db, "rpartition", vec![String], Tuple, 0),
-            // function_field(db, "rsplit", vec![String, Int], List),
+            function_field(
+                db,
+                "rpartition",
+                vec![String],
+                Tuple(smallvec![String.intern(), String.intern(), String.intern()]),
+                0,
+            ),
+            function_field(db, "rsplit", vec![String, Int], List(String.intern()), 0),
             function_field(db, "rstrip", vec![String], String, 0),
-            // function_field(db, "split", vec![String, Int], List),
-            // function_field(db, "splitlines", vec![Bool], List),
+            function_field(db, "split", vec![String, Int], List(String.intern()), 0),
+            function_field(db, "splitlines", vec![Bool], List(String.intern()), 0),
             function_field(db, "startswith", vec![String, Int, Int], Bool, 0),
             function_field(db, "strip", vec![String], String, 0),
             function_field(db, "title", vec![], String, 0),
@@ -173,10 +184,22 @@ fn make_dict_base_class(db: &dyn Db) -> BuiltinClass {
         vec![
             function_field(db, "clear", vec![], None, 2),
             function_field(db, "get", vec![BoundVar(0), BoundVar(1)], BoundVar(1), 2),
-            // function_field(db, "items", vec![], List),
-            // function_field(db, "keys", vec![], List),
+            function_field(
+                db,
+                "items",
+                vec![],
+                List(Tuple(smallvec![BoundVar(0).intern(), BoundVar(1).intern()]).intern()),
+                2,
+            ),
+            function_field(db, "keys", vec![], List(BoundVar(0).intern()), 2),
             function_field(db, "pop", vec![BoundVar(0), BoundVar(1)], Any, 2),
-            function_field(db, "popitem", vec![], Tuple, 2),
+            function_field(
+                db,
+                "popitem",
+                vec![],
+                Tuple(smallvec![BoundVar(0).intern(), BoundVar(1).intern()]),
+                2,
+            ),
             function_field(
                 db,
                 "setdefault",
@@ -184,8 +207,16 @@ fn make_dict_base_class(db: &dyn Db) -> BuiltinClass {
                 BoundVar(1),
                 2,
             ),
-            // function_field(db, "update", vec![List], None),
-            // function_field(db, "values", vec![], List),
+            function_field(
+                db,
+                "update",
+                vec![List(
+                    Tuple(smallvec![BoundVar(0).intern(), BoundVar(1).intern()]).intern(),
+                )],
+                None,
+                2,
+            ),
+            function_field(db, "values", vec![], List(BoundVar(1).intern()), 2),
         ],
     )
 }

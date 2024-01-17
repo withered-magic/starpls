@@ -11,7 +11,7 @@ use crossbeam::atomic::AtomicCell;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
-use starpls_common::{parse, File};
+use starpls_common::{parse, Diagnostic, File, FileRange, Severity};
 use starpls_intern::{impl_internable, Interned};
 use starpls_syntax::ast::{self, AstNode, AstPtr, BinaryOp, UnaryOp};
 use std::{
@@ -351,7 +351,7 @@ impl Substitution {
 #[derive(Default)]
 pub struct GlobalCtxt {
     shared_state: Arc<SharedState>,
-    type_of_expr: Arc<Mutex<FxHashMap<FileExprId, Ty>>>,
+    cx: Arc<Mutex<InferenceCtxt>>,
 }
 
 impl GlobalCtxt {
@@ -363,37 +363,40 @@ impl GlobalCtxt {
     where
         F: FnMut(&mut TyCtxt) -> T + std::panic::UnwindSafe,
     {
-        let mut type_of_expr = self.type_of_expr.lock();
+        let mut cx = self.cx.lock();
         let mut tcx = TyCtxt {
             db,
             types: builtin_types(db),
             shared_state: Arc::clone(&self.shared_state),
-            type_of_expr: &mut type_of_expr,
+            cx: &mut cx,
         };
         f(&mut tcx)
     }
 }
 
+#[derive(Default)]
+struct InferenceCtxt {
+    diagnostics: Vec<Diagnostic>,
+    type_of_expr: FxHashMap<FileExprId, Ty>,
+}
+
 pub struct CancelGuard<'a> {
     gcx: &'a GlobalCtxt,
-    type_of_expr: &'a Mutex<FxHashMap<FileExprId, Ty>>,
+    cx: &'a Mutex<InferenceCtxt>,
 }
 
 impl<'a> CancelGuard<'a> {
     fn new(gcx: &'a GlobalCtxt) -> Self {
         gcx.shared_state.cancelled.store(true);
-        Self {
-            gcx,
-            type_of_expr: &gcx.type_of_expr,
-        }
+        Self { gcx, cx: &gcx.cx }
     }
 }
 
 impl Drop for CancelGuard<'_> {
     fn drop(&mut self) {
-        let mut type_of_expr = self.type_of_expr.lock();
+        let mut cx = self.cx.lock();
         self.gcx.shared_state.cancelled.store(false);
-        *type_of_expr = FxHashMap::default();
+        *cx = Default::default();
     }
 }
 
@@ -401,12 +404,17 @@ pub struct TyCtxt<'a> {
     db: &'a dyn Db,
     types: BuiltinTypes,
     shared_state: Arc<SharedState>,
-    type_of_expr: &'a mut FxHashMap<FileExprId, Ty>,
+    cx: &'a mut InferenceCtxt,
 }
 
 impl TyCtxt<'_> {
     pub fn infer_expr(&mut self, file: File, expr: ExprId) -> Ty {
-        if let Some(ty) = self.type_of_expr.get(&FileExprId { file, expr }).cloned() {
+        if let Some(ty) = self
+            .cx
+            .type_of_expr
+            .get(&FileExprId { file, expr })
+            .cloned()
+        {
             return ty;
         }
 
@@ -428,7 +436,8 @@ impl TyCtxt<'_> {
                         return source
                             .and_then(|source| {
                                 self.infer_source_expr_assign(file, source);
-                                self.type_of_expr
+                                self.cx
+                                    .type_of_expr
                                     .get(&FileExprId { file, expr: *id })
                                     .cloned()
                             })
@@ -480,13 +489,16 @@ impl TyCtxt<'_> {
                 Literal::Bool => self.types.bool(db),
                 Literal::None => self.types.none(db),
             },
-            Expr::Unary { op, expr } => op
+            Expr::Unary {
+                op,
+                expr: unary_expr,
+            } => op
                 .as_ref()
-                .map(|op| self.infer_unary_expr(file, *expr, op.clone()))
+                .map(|op| self.infer_unary_expr(file, expr, *unary_expr, op.clone()))
                 .unwrap_or_else(|| self.types.unknown(db)),
             Expr::Binary { lhs, rhs, op } => op
                 .as_ref()
-                .map(|op| self.infer_binary_expr(file, *lhs, *rhs, op.clone()))
+                .map(|op| self.infer_binary_expr(file, expr, *lhs, *rhs, op.clone()))
                 .unwrap_or_else(|| self.types.unknown(db)),
             Expr::Dot { expr, field } => {
                 let receiver_ty = self.infer_expr(file, *expr);
@@ -527,49 +539,84 @@ impl TyCtxt<'_> {
         self.set_expr_type(file, expr, ty)
     }
 
-    fn infer_unary_expr(&mut self, file: File, expr: ExprId, op: UnaryOp) -> Ty {
+    fn infer_unary_expr(&mut self, file: File, parent: ExprId, expr: ExprId, op: UnaryOp) -> Ty {
+        let db = self.db;
         let ty = self.infer_expr(file, expr);
         let kind = ty.kind();
+        let mut unknown = || {
+            self.add_diagnostic(
+                file,
+                parent,
+                format!(
+                    "Operator \"{}\" is not supported for type \"{}\"",
+                    op,
+                    ty.display(db)
+                ),
+            );
+            self.types.unknown(db)
+        };
+
         if kind == &TyKind::Any {
-            return self.types.any(self.db);
+            return self.types.any(db);
         }
 
         match op {
             UnaryOp::Arith(_) => match kind {
-                TyKind::Int => self.types.int(self.db),
-                TyKind::Float => self.types.float(self.db),
-                _ => self.types.unknown(self.db),
+                TyKind::Int => self.types.int(db),
+                TyKind::Float => self.types.float(db),
+                _ => unknown(),
             },
             UnaryOp::Inv => match kind {
-                TyKind::Int => self.types.int(self.db),
-                _ => self.types.unknown(self.db),
+                TyKind::Int => self.types.int(db),
+                _ => unknown(),
             },
-            UnaryOp::Not => self.types.bool(self.db),
+            UnaryOp::Not => self.types.bool(db),
         }
     }
 
-    fn infer_binary_expr(&mut self, file: File, lhs: ExprId, rhs: ExprId, op: BinaryOp) -> Ty {
+    fn infer_binary_expr(
+        &mut self,
+        file: File,
+        parent: ExprId,
+        lhs: ExprId,
+        rhs: ExprId,
+        op: BinaryOp,
+    ) -> Ty {
+        let db = self.db;
         let lhs = self.infer_expr(file, lhs);
         let rhs = self.infer_expr(file, rhs);
         let lhs = lhs.kind();
         let rhs = rhs.kind();
+        let mut unknown = || {
+            self.add_diagnostic(
+                file,
+                parent,
+                format!(
+                    "Operator \"{}\" not supported for types \"{}\" and \"{}\"",
+                    op,
+                    lhs.display(db),
+                    rhs.display(db)
+                ),
+            );
+            self.types.unknown(db)
+        };
 
         if lhs == &TyKind::Any || rhs == &TyKind::Any {
-            return self.types.any(self.db);
+            return self.types.any(db);
         }
 
         match op {
             // TODO(withered-magic): Handle string interoplation with "%".
             BinaryOp::Arith(_) => match (lhs, rhs) {
-                (TyKind::Int, TyKind::Int) => self.types.int(self.db),
+                (TyKind::Int, TyKind::Int) => self.types.int(db),
                 (TyKind::Float, TyKind::Int)
                 | (TyKind::Int, TyKind::Float)
-                | (TyKind::Float, TyKind::Float) => self.types.float(self.db),
-                _ => self.types.unknown(self.db),
+                | (TyKind::Float, TyKind::Float) => self.types.float(db),
+                _ => unknown(),
             },
             BinaryOp::Bitwise(_) => match (lhs, rhs) {
-                (TyKind::Int, TyKind::Int) => self.types.int(self.db),
-                _ => self.types.unknown(self.db),
+                (TyKind::Int, TyKind::Int) => self.types.int(db),
+                _ => unknown(),
             },
             _ => self.types.bool(self.db),
         }
@@ -618,7 +665,8 @@ impl TyCtxt<'_> {
     }
 
     fn set_expr_type(&mut self, file: File, expr: ExprId, ty: Ty) -> Ty {
-        self.type_of_expr
+        self.cx
+            .type_of_expr
             .insert(FileExprId { file, expr }, ty.clone());
         ty
     }
@@ -646,5 +694,22 @@ impl TyCtxt<'_> {
             return true;
         }
         true
+    }
+
+    fn add_diagnostic<T: Into<String>>(&mut self, file: File, expr: ExprId, message: T) {
+        let info = lower_(self.db, file);
+        let range = match info.source_map(self.db).expr_map_back.get(&expr) {
+            Some(ptr) => ptr.syntax_node_ptr().text_range(),
+            None => return,
+        };
+
+        self.cx.diagnostics.push(Diagnostic {
+            message: message.into(),
+            severity: Severity::Error,
+            range: FileRange {
+                file_id: file.id(self.db),
+                range: range,
+            },
+        })
     }
 }

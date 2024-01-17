@@ -3,7 +3,10 @@ use crate::{
     SyntaxKind::{self, *},
     SyntaxNode, SyntaxNodeChildren, SyntaxToken, T,
 };
-use std::marker::PhantomData;
+use std::{
+    fmt::{Debug, Write},
+    marker::PhantomData,
+};
 
 pub use rowan::ast::{AstNode, AstPtr};
 use rowan::Direction;
@@ -902,6 +905,18 @@ pub enum BinaryOp {
     MemberOp(MemberOp),
 }
 
+impl std::fmt::Display for BinaryOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BinaryOp::Arith(op) => std::fmt::Display::fmt(op, f),
+            BinaryOp::Bitwise(op) => std::fmt::Display::fmt(op, f),
+            BinaryOp::Cmp(op) => std::fmt::Display::fmt(op, f),
+            BinaryOp::Logic(op) => std::fmt::Display::fmt(op, f),
+            BinaryOp::MemberOp(op) => std::fmt::Display::fmt(op, f),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ArithOp {
     Add,
@@ -912,6 +927,19 @@ pub enum ArithOp {
     Mod,
 }
 
+impl std::fmt::Display for ArithOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            ArithOp::Add => "+",
+            ArithOp::Sub => "-",
+            ArithOp::Mul => "*",
+            ArithOp::Div => "/",
+            ArithOp::Flr => "//",
+            ArithOp::Mod => "%",
+        })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BitwiseOp {
     And,
@@ -919,6 +947,18 @@ pub enum BitwiseOp {
     Xor,
     Shl,
     Shr,
+}
+
+impl std::fmt::Display for BitwiseOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            BitwiseOp::And => "&",
+            BitwiseOp::Or => "|",
+            BitwiseOp::Xor => "^",
+            BitwiseOp::Shl => "<<",
+            BitwiseOp::Shr => ">>",
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -931,10 +971,32 @@ pub enum CmpOp {
     Ge,
 }
 
+impl std::fmt::Display for CmpOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            CmpOp::Eq => "==",
+            CmpOp::Ne => "!=",
+            CmpOp::Lt => "<",
+            CmpOp::Gt => ">",
+            CmpOp::Le => "<=",
+            CmpOp::Ge => ">=",
+        })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LogicOp {
     And,
     Or,
+}
+
+impl std::fmt::Display for LogicOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            LogicOp::And => "and",
+            LogicOp::Or => "or",
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -943,11 +1005,30 @@ pub enum MemberOp {
     NotIn,
 }
 
+impl std::fmt::Display for MemberOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            MemberOp::In => "in",
+            MemberOp::NotIn => "not in",
+        })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AssignOp {
     Normal,
     Arith(ArithAssignOp),
     Bitwise(BitwiseAssignOp),
+}
+
+impl std::fmt::Display for AssignOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AssignOp::Normal => f.write_char('='),
+            AssignOp::Arith(op) => std::fmt::Display::fmt(op, f),
+            AssignOp::Bitwise(op) => std::fmt::Display::fmt(op, f),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -960,6 +1041,19 @@ pub enum ArithAssignOp {
     Mod,
 }
 
+impl std::fmt::Display for ArithAssignOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            ArithAssignOp::Add => "+=",
+            ArithAssignOp::Sub => "-=",
+            ArithAssignOp::Mul => "*=",
+            ArithAssignOp::Div => "/=",
+            ArithAssignOp::Flr => "//=",
+            ArithAssignOp::Mod => "%=",
+        })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BitwiseAssignOp {
     And,
@@ -969,6 +1063,18 @@ pub enum BitwiseAssignOp {
     Xor,
 }
 
+impl std::fmt::Display for BitwiseAssignOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            BitwiseAssignOp::And => "&=",
+            BitwiseAssignOp::Or => "|=",
+            BitwiseAssignOp::Shl => "<<=",
+            BitwiseAssignOp::Shr => ">>=",
+            BitwiseAssignOp::Xor => "^=",
+        })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
     Arith(UnaryArithOp),
@@ -976,10 +1082,29 @@ pub enum UnaryOp {
     Not,
 }
 
+impl std::fmt::Display for UnaryOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UnaryOp::Arith(op) => std::fmt::Display::fmt(op, f),
+            UnaryOp::Inv => f.write_char('~'),
+            UnaryOp::Not => f.write_char('!'),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum UnaryArithOp {
     Add,
     Sub,
+}
+
+impl std::fmt::Display for UnaryArithOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_char(match self {
+            UnaryArithOp::Add => '+',
+            UnaryArithOp::Sub => '-',
+        })
+    }
 }
 
 ast_token! {

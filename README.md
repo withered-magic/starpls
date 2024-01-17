@@ -4,6 +4,12 @@
 ## Development
 `starpls` currently requires a nightly build of Rust, due to usage of `trait_upcasting` as specified by [RFC3324](https://rust-lang.github.io/rfcs/3324-dyn-upcasting.html).
 
+Steps to get up and running:
+1. `rustup override set nightly`
+2. `cargo build`
+3. Open VSCode, `Run and Debug > Run Extension (Debug Build)`.
+4. In the extension development host, open a `.star` file and enjoy syntax highlighting and error messages!
+
 ## Disclaimer
 This project is still heavily WIP, so expect a decent amount of bugs and crashes if you decide to try it out! Additionally, I've elected to focus on implementing the core Starlark specification first before introducing Bazel- or Buck2-specific features.
 

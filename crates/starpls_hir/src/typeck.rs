@@ -547,24 +547,29 @@ impl TyCtxt<'_> {
             Expr::Index { lhs, index } => {
                 let lhs_ty = self.infer_expr(file, *lhs);
                 let index_ty = self.infer_expr(file, *index);
-                match (lhs_ty.kind(), index_ty.kind()) {
-                    (TyKind::List(ty), TyKind::Int) => ty.clone(),
-                    (TyKind::List(_), index_ty) => self.add_diagnostic(
+                let mut cannot_index = |receiver| {
+                    self.add_diagnostic(
                         file,
                         *lhs,
-                        format!("Cannot index list with type \"{}\"", index_ty.display(db)),
-                    ),
-                    (TyKind::Dict(key_ty, value_ty), index_kind) => {
-                        if key_ty.kind() == index_kind {
-                            value_ty.clone()
-                        } else {
-                            self.add_diagnostic(
-                                file,
-                                *lhs,
-                                format!("Cannot index dict with type \"{}\"", index_ty.display(db)),
-                            )
-                        }
+                        format!(
+                            "Cannot index {} with type \"{}\"",
+                            receiver,
+                            index_ty.display(db)
+                        ),
+                    )
+                };
+
+                match (lhs_ty.kind(), index_ty.kind()) {
+                    (TyKind::List(ty), TyKind::Int) => ty.clone(),
+                    (TyKind::List(_), _) => cannot_index("list"),
+                    (TyKind::Dict(key_ty, value_ty), index_kind) if key_ty.kind() == index_kind => {
+                        value_ty.clone()
                     }
+                    (TyKind::Dict(_, _), _) => cannot_index("dict"),
+                    (TyKind::String, TyKind::Int) => self.types.string(db),
+                    (TyKind::String, _) => cannot_index("string"),
+                    (TyKind::Bytes, TyKind::Int) => self.types.int(db),
+                    (TyKind::Bytes, _) => cannot_index("bytes"),
                     (TyKind::Unknown | TyKind::Any, _) => self.types.unknown(db),
                     _ => self.add_diagnostic(
                         file,

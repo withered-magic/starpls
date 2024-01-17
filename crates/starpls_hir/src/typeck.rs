@@ -516,8 +516,11 @@ impl TyCtxt<'_> {
                 .as_ref()
                 .map(|op| self.infer_binary_expr(file, expr, *lhs, *rhs, op.clone()))
                 .unwrap_or_else(|| self.types.unknown(db)),
-            Expr::Dot { expr, field } => {
-                let receiver_ty = self.infer_expr(file, *expr);
+            Expr::Dot {
+                expr: dot_expr,
+                field,
+            } => {
+                let receiver_ty = self.infer_expr(file, *dot_expr);
                 receiver_ty
                     .fields(db)
                     .unwrap_or_else(|| Vec::new())
@@ -529,27 +532,59 @@ impl TyCtxt<'_> {
                             None
                         }
                     })
-                    .unwrap_or_else(|| self.types.unknown(db))
+                    .unwrap_or_else(|| {
+                        self.add_diagnostic(
+                            file,
+                            expr,
+                            format!(
+                                "Cannot access field \"{}\" for type \"{}\"",
+                                field.as_str(),
+                                receiver_ty.display(db)
+                            ),
+                        )
+                    })
             }
             Expr::Index { lhs, index } => {
                 let lhs_ty = self.infer_expr(file, *lhs);
                 let index_ty = self.infer_expr(file, *index);
                 match (lhs_ty.kind(), index_ty.kind()) {
                     (TyKind::List(ty), TyKind::Int) => ty.clone(),
+                    (TyKind::List(_), index_ty) => self.add_diagnostic(
+                        file,
+                        *lhs,
+                        format!("Cannot index list with type \"{}\"", index_ty.display(db)),
+                    ),
                     (TyKind::Dict(key_ty, value_ty), index_kind) => {
                         if key_ty.kind() == index_kind {
                             value_ty.clone()
                         } else {
-                            self.types.unknown(db)
+                            self.add_diagnostic(
+                                file,
+                                *lhs,
+                                format!("Cannot index dict with type \"{}\"", index_ty.display(db)),
+                            )
                         }
                     }
-                    _ => self.types.unknown(db),
+                    (TyKind::Unknown | TyKind::Any, _) => self.types.unknown(db),
+                    _ => self.add_diagnostic(
+                        file,
+                        *lhs,
+                        format!("Type \"{}\" is not indexable", lhs_ty.display(db)),
+                    ),
                 }
             }
-            Expr::Call { callee, .. } => match self.infer_expr(file, *callee).kind() {
-                TyKind::BuiltinFunction(fun, subst) => fun.ret_ty(db).substitute(&subst.args),
-                _ => self.types.unknown(db),
-            },
+            Expr::Call { callee, .. } => {
+                let callee_ty = self.infer_expr(file, *callee);
+                match callee_ty.kind() {
+                    TyKind::BuiltinFunction(fun, subst) => fun.ret_ty(db).substitute(&subst.args),
+                    TyKind::Unknown | TyKind::Any => self.types.unknown(db),
+                    _ => self.add_diagnostic(
+                        file,
+                        expr,
+                        format!("Type \"{}\" is not callable", callee_ty.display(db)),
+                    ),
+                }
+            }
             _ => self.types.any(db),
         };
         self.set_expr_type(file, expr, ty)
@@ -568,8 +603,7 @@ impl TyCtxt<'_> {
                     op,
                     ty.display(db)
                 ),
-            );
-            self.types.unknown(db)
+            )
         };
 
         if kind == &TyKind::Any {
@@ -613,8 +647,7 @@ impl TyCtxt<'_> {
                     lhs.display(db),
                     rhs.display(db)
                 ),
-            );
-            self.types.unknown(db)
+            )
         };
 
         if lhs == &TyKind::Any || rhs == &TyKind::Any {
@@ -642,7 +675,8 @@ impl TyCtxt<'_> {
         // Find the parent assignment node. This can be either an assignment statement (`x = 0`), a `for` statement (`for x in 1, 2, 3`), or
         // a for comp clause in a list/dict comprehension (`[x + 1 for x in [1, 2, 3]]`).
         let info = lower_(self.db, file);
-        let source_ptr = match info.source_map(self.db).expr_map_back.get(&source) {
+        let source_map = info.source_map(self.db);
+        let source_ptr = match source_map.expr_map_back.get(&source) {
             Some(ptr) => ptr,
             _ => return,
         };
@@ -657,30 +691,81 @@ impl TyCtxt<'_> {
             if let Some(lhs) = stmt.lhs() {
                 let lhs_ptr = AstPtr::new(&lhs);
                 let expr = info.source_map(self.db).expr_map.get(&lhs_ptr).unwrap();
-                self.assign_expr_source_ty(file, *expr, source_ty);
+                self.assign_expr_source_ty(file, *expr, *expr, source_ty);
+            }
+        } else if let Some(stmt) = ast::ForStmt::cast(parent) {
+            if let Some(targets) = stmt.targets() {
+                let targets = targets
+                    .exprs()
+                    .map(|expr| source_map.expr_map.get(&AstPtr::new(&expr)).unwrap())
+                    .copied()
+                    .collect::<Vec<_>>();
+                let sub_ty = match source_ty.kind() {
+                    TyKind::List(ty) => ty.clone(),
+                    TyKind::Tuple(_) | TyKind::Any => self.types.any(self.db),
+                    _ => {
+                        self.add_diagnostic(
+                            file,
+                            source,
+                            format!("Type \"{}\" is not iterable", source_ty.display(self.db)),
+                        );
+                        for expr in targets.iter() {
+                            self.assign_expr_unknown_rec(file, *expr);
+                        }
+                        return;
+                    }
+                };
+                self.assign_exprs_source_ty(file, source, &targets, sub_ty);
             }
         }
     }
 
-    fn assign_expr_source_ty(&mut self, file: File, expr: ExprId, source_ty: Ty) {
+    fn assign_expr_source_ty(&mut self, file: File, root: ExprId, expr: ExprId, source_ty: Ty) {
         let module = lower_(self.db, file);
         match module.module(self.db).exprs.get(expr).unwrap() {
             Expr::Name { .. } => {
                 self.set_expr_type(file, expr, source_ty);
             }
             Expr::List { exprs } | Expr::Tuple { exprs } => {
-                let sub_ty = match source_ty.kind() {
-                    TyKind::List(ty) => ty.clone(),
-                    TyKind::Tuple(_) | TyKind::Any => self.types.any(self.db),
-                    _ => self.types.unknown(self.db),
-                };
-                for expr in exprs.iter().copied() {
-                    self.assign_expr_source_ty(file, expr, sub_ty.clone());
-                }
+                self.assign_exprs_source_ty(file, root, exprs, source_ty);
             }
-            Expr::Paren { expr } => self.assign_expr_source_ty(file, *expr, source_ty),
+            Expr::Paren { expr } => self.assign_expr_source_ty(file, root, *expr, source_ty),
             _ => {}
         }
+    }
+
+    fn assign_exprs_source_ty(
+        &mut self,
+        file: File,
+        root: ExprId,
+        exprs: &[ExprId],
+        source_ty: Ty,
+    ) {
+        let sub_ty = match source_ty.kind() {
+            TyKind::List(ty) => ty.clone(),
+            TyKind::Tuple(_) | TyKind::Any => self.types.any(self.db),
+            _ => {
+                self.add_diagnostic(
+                    file,
+                    root,
+                    format!("Type \"{}\" is not iterable", source_ty.display(self.db)),
+                );
+                for expr in exprs.iter() {
+                    self.assign_expr_unknown_rec(file, *expr);
+                }
+                return;
+            }
+        };
+        for expr in exprs.iter().copied() {
+            self.assign_expr_source_ty(file, root, expr, sub_ty.clone());
+        }
+    }
+
+    fn assign_expr_unknown_rec(&mut self, file: File, expr: ExprId) {
+        self.set_expr_type(file, expr, self.types.unknown(self.db));
+        lower_(self.db, file).module(self.db).exprs[expr].walk_child_exprs(|expr| {
+            self.assign_expr_unknown_rec(file, expr);
+        })
     }
 
     fn set_expr_type(&mut self, file: File, expr: ExprId, ty: Ty) -> Ty {
@@ -715,11 +800,11 @@ impl TyCtxt<'_> {
         true
     }
 
-    fn add_diagnostic<T: Into<String>>(&mut self, file: File, expr: ExprId, message: T) {
+    fn add_diagnostic<T: Into<String>>(&mut self, file: File, expr: ExprId, message: T) -> Ty {
         let info = lower_(self.db, file);
         let range = match info.source_map(self.db).expr_map_back.get(&expr) {
             Some(ptr) => ptr.syntax_node_ptr().text_range(),
-            None => return,
+            None => return self.types.unknown(self.db),
         };
 
         self.cx.diagnostics.push(Diagnostic {
@@ -729,6 +814,7 @@ impl TyCtxt<'_> {
                 file_id: file.id(self.db),
                 range: range,
             },
-        })
+        });
+        self.types.unknown(self.db)
     }
 }

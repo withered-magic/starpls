@@ -156,6 +156,39 @@ impl Ty {
         self.kind() == &TyKind::Any
     }
 
+    pub fn is_iterable(&self) -> bool {
+        matches!(
+            self.kind(),
+            TyKind::Dict(_, _)
+                | TyKind::List(_)
+                | TyKind::Tuple(_)
+                | TyKind::StringElems
+                | TyKind::BytesElems
+        )
+    }
+
+    pub fn is_sequence(&self) -> bool {
+        matches!(
+            self.kind(),
+            TyKind::Dict(_, _) | TyKind::List(_) | TyKind::Tuple(_)
+        )
+    }
+
+    pub fn is_indexable(&self) -> bool {
+        matches!(
+            self.kind(),
+            TyKind::String | TyKind::Bytes | TyKind::Tuple(_) | TyKind::List(_)
+        )
+    }
+
+    pub fn is_set_indexable(&self) -> bool {
+        matches!(self.kind(), TyKind::List(_))
+    }
+
+    pub fn is_mapping(&self) -> bool {
+        matches!(self.kind(), TyKind::Dict(_, _))
+    }
+
     fn substitute(&self, args: &[Ty]) -> Ty {
         match self.kind() {
             TyKind::List(ty) => TyKind::List(ty.substitute(args)).intern(),
@@ -196,8 +229,8 @@ pub enum TyKind {
     List(Ty),
     Tuple(SmallVec<[Ty; 2]>),
     Dict(Ty, Ty),
+    Range,
     BuiltinFunction(BuiltinFunction, Substitution),
-    // BuiltinClass(BuiltinClass, Substitution),
     BoundVar(usize),
 }
 
@@ -237,6 +270,7 @@ impl DisplayWithDb for TyKind {
                 value_ty.fmt(db, f)?;
                 return f.write_char(']');
             }
+            TyKind::Range => "range",
             TyKind::BuiltinFunction(fun, subst) => {
                 f.write_char('(')?;
                 for (i, param_ty) in fun.param_tys(db).iter().enumerate() {

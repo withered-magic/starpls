@@ -25,6 +25,7 @@ macro_rules! match_notification {
 
 #[derive(Debug)]
 pub(crate) enum Task {
+    AnalysisRequested,
     /// A new set of diagnostics has been processed and is ready for forwarding.
     DiagnosticsReady(Vec<(FileId, Vec<lsp_types::Diagnostic>)>),
     /// A request has been evaluated and its response is ready.
@@ -78,6 +79,9 @@ impl Server {
         // This is done asynchronously, so any new diagnostics resulting from this won't be seen until the next turn
         // of the event loop.
         if self.process_changes() {
+            self.analysis_requested = false;
+            self.analysis_debouncer.sender.send(()).unwrap();
+        } else if self.analysis_requested {
             self.update_diagnostics();
         }
 
@@ -137,6 +141,7 @@ impl Server {
 
             Task::DiagnosticsReady(res)
         });
+        self.analysis_requested = false;
     }
 
     fn register_and_handle_request(&mut self, req: lsp_server::Request) {
@@ -227,6 +232,7 @@ impl Server {
 
     fn handle_task(&mut self, task: Task) {
         match task {
+            Task::AnalysisRequested => self.analysis_requested = true,
             Task::DiagnosticsReady(diagnostics) => {
                 for (file_id, diagnostics) in diagnostics {
                     self.diagnostics_manager

@@ -5,6 +5,7 @@ use lsp_types::{
 };
 
 mod convert;
+mod debouncer;
 mod diagnostics;
 mod document;
 mod event_loop;

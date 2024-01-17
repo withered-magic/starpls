@@ -1,4 +1,5 @@
 use crate::{
+    debouncer::AnalysisDebouncer,
     diagnostics::DiagnosticsManager,
     document::DocumentManager,
     event_loop::Task,
@@ -7,7 +8,9 @@ use crate::{
 use lsp_server::{Connection, ReqQueue};
 use parking_lot::RwLock;
 use starpls_ide::{Analysis, AnalysisSnapshot, Change};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
+
+const DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
 
 pub(crate) struct Server {
     pub(crate) connection: Connection,
@@ -16,6 +19,8 @@ pub(crate) struct Server {
     pub(crate) document_manager: Arc<RwLock<DocumentManager>>,
     pub(crate) diagnostics_manager: DiagnosticsManager,
     pub(crate) analysis: Analysis,
+    pub(crate) analysis_debouncer: AnalysisDebouncer,
+    pub(crate) analysis_requested: bool,
 }
 
 pub(crate) struct ServerSnapshot {
@@ -27,7 +32,7 @@ impl Server {
     pub(crate) fn new(connection: Connection) -> anyhow::Result<Self> {
         // Create the task pool for processin incoming requests.
         let (sender, receiver) = crossbeam_channel::unbounded();
-        let task_pool = TaskPool::with_num_threads(sender, 4)?;
+        let task_pool = TaskPool::with_num_threads(sender.clone(), 4)?;
         let task_pool_handle = TaskPoolHandle::new(receiver, task_pool);
 
         Ok(Server {
@@ -37,6 +42,8 @@ impl Server {
             document_manager: Default::default(),
             diagnostics_manager: Default::default(),
             analysis: Analysis::new(),
+            analysis_debouncer: AnalysisDebouncer::new(DEBOUNCE_INTERVAL, sender),
+            analysis_requested: false,
         })
     }
 

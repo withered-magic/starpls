@@ -34,8 +34,10 @@ pub struct Jar(
     typeck::builtins::BuiltinClass,
     typeck::builtins::BuiltinFieldTypes,
     typeck::builtins::BuiltinFunction,
+    typeck::builtins::BuiltinFunctions,
     typeck::builtins::BuiltinTypes,
     typeck::builtins::builtin_field_types,
+    typeck::builtins::builtin_functions,
     typeck::builtins::builtin_types,
 );
 

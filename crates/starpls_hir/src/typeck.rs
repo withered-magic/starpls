@@ -3,7 +3,8 @@ use crate::{
     display::DisplayWithDb,
     lower as lower_,
     typeck::builtins::{
-        builtin_field_types, builtin_types, BuiltinClass, BuiltinFunction, BuiltinTypes,
+        builtin_field_types, builtin_types, BuiltinClass, BuiltinFunction, BuiltinFunctionParam,
+        BuiltinTypes,
     },
     Db, Declaration, Name, Resolver,
 };
@@ -235,7 +236,7 @@ pub enum TyKind {
 }
 
 impl DisplayWithDb for TyKind {
-    fn fmt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let text = match self {
             TyKind::Unbound => "Unbound",
             TyKind::Unknown => "Unknown",
@@ -271,20 +272,48 @@ impl DisplayWithDb for TyKind {
                 return f.write_char(']');
             }
             TyKind::Range => "range",
-            TyKind::BuiltinFunction(fun, subst) => {
+            TyKind::BuiltinFunction(func, subst) => {
                 f.write_char('(')?;
-                for (i, param_ty) in fun.param_tys(db).iter().enumerate() {
+                for (i, param) in func.params(db).iter().enumerate() {
                     if i > 0 {
                         f.write_str(", ")?;
                     }
-                    param_ty.substitute(&subst.args).fmt(db, f)?;
+                    match param {
+                        BuiltinFunctionParam::Positional { ty, optional } => {
+                            write!(f, "x{}: ", i)?;
+                            ty.fmt(db, f)?;
+                            if *optional {
+                                f.write_str(" = None")?;
+                            }
+                        }
+                        BuiltinFunctionParam::Keyword { name, ty } => {
+                            f.write_str(name.as_str())?;
+                            f.write_str(": ")?;
+                            ty.fmt(db, f)?;
+                            f.write_str(" = None")?;
+                        }
+                        BuiltinFunctionParam::VarArgList { ty } => {
+                            f.write_str("*args: ")?;
+                            ty.fmt(db, f)?;
+                        }
+                        BuiltinFunctionParam::VarArgDict => {
+                            f.write_str("**kwargs")?;
+                        }
+                    }
                 }
                 f.write_str(") -> ")?;
-                return fun.ret_ty(db).substitute(&subst.args).fmt(db, f);
+                return func.ret_ty(db).substitute(&subst.args).fmt(db, f);
             }
             TyKind::BoundVar(index) => return write!(f, "'{}", index),
         };
         f.write_str(text)
+    }
+
+    fn fmt_alt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TyKind::BuiltinFunction(_, _) => f.write_str("builtin_function_or_method"),
+            _ => self.fmt(db, f),
+        }
     }
 }
 
@@ -554,7 +583,7 @@ impl TyCtxt<'_> {
                         format!(
                             "Cannot index {} with type \"{}\"",
                             receiver,
-                            index_ty.display(db)
+                            index_ty.display(db).alt()
                         ),
                     )
                 };
@@ -574,7 +603,7 @@ impl TyCtxt<'_> {
                     _ => self.add_diagnostic(
                         file,
                         *lhs,
-                        format!("Type \"{}\" is not indexable", lhs_ty.display(db)),
+                        format!("Type \"{}\" is not indexable", lhs_ty.display(db).alt()),
                     ),
                 }
             }
@@ -586,7 +615,7 @@ impl TyCtxt<'_> {
                     _ => self.add_diagnostic(
                         file,
                         expr,
-                        format!("Type \"{}\" is not callable", callee_ty.display(db)),
+                        format!("Type \"{}\" is not callable", callee_ty.display(db).alt()),
                     ),
                 }
             }

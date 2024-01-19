@@ -289,7 +289,7 @@ impl DisplayWithDb for TyKind {
                     match param {
                         BuiltinFunctionParam::Positional { ty, optional } => {
                             write!(f, "x{}: ", i)?;
-                            ty.fmt(db, f)?;
+                            ty.substitute(&subst.args).fmt(db, f)?;
                             if *optional {
                                 f.write_str(" = None")?;
                             }
@@ -297,12 +297,12 @@ impl DisplayWithDb for TyKind {
                         BuiltinFunctionParam::Keyword { name, ty } => {
                             f.write_str(name.as_str())?;
                             f.write_str(": ")?;
-                            ty.fmt(db, f)?;
+                            ty.substitute(&subst.args).fmt(db, f)?;
                             f.write_str(" = None")?;
                         }
                         BuiltinFunctionParam::VarArgList { ty } => {
                             f.write_str("*args: ")?;
-                            ty.fmt(db, f)?;
+                            ty.substitute(&subst.args).fmt(db, f)?;
                         }
                         BuiltinFunctionParam::VarArgDict => {
                             f.write_str("**kwargs")?;
@@ -669,7 +669,7 @@ impl TyCtxt<'_> {
                         let params = func.params(db);
                         for param in params {
                             let slot = match param {
-                                BuiltinFunctionParam::Positional { optional, .. } => {
+                                BuiltinFunctionParam::Positional { .. } => {
                                     if saw_vararg {
                                         // TODO: Emit diagnostics for invalid parameters.
                                         break;
@@ -851,6 +851,13 @@ impl TyCtxt<'_> {
                     ),
                 }
             }
+            Expr::Tuple { exprs } => TyKind::Tuple(
+                exprs
+                    .iter()
+                    .map(|expr| self.infer_expr(file, *expr))
+                    .collect(),
+            )
+            .intern(),
             _ => self.types.any(db),
         };
         self.set_expr_type(file, expr, ty)
@@ -1012,9 +1019,39 @@ impl TyCtxt<'_> {
         exprs: &[ExprId],
         source_ty: Ty,
     ) {
-        let sub_ty = match source_ty.kind() {
-            TyKind::List(ty) => ty.clone(),
-            TyKind::Tuple(_) | TyKind::Any => self.types.any(self.db),
+        match source_ty.kind() {
+            TyKind::List(ty) => {
+                for expr in exprs.iter().copied() {
+                    self.assign_expr_source_ty(file, root, expr, ty.clone());
+                }
+            }
+            TyKind::Tuple(tys) => {
+                let mut pairs = exprs.iter().copied().zip(tys.iter());
+                while let Some((expr, ty)) = pairs.next() {
+                    self.assign_expr_source_ty(file, root, expr, ty.clone());
+                }
+                if exprs.len() != tys.len() {
+                    if exprs.len() > tys.len() {
+                        for expr in &exprs[tys.len()..] {
+                            self.assign_expr_unknown_rec(file, *expr);
+                        }
+                    }
+                    self.add_diagnostic(
+                        file,
+                        root,
+                        format!(
+                            "Tuple size mismatch, {} on left-hand side and {} on right-hand side",
+                            exprs.len(),
+                            tys.len(),
+                        ),
+                    );
+                }
+            }
+            TyKind::Any => {
+                for expr in exprs.iter().copied() {
+                    self.assign_expr_source_ty(file, root, expr, self.types.any(self.db));
+                }
+            }
             _ => {
                 self.add_diagnostic(
                     file,
@@ -1027,9 +1064,6 @@ impl TyCtxt<'_> {
                 return;
             }
         };
-        for expr in exprs.iter().copied() {
-            self.assign_expr_source_ty(file, root, expr, sub_ty.clone());
-        }
     }
 
     fn assign_expr_unknown_rec(&mut self, file: File, expr: ExprId) {

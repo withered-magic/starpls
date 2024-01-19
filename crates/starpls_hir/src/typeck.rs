@@ -157,6 +157,10 @@ impl Ty {
         self.kind() == &TyKind::Any
     }
 
+    pub fn is_unknown(&self) -> bool {
+        self.kind() == &TyKind::Unknown
+    }
+
     pub fn is_iterable(&self) -> bool {
         matches!(
             self.kind(),
@@ -188,6 +192,10 @@ impl Ty {
 
     pub fn is_mapping(&self) -> bool {
         matches!(self.kind(), TyKind::Dict(_, _))
+    }
+
+    pub fn is_var(&self) -> bool {
+        matches!(self.kind(), TyKind::BoundVar(_))
     }
 
     fn substitute(&self, args: &[Ty]) -> Ty {
@@ -750,11 +758,13 @@ impl TyCtxt<'_> {
                                     }
                                 }
                                 Argument::UnpackedList { expr } => {
-                                    // Mark all positional slots as well as the "*args" slot as being provided by
-                                    // this argument.
+                                    // Mark all unfilled positional slots as well as the "*args" slot as being
+                                    // provided by this argument.
                                     for slot in slots.iter_mut() {
                                         match slot {
-                                            Slot::Positional { provider } => {
+                                            Slot::Positional {
+                                                provider: provider @ SlotProvider::Missing,
+                                            } => {
                                                 *provider =
                                                     SlotProvider::VarArgList(expr, arg_ty.clone())
                                             }
@@ -798,6 +808,7 @@ impl TyCtxt<'_> {
                                         .intern()
                                 }
                             };
+                            let param_ty = param_ty.substitute(&subst.args);
 
                             let mut validate_provider = |provider| match provider {
                                 SlotProvider::Missing => {
@@ -813,7 +824,7 @@ impl TyCtxt<'_> {
                                     }
                                 }
                                 SlotProvider::Single(expr, ty) => {
-                                    if ty != param_ty {
+                                    if !self.assign_tys(&ty, &param_ty) {
                                         self.add_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to paramter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                 }
@@ -1053,11 +1064,11 @@ impl TyCtxt<'_> {
             .unwrap_or(default)
     }
 
-    fn type_is_assignable(&self, source: Ty, target: Ty) -> bool {
-        if target.is_any() {
+    fn assign_tys(&self, source: &Ty, target: &Ty) -> bool {
+        if target.is_any() || target.is_unknown() {
             return true;
         }
-        true
+        source == target
     }
 
     fn add_diagnostic<T: Into<String>>(&mut self, file: File, expr: ExprId, message: T) -> Ty {

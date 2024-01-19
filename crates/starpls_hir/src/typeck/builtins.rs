@@ -87,6 +87,15 @@ pub enum BuiltinFunctionParam {
     VarArgDict,
 }
 
+impl BuiltinFunctionParam {
+    pub fn is_optional(&self) -> bool {
+        match self {
+            BuiltinFunctionParam::Positional { optional, .. } => *optional,
+            _ => true,
+        }
+    }
+}
+
 #[salsa::tracked]
 pub(crate) fn builtin_functions(db: &dyn Db) -> BuiltinFunctions {
     // TODO(withered-magic): Many of these signatures are wrong

@@ -1,5 +1,5 @@
 use crate::{
-    def::{Expr, ExprId, Literal},
+    def::{Argument, Expr, ExprId, Literal},
     display::DisplayWithDb,
     lower as lower_,
     typeck::builtins::{
@@ -11,7 +11,7 @@ use crate::{
 use crossbeam::atomic::AtomicCell;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use starpls_common::{parse, Diagnostic, File, FileRange, Severity};
 use starpls_intern::{impl_internable, Interned};
 use starpls_syntax::ast::{self, AstNode, AstPtr, BinaryOp, UnaryOp};
@@ -607,11 +607,232 @@ impl TyCtxt<'_> {
                     ),
                 }
             }
-            Expr::Call { callee, .. } => {
+            Expr::Call { callee, args } => {
                 let callee_ty = self.infer_expr(file, *callee);
+                let args_with_ty: SmallVec<[(Argument, Ty); 5]> = args
+                    .iter()
+                    .cloned()
+                    .map(|arg| {
+                        let arg_ty = match &arg {
+                            Argument::Simple { expr }
+                            | Argument::Keyword { expr, .. }
+                            | Argument::UnpackedList { expr }
+                            | Argument::UnpackedDict { expr } => self.infer_expr(file, *expr),
+                        };
+                        (arg, arg_ty)
+                    })
+                    .collect();
+
                 match callee_ty.kind() {
-                    TyKind::BuiltinFunction(fun, subst) => fun.ret_ty(db).substitute(&subst.args),
-                    TyKind::Unknown | TyKind::Any => self.types.unknown(db),
+                    TyKind::BuiltinFunction(func, subst) => {
+                        // Match arguments with their corresponding parameters.
+                        // The following routine is based on PEP 3102 (https://peps.python.org/pep-3102),
+                        // but with a couple of modifications for handling "*args" and "**kwargs" arguments.
+                        #[derive(Clone, Debug, PartialEq, Eq)]
+                        enum SlotProvider {
+                            Missing,
+                            Single(ExprId, Ty),
+                            VarArgList(ExprId, Ty),
+                            VarArgDict(ExprId, Ty),
+                        }
+
+                        enum Slot {
+                            Positional {
+                                provider: SlotProvider,
+                            },
+                            Keyword {
+                                name: Name,
+                                provider: SlotProvider,
+                            },
+                            VarArgList {
+                                providers: SmallVec<[SlotProvider; 1]>,
+                            },
+                            VarArgDict {
+                                providers: SmallVec<[SlotProvider; 1]>,
+                            },
+                        }
+
+                        let mut slots: SmallVec<[Slot; 5]> = smallvec![];
+
+                        // Only match valid parameters. For example, don't match a second `*args` or
+                        // `**kwargs` parameter.
+                        let mut saw_vararg = false;
+                        let mut saw_kwargs = false;
+                        let params = func.params(db);
+                        for param in params {
+                            let slot = match param {
+                                BuiltinFunctionParam::Positional { optional, .. } => {
+                                    if saw_vararg {
+                                        // TODO: Emit diagnostics for invalid parameters.
+                                        break;
+                                    }
+                                    Slot::Positional {
+                                        provider: SlotProvider::Missing,
+                                    }
+                                }
+                                BuiltinFunctionParam::Keyword { name, .. } => Slot::Keyword {
+                                    name: name.clone(),
+                                    provider: SlotProvider::Missing,
+                                },
+                                BuiltinFunctionParam::VarArgList { .. } => {
+                                    saw_vararg = true;
+                                    Slot::VarArgList {
+                                        providers: smallvec![],
+                                    }
+                                }
+                                BuiltinFunctionParam::VarArgDict => {
+                                    saw_kwargs = true;
+                                    Slot::VarArgDict {
+                                        providers: smallvec![],
+                                    }
+                                }
+                            };
+
+                            slots.push(slot);
+
+                            // Nothing can follow a "**kwargs" parameter.
+                            if saw_kwargs {
+                                break;
+                            }
+                        }
+
+                        'outer: for (arg, arg_ty) in args_with_ty {
+                            match arg {
+                                Argument::Simple { expr } => {
+                                    // Look for a positional parameter with no provider, or for a "*args"
+                                    // parameter.
+                                    let provider = SlotProvider::Single(expr, arg_ty);
+                                    for slot in slots.iter_mut() {
+                                        match slot {
+                                            Slot::Positional {
+                                                provider: provider2 @ SlotProvider::Missing,
+                                            } => {
+                                                *provider2 = provider;
+                                                continue 'outer;
+                                            }
+                                            Slot::VarArgList { providers } => {
+                                                providers.push(provider);
+                                                continue 'outer;
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                    self.add_diagnostic(
+                                        file,
+                                        expr,
+                                        "Unexpected positional argument",
+                                    );
+                                }
+                                Argument::Keyword {
+                                    name: ref arg_name,
+                                    expr,
+                                } => {
+                                    // Look for either a keyword parameter matching this argument's
+                                    // name, or for the "**kwargs" parameter.
+                                    let provider = SlotProvider::Single(expr, arg_ty);
+                                    for slot in slots.iter_mut() {
+                                        match slot {
+                                            Slot::Keyword {
+                                                name,
+                                                provider:
+                                                    provider2 @ (SlotProvider::Missing
+                                                    | SlotProvider::VarArgDict(_, _)),
+                                            } if arg_name == name => {
+                                                *provider2 = provider;
+                                                continue 'outer;
+                                            }
+                                            Slot::VarArgList { providers } => {
+                                                providers.push(provider);
+                                                continue 'outer;
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                                Argument::UnpackedList { expr } => {
+                                    // Mark all positional slots as well as the "*args" slot as being provided by
+                                    // this argument.
+                                    for slot in slots.iter_mut() {
+                                        match slot {
+                                            Slot::Positional { provider } => {
+                                                *provider =
+                                                    SlotProvider::VarArgList(expr, arg_ty.clone())
+                                            }
+                                            Slot::VarArgList { providers } => {
+                                                providers.push(SlotProvider::VarArgList(
+                                                    expr,
+                                                    arg_ty.clone(),
+                                                ));
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                                Argument::UnpackedDict { expr } => {
+                                    // Mark all keyword slots as well as the "**kwargs" slot as being provided by
+                                    // this argument.
+                                    for slot in slots.iter_mut() {
+                                        match slot {
+                                            Slot::Keyword { provider, .. } => {
+                                                *provider =
+                                                    SlotProvider::VarArgDict(expr, arg_ty.clone())
+                                            }
+                                            Slot::VarArgDict { providers } => providers.push(
+                                                SlotProvider::VarArgDict(expr, arg_ty.clone()),
+                                            ),
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Validate argument types.
+                        for (param, slot) in params.iter().zip(slots) {
+                            let param_ty = match param {
+                                BuiltinFunctionParam::Positional { ty, .. }
+                                | BuiltinFunctionParam::Keyword { ty, .. }
+                                | BuiltinFunctionParam::VarArgList { ty } => ty.clone(),
+                                BuiltinFunctionParam::VarArgDict => {
+                                    TyKind::Dict(self.types.any(self.db), self.types.any(self.db))
+                                        .intern()
+                                }
+                            };
+
+                            let mut validate_provider = |provider| match provider {
+                                SlotProvider::Missing => {
+                                    if !param.is_optional() {
+                                        self.add_diagnostic(
+                                            file,
+                                            expr,
+                                            format!(
+                                                "Missing expected argument of type \"{}\"",
+                                                param_ty.display(db)
+                                            ),
+                                        );
+                                    }
+                                }
+                                SlotProvider::Single(expr, ty) => {
+                                    if ty != param_ty {
+                                        self.add_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to paramter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
+                                    }
+                                }
+                                _ => {}
+                            };
+
+                            match slot {
+                                Slot::Positional { provider } | Slot::Keyword { provider, .. } => {
+                                    validate_provider(provider)
+                                }
+                                Slot::VarArgList { providers } | Slot::VarArgDict { providers } => {
+                                    providers.into_iter().for_each(validate_provider);
+                                }
+                            }
+                        }
+
+                        func.ret_ty(db).substitute(&subst.args)
+                    }
+                    TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.types.unknown(db),
                     _ => self.add_diagnostic(
                         file,
                         expr,

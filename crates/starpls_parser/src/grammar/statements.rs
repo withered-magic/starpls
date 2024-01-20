@@ -280,7 +280,7 @@ pub(crate) fn load_stmt(p: &mut Parser) {
         match p.current() {
             T![ident] => {
                 let m = p.start();
-                assert!(name_ref(p).is_some());
+                assert!(name(p).is_some());
                 if !p.eat(T![=]) {
                     p.error("Expected \"=\"");
                 } else if !p.eat(STRING) {

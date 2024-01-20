@@ -304,7 +304,7 @@ pub enum Declaration {
     BuiltinFunction { func: BuiltinFunction },
     Variable { id: ExprId, source: Option<ExprId> },
     Parameter { id: ParamId },
-    LoadItem {},
+    LoadItem { id: StmtId },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

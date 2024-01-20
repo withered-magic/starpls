@@ -1,5 +1,5 @@
 use crate::{
-    def::{CompClause, Declaration, Expr, ExprId, Param, ParamId, Stmt, StmtId},
+    def::{CompClause, Declaration, Expr, ExprId, LoadItem, Param, ParamId, Stmt, StmtId},
     lower, Db, Module, ModuleInfo, ModuleSourceMap, Name,
 };
 use id_arena::{Arena, Id};
@@ -228,7 +228,20 @@ impl ScopeCollector<'_> {
                 *current = self.scopes.alloc_scope(*current);
                 self.collect_expr(*lhs, *current, Some(*rhs));
             }
-            Stmt::Load { .. } => {}
+            Stmt::Load { items } => {
+                *current = self.scopes.alloc_scope(*current);
+                for item in items.iter() {
+                    let name: &str = match item {
+                        LoadItem::Direct { name } => &name,
+                        LoadItem::Aliased { alias, .. } => alias.as_str(),
+                    };
+                    self.scopes.add_decl(
+                        *current,
+                        Name::from_str(name),
+                        Declaration::LoadItem { id: stmt },
+                    )
+                }
+            }
             Stmt::Return { expr } => {
                 if let Some(expr) = expr {
                     self.collect_expr(*expr, *current, None);

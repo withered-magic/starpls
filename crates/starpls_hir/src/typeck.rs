@@ -121,7 +121,7 @@ impl From<BuiltinType> for TypeRef {
 pub struct Ty(Interned<TyKind>);
 
 impl Ty {
-    pub fn kind(&self) -> &TyKind {
+    pub(crate) fn kind(&self) -> &TyKind {
         &self.0
     }
 

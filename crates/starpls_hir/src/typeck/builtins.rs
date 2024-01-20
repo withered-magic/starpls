@@ -94,6 +94,13 @@ impl BuiltinFunctionParam {
             _ => true,
         }
     }
+
+    pub fn name(&self) -> Option<&Name> {
+        match self {
+            BuiltinFunctionParam::Keyword { name, .. } => Some(name),
+            _ => None,
+        }
+    }
 }
 
 #[salsa::tracked]
@@ -297,7 +304,7 @@ fn make_string_base_class(db: &dyn Db) -> BuiltinClass {
             function_field(db, "isspace", vec![], Bool, 0),
             function_field(db, "istitle", vec![], Bool, 0),
             function_field(db, "isupper", vec![], Bool, 0),
-            function_field(db, "join", vec![positional(Any)], Bool, 0),
+            function_field(db, "join", vec![positional(Any)], String, 0),
             function_field(db, "lower", vec![], String, 0),
             function_field(db, "lstrip", vec![positional_opt(String)], String, 0),
             function_field(

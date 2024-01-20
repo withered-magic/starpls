@@ -149,6 +149,21 @@ impl Ty {
         Some(names.zip(types).collect())
     }
 
+    pub fn params<'a>(&'a self, db: &'a dyn Db) -> Vec<&'a Name> {
+        let mut params = Vec::new();
+        match self.kind() {
+            TyKind::BuiltinFunction(func, _) => {
+                for param in func.params(db).iter() {
+                    if let Some(name) = param.name() {
+                        params.push(name);
+                    }
+                }
+            }
+            _ => {}
+        }
+        params
+    }
+
     pub fn is_fn(&self) -> bool {
         matches!(self.kind(), TyKind::BuiltinFunction(_, _))
     }
@@ -569,6 +584,15 @@ impl TyCtxt<'_> {
                 field,
             } => {
                 let receiver_ty = self.infer_expr(file, *dot_expr);
+
+                // Special-casing for "Any", "Unknown", and "Unbound".
+                if receiver_ty.is_any() {
+                    return self.types.any(db);
+                }
+                if receiver_ty.is_unknown() {
+                    return self.types.unknown(db);
+                }
+
                 receiver_ty
                     .fields(db)
                     .unwrap_or_else(|| Vec::new())
@@ -788,6 +812,14 @@ impl TyCtxt<'_> {
                                             _ => {}
                                         }
                                     }
+                                    self.add_diagnostic(
+                                        file,
+                                        expr,
+                                        format!(
+                                            "Unexpected keyword argument \"{}\"",
+                                            arg_name.as_str(),
+                                        ),
+                                    );
                                 }
                                 Argument::UnpackedList { expr } => {
                                     // Mark all unfilled positional slots as well as the "*args" slot as being

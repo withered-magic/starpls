@@ -40,6 +40,7 @@ enum NameContext {
 
 struct NameRefContext {
     names: HashMap<Name, Declaration>,
+    param_names: Vec<Name>,
     is_in_def: bool,
     is_in_for: bool,
     is_lone_expr: bool,
@@ -57,11 +58,19 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
     match &ctx.analysis {
         CompletionAnalysis::NameRef(NameRefContext {
             names,
+            param_names,
             is_lone_expr,
             is_in_def,
             is_in_for,
             is_loop_variable,
         }) => {
+            for param_name in param_names.iter() {
+                items.push(CompletionItem {
+                    label: format!("{}=", param_name.as_str()),
+                    kind: CompletionItemKind::Variable,
+                    mode: None,
+                });
+            }
             if !is_loop_variable {
                 add_globals(&mut items);
                 for (name, decl) in names {
@@ -162,7 +171,25 @@ impl CompletionContext {
             .right_biased()?
             .parent()?;
 
-        let analysis = if let Some(_name_ref) = ast::NameRef::cast(parent.clone()) {
+        let analysis = if let Some(name_ref) = ast::NameRef::cast(parent.clone()) {
+            let mut param_names = vec![];
+            if let Some(receiver) = name_ref
+                .syntax()
+                .parent()
+                .and_then(|parent| ast::SimpleArgument::cast(parent))
+                .and_then(|arg| arg.syntax().parent())
+                .and_then(|parent| ast::Arguments::cast(parent))
+                .and_then(|arg| arg.syntax().parent())
+                .and_then(|parent| ast::CallExpr::cast(parent))
+                .and_then(|expr| expr.callee())
+            {
+                let ptr = AstPtr::new(&receiver);
+                let ty = db.infer_expr(file, *lower(db, file).source_map(db).expr_map.get(&ptr)?);
+                for param_name in ty.params(db) {
+                    param_names.push(param_name.clone());
+                }
+            }
+
             let resolver = Resolver::new_for_offset(db, file, pos);
             let (is_in_def, is_in_for, is_loop_variable) =
                 parent.ancestors().map(|node| node.kind()).fold(
@@ -182,6 +209,7 @@ impl CompletionContext {
                 .unwrap_or(true);
             CompletionAnalysis::NameRef(NameRefContext {
                 names: resolver.names(),
+                param_names,
                 is_in_def,
                 is_in_for,
                 is_lone_expr,

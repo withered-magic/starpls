@@ -30,7 +30,7 @@ pub(crate) fn argument(p: &mut Parser) {
             m.complete(p, UNPACKED_DICT_ARGUMENT);
         }
         T![ident] if p.nth(1) == T![=] => {
-            p.bump(T![ident]);
+            name(p);
             p.bump(T![=]);
             test(p);
             m.complete(p, KEYWORD_ARGUMENT);

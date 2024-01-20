@@ -231,14 +231,14 @@ impl ScopeCollector<'_> {
             Stmt::Load { items } => {
                 *current = self.scopes.alloc_scope(*current);
                 for item in items.iter() {
-                    let name: &str = match item {
+                    let name: &str = match &self.module.load_items[*item] {
                         LoadItem::Direct { name } => &name,
                         LoadItem::Aliased { alias, .. } => alias.as_str(),
                     };
                     self.scopes.add_decl(
                         *current,
                         Name::from_str(name),
-                        Declaration::LoadItem { id: stmt },
+                        Declaration::LoadItem { id: *item },
                     )
                 }
             }

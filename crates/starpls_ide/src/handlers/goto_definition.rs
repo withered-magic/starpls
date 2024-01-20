@@ -34,7 +34,7 @@ pub(crate) fn goto_definition(
                 .resolve_name(&name)?
                 .into_iter()
                 .flat_map(|decl| match decl {
-                    Declaration::Function { id } | Declaration::LoadItem { id } => {
+                    Declaration::Function { id } => {
                         source_map.stmt_map_back.get(&id).map(|ptr| Location {
                             file_id,
                             range: ptr.syntax_node_ptr().text_range(),
@@ -48,6 +48,12 @@ pub(crate) fn goto_definition(
                     }
                     Declaration::Parameter { id } => {
                         source_map.param_map_back.get(&id).map(|ptr| Location {
+                            file_id,
+                            range: ptr.syntax_node_ptr().text_range(),
+                        })
+                    }
+                    Declaration::LoadItem { id } => {
+                        source_map.load_item_map_back.get(&id).map(|ptr| Location {
                             file_id,
                             range: ptr.syntax_node_ptr().text_range(),
                         })

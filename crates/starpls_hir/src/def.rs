@@ -26,11 +26,15 @@ pub type StmtPtr = AstPtr<ast::Statement>;
 pub type ParamId = Id<Param>;
 pub type ParamPtr = AstPtr<ast::Parameter>;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+pub type LoadItemId = Id<LoadItem>;
+pub type LoadItemPtr = AstPtr<ast::LoadItem>;
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Module {
     pub(crate) exprs: Arena<Expr>,
     pub(crate) stmts: Arena<Stmt>,
     pub(crate) params: Arena<Param>,
+    pub(crate) load_items: Arena<LoadItem>,
     pub(crate) top_level: Box<[StmtId]>,
 }
 
@@ -43,6 +47,8 @@ pub struct ModuleSourceMap {
     pub stmt_map_back: FxHashMap<StmtId, StmtPtr>,
     pub param_map: FxHashMap<ParamPtr, ParamId>,
     pub param_map_back: FxHashMap<ParamId, ParamPtr>,
+    pub load_item_map: FxHashMap<LoadItemPtr, LoadItemId>,
+    pub load_item_map_back: FxHashMap<LoadItemId, LoadItemPtr>,
 }
 
 impl Module {
@@ -232,7 +238,7 @@ pub enum Stmt {
         op: Option<AssignOp>,
     },
     Load {
-        items: Box<[LoadItem]>,
+        items: Box<[LoadItemId]>,
     },
     Expr {
         expr: ExprId,
@@ -304,7 +310,7 @@ pub enum Declaration {
     BuiltinFunction { func: BuiltinFunction },
     Variable { id: ExprId, source: Option<ExprId> },
     Parameter { id: ParamId },
-    LoadItem { id: StmtId },
+    LoadItem { id: LoadItemId },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

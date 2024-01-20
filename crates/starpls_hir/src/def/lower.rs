@@ -1,7 +1,8 @@
 use crate::{
     def::{
-        Argument, CompClause, DictEntry, Expr, ExprId, ExprPtr, Literal, LoadItem, Module,
-        ModuleSourceMap, Name, Param, ParamId, ParamPtr, Stmt, StmtId, StmtPtr,
+        Argument, CompClause, DictEntry, Expr, ExprId, ExprPtr, Literal, LoadItem, LoadItemId,
+        LoadItemPtr, Module, ModuleSourceMap, Name, Param, ParamId, ParamPtr, Stmt, StmtId,
+        StmtPtr,
     },
     Db,
 };
@@ -17,12 +18,7 @@ pub(super) fn lower_module(
     LoweringContext {
         db,
         file,
-        module: Module {
-            exprs: Default::default(),
-            stmts: Default::default(),
-            params: Default::default(),
-            top_level: Default::default(),
-        },
+        module: Default::default(),
         source_map: ModuleSourceMap {
             root,
             expr_map: Default::default(),
@@ -31,6 +27,8 @@ pub(super) fn lower_module(
             stmt_map_back: Default::default(),
             param_map: Default::default(),
             param_map_back: Default::default(),
+            load_item_map: Default::default(),
+            load_item_map_back: Default::default(),
         },
     }
     .lower(syntax)
@@ -387,18 +385,22 @@ impl<'a> LoweringContext<'a> {
     fn lower_load_items(
         &mut self,
         load_items: impl Iterator<Item = ast::LoadItem>,
-    ) -> Box<[LoadItem]> {
+    ) -> Box<[LoadItemId]> {
         load_items
-            .map(|load_item| match load_item {
-                ast::LoadItem::Direct(_item) => {
-                    let name = String::new().into_boxed_str();
-                    LoadItem::Direct { name }
-                }
-                ast::LoadItem::Aliased(item) => {
-                    let alias = self.lower_name_opt(item.alias());
-                    let name = String::new().into_boxed_str();
-                    LoadItem::Aliased { alias, name }
-                }
+            .map(|load_item| {
+                let ptr = AstPtr::new(&load_item);
+                let load_item = match load_item {
+                    ast::LoadItem::Direct(_item) => {
+                        let name = String::new().into_boxed_str();
+                        LoadItem::Direct { name }
+                    }
+                    ast::LoadItem::Aliased(item) => {
+                        let alias = self.lower_name_opt(item.alias());
+                        let name = String::new().into_boxed_str();
+                        LoadItem::Aliased { alias, name }
+                    }
+                };
+                self.alloc_load_item(load_item, ptr)
             })
             .collect::<Vec<_>>()
             .into_boxed_slice()
@@ -422,6 +424,13 @@ impl<'a> LoweringContext<'a> {
         let id = self.module.params.alloc(param);
         self.source_map.param_map.insert(ptr.clone(), id);
         self.source_map.param_map_back.insert(id, ptr.clone());
+        id
+    }
+
+    fn alloc_load_item(&mut self, load_item: LoadItem, ptr: LoadItemPtr) -> LoadItemId {
+        let id = self.module.load_items.alloc(load_item);
+        self.source_map.load_item_map.insert(ptr.clone(), id);
+        self.source_map.load_item_map_back.insert(id, ptr.clone());
         id
     }
 }

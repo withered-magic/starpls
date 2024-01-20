@@ -296,11 +296,11 @@ pub struct DictEntry {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Literal {
-    Int,
+    Int(u64),
     Float,
-    String,
+    String(Box<str>),
     Bytes,
-    Bool,
+    Bool(bool),
     None,
 }
 

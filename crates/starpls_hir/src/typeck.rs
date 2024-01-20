@@ -542,11 +542,11 @@ impl TyCtxt<'_> {
                 TyKind::Dict(key_ty, value_ty).intern()
             }
             Expr::Literal { literal } => match literal {
-                Literal::Int => self.types.int(db),
+                Literal::Int(_) => self.types.int(db),
                 Literal::Float => self.types.float(db),
-                Literal::String => self.types.string(db),
+                Literal::String(_) => self.types.string(db),
                 Literal::Bytes => self.types.bytes(db),
-                Literal::Bool => self.types.bool(db),
+                Literal::Bool(_) => self.types.bool(db),
                 Literal::None => self.types.none(db),
             },
             Expr::Unary {

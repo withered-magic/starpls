@@ -722,6 +722,7 @@ dependencies = [
  "cc",
  "line-index",
  "rowan",
+ "starpls_lexer",
  "starpls_parser",
 ]
 

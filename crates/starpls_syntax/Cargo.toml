@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+starpls_lexer = { path = "../starpls_lexer" }
 starpls_parser = { path = "../starpls_parser" }
 rowan = "0.15.11"
 line-index = "0.1.0"

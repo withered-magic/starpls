@@ -7,7 +7,10 @@ use crate::{
     Db,
 };
 use starpls_common::{Diagnostic, Diagnostics, File, FileRange, Severity};
-use starpls_syntax::ast::{self, AstNode, AstPtr, LoopVariables};
+use starpls_syntax::{
+    ast::{self, AstNode, AstPtr, AstToken, LoopVariables},
+    StarlarkLanguage, SyntaxToken,
+};
 
 pub(super) fn lower_module(
     db: &dyn Db,
@@ -390,20 +393,28 @@ impl<'a> LoweringContext<'a> {
             .map(|load_item| {
                 let ptr = AstPtr::new(&load_item);
                 let load_item = match load_item {
-                    ast::LoadItem::Direct(_item) => {
-                        let name = String::new().into_boxed_str();
-                        LoadItem::Direct { name }
-                    }
+                    ast::LoadItem::Direct(item) => LoadItem::Direct {
+                        name: self.lower_string_opt(item.name()),
+                    },
                     ast::LoadItem::Aliased(item) => {
                         let alias = self.lower_name_opt(item.alias());
-                        let name = String::new().into_boxed_str();
-                        LoadItem::Aliased { alias, name }
+                        LoadItem::Aliased {
+                            alias,
+                            name: self.lower_string_opt(item.name()),
+                        }
                     }
                 };
                 self.alloc_load_item(load_item, ptr)
             })
             .collect::<Vec<_>>()
             .into_boxed_slice()
+    }
+
+    fn lower_string_opt(&self, syntax: Option<SyntaxToken>) -> Box<str> {
+        syntax
+            .and_then(|name| ast::String::cast(name))
+            .and_then(|name| name.value())
+            .unwrap_or_else(|| String::new().into_boxed_str())
     }
 
     fn alloc_stmt(&mut self, stmt: Stmt, ptr: StmtPtr) -> StmtId {
@@ -438,11 +449,14 @@ impl<'a> LoweringContext<'a> {
 impl From<ast::LiteralKind> for Literal {
     fn from(value: ast::LiteralKind) -> Self {
         match value {
-            ast::LiteralKind::Int(_) => Literal::Int,
+            ast::LiteralKind::Int(lit) => Literal::Int(lit.value().unwrap_or(0)),
             ast::LiteralKind::Float(_) => Literal::Float,
-            ast::LiteralKind::String(_) => Literal::String,
+            ast::LiteralKind::String(lit) => Literal::String(
+                lit.value()
+                    .unwrap_or_else(|| String::new().into_boxed_str()),
+            ),
             ast::LiteralKind::Bytes(_) => Literal::Bytes,
-            ast::LiteralKind::Bool(_) => Literal::Bool,
+            ast::LiteralKind::Bool(lit) => Literal::Bool(lit),
             ast::LiteralKind::None => Literal::None,
         }
     }

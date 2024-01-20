@@ -6,6 +6,7 @@ use crate::{
 use std::{
     fmt::{Debug, Write},
     marker::PhantomData,
+    str::Chars,
 };
 
 pub use rowan::ast::{AstNode, AstPtr};
@@ -1111,12 +1112,108 @@ ast_token! {
     Int => INT
 }
 
+impl Int {
+    pub fn value(&self) -> Option<u64> {
+        let text = self.syntax.text();
+        if text.starts_with("0") {
+            return Some(if text.len() == 1 {
+                0
+            } else {
+                u64::from_str_radix(&text[1..], 8).ok()?
+            });
+        }
+        if text.starts_with("0x") {
+            return u64::from_str_radix(&text[2..], 16).ok();
+        }
+        return u64::from_str_radix(text, 10).ok();
+    }
+}
+
 ast_token! {
     Float => FLOAT
 }
 
 ast_token! {
     String => STRING
+}
+
+impl String {
+    pub fn value(&self) -> Option<Box<str>> {
+        let mut cursor = Cursor::new(self.text());
+        let mut is_raw = false;
+        let mut is_bytes = false;
+
+        // Determine the string's prefix.
+        // "r" -> raw string
+        // "b" -> bytes
+        // "rb", "br" -> raw bytes
+        match cursor.first() {
+            Some('r') => {
+                is_raw = true;
+                cursor.bump();
+                if let Some('b') = cursor.first() {
+                    is_bytes = true;
+                    cursor.bump();
+                }
+            }
+            Some('b') => {
+                is_bytes = true;
+                cursor.bump();
+                if let Some('r') = cursor.first() {
+                    is_raw = true;
+                    cursor.bump();
+                }
+            }
+            None => return None,
+            _ => {}
+        }
+
+        // Determine the opening quote, whether the string literal is triple
+        // quoted, and if it's terminated.
+        let suffix = match cursor.first() {
+            Some('\'') => {
+                cursor.bump();
+                match (cursor.first(), cursor.second()) {
+                    (Some('\''), Some('\'')) => {
+                        cursor.bump();
+                        cursor.bump();
+                        "'''"
+                    }
+                    _ => "'",
+                }
+            }
+            Some('"') => {
+                cursor.bump();
+                match (cursor.first(), cursor.second()) {
+                    (Some('"'), Some('"')) => {
+                        cursor.bump();
+                        cursor.bump();
+                        "\"\"\""
+                    }
+                    _ => "\"",
+                }
+            }
+            _ => return None,
+        };
+
+        if is_bytes || !cursor.text().ends_with(suffix) {
+            return None;
+        }
+
+        let mut ok = true;
+        let mut s = std::string::String::new();
+        starpls_lexer::unescape::unescape_string(
+            &cursor.text()[..cursor.text().len() - suffix.len()],
+            is_raw,
+            suffix.len() == 3,
+            &mut |_, res| match res {
+                Ok(c) => s.push(c),
+                Err(_) => ok = false,
+            },
+        );
+
+        ok.then(|| s.into_boxed_str())
+    }
 }
 
 ast_token! {
@@ -1135,4 +1232,34 @@ pub enum LiteralKind {
 
 ast_node! {
     TypeComment => TYPE_COMMENT
+}
+
+struct Cursor<'a> {
+    chars: Chars<'a>,
+}
+
+impl<'a> Cursor<'a> {
+    fn new(text: &'a str) -> Self {
+        Cursor {
+            chars: text.chars(),
+        }
+    }
+
+    fn bump(&mut self) -> Option<char> {
+        self.chars.next()
+    }
+
+    fn first(&self) -> Option<char> {
+        self.chars.clone().next()
+    }
+
+    fn second(&self) -> Option<char> {
+        let mut chars = self.chars.clone();
+        chars.next();
+        chars.next()
+    }
+
+    fn text(&self) -> &str {
+        self.chars.as_str()
+    }
 }

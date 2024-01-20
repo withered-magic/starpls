@@ -172,8 +172,8 @@ impl CompletionContext {
             .parent()?;
 
         let analysis = if let Some(name_ref) = ast::NameRef::cast(parent.clone()) {
-            let mut param_names = vec![];
-            if let Some(receiver) = name_ref
+            // TODO(withered-magic): There's probably a better way to traverse up the tree.
+            let param_names = name_ref
                 .syntax()
                 .parent()
                 .and_then(|parent| ast::SimpleArgument::cast(parent))
@@ -182,15 +182,18 @@ impl CompletionContext {
                 .and_then(|arg| arg.syntax().parent())
                 .and_then(|parent| ast::CallExpr::cast(parent))
                 .and_then(|expr| expr.callee())
-            {
-                let ptr = AstPtr::new(&receiver);
-                let ty = db.infer_expr(file, *lower(db, file).source_map(db).expr_map.get(&ptr)?);
-                for param_name in ty.params(db) {
-                    param_names.push(param_name.clone());
-                }
-            }
+                .map(|reciever| {
+                    let ptr = AstPtr::new(&reciever);
+                    let ty = db.infer_expr(
+                        file,
+                        *lower(db, file).source_map(db).expr_map.get(&ptr).unwrap(),
+                    );
+                    ty.param_names(db)
+                })
+                .unwrap_or_else(|| vec![]);
 
             let resolver = Resolver::new_for_offset(db, file, pos);
+
             let (is_in_def, is_in_for, is_loop_variable) =
                 parent.ancestors().map(|node| node.kind()).fold(
                     (false, false, false),

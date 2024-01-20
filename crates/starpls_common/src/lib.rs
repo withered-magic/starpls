@@ -30,6 +30,7 @@ pub struct File {
 
 #[salsa::tracked]
 pub struct Parse {
+    pub file: File,
     module: ParseTree<Module>,
 }
 
@@ -58,7 +59,7 @@ pub fn parse(db: &dyn Db, file: File) -> Parse {
             },
         )
     });
-    Parse::new(db, parse)
+    Parse::new(db, file, parse)
 }
 
 #[salsa::tracked]

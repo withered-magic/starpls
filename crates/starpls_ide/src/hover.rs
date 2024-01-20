@@ -72,24 +72,32 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
         text.push_str("\n```\n");
         return Some(text.into());
     } else if let Some(name) = ast::Name::cast(parent.clone()) {
-        let dot_expr = ast::DotExpr::cast(name.syntax().parent()?)?;
-        let receiver_ptr = AstPtr::new(&dot_expr.expr()?);
-        let receiver_expr = *lower(db, file).source_map(db).expr_map.get(&receiver_ptr)?;
-        let receiver_ty = db.infer_expr(file, receiver_expr);
-        let field_ty = receiver_ty
-            .fields(db)?
-            .iter()
-            .find_map(|(field_name, ty)| {
-                (field_name.as_str() == name.syntax().text()).then_some(ty.clone())
-            })?;
+        let parent = name.syntax().parent()?;
+        if let Some(dot_expr) = ast::DotExpr::cast(parent.clone()) {
+            let receiver_ptr = AstPtr::new(&dot_expr.expr()?);
+            let receiver_expr = *lower(db, file).source_map(db).expr_map.get(&receiver_ptr)?;
+            let receiver_ty = db.infer_expr(file, receiver_expr);
+            let field_ty = receiver_ty
+                .fields(db)?
+                .iter()
+                .find_map(|(field_name, ty)| {
+                    (field_name.as_str() == name.syntax().text()).then_some(ty.clone())
+                })?;
 
-        let mut text = String::new();
-        text.push_str("```text\n(field) ");
-        name.syntax().text().for_each_chunk(|s| text.push_str(s));
-        text.push_str(": ");
-        write!(&mut text, "{}", field_ty.display(db)).unwrap();
-        text.push_str("\n```\n");
-        return Some(text.into());
+            let mut text = String::new();
+            text.push_str("```text\n(field) ");
+            name.syntax().text().for_each_chunk(|s| text.push_str(s));
+            text.push_str(": ");
+            write!(&mut text, "{}", field_ty.display(db)).unwrap();
+            text.push_str("\n```\n");
+            return Some(text.into());
+        } else if let Some(def_stmt) = ast::DefStmt::cast(parent.clone()) {
+            let ptr = AstPtr::new(&ast::Statement::cast(def_stmt.syntax().clone())?);
+            let info = lower(db, file);
+            let def_stmt = info.source_map(db).stmt_map.get(&ptr)?;
+            let func = info.module(db).function_for_stmt(*def_stmt)?;
+            return Some(format!("```text\n(function) {}\n```\n", func.name(db).as_str()).into());
+        }
     }
     None
 }

@@ -1,5 +1,5 @@
 use crate::{
-    def::{Argument, Expr, ExprId, Literal},
+    def::{Argument, Expr, ExprId, Function, Literal, Param},
     display::DisplayWithDb,
     lower as lower_,
     typeck::builtins::{
@@ -149,23 +149,30 @@ impl Ty {
         Some(names.zip(types).collect())
     }
 
-    pub fn params<'a>(&'a self, db: &'a dyn Db) -> Vec<&'a Name> {
-        let mut params = Vec::new();
+    pub fn param_names<'a>(&'a self, db: &'a dyn Db) -> Vec<Name> {
         match self.kind() {
-            TyKind::BuiltinFunction(func, _) => {
-                for param in func.params(db).iter() {
-                    if let Some(name) = param.name() {
-                        params.push(name);
-                    }
-                }
-            }
-            _ => {}
+            TyKind::Function(func) => func
+                .params(db)
+                .map(|param| match param {
+                    Param::Simple { name, .. }
+                    | Param::ArgsList { name, .. }
+                    | Param::KwargsList { name, .. } => name.clone(),
+                })
+                .collect(),
+            TyKind::BuiltinFunction(func, _) => func
+                .params(db)
+                .iter()
+                .filter_map(|param| param.name().cloned())
+                .collect(),
+            _ => vec![],
         }
-        params
     }
 
     pub fn is_fn(&self) -> bool {
-        matches!(self.kind(), TyKind::BuiltinFunction(_, _))
+        matches!(
+            self.kind(),
+            TyKind::Function(_) | TyKind::BuiltinFunction(_, _)
+        )
     }
 
     pub fn is_any(&self) -> bool {
@@ -254,6 +261,7 @@ pub enum TyKind {
     Tuple(SmallVec<[Ty; 2]>),
     Dict(Ty, Ty),
     Range,
+    Function(Function),
     BuiltinFunction(BuiltinFunction, Substitution),
     BoundVar(usize),
 }
@@ -295,6 +303,26 @@ impl DisplayWithDb for TyKind {
                 return f.write_char(']');
             }
             TyKind::Range => "range",
+            TyKind::Function(func) => {
+                write!(f, "def {}(", func.name(db).as_str())?;
+                for (i, param) in func.params(db).enumerate() {
+                    if i > 0 {
+                        f.write_str(", ")?;
+                    }
+                    match param {
+                        Param::Simple { name, .. } => {
+                            write!(f, "{}: Unknown", name.as_str())?;
+                        }
+                        Param::ArgsList { name, .. } => {
+                            write!(f, "*{}: Unknown", name.as_str())?;
+                        }
+                        Param::KwargsList { name, .. } => {
+                            write!(f, "**{}", name.as_str())?;
+                        }
+                    }
+                }
+                return f.write_str(") -> Unknown");
+            }
             TyKind::BuiltinFunction(func, subst) => {
                 f.write_char('(')?;
                 for (i, param) in func.params(db).iter().enumerate() {
@@ -334,6 +362,7 @@ impl DisplayWithDb for TyKind {
 
     fn fmt_alt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            TyKind::Function(_) => f.write_str("function"),
             TyKind::BuiltinFunction(_, _) => f.write_str("builtin_function_or_method"),
             _ => self.fmt(db, f),
         }

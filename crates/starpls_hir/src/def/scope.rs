@@ -187,16 +187,18 @@ impl ScopeCollector<'_> {
         current: &mut ScopeId,
     ) {
         match &self.module.stmts[stmt] {
-            Stmt::Def {
-                name,
-                params,
-                stmts,
-            } => {
+            Stmt::Def { func, stmts } => {
                 *current = self.scopes.alloc_scope(*current);
-                self.scopes
-                    .add_decl(*current, name.clone(), Declaration::Function { id: stmt });
+                self.scopes.add_decl(
+                    *current,
+                    func.name(self.db).clone(),
+                    Declaration::Function {
+                        id: stmt,
+                        func: *func,
+                    },
+                );
                 deferred.push_back(Function {
-                    params: params.clone(),
+                    params: func.params_(self.db).clone(),
                     stmts: stmts.clone(),
                 });
             }

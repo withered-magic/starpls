@@ -1,4 +1,5 @@
 use crate::{
+    lower as lower_,
     typeck::{builtins::BuiltinFunction, TypeRef},
     Db,
 };
@@ -58,6 +59,13 @@ impl Module {
         syntax: ast::Module,
     ) -> (Module, ModuleSourceMap) {
         lower::lower_module(db, file, syntax)
+    }
+
+    pub fn function_for_stmt(&self, id: StmtId) -> Option<Function> {
+        match &self.stmts[id] {
+            Stmt::Def { func, .. } => Some(*func),
+            _ => None,
+        }
     }
 }
 
@@ -211,8 +219,7 @@ impl Expr {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Stmt {
     Def {
-        name: Name,
-        params: Box<[ParamId]>,
+        func: Function,
         stmts: Box<[StmtId]>,
     },
     If {
@@ -264,7 +271,6 @@ pub enum Param {
         name: Name,
         type_ref: Option<TypeRef>,
     },
-
     KwargsList {
         name: Name,
         type_ref: Option<TypeRef>,
@@ -306,7 +312,7 @@ pub enum Literal {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Declaration {
-    Function { id: StmtId },
+    Function { id: StmtId, func: Function },
     BuiltinFunction { func: BuiltinFunction },
     Variable { id: ExprId, source: Option<ExprId> },
     Parameter { id: ParamId },
@@ -347,5 +353,20 @@ impl Name {
 
     fn new(repr: SmolStr) -> Self {
         Self(repr)
+    }
+}
+
+#[salsa::tracked]
+pub struct Function {
+    pub file: File,
+    pub name: Name,
+    #[return_ref]
+    params_: Box<[ParamId]>,
+}
+
+impl Function {
+    pub fn params<'a>(&'a self, db: &'a dyn Db) -> impl Iterator<Item = &'a Param> + '_ {
+        let params = &lower_(db, self.file(db)).module(db).params;
+        self.params_(db).iter().map(|param| &params[*param])
     }
 }

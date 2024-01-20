@@ -1,8 +1,8 @@
 use crate::{
     def::{
-        Argument, CompClause, DictEntry, Expr, ExprId, ExprPtr, Literal, LoadItem, LoadItemId,
-        LoadItemPtr, Module, ModuleSourceMap, Name, Param, ParamId, ParamPtr, Stmt, StmtId,
-        StmtPtr,
+        Argument, CompClause, DictEntry, Expr, ExprId, ExprPtr, Function, Literal, LoadItem,
+        LoadItemId, LoadItemPtr, Module, ModuleSourceMap, Name, Param, ParamId, ParamPtr, Stmt,
+        StmtId, StmtPtr,
     },
     Db,
 };
@@ -88,8 +88,7 @@ impl<'a> LoweringContext<'a> {
                 let params = self.lower_params_opt(syntax.parameters());
                 let stmts = self.lower_suite_opt(syntax.suite());
                 Stmt::Def {
-                    name,
-                    params,
+                    func: Function::new(self.db, self.file, name, params),
                     stmts,
                 }
             }

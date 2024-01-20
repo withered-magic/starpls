@@ -9,7 +9,7 @@ use crate::{
 use starpls_common::{Diagnostic, Diagnostics, File, FileRange, Severity};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr, AstToken, LoopVariables},
-    StarlarkLanguage, SyntaxToken,
+    SyntaxToken,
 };
 
 pub(super) fn lower_module(

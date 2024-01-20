@@ -158,7 +158,7 @@ impl Ty {
     }
 
     pub fn is_unknown(&self) -> bool {
-        self.kind() == &TyKind::Unknown
+        self.kind() == &TyKind::Unknown || self.kind() == &TyKind::Unbound
     }
 
     pub fn is_iterable(&self) -> bool {
@@ -484,28 +484,32 @@ impl TyCtxt<'_> {
         let ty = match &info.module(db).exprs[expr] {
             Expr::Name { name } => {
                 let resolver = Resolver::new_for_expr(db, file, expr);
-                let decls = match resolver.resolve_name(name) {
-                    Some(decls) => decls,
-                    None => return self.set_expr_type(file, expr, self.types.unbound(db)),
-                };
-                decls
-                    .last()
+                resolver
+                    .resolve_name(name)
+                    .and_then(|decls| decls.into_iter().last())
                     .map(|decl| match decl {
                         Declaration::Variable { id, source } => source
                             .and_then(|source| {
                                 self.infer_source_expr_assign(file, source);
                                 self.cx
                                     .type_of_expr
-                                    .get(&FileExprId { file, expr: *id })
+                                    .get(&FileExprId { file, expr: id })
                                     .cloned()
                             })
                             .unwrap_or_else(|| self.types.unknown(db)),
                         Declaration::BuiltinFunction { func } => {
-                            TyKind::BuiltinFunction(*func, Substitution::new_identity(0)).intern()
+                            TyKind::BuiltinFunction(func, Substitution::new_identity(0)).intern()
                         }
                         _ => self.types.any(db),
                     })
-                    .unwrap_or_else(|| self.types.unbound(db))
+                    .unwrap_or_else(|| {
+                        self.add_diagnostic(
+                            file,
+                            expr,
+                            format!("\"{}\" is not defined", name.as_str()),
+                        );
+                        self.types.unbound(db)
+                    })
             }
             Expr::List { exprs } => {
                 // Determine the full type of the list. If all of the specified elements are of the same type T, then
@@ -591,6 +595,7 @@ impl TyCtxt<'_> {
             Expr::Index { lhs, index } => {
                 let lhs_ty = self.infer_expr(file, *lhs);
                 let index_ty = self.infer_expr(file, *index);
+                let int_ty = self.types.int(db);
                 let mut cannot_index = |receiver| {
                     self.add_diagnostic(
                         file,
@@ -603,18 +608,38 @@ impl TyCtxt<'_> {
                     )
                 };
 
-                match (lhs_ty.kind(), index_ty.kind()) {
-                    (TyKind::List(ty), TyKind::Int) => ty.clone(),
-                    (TyKind::List(_), _) => cannot_index("list"),
-                    (TyKind::Dict(key_ty, value_ty), index_kind) if key_ty.kind() == index_kind => {
-                        value_ty.clone()
+                // Indexing is currently only supported for lists, dicts,
+                // strings, bytes, and ranges.
+                match lhs_ty.kind() {
+                    TyKind::List(ty) => {
+                        if assign_tys(&index_ty, &int_ty) {
+                            ty.clone()
+                        } else {
+                            cannot_index("list")
+                        }
                     }
-                    (TyKind::Dict(_, _), _) => cannot_index("dict"),
-                    (TyKind::String, TyKind::Int) => self.types.string(db),
-                    (TyKind::String, _) => cannot_index("string"),
-                    (TyKind::Bytes, TyKind::Int) => self.types.int(db),
-                    (TyKind::Bytes, _) => cannot_index("bytes"),
-                    (TyKind::Unknown | TyKind::Any, _) => self.types.unknown(db),
+                    TyKind::Dict(key_ty, value_ty) => {
+                        if assign_tys(&index_ty, key_ty) {
+                            value_ty.clone()
+                        } else {
+                            cannot_index("dict")
+                        }
+                    }
+                    TyKind::String => {
+                        if assign_tys(&index_ty, &int_ty) {
+                            self.types.string(db)
+                        } else {
+                            cannot_index("string")
+                        }
+                    }
+                    TyKind::Bytes => {
+                        if assign_tys(&index_ty, &int_ty) {
+                            int_ty
+                        } else {
+                            cannot_index("bytes")
+                        }
+                    }
+                    TyKind::Any | TyKind::Unknown | TyKind::Unbound => self.types.unknown(db),
                     _ => self.add_diagnostic(
                         file,
                         *lhs,
@@ -831,7 +856,7 @@ impl TyCtxt<'_> {
                                     }
                                 }
                                 SlotProvider::Single(expr, ty) => {
-                                    if !self.assign_tys(&ty, &param_ty) {
+                                    if !assign_tys(&ty, &param_ty) {
                                         self.add_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to paramter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                 }
@@ -873,7 +898,6 @@ impl TyCtxt<'_> {
     fn infer_unary_expr(&mut self, file: File, parent: ExprId, expr: ExprId, op: UnaryOp) -> Ty {
         let db = self.db;
         let ty = self.infer_expr(file, expr);
-        let kind = ty.kind();
         let mut unknown = || {
             self.add_diagnostic(
                 file,
@@ -886,10 +910,17 @@ impl TyCtxt<'_> {
             )
         };
 
-        if kind == &TyKind::Any {
+        // Special handling for "Any".
+        if ty.is_any() {
             return self.types.any(db);
         }
 
+        // Special handling for "Unknown" and "Unbound".
+        if ty.is_unknown() {
+            return self.types.unknown(db);
+        }
+
+        let kind = ty.kind();
         match op {
             UnaryOp::Arith(_) => match kind {
                 TyKind::Int => self.types.int(db),
@@ -965,8 +996,14 @@ impl TyCtxt<'_> {
             .syntax()
             .parent()
             .unwrap();
-        let source_ty = self.infer_expr(file, source);
 
+        // Convert "Unbound" to "Unknown" in assignments to avoid confusion.
+        let mut source_ty = self.infer_expr(file, source);
+        if matches!(source_ty.kind(), TyKind::Unbound) {
+            source_ty = self.types.unknown(self.db);
+        }
+
+        // Handle standard assigments, e.g. `x, y = 1, 2`.
         if let Some(stmt) = ast::AssignStmt::cast(parent.clone()) {
             if let Some(lhs) = stmt.lhs() {
                 let lhs_ptr = AstPtr::new(&lhs);
@@ -996,6 +1033,7 @@ impl TyCtxt<'_> {
         let sub_ty = match source_ty.kind() {
             TyKind::List(ty) => ty.clone(),
             TyKind::Tuple(_) | TyKind::Any => self.types.any(self.db),
+            TyKind::Range => self.types.int(self.db),
             _ => {
                 self.add_diagnostic(
                     file,
@@ -1115,13 +1153,6 @@ impl TyCtxt<'_> {
             .unwrap_or(default)
     }
 
-    fn assign_tys(&self, source: &Ty, target: &Ty) -> bool {
-        if target.is_any() || target.is_unknown() {
-            return true;
-        }
-        source == target
-    }
-
     fn add_diagnostic<T: Into<String>>(&mut self, file: File, expr: ExprId, message: T) -> Ty {
         let info = lower_(self.db, file);
         let range = match info.source_map(self.db).expr_map_back.get(&expr) {
@@ -1139,4 +1170,13 @@ impl TyCtxt<'_> {
         });
         self.types.unknown(self.db)
     }
+}
+
+fn assign_tys(source: &Ty, target: &Ty) -> bool {
+    // Assignments involving "Any", "Unknown", or "Unbound" at the top-level
+    // are always valid to avoid confusion.
+    if source.is_any() || source.is_unknown() || target.is_any() || target.is_unknown() {
+        return true;
+    }
+    source == target
 }

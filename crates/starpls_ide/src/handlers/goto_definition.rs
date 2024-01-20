@@ -52,7 +52,7 @@ pub(crate) fn goto_definition(
                             range: ptr.syntax_node_ptr().text_range(),
                         })
                     }
-                    Declaration::LoadItem {} => None,
+                    _ => None,
                 })
                 .collect(),
         );

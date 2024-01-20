@@ -1,4 +1,7 @@
-use crate::{typeck::TypeRef, Db};
+use crate::{
+    typeck::{builtins::BuiltinFunction, TypeRef},
+    Db,
+};
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
@@ -298,6 +301,7 @@ pub enum Literal {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Declaration {
     Function { id: StmtId },
+    BuiltinFunction { func: BuiltinFunction },
     Variable { id: ExprId, source: Option<ExprId> },
     Parameter { id: ParamId },
     LoadItem {},

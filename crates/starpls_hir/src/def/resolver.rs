@@ -3,7 +3,9 @@ use crate::{
         scope::{module_scopes, Scope, ScopeHirId, ScopeId, Scopes},
         Declaration, ExprId, ModuleSourceMap,
     },
-    lower, Db, Name,
+    lower,
+    typeck::builtins::builtin_functions,
+    Db, Name,
 };
 use starpls_common::File;
 use starpls_syntax::{TextRange, TextSize};
@@ -15,19 +17,27 @@ use std::{
 /// Resolves things like variables, function definition, etc. For now this is implemented as a simple list
 /// of "module" scopes that hold variable declarations, but will need to be updated later to support other
 /// features, e.g. type declarations, builtins, etc.
-pub struct Resolver {
+pub struct Resolver<'a> {
+    db: &'a dyn Db,
     scopes: Arc<Scopes>,
     scope_chain: Vec<ScopeId>,
 }
 
-impl Resolver {
+impl<'a> Resolver<'a> {
     pub fn resolve_name(&self, name: &Name) -> Option<Vec<Declaration>> {
+        // Check module scopes first.
         for scope in self.scopes() {
             if let Some(declarations) = scope.declarations.get(&name) {
                 return Some(declarations.clone());
             }
         }
-        None
+
+        // Fall back to the builtins scope.
+        builtin_functions(self.db)
+            .functions(self.db)
+            .get(name)
+            .copied()
+            .map(|func| vec![Declaration::BuiltinFunction { func }])
     }
 
     pub fn names(&self) -> HashMap<Name, Declaration> {
@@ -41,6 +51,13 @@ impl Resolver {
                 }
             }
         }
+
+        // Add names from the builtins scope.
+        // TODO(withered-magic): We probably don't want to do this by default since the builtins
+        // scope might be huge once we start loading things like Bazel definitions.
+        for (key, func) in builtin_functions(self.db).functions(self.db).iter() {
+            names.insert(key.clone(), Declaration::BuiltinFunction { func: *func });
+        }
         names
     }
 
@@ -51,18 +68,19 @@ impl Resolver {
             .map(|scope| &self.scopes.scopes[*scope])
     }
 
-    pub fn new_for_expr(db: &dyn Db, file: File, expr: ExprId) -> Self {
+    pub fn new_for_expr(db: &'a dyn Db, file: File, expr: ExprId) -> Self {
         let scopes = module_scopes(db, file).scopes(db);
         let scope = scopes.scope_for_hir_id(expr);
         let mut scope_chain = scopes.scope_chain(scope).collect::<Vec<_>>();
         scope_chain.reverse();
         Self {
+            db,
             scopes,
             scope_chain,
         }
     }
 
-    pub fn new_for_offset(db: &dyn Db, file: File, offset: TextSize) -> Self {
+    pub fn new_for_offset(db: &'a dyn Db, file: File, offset: TextSize) -> Self {
         let info = lower(db, file);
         let scopes = module_scopes(db, file).scopes(db);
         let source_map = info.source_map(db);
@@ -93,6 +111,7 @@ impl Resolver {
         let mut scope_chain = scopes.scope_chain(scope).collect::<Vec<_>>();
         scope_chain.reverse();
         Self {
+            db,
             scopes,
             scope_chain,
         }

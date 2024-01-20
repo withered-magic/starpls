@@ -461,6 +461,12 @@ impl TyCtxt<'_> {
             .collect()
     }
 
+    fn unwind_if_cancelled(&self) {
+        if self.shared_state.cancelled.load() {
+            TypecheckCancelled.throw();
+        }
+    }
+
     pub fn infer_expr(&mut self, file: File, expr: ExprId) -> Ty {
         if let Some(ty) = self
             .cx
@@ -471,9 +477,7 @@ impl TyCtxt<'_> {
             return ty;
         }
 
-        if self.shared_state.cancelled.load() {
-            TypecheckCancelled.throw();
-        }
+        self.unwind_if_cancelled();
 
         let db = self.db;
         let info = lower_(db, file);
@@ -484,23 +488,24 @@ impl TyCtxt<'_> {
                     Some(decls) => decls,
                     None => return self.set_expr_type(file, expr, self.types.unbound(db)),
                 };
-                match decls.last() {
-                    Some(Declaration::Variable { id, source }) => source
-                        .and_then(|source| {
-                            self.infer_source_expr_assign(file, source);
-                            self.cx
-                                .type_of_expr
-                                .get(&FileExprId { file, expr: *id })
-                                .cloned()
-                        })
-                        .unwrap_or_else(|| self.types.unknown(db)),
-                    Some(
-                        Declaration::Function { .. }
-                        | Declaration::Parameter { .. }
-                        | Declaration::LoadItem {},
-                    ) => self.types.any(db),
-                    _ => self.types.unbound(db),
-                }
+                decls
+                    .last()
+                    .map(|decl| match decl {
+                        Declaration::Variable { id, source } => source
+                            .and_then(|source| {
+                                self.infer_source_expr_assign(file, source);
+                                self.cx
+                                    .type_of_expr
+                                    .get(&FileExprId { file, expr: *id })
+                                    .cloned()
+                            })
+                            .unwrap_or_else(|| self.types.unknown(db)),
+                        Declaration::BuiltinFunction { func } => {
+                            TyKind::BuiltinFunction(*func, Substitution::new_identity(0)).intern()
+                        }
+                        _ => self.types.any(db),
+                    })
+                    .unwrap_or_else(|| self.types.unbound(db))
             }
             Expr::List { exprs } => {
                 // Determine the full type of the list. If all of the specified elements are of the same type T, then
@@ -1129,7 +1134,7 @@ impl TyCtxt<'_> {
             severity: Severity::Error,
             range: FileRange {
                 file_id: file.id(self.db),
-                range: range,
+                range,
             },
         });
         self.types.unknown(self.db)

@@ -485,17 +485,15 @@ impl TyCtxt<'_> {
                     None => return self.set_expr_type(file, expr, self.types.unbound(db)),
                 };
                 match decls.last() {
-                    Some(Declaration::Variable { id, source }) => {
-                        return source
-                            .and_then(|source| {
-                                self.infer_source_expr_assign(file, source);
-                                self.cx
-                                    .type_of_expr
-                                    .get(&FileExprId { file, expr: *id })
-                                    .cloned()
-                            })
-                            .unwrap_or_else(|| self.types.unknown(db))
-                    }
+                    Some(Declaration::Variable { id, source }) => source
+                        .and_then(|source| {
+                            self.infer_source_expr_assign(file, source);
+                            self.cx
+                                .type_of_expr
+                                .get(&FileExprId { file, expr: *id })
+                                .cloned()
+                        })
+                        .unwrap_or_else(|| self.types.unknown(db)),
                     Some(
                         Declaration::Function { .. }
                         | Declaration::Parameter { .. }
@@ -514,7 +512,7 @@ impl TyCtxt<'_> {
                 ))
                 .intern()
             }
-            Expr::ListComp { .. } => TyKind::List(self.types.any(db)).intern(),
+            Expr::ListComp { expr, .. } => TyKind::List(self.infer_expr(file, *expr)).intern(),
             Expr::Dict { entries } => {
                 // Determine the dict's key type. For now, if all specified entries have the key type `T`, then we also
                 // use the type `T` as the dict's key tpe. Otherwise, we use `Any` as the key type.
@@ -533,7 +531,11 @@ impl TyCtxt<'_> {
                 );
                 TyKind::Dict(key_ty, value_ty).intern()
             }
-            Expr::DictComp { .. } => TyKind::Dict(self.types.any(db), self.types.any(db)).intern(),
+            Expr::DictComp { entry, .. } => {
+                let key_ty = self.infer_expr(file, entry.key);
+                let value_ty = self.infer_expr(file, entry.value);
+                TyKind::Dict(key_ty, value_ty).intern()
+            }
             Expr::Literal { literal } => match literal {
                 Literal::Int => self.types.int(db),
                 Literal::Float => self.types.float(db),
@@ -966,35 +968,45 @@ impl TyCtxt<'_> {
                 let expr = info.source_map(self.db).expr_map.get(&lhs_ptr).unwrap();
                 self.assign_expr_source_ty(file, *expr, *expr, source_ty);
             }
-        } else if let Some(stmt) = ast::ForStmt::cast(parent) {
-            if let Some(targets) = stmt.targets() {
-                let targets = targets
-                    .exprs()
-                    .map(|expr| source_map.expr_map.get(&AstPtr::new(&expr)).unwrap())
-                    .copied()
-                    .collect::<Vec<_>>();
+            return;
+        }
 
-                let sub_ty = match source_ty.kind() {
-                    TyKind::List(ty) => ty.clone(),
-                    TyKind::Tuple(_) | TyKind::Any => self.types.any(self.db),
-                    _ => {
-                        self.add_diagnostic(
-                            file,
-                            source,
-                            format!("Type \"{}\" is not iterable", source_ty.display(self.db)),
-                        );
-                        for expr in targets.iter() {
-                            self.assign_expr_unknown_rec(file, *expr);
-                        }
-                        return;
-                    }
-                };
-                if targets.len() == 1 {
-                    self.assign_expr_source_ty(file, targets[0], targets[0], sub_ty);
-                } else {
-                    self.assign_exprs_source_ty(file, source, &targets, sub_ty);
+        // Handle assignments in "for" statements and comphrehensions.
+        // e.g. `for x in 1, 2, 3` or `[x*y for x in range(5) for y in range(5)]`
+        let targets = ast::ForStmt::cast(parent.clone())
+            .and_then(|stmt| stmt.targets())
+            .or_else(|| {
+                ast::CompClauseFor::cast(parent).and_then(|comp_clause| comp_clause.targets())
+            });
+
+        let targets = match targets {
+            Some(targets) => targets
+                .exprs()
+                .map(|expr| source_map.expr_map.get(&AstPtr::new(&expr)).unwrap())
+                .copied()
+                .collect::<Vec<_>>(),
+            None => return,
+        };
+
+        let sub_ty = match source_ty.kind() {
+            TyKind::List(ty) => ty.clone(),
+            TyKind::Tuple(_) | TyKind::Any => self.types.any(self.db),
+            _ => {
+                self.add_diagnostic(
+                    file,
+                    source,
+                    format!("Type \"{}\" is not iterable", source_ty.display(self.db)),
+                );
+                for expr in targets.iter() {
+                    self.assign_expr_unknown_rec(file, *expr);
                 }
+                return;
             }
+        };
+        if targets.len() == 1 {
+            self.assign_expr_source_ty(file, targets[0], targets[0], sub_ty);
+        } else {
+            self.assign_exprs_source_ty(file, source, &targets, sub_ty);
         }
     }
 

@@ -353,7 +353,7 @@ fn dict_expr_or_comp(p: &mut Parser) -> CompletedMarker {
     match p.current() {
         // CompClause = 'for' LoopVariables 'in' Test | 'if' Test .
         T![for] | T![if] => {
-            kind = LIST_COMP;
+            kind = DICT_COMP;
             loop {
                 match p.current() {
                     T![for] => {

@@ -1,7 +1,7 @@
 use crate::{
     lower as lower_,
     typeck::{builtins::BuiltinFunction, TypeRef},
-    Db,
+    Db, Ty, TyKind,
 };
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
@@ -368,5 +368,9 @@ impl Function {
     pub fn params<'a>(&'a self, db: &'a dyn Db) -> impl Iterator<Item = &'a Param> + '_ {
         let params = &lower_(db, self.file(db)).module(db).params;
         self.params_(db).iter().map(|param| &params[*param])
+    }
+
+    pub fn ty(&self) -> Ty {
+        TyKind::Function(*self).intern()
     }
 }

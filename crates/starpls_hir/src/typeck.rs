@@ -175,6 +175,10 @@ impl Ty {
         )
     }
 
+    pub fn is_user_defined_fn(&self) -> bool {
+        matches!(self.kind(), TyKind::Function(_))
+    }
+
     pub fn is_any(&self) -> bool {
         self.kind() == &TyKind::Any
     }
@@ -541,6 +545,7 @@ impl TyCtxt<'_> {
                                     .cloned()
                             })
                             .unwrap_or_else(|| self.types.unknown(db)),
+                        Declaration::Function { func, .. } => func.ty(),
                         Declaration::BuiltinFunction { func } => {
                             TyKind::BuiltinFunction(func, Substitution::new_identity(0)).intern()
                         }
@@ -717,6 +722,10 @@ impl TyCtxt<'_> {
                     .collect();
 
                 match callee_ty.kind() {
+                    TyKind::Function(_) => {
+                        // TODO: Handle slot assignments.
+                        self.types.unknown(db)
+                    }
                     TyKind::BuiltinFunction(func, subst) => {
                         // Match arguments with their corresponding parameters.
                         // The following routine is based on PEP 3102 (https://peps.python.org/pep-3102),

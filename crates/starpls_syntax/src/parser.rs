@@ -94,7 +94,9 @@ fn build_type_comment(
         StrStep::Start { kind } => builder.start_node(StarlarkLanguage::kind_to_raw(kind)),
         StrStep::Finish => builder.finish_node(),
         StrStep::Token { kind, text } => builder.token(StarlarkLanguage::kind_to_raw(kind), text),
-        StrStep::Error { message, pos } => {}
+        StrStep::Error { .. } => {
+            // TODO(withered-magic): Add missing error handling logic.
+        }
     });
 
     builder.finish_node();

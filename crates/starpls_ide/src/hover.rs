@@ -62,12 +62,16 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
         let ty = db.infer_expr(file, expr);
         let mut text = String::new();
         text.push_str("```text\n");
-        text.push_str("(variable) ");
-        name_ref
-            .syntax()
-            .text()
-            .for_each_chunk(|s| text.push_str(s));
-        text.push_str(": ");
+
+        // Handle special `def` formatting for function types.
+        if ty.is_user_defined_fn() {
+            text.push_str("(function) ");
+        } else {
+            text.push_str("(variable) ");
+            text.push_str(name_ref.name()?.text());
+            text.push_str(": ");
+        }
+
         write!(&mut text, "{}", ty.display(db)).unwrap();
         text.push_str("\n```\n");
         return Some(text.into());
@@ -96,7 +100,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             let info = lower(db, file);
             let def_stmt = info.source_map(db).stmt_map.get(&ptr)?;
             let func = info.module(db).function_for_stmt(*def_stmt)?;
-            return Some(format!("```text\n(function) {}\n```\n", func.name(db).as_str()).into());
+            return Some(format!("```text\n(function) {}\n```\n", func.ty().display(db)).into());
         }
     }
     None

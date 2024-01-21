@@ -54,6 +54,7 @@ pub fn parse_module(input: &str, errors_sink: &mut dyn FnMut(SyntaxError)) -> Pa
         StrStep::Token { kind, text } => {
             if kind == COMMENT && text.starts_with(TYPE_COMMENT_PREFIX_STR) {
                 build_type_comment(&mut builder, text, errors_sink);
+                return;
             }
             builder.token(StarlarkLanguage::kind_to_raw(kind), text);
         }

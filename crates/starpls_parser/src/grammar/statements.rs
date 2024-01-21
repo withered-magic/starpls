@@ -51,16 +51,20 @@ pub(crate) fn def_stmt(p: &mut Parser) {
 
     // Parse the parameter list. If we don't see an opening '(' but are at a ':', we can emit
     // an error for the missing parameter list and recover.
-    if p.eat(T!['(']) {
+    if p.at(T!['(']) {
+        let param_marker = p.start();
+        p.bump(T!['(']);
         if p.at_kinds(PARAMETER_START) {
             parameters(p);
         }
 
         if !p.eat(T![')']) {
             p.error_recover_until("\"(\" was not closed", STMT_RECOVERY);
+            param_marker.complete(p, PARAMETERS);
             m.complete(p, DEF_STMT);
             return;
         }
+        param_marker.complete(p, PARAMETERS);
     } else {
         if p.current() != T![:] {
             p.error_recover_until("Expected parameter list", STMT_RECOVERY);

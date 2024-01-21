@@ -4,13 +4,13 @@ pub(crate) const PARAMETER_START: SyntaxKindSet = SyntaxKindSet::new(&[T![ident]
 
 /// Grammar: `Parameters = Parameter {',' Parameter}.`
 pub(crate) fn parameters(p: &mut Parser) {
-    let m = p.start();
+    // let m = p.start();
     parameter(p);
     while p.at(T![,]) && PARAMETER_START.contains(p.nth(1)) {
         p.bump(T![,]);
         parameter(p);
     }
-    m.complete(p, PARAMETERS);
+    // m.complete(p, PARAMETERS);
     p.eat(T![,]);
 }
 

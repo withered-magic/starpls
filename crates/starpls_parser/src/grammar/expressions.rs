@@ -227,7 +227,9 @@ fn lambda_expr(p: &mut Parser) -> CompletedMarker {
     let m = p.start();
     p.bump(T![lambda]);
     if p.at_kinds(PARAMETER_START) {
+        let m = p.start();
         parameters(p);
+        m.complete(p, PARAMETERS);
     }
     if !p.eat(T![:]) {
         p.error_recover_until("Expected \":\"", STMT_RECOVERY);

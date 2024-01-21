@@ -4,11 +4,11 @@ use crate::{
         LoadItemId, LoadItemPtr, Module, ModuleSourceMap, Name, Param, ParamId, ParamPtr, Stmt,
         StmtId, StmtPtr,
     },
-    Db,
+    Db, TypeRef,
 };
 use starpls_common::{Diagnostic, Diagnostics, File, FileRange, Severity};
 use starpls_syntax::{
-    ast::{self, AstNode, AstPtr, AstToken, LoopVariables},
+    ast::{self, AstNode, AstPtr, AstToken, LoopVariables, TypeComment},
     SyntaxToken,
 };
 
@@ -268,6 +268,7 @@ impl<'a> LoweringContext<'a> {
         let mut params = Vec::new();
         for param in syntax.iter().flat_map(|params| params.parameters()) {
             let ptr = AstPtr::new(&param);
+            let type_ref = self.lower_type_comment_opt(param.type_comment());
             let param = match param {
                 ast::Parameter::Simple(param) => {
                     let name = self.lower_name_opt(param.name());
@@ -275,16 +276,16 @@ impl<'a> LoweringContext<'a> {
                     Param::Simple {
                         name,
                         default,
-                        type_ref: None,
+                        type_ref,
                     }
                 }
                 ast::Parameter::ArgsList(param) => Param::ArgsList {
                     name: self.lower_name_opt(param.name()),
-                    type_ref: None,
+                    type_ref,
                 },
                 ast::Parameter::KwargsList(param) => Param::KwargsList {
                     name: self.lower_name_opt(param.name()),
-                    type_ref: None,
+                    type_ref,
                 },
             };
             params.push(self.alloc_param(param, ptr));
@@ -414,6 +415,27 @@ impl<'a> LoweringContext<'a> {
             .and_then(|name| ast::String::cast(name))
             .and_then(|name| name.value())
             .unwrap_or_else(|| String::new().into_boxed_str())
+    }
+
+    fn lower_type_comment_opt(&self, node: Option<TypeComment>) -> Option<TypeRef> {
+        eprintln!("{:?}", node);
+        node.map(|node| {
+            eprintln!("lwoer");
+            self.lower_type_comment(node)
+        })
+    }
+
+    fn lower_type_comment(&self, node: TypeComment) -> TypeRef {
+        // TODO(withered-magic): As a first attempt for supporting type comments, we
+        // only consider the first entry, and only NAMED_TYPE nodes.
+        node.type_list()
+            .map(|types| types.types())
+            .and_then(|mut types| types.next())
+            .and_then(|type_| match type_ {
+                ast::Type::NamedType(named_type) => named_type.name(),
+            })
+            .map(|name| TypeRef::Name(Name::from_str(name.text())))
+            .unwrap_or_else(|| TypeRef::Any)
     }
 
     fn alloc_stmt(&mut self, stmt: Stmt, ptr: StmtPtr) -> StmtId {

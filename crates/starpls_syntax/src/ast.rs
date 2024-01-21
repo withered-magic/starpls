@@ -736,6 +736,21 @@ pub enum Parameter {
     KwargsList(KwargsListParameter),
 }
 
+impl Parameter {
+    pub fn type_comment(&self) -> Option<TypeComment> {
+        self.syntax()
+            .siblings_with_tokens(Direction::Next)
+            .skip(1)
+            .take_while(|node_or_token| {
+                let kind = node_or_token.kind();
+                eprintln!("param sibling kind {:?}", kind);
+                kind != CLOSE_PAREN && !Self::can_cast(kind)
+            })
+            .filter_map(|node_or_token| node_or_token.into_node())
+            .find_map(TypeComment::cast)
+    }
+}
+
 impl AstNode for Parameter {
     type Language = StarlarkLanguage;
 
@@ -1232,6 +1247,46 @@ pub enum LiteralKind {
 
 ast_node! {
     TypeComment => TYPE_COMMENT
+    child type_list -> TypeList;
+}
+
+ast_node! {
+    TypeList => TYPE_LIST
+    children types -> Type;
+}
+
+pub enum Type {
+    NamedType(NamedType),
+}
+
+impl AstNode for Type {
+    type Language = StarlarkLanguage;
+
+    fn can_cast(kind: SyntaxKind) -> bool
+    where
+        Self: Sized,
+    {
+        matches!(kind, NAMED_TYPE)
+    }
+
+    fn cast(syntax: SyntaxNode) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        Some(match syntax.kind() {
+            NAMED_TYPE => Self::NamedType(NamedType { syntax }),
+            _ => return None,
+        })
+    }
+
+    fn syntax(&self) -> &rowan::SyntaxNode<Self::Language> {
+        todo!()
+    }
+}
+
+ast_node! {
+    NamedType => NAMED_TYPE
+    child_token name -> IDENT;
 }
 
 struct Cursor<'a> {

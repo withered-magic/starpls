@@ -314,8 +314,12 @@ impl DisplayWithDb for TyKind {
                         f.write_str(", ")?;
                     }
                     match param {
-                        Param::Simple { name, .. } => {
-                            write!(f, "{}: Unknown", name.as_str())?;
+                        Param::Simple { name, type_ref, .. } => {
+                            let type_ = match type_ref {
+                                Some(TypeRef::Name(name)) => name.as_str(),
+                                _ => "Unknown",
+                            };
+                            write!(f, "{}: {}", name.as_str(), type_)?;
                         }
                         Param::ArgsList { name, .. } => {
                             write!(f, "*{}: Unknown", name.as_str())?;

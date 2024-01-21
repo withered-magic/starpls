@@ -315,7 +315,7 @@ pub enum Declaration {
     Function { id: StmtId, func: Function },
     BuiltinFunction { func: BuiltinFunction },
     Variable { id: ExprId, source: Option<ExprId> },
-    Parameter { id: ParamId },
+    Parameter { id: ParamId, func: Option<Function> },
     LoadItem { id: LoadItemId },
 }
 
@@ -329,10 +329,6 @@ impl Name {
 
     pub(crate) fn missing() -> Self {
         Self::new(SmolStr::new_inline("[missing name]"))
-    }
-
-    pub(crate) fn is_missing(&self) -> bool {
-        &self.0 == "[missing name]"
     }
 
     pub fn from_ast_node(name: ast::NameRef) -> Self {

@@ -12,6 +12,10 @@ use std::collections::HashMap;
 
 const COMPLETION_MARKER: &'static str = "__STARPLS_COMPLETION_MARKER";
 
+const BUILTIN_TYPE_NAMES: &[&str] = &[
+    "NoneType", "bool", "int", "float", "string", "bytes", "list", "tuple", "dict", "range",
+];
+
 pub struct CompletionItem {
     pub label: String,
     pub kind: CompletionItemKind,
@@ -26,11 +30,13 @@ pub enum CompletionItemKind {
     Function,
     Variable,
     Keyword,
+    Class,
 }
 
 enum CompletionAnalysis {
     Name(NameContext),
     NameRef(NameRefContext),
+    Type,
 }
 
 enum NameContext {
@@ -107,6 +113,15 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
                         mode: None,
                     })
                 }
+            }
+        }
+        CompletionAnalysis::Type => {
+            for name in BUILTIN_TYPE_NAMES.iter() {
+                items.push(CompletionItem {
+                    label: name.to_string(),
+                    kind: CompletionItemKind::Class,
+                    mode: None,
+                })
             }
         }
         _ => {}
@@ -227,6 +242,8 @@ impl CompletionContext {
             } else {
                 NameContext::Def
             })
+        } else if let Some(_) = ast::NamedType::cast(parent) {
+            CompletionAnalysis::Type
         } else {
             return None;
         };

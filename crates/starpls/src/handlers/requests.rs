@@ -113,6 +113,8 @@ pub(crate) fn completion(
                 CompletionItemKind::Function => lsp_types::CompletionItemKind::FUNCTION,
                 CompletionItemKind::Variable => lsp_types::CompletionItemKind::VARIABLE,
                 CompletionItemKind::Keyword => lsp_types::CompletionItemKind::KEYWORD,
+                // TODO(withered-magic): Only choosing `INTERFACE` because it looks cooler in VSCode :D
+                CompletionItemKind::Class => lsp_types::CompletionItemKind::INTERFACE,
             }),
             ..Default::default()
         })

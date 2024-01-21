@@ -295,7 +295,7 @@ impl AssignStmt {
     pub fn assign_op_info(&self) -> Option<(SyntaxToken, AssignOp)> {
         self.syntax()
             .children_with_tokens()
-            .filter_map(|node_or_token| node_or_token.into_token())
+            .filter_map(|el| el.into_token())
             .find_map(|token| {
                 let op = match token.kind() {
                     T![=] => AssignOp::Normal,
@@ -319,8 +319,8 @@ impl AssignStmt {
     pub fn type_comment(&self) -> Option<TypeComment> {
         self.syntax
             .siblings_with_tokens(Direction::Next)
-            .take_while(|node_or_token| !matches!(node_or_token.kind(), SEMI | NEWLINE))
-            .filter_map(|node_or_token| node_or_token.into_node())
+            .take_while(|el| !matches!(el.kind(), SEMI | NEWLINE))
+            .filter_map(|el| el.into_node())
             .find_map(TypeComment::cast)
     }
 }
@@ -443,8 +443,8 @@ impl LiteralExpr {
     pub fn token(&self) -> SyntaxToken {
         self.syntax
             .children_with_tokens()
-            .find(|node_or_token| !node_or_token.kind().is_trivia_token())
-            .and_then(|node_or_token| node_or_token.into_token())
+            .find(|el| !el.kind().is_trivia_token())
+            .and_then(|el| el.into_token())
             .unwrap()
     }
 
@@ -495,7 +495,7 @@ impl UnaryExpr {
     pub fn unary_op_info(&self) -> Option<(SyntaxToken, UnaryOp)> {
         self.syntax
             .children_with_tokens()
-            .filter_map(|node_or_token| node_or_token.into_token())
+            .filter_map(|el| el.into_token())
             .find_map(|token| {
                 let op = match token.kind() {
                     T![+] => UnaryOp::Arith(UnaryArithOp::Add),
@@ -522,7 +522,7 @@ impl BinaryExpr {
     pub fn binary_op_info(&self) -> Option<(SyntaxToken, BinaryOp)> {
         self.syntax
             .children_with_tokens()
-            .filter_map(|node_or_token| node_or_token.into_token())
+            .filter_map(|el| el.into_token())
             .find_map(|token| {
                 let op = match token.kind() {
                     // TODO(withered-magic): Handle "not in".
@@ -625,8 +625,8 @@ impl SliceExpr {
         // and "start" (at index 1).
         self.syntax()
             .children_with_tokens()
-            .take_while(|node_or_token| node_or_token.kind() != T![:])
-            .filter_map(|node_or_token| node_or_token.into_node())
+            .take_while(|el| el.kind() != T![:])
+            .filter_map(|el| el.into_node())
             .filter_map(Expression::cast)
             .nth(1)
     }
@@ -635,10 +635,10 @@ impl SliceExpr {
         // Skip all children until the first colon, consume the colon, then take all children until the second colon.
         self.syntax()
             .children_with_tokens()
-            .skip_while(|node_or_token| node_or_token.kind() != T![:])
+            .skip_while(|el| el.kind() != T![:])
             .skip(1)
-            .take_while(|node_or_token| node_or_token.kind() != T![:])
-            .filter_map(|node_or_token| node_or_token.into_node())
+            .take_while(|el| el.kind() != T![:])
+            .filter_map(|el| el.into_node())
             .find_map(Expression::cast)
     }
 
@@ -646,11 +646,11 @@ impl SliceExpr {
         // Skip all children until the second colon.
         self.syntax()
             .children_with_tokens()
-            .skip_while(|node_or_token| node_or_token.kind() != T![:])
+            .skip_while(|el| el.kind() != T![:])
             .skip(1)
-            .skip_while(|node_or_token| node_or_token.kind() != T![:])
+            .skip_while(|el| el.kind() != T![:])
             .skip(1)
-            .filter_map(|node_or_token| node_or_token.into_node())
+            .filter_map(|el| el.into_node())
             .find_map(Expression::cast)
     }
 }
@@ -741,12 +741,8 @@ impl Parameter {
         self.syntax()
             .siblings_with_tokens(Direction::Next)
             .skip(1)
-            .take_while(|node_or_token| {
-                let kind = node_or_token.kind();
-                eprintln!("param sibling kind {:?}", kind);
-                kind != CLOSE_PAREN && !Self::can_cast(kind)
-            })
-            .filter_map(|node_or_token| node_or_token.into_node())
+            .take_while(|el| el.kind() != CLOSE_PAREN && !Self::can_cast(el.kind()))
+            .filter_map(|el| el.into_node())
             .find_map(TypeComment::cast)
     }
 }

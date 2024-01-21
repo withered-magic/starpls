@@ -1,5 +1,5 @@
 use crate::{
-    def::{Argument, Expr, ExprId, Function, Literal, Param},
+    def::{Argument, Expr, ExprId, Function, Literal, Param, ParamId},
     display::DisplayWithDb,
     lower as lower_,
     typeck::builtins::{
@@ -14,7 +14,10 @@ use rustc_hash::FxHashMap;
 use smallvec::{smallvec, SmallVec};
 use starpls_common::{parse, Diagnostic, File, FileRange, Severity};
 use starpls_intern::{impl_internable, Interned};
-use starpls_syntax::ast::{self, AstNode, AstPtr, BinaryOp, UnaryOp};
+use starpls_syntax::{
+    ast::{self, AstNode, AstPtr, BinaryOp, UnaryOp},
+    TextRange,
+};
 use std::{
     fmt::Write,
     panic::{self, UnwindSafe},
@@ -29,6 +32,12 @@ pub(crate) mod builtins;
 pub struct FileExprId {
     pub file: File,
     pub expr: ExprId,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct FileParamId {
+    pub file: File,
+    pub param: ParamId,
 }
 
 #[derive(Debug)]
@@ -466,6 +475,7 @@ impl GlobalCtxt {
 #[derive(Default)]
 struct InferenceCtxt {
     diagnostics: Vec<Diagnostic>,
+    param_tys: FxHashMap<FileParamId, Ty>,
     type_of_expr: FxHashMap<FileExprId, Ty>,
 }
 
@@ -553,6 +563,7 @@ impl TyCtxt<'_> {
                         Declaration::BuiltinFunction { func } => {
                             TyKind::BuiltinFunction(func, Substitution::new_identity(0)).intern()
                         }
+                        Declaration::Parameter { id, .. } => self.param_ty(file, id),
                         _ => self.types.any(db),
                     })
                     .unwrap_or_else(|| {
@@ -1233,7 +1244,16 @@ impl TyCtxt<'_> {
             Some(ptr) => ptr.syntax_node_ptr().text_range(),
             None => return self.types.unknown(self.db),
         };
+        self.add_diagnostic_for_range(file, range, message);
+        self.types.unknown(self.db)
+    }
 
+    fn add_diagnostic_for_range<T: Into<String>>(
+        &mut self,
+        file: File,
+        range: TextRange,
+        message: T,
+    ) {
         self.cx.diagnostics.push(Diagnostic {
             message: message.into(),
             severity: Severity::Error,
@@ -1242,7 +1262,53 @@ impl TyCtxt<'_> {
                 range,
             },
         });
-        self.types.unknown(self.db)
+    }
+
+    fn param_ty(&mut self, file: File, param: ParamId) -> Ty {
+        if let Some(ty) = self.cx.param_tys.get(&FileParamId { file, param }) {
+            return ty.clone();
+        }
+
+        let info = lower_(self.db, file);
+        let kind = match &info.module(self.db).params[param] {
+            Param::Simple { type_ref, .. } => type_ref
+                .as_ref()
+                .and_then(|type_ref| match type_ref {
+                    TypeRef::Name(name) => Some(name),
+                    _ => None,
+                })
+                .and_then(|name| {
+                    Some(match name.as_str() {
+                        "None" | "NoneType" => TyKind::None,
+                        "bool" => TyKind::Bool,
+                        "int" => TyKind::Int,
+                        "float" => TyKind::Float,
+                        "string" => TyKind::String,
+                        "bytes" => TyKind::Bytes,
+                        "list" => TyKind::List(self.types.any(self.db)),
+                        "dict" => TyKind::Dict(self.types.any(self.db), self.types.any(self.db)),
+                        "range" => TyKind::Range,
+                        name => {
+                            if let Some(ptr) = info.source_map(self.db).param_map_back.get(&param) {
+                                self.add_diagnostic_for_range(
+                                    file,
+                                    ptr.syntax_node_ptr().text_range(),
+                                    format!("Unknown type \"{}\" in type comment", name),
+                                );
+                            }
+                            return None;
+                        }
+                    })
+                })
+                .unwrap_or(TyKind::Unknown),
+            _ => TyKind::Unknown,
+        };
+
+        let ty = kind.intern();
+        self.cx
+            .param_tys
+            .insert(FileParamId { file, param }, ty.clone());
+        ty
     }
 }
 

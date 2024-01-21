@@ -1,5 +1,7 @@
 use crate::{
-    def::{CompClause, Declaration, Expr, ExprId, LoadItem, Param, ParamId, Stmt, StmtId},
+    def::{
+        CompClause, Declaration, Expr, ExprId, Function, LoadItem, Param, ParamId, Stmt, StmtId,
+    },
     lower, Db, Module, ModuleInfo, ModuleSourceMap, Name,
 };
 use id_arena::{Arena, Id};
@@ -60,10 +62,11 @@ pub struct Scopes {
 
 struct DeferredScope {
     parent: ScopeId,
-    data: Function,
+    data: FunctionData,
 }
 
-struct Function {
+struct FunctionData {
+    func: Function,
     params: Box<[ParamId]>,
     stmts: Box<[StmtId]>,
 }
@@ -145,7 +148,10 @@ impl ScopeCollector<'_> {
                         self.scopes.add_decl(
                             scope,
                             name.clone(),
-                            Declaration::Parameter { id: param },
+                            Declaration::Parameter {
+                                id: param,
+                                func: Some(data.func),
+                            },
                         );
                     }
                 }
@@ -171,7 +177,7 @@ impl ScopeCollector<'_> {
 
     fn collect_stmts(
         &mut self,
-        deferred: &mut VecDeque<Function>,
+        deferred: &mut VecDeque<FunctionData>,
         stmts: &Box<[StmtId]>,
         current: &mut ScopeId,
     ) {
@@ -182,7 +188,7 @@ impl ScopeCollector<'_> {
 
     fn collect_stmt(
         &mut self,
-        deferred: &mut VecDeque<Function>,
+        deferred: &mut VecDeque<FunctionData>,
         stmt: StmtId,
         current: &mut ScopeId,
     ) {
@@ -197,9 +203,10 @@ impl ScopeCollector<'_> {
                         func: *func,
                     },
                 );
-                deferred.push_back(Function {
+                deferred.push_back(FunctionData {
                     params: func.params_(self.db).clone(),
                     stmts: stmts.clone(),
+                    func: *func,
                 });
             }
             Stmt::If {
@@ -321,7 +328,10 @@ impl ScopeCollector<'_> {
                                 self.scopes.add_decl(
                                     scope,
                                     name.clone(),
-                                    Declaration::Parameter { id: param },
+                                    Declaration::Parameter {
+                                        id: param,
+                                        func: None,
+                                    },
                                 );
                             }
                         }

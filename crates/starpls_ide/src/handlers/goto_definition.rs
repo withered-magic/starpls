@@ -46,7 +46,7 @@ pub(crate) fn goto_definition(
                             range: ptr.syntax_node_ptr().text_range(),
                         })
                     }
-                    Declaration::Parameter { id } => {
+                    Declaration::Parameter { id, .. } => {
                         source_map.param_map_back.get(&id).map(|ptr| Location {
                             file_id,
                             range: ptr.syntax_node_ptr().text_range(),

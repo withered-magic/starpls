@@ -418,11 +418,7 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn lower_type_comment_opt(&self, node: Option<TypeComment>) -> Option<TypeRef> {
-        eprintln!("{:?}", node);
-        node.map(|node| {
-            eprintln!("lwoer");
-            self.lower_type_comment(node)
-        })
+        node.map(|node| self.lower_type_comment(node))
     }
 
     fn lower_type_comment(&self, node: TypeComment) -> TypeRef {

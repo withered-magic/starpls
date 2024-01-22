@@ -24,6 +24,7 @@ use std::{
     sync::Arc,
 };
 
+mod custom;
 mod lower;
 
 pub(crate) mod builtins;
@@ -237,23 +238,50 @@ impl DisplayWithDb for Ty {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TyKind {
+    /// An unbound variable, e.g. a variable without a corresponding
+    /// declaration.
     Unbound,
+    /// A value whose actual type is unknown. This is usually the
+    /// result of failed type inference, e.g. calling an unbound
+    /// function.
     Unknown,
+    /// Similar to `Unknown`, but not necessarily the result of failed
+    /// type inference.
     Any,
+    /// The type of the predefined `None` variable.
     None,
+    /// A boolean.
     Bool,
+    /// A 64-bit integer.
     Int,
+    /// A 64-bit floating point number.
     Float,
+    /// A UTF-8 encoded string.
     String,
+    /// The individual characters of a UTF-8 encoded string.
     StringElems,
+    /// A series of bytes.
     Bytes,
+    /// An iterable collection of bytes.
     BytesElems,
+    /// A list type, e.g. `list[string]`
     List(Ty),
+    /// A fixed-size collection of elements.
     Tuple(SmallVec<[Ty; 2]>),
+    /// A mapping of keys to values.
     Dict(Ty, Ty),
+    /// An iterable and indexable sequence of numbers. Obtained from
+    /// the `range()` function.
     Range,
+    /// A user-defined function.
     Function(Function),
+    /// A function predefined by the Starlark specification.
     BuiltinFunction(BuiltinFunction, Substitution),
+    /// A function predefined outside of the Starlark specification.
+    /// For example, common Bazel functions like `genrule()`.
+    CustomFunction,
+    /// A bound type variable, e.g. the argument to the `append()` method
+    /// of the `list[int]` class.
     BoundVar(usize),
 }
 
@@ -350,6 +378,7 @@ impl DisplayWithDb for TyKind {
                 f.write_str(") -> ")?;
                 return func.ret_ty(db).substitute(&subst.args).fmt(db, f);
             }
+            TyKind::CustomFunction => "builtin_function_or_method",
             TyKind::BoundVar(index) => return write!(f, "'{}", index),
         };
         f.write_str(text)
@@ -358,7 +387,9 @@ impl DisplayWithDb for TyKind {
     fn fmt_alt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TyKind::Function(_) => f.write_str("function"),
-            TyKind::BuiltinFunction(_, _) => f.write_str("builtin_function_or_method"),
+            TyKind::BuiltinFunction(_, _) | TyKind::CustomFunction => {
+                f.write_str("builtin_function_or_method")
+            }
             _ => self.fmt(db, f),
         }
     }

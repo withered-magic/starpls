@@ -2,8 +2,9 @@ use crate::{handlers::*, hover::Hover};
 use completions::CompletionItem;
 use dashmap::{mapref::entry::Entry, DashMap};
 use salsa::ParallelDatabase;
+use starpls_bazel::Builtins;
 use starpls_common::{Db, Diagnostic, File, FileId};
-use starpls_hir::{ExprId, GlobalCtxt, Ty};
+use starpls_hir::{Db as _, ExprId, GlobalCtxt, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use std::sync::Arc;
 
@@ -18,6 +19,7 @@ pub type Cancellable<T> = Result<T, starpls_hir::Cancelled>;
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, starpls_hir::Jar)]
 pub(crate) struct Database {
+    builtins: Option<Builtins>,
     storage: salsa::Storage<Self>,
     files: Arc<DashMap<FileId, File>>,
     gcx: Arc<GlobalCtxt>,
@@ -41,6 +43,7 @@ impl salsa::ParallelDatabase for Database {
             storage: self.storage.snapshot(),
             files: self.files.clone(),
             gcx: self.gcx.clone(),
+            ..Default::default()
         })
     }
 }
@@ -63,6 +66,14 @@ impl starpls_common::Db for Database {
 impl starpls_hir::Db for Database {
     fn infer_expr(&self, file: File, expr: ExprId) -> Ty {
         self.gcx.with_tcx(self, |tcx| tcx.infer_expr(file, expr))
+    }
+
+    fn set_builtins(&mut self, builtins: starpls_bazel::Builtins) {
+        self.builtins.replace(builtins);
+    }
+
+    fn get_builtins(&mut self) -> Option<&Builtins> {
+        self.builtins.as_ref()
     }
 }
 
@@ -99,6 +110,10 @@ impl Analysis {
         AnalysisSnapshot {
             db: self.db.snapshot(),
         }
+    }
+
+    pub fn set_builtins(&mut self, builtins: Builtins) {
+        self.db.set_builtins(builtins);
     }
 }
 

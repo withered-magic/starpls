@@ -32,4 +32,10 @@ impl crate::Db for TestDatabase {
     fn infer_expr(&self, _file: File, _expr: crate::def::ExprId) -> Ty {
         TyKind::Any.intern()
     }
+
+    fn set_builtins(&mut self, _builtins: starpls_bazel::Builtins) {}
+
+    fn get_builtins(&mut self) -> Option<&starpls_bazel::Builtins> {
+        None
+    }
 }

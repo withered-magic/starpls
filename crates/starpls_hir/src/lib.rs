@@ -1,4 +1,5 @@
 use crate::def::ModuleSourceMap;
+use starpls_bazel::Builtins;
 use starpls_common::{parse, File, Parse};
 
 pub use crate::{
@@ -45,6 +46,10 @@ pub struct Jar(
 
 pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
     fn infer_expr(&self, file: File, expr: ExprId) -> Ty;
+
+    fn set_builtins(&mut self, builtins: Builtins);
+
+    fn get_builtins(&mut self) -> Option<&Builtins>;
 }
 
 #[salsa::tracked]

@@ -7,6 +7,7 @@ use crate::{
 };
 use lsp_server::{Connection, ReqQueue};
 use parking_lot::RwLock;
+use starpls_bazel::{load_builtins, Builtins};
 use starpls_ide::{Analysis, AnalysisSnapshot, Change};
 use std::{sync::Arc, time::Duration};
 
@@ -35,13 +36,25 @@ impl Server {
         let task_pool = TaskPool::with_num_threads(sender.clone(), 4)?;
         let task_pool_handle = TaskPoolHandle::new(receiver, task_pool);
 
+        // Load Bazel builtins from the specified file.
+        let builtins = match load_bazel_builtins() {
+            Ok(builtins) => builtins,
+            Err(err) => {
+                eprintln!("server: failed to load builtins, {}", err);
+                Default::default()
+            }
+        };
+
+        let mut analysis = Analysis::new();
+        analysis.set_builtins(builtins);
+
         Ok(Server {
             connection,
             req_queue: Default::default(),
             task_pool_handle,
             document_manager: Default::default(),
             diagnostics_manager: Default::default(),
-            analysis: Analysis::new(),
+            analysis,
             analysis_debouncer: AnalysisDebouncer::new(DEBOUNCE_INTERVAL, sender),
             analysis_requested: false,
         })
@@ -89,4 +102,10 @@ impl Server {
     pub(crate) fn send(&self, message: lsp_server::Message) {
         self.connection.sender.send(message).unwrap();
     }
+}
+
+fn load_bazel_builtins() -> anyhow::Result<Builtins> {
+    let path = std::env::var("BAZEL_BUILTINS_PROTO_PATH")?;
+    let builtins = load_builtins(path)?;
+    Ok(builtins)
 }

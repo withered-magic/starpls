@@ -806,6 +806,13 @@ impl TyCtxt<'_> {
                             cannot_index("bytes")
                         }
                     }
+                    TyKind::Range => {
+                        if assign_tys(&index_ty, &int_ty) {
+                            int_ty
+                        } else {
+                            cannot_index("range")
+                        }
+                    }
                     TyKind::Any | TyKind::Unknown | TyKind::Unbound => self.types.unknown(db),
                     _ => self.add_diagnostic(
                         file,
@@ -1167,14 +1174,15 @@ impl TyCtxt<'_> {
     fn infer_source_expr_assign(&mut self, file: File, source: ExprId) {
         // Find the parent assignment node. This can be either an assignment statement (`x = 0`), a `for` statement (`for x in 1, 2, 3`), or
         // a for comp clause in a list/dict comprehension (`[x + 1 for x in [1, 2, 3]]`).
-        let info = lower_(self.db, file);
-        let source_map = info.source_map(self.db);
+        let db = self.db;
+        let info = lower_(db, file);
+        let source_map = info.source_map(db);
         let source_ptr = match source_map.expr_map_back.get(&source) {
             Some(ptr) => ptr,
             _ => return,
         };
         let parent = source_ptr
-            .to_node(&parse(self.db, file).syntax(self.db))
+            .to_node(&parse(db, file).syntax(db))
             .syntax()
             .parent()
             .unwrap();
@@ -1182,14 +1190,14 @@ impl TyCtxt<'_> {
         // Convert "Unbound" to "Unknown" in assignments to avoid confusion.
         let mut source_ty = self.infer_expr(file, source);
         if matches!(source_ty.kind(), TyKind::Unbound) {
-            source_ty = self.types.unknown(self.db);
+            source_ty = self.types.unknown(db);
         }
 
         // Handle standard assigments, e.g. `x, y = 1, 2`.
         if let Some(stmt) = ast::AssignStmt::cast(parent.clone()) {
             if let Some(lhs) = stmt.lhs() {
                 let lhs_ptr = AstPtr::new(&lhs);
-                let expr = info.source_map(self.db).expr_map.get(&lhs_ptr).unwrap();
+                let expr = info.source_map(db).expr_map.get(&lhs_ptr).unwrap();
                 self.assign_expr_source_ty(file, *expr, *expr, source_ty);
             }
             return;
@@ -1214,13 +1222,16 @@ impl TyCtxt<'_> {
 
         let sub_ty = match source_ty.kind() {
             TyKind::List(ty) => ty.clone(),
-            TyKind::Tuple(_) | TyKind::Any => self.types.any(self.db),
-            TyKind::Range => self.types.int(self.db),
+            TyKind::Dict(key_ty, _) => key_ty.clone(),
+            TyKind::Tuple(_) | TyKind::Any => self.types.any(db),
+            TyKind::Range => self.types.int(db),
+            TyKind::StringElems => self.types.string(db),
+            TyKind::BytesElems => self.types.int(db),
             _ => {
                 self.add_diagnostic(
                     file,
                     source,
-                    format!("Type \"{}\" is not iterable", source_ty.display(self.db)),
+                    format!("Type \"{}\" is not iterable", source_ty.display(db)),
                 );
                 for expr in targets.iter() {
                     self.assign_expr_unknown_rec(file, *expr);

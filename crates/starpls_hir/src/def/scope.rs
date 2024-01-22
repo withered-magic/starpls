@@ -213,8 +213,9 @@ impl ScopeCollector<'_> {
                 if_stmts,
                 elif_stmt,
                 else_stmts,
-                ..
+                test,
             } => {
+                self.collect_expr(*test, *current, None);
                 self.collect_stmts(deferred, if_stmts, current);
                 if let Some(elif_stmt) = elif_stmt {
                     self.collect_stmt(deferred, *elif_stmt, current);

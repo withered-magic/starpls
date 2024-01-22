@@ -97,33 +97,11 @@ struct SharedState {
     cancelled: AtomicCell<bool>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum BuiltinType {
-    None,
-    Bool,
-    Int,
-    Float,
-    String,
-    StringElems,
-    Bytes,
-    BytesElems,
-    List,
-    Tuple,
-    Dict,
-}
-
 /// A reference to a type in a source file.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TypeRef {
-    Any,
-    Builtin(BuiltinType),
     Name(Name),
-}
-
-impl From<BuiltinType> for TypeRef {
-    fn from(value: BuiltinType) -> Self {
-        Self::Builtin(value)
-    }
+    Unknown,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -341,7 +319,7 @@ impl DisplayWithDb for TyKind {
                 return f.write_str(") -> Unknown");
             }
             TyKind::BuiltinFunction(func, subst) => {
-                f.write_char('(')?;
+                write!(f, "def {}(", func.name(db).as_str())?;
                 for (i, param) in func.params(db).iter().enumerate() {
                     if i > 0 {
                         f.write_str(", ")?;

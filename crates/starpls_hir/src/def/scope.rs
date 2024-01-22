@@ -359,7 +359,7 @@ impl ScopeCollector<'_> {
                     entry,
                     comp_clauses,
                 } => {
-                    let mut comp = current;
+                    let mut comp = self.scopes.alloc_scope(current);
                     self.collect_comp_clause(comp_clauses, &mut comp);
                     self.collect_expr(entry.key, comp, None);
                     self.collect_expr(entry.value, comp, None);
@@ -369,7 +369,7 @@ impl ScopeCollector<'_> {
                     expr: list_expr,
                     comp_clauses,
                 } => {
-                    let mut comp = current;
+                    let mut comp = self.scopes.alloc_scope(current);
                     self.collect_comp_clause(comp_clauses, &mut comp);
                     self.collect_expr(*list_expr, comp, None);
                     self.scopes.scopes_by_hir_id.insert(expr.into(), current);

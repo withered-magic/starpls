@@ -73,7 +73,7 @@ pub struct BuiltinFunctions {
 
 #[salsa::tracked]
 pub struct BuiltinFunction {
-    pub name: Option<Name>,
+    pub name: Name,
     #[return_ref]
     pub params: Vec<BuiltinFunctionParam>,
     pub ret_ty: Ty,
@@ -492,7 +492,7 @@ fn function(
     params: Vec<BuiltinFunctionParam>,
     ret_ty: TyKind,
 ) -> BuiltinFunction {
-    BuiltinFunction::new(db, Some(Name::new_inline(name)), params, ret_ty.intern())
+    BuiltinFunction::new(db, Name::new_inline(name), params, ret_ty.intern())
 }
 
 fn function_field(
@@ -505,7 +505,7 @@ fn function_field(
     BuiltinField::new_inline(
         name,
         TyKind::BuiltinFunction(
-            BuiltinFunction::new(db, None, params, ret_ty.intern()),
+            function(db, name, params, ret_ty),
             Substitution::new_identity(num_vars),
         )
         .intern(),

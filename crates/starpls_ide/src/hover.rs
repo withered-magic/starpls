@@ -64,7 +64,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
         text.push_str("```python\n");
 
         // Handle special `def` formatting for function types.
-        if ty.is_user_defined_fn() {
+        if ty.is_fn() {
             text.push_str("(function) ");
         } else {
             text.push_str("(variable) ");
@@ -88,10 +88,16 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
                     (field_name.as_str() == name.syntax().text()).then_some(ty.clone())
                 })?;
 
+            // Handle special `def` formatting for methods.
             let mut text = String::new();
-            text.push_str("```python\n(field) ");
-            name.syntax().text().for_each_chunk(|s| text.push_str(s));
-            text.push_str(": ");
+            text.push_str("```python\n");
+            if field_ty.is_fn() {
+                text.push_str("(method) ");
+            } else {
+                text.push_str("(field) ");
+                text.push_str(name.name()?.text());
+                text.push_str(": ");
+            }
             write!(&mut text, "{}", field_ty.display(db)).unwrap();
             text.push_str("\n```\n");
             return Some(text.into());

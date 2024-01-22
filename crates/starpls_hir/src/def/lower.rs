@@ -431,7 +431,7 @@ impl<'a> LoweringContext<'a> {
                 ast::Type::NamedType(named_type) => named_type.name(),
             })
             .map(|name| TypeRef::Name(Name::from_str(name.text())))
-            .unwrap_or_else(|| TypeRef::Any)
+            .unwrap_or_else(|| TypeRef::Unknown)
     }
 
     fn alloc_stmt(&mut self, stmt: Stmt, ptr: StmtPtr) -> StmtId {

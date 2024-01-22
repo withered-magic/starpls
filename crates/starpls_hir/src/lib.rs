@@ -6,7 +6,8 @@ pub use crate::{
     def::{resolver::Resolver, scope::module_scopes, Declaration, ExprId, Module, Name},
     display::{DisplayWithDb, DisplayWithDbWrapper},
     typeck::{
-        builtins::BuiltinClass, Cancelled, FileExprId, GlobalCtxt, Ty, TyCtxt, TyKind, TypeRef,
+        builtins::BuiltinClass, custom::CustomDefs, Cancelled, FileExprId, GlobalCtxt, Ty, TyCtxt,
+        TyKind, TypeRef,
     },
 };
 
@@ -42,17 +43,30 @@ pub struct Jar(
     typeck::builtins::builtin_field_types,
     typeck::builtins::builtin_functions,
     typeck::builtins::builtin_types,
+    typeck::custom::CustomDefs,
+    typeck::custom::CustomFunction,
+    typeck::custom::CustomGlobals,
+    typeck::custom::CustomType,
+    typeck::custom::CustomTypes,
+    typeck::custom::CustomVariable,
+    typeck::custom::custom_types_query,
 );
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Dialect {
+    Bazel,
+}
 
 pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
     fn infer_expr(&self, file: File, expr: ExprId) -> Ty;
 
-    fn set_builtins(&mut self, builtins: Builtins);
+    fn set_custom_defs(&mut self, dialect: Dialect, builtins: Builtins);
 
-    fn get_builtins(&mut self) -> Option<&Builtins>;
+    fn get_custom_defs(&self, dialect: &Dialect) -> CustomDefs;
 }
 
 #[salsa::tracked]
+
 fn lower_query(db: &dyn Db, parse: Parse) -> ModuleInfo {
     let file = parse.file(db);
     let (module, source_map) = Module::new_with_source_map(db, file, parse.tree(db));

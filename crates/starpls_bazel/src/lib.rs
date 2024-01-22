@@ -25,6 +25,37 @@ pub const BUILTINS_TYPES_DENY_LIST: &[&str] = &[
     "tuple",
 ];
 
+pub const BUILTINS_VALUES_DENY_LIST: &[&str] = &[
+    "False",
+    "True",
+    "None",
+    "abs",
+    "all",
+    "any",
+    "bool",
+    "dict",
+    "dir",
+    "enumerate",
+    "fail",
+    "float",
+    "getattr",
+    "hasattr",
+    "hash",
+    "int",
+    "len",
+    "list",
+    "max",
+    "min",
+    "print",
+    "range",
+    "repr",
+    "reversed",
+    "sorted",
+    "tuple",
+    "type",
+    "zip",
+];
+
 pub fn load_builtins(path: impl AsRef<Path>) -> anyhow::Result<Builtins> {
     let data = fs::read(path)?;
     let builtins = Builtins::decode(&data[..])?;

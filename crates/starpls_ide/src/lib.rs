@@ -4,7 +4,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use salsa::ParallelDatabase;
 use starpls_bazel::Builtins;
 use starpls_common::{Db, Diagnostic, File, FileId};
-use starpls_hir::{Db as _, ExprId, GlobalCtxt, Ty};
+use starpls_hir::{CustomDefs, Db as _, Dialect, ExprId, GlobalCtxt, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use std::sync::Arc;
 
@@ -19,7 +19,7 @@ pub type Cancellable<T> = Result<T, starpls_hir::Cancelled>;
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, starpls_hir::Jar)]
 pub(crate) struct Database {
-    builtins: Option<Builtins>,
+    custom_defs: Arc<DashMap<Dialect, CustomDefs>>,
     storage: salsa::Storage<Self>,
     files: Arc<DashMap<FileId, File>>,
     gcx: Arc<GlobalCtxt>,
@@ -40,10 +40,10 @@ impl salsa::Database for Database {}
 impl salsa::ParallelDatabase for Database {
     fn snapshot(&self) -> salsa::Snapshot<Self> {
         salsa::Snapshot::new(Database {
-            storage: self.storage.snapshot(),
+            custom_defs: self.custom_defs.clone(),
             files: self.files.clone(),
             gcx: self.gcx.clone(),
-            ..Default::default()
+            storage: self.storage.snapshot(),
         })
     }
 }
@@ -68,12 +68,22 @@ impl starpls_hir::Db for Database {
         self.gcx.with_tcx(self, |tcx| tcx.infer_expr(file, expr))
     }
 
-    fn set_builtins(&mut self, builtins: starpls_bazel::Builtins) {
-        self.builtins.replace(builtins);
+    fn set_custom_defs(&mut self, dialect: Dialect, builtins: Builtins) {
+        let defs = match self.custom_defs.entry(dialect) {
+            Entry::Occupied(entry) => *entry.get(),
+            Entry::Vacant(entry) => {
+                entry.insert(CustomDefs::new(self, builtins));
+                return;
+            }
+        };
+        defs.set_builtins(self).to(builtins);
     }
 
-    fn get_builtins(&mut self) -> Option<&Builtins> {
-        self.builtins.as_ref()
+    fn get_custom_defs(&self, dialect: &Dialect) -> CustomDefs {
+        self.custom_defs
+            .get(dialect)
+            .map(|defs| *defs)
+            .unwrap_or(CustomDefs::new(self, Builtins::default()))
     }
 }
 
@@ -112,8 +122,8 @@ impl Analysis {
         }
     }
 
-    pub fn set_builtins(&mut self, builtins: Builtins) {
-        self.db.set_builtins(builtins);
+    pub fn set_custom_defs(&mut self, builtins: Builtins) {
+        self.db.set_custom_defs(Dialect::Bazel, builtins);
     }
 }
 

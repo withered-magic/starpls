@@ -1,10 +1,13 @@
 use crate::{
-    def::{Argument, Expr, ExprId, Function, Literal, Param, ParamId},
+    def::{Argument, Expr, ExprId, Function, Literal, ModuleSourceMap, Param, ParamId},
     display::DisplayWithDb,
     lower as lower_,
-    typeck::builtins::{
-        builtin_field_types, builtin_types, BuiltinClass, BuiltinFunction, BuiltinFunctionParam,
-        BuiltinTypes,
+    typeck::{
+        builtins::{
+            builtin_field_types, builtin_types, BuiltinClass, BuiltinFunction,
+            BuiltinFunctionParam, BuiltinTypes,
+        },
+        custom::{custom_types, CustomType, CustomTypes},
     },
     Db, Declaration, Name, Resolver,
 };
@@ -24,10 +27,10 @@ use std::{
     sync::Arc,
 };
 
-mod custom;
 mod lower;
 
 pub(crate) mod builtins;
+pub(crate) mod custom;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FileExprId {
@@ -114,7 +117,25 @@ impl Ty {
     }
 
     pub fn fields<'a>(&'a self, db: &'a dyn Db) -> Option<Vec<(&'a Name, Ty)>> {
-        let class = self.kind().builtin_class(db)?;
+        if let Some(class) = self.kind().builtin_class(db) {
+            Some(self.builtin_class_fields(db, class))
+        } else if let TyKind::CustomType(cty) = self.kind() {
+            Some(
+                cty.fields(db)
+                    .iter()
+                    .map(|field| (&field.name, TyKind::Unknown.intern()))
+                    .collect(),
+            )
+        } else {
+            None
+        }
+    }
+
+    fn builtin_class_fields<'a>(
+        &'a self,
+        db: &'a dyn Db,
+        class: BuiltinClass,
+    ) -> Vec<(&'a Name, Ty)> {
         let names = class.fields(db).iter().map(|field| &field.name);
         let mut subst = Substitution::new();
 
@@ -134,7 +155,7 @@ impl Ty {
             .field_tys(db)
             .iter()
             .map(|binders| binders.substitute(&subst));
-        Some(names.zip(types).collect())
+        names.zip(types).collect()
     }
 
     pub fn param_names<'a>(&'a self, db: &'a dyn Db) -> Vec<Name> {
@@ -277,9 +298,12 @@ pub enum TyKind {
     Function(Function),
     /// A function predefined by the Starlark specification.
     BuiltinFunction(BuiltinFunction, Substitution),
-    /// A function predefined outside of the Starlark specification.
+    /// A function defined outside of the Starlark specification.
     /// For example, common Bazel functions like `genrule()`.
     CustomFunction,
+    /// A type defined outside of the Starlark specification.
+    /// For example, common Bazel types like `Label`.
+    CustomType(CustomType),
     /// A bound type variable, e.g. the argument to the `append()` method
     /// of the `list[int]` class.
     BoundVar(usize),
@@ -379,6 +403,7 @@ impl DisplayWithDb for TyKind {
                 return func.ret_ty(db).substitute(&subst.args).fmt(db, f);
             }
             TyKind::CustomFunction => "builtin_function_or_method",
+            TyKind::CustomType(type_) => type_.name(db).as_str(),
             TyKind::BoundVar(index) => return write!(f, "'{}", index),
         };
         f.write_str(text)
@@ -473,6 +498,7 @@ impl GlobalCtxt {
         let mut cx = self.cx.lock();
         let mut tcx = TyCtxt {
             db,
+            custom_types: custom_types(db),
             types: builtin_types(db),
             shared_state: Arc::clone(&self.shared_state),
             cx: &mut cx,
@@ -510,6 +536,7 @@ impl Drop for CancelGuard<'_> {
 
 pub struct TyCtxt<'a> {
     db: &'a dyn Db,
+    custom_types: CustomTypes,
     types: BuiltinTypes,
     shared_state: Arc<SharedState>,
     cx: &'a mut InferenceCtxt,
@@ -643,11 +670,11 @@ impl TyCtxt<'_> {
             } => {
                 let receiver_ty = self.infer_expr(file, *dot_expr);
 
-                // Special-casing for "Any", "Unknown", and "Unbound".
+                // Special-casing for "Any", "Unknown", "Unbound", and missing names.
                 if receiver_ty.is_any() {
                     return self.types.any(db);
                 }
-                if receiver_ty.is_unknown() {
+                if receiver_ty.is_unknown() || field.is_missing() {
                     return self.types.unknown(db);
                 }
 
@@ -1279,45 +1306,73 @@ impl TyCtxt<'_> {
         }
 
         let info = lower_(self.db, file);
-        let kind = match &info.module(self.db).params[param] {
+        let ty = match &info.module(self.db).params[param] {
             Param::Simple { type_ref, .. } => type_ref
                 .as_ref()
-                .and_then(|type_ref| match type_ref {
-                    TypeRef::Name(name) => Some(name),
-                    _ => None,
+                .and_then(|type_ref| {
+                    self.lower_param_type_ref(file, &info.source_map(self.db), param, &type_ref)
                 })
-                .and_then(|name| {
-                    Some(match name.as_str() {
-                        "None" | "NoneType" => TyKind::None,
-                        "bool" => TyKind::Bool,
-                        "int" => TyKind::Int,
-                        "float" => TyKind::Float,
-                        "string" => TyKind::String,
-                        "bytes" => TyKind::Bytes,
-                        "list" => TyKind::List(self.types.any(self.db)),
-                        "dict" => TyKind::Dict(self.types.any(self.db), self.types.any(self.db)),
-                        "range" => TyKind::Range,
-                        name => {
-                            if let Some(ptr) = info.source_map(self.db).param_map_back.get(&param) {
-                                self.add_diagnostic_for_range(
-                                    file,
-                                    ptr.syntax_node_ptr().text_range(),
-                                    format!("Unknown type \"{}\" in type comment", name),
-                                );
-                            }
-                            return None;
-                        }
+                .unwrap_or_else(|| self.types.unknown(self.db)),
+            Param::ArgsList { type_ref, .. } => TyKind::List(
+                type_ref
+                    .as_ref()
+                    .and_then(|type_ref| {
+                        self.lower_param_type_ref(file, &info.source_map(self.db), param, type_ref)
                     })
-                })
-                .unwrap_or(TyKind::Unknown),
-            _ => TyKind::Unknown,
+                    .unwrap_or_else(|| self.types.unknown(self.db)),
+            )
+            .intern(),
+            Param::KwargsList { .. } => {
+                TyKind::Dict(self.types.any(self.db), self.types.any(self.db)).intern()
+            }
         };
 
-        let ty = kind.intern();
         self.cx
             .param_tys
             .insert(FileParamId { file, param }, ty.clone());
         ty
+    }
+
+    fn lower_param_type_ref(
+        &mut self,
+        file: File,
+        source_map: &ModuleSourceMap,
+        param: ParamId,
+        type_ref: &TypeRef,
+    ) -> Option<Ty> {
+        let opt = self.lower_type_ref(type_ref);
+        if opt.is_none() {
+            let name = match type_ref {
+                TypeRef::Name(name) => name,
+                TypeRef::Unknown => return None,
+            };
+            let ptr = source_map.param_map_back.get(&param)?;
+            self.add_diagnostic_for_range(
+                file,
+                ptr.syntax_node_ptr().text_range(),
+                format!("Unknown type \"{}\" in type comment", name.as_str()),
+            );
+        }
+        opt
+    }
+
+    fn lower_type_ref(&mut self, type_ref: &TypeRef) -> Option<Ty> {
+        let db = self.db;
+        Some(match type_ref {
+            TypeRef::Name(name) => match name.as_str() {
+                "None" | "NoneType" => self.types.none(db),
+                "bool" => self.types.bool(db),
+                "int" => self.types.int(db),
+                "float" => self.types.float(db),
+                "string" => self.types.string(db),
+                "bytes" => self.types.bytes(db),
+                "list" => TyKind::List(self.types.any(self.db)).intern(),
+                "dict" => TyKind::Dict(self.types.any(self.db), self.types.any(self.db)).intern(),
+                "range" => self.types.range(db),
+                name => return self.custom_types.types(db).get(name).cloned(),
+            },
+            TypeRef::Unknown => self.types.unknown(db),
+        })
     }
 }
 

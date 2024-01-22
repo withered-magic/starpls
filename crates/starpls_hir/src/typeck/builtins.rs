@@ -18,6 +18,7 @@ pub struct BuiltinTypes {
     pub(crate) string_elems: Ty,
     pub(crate) bytes: Ty,
     pub(crate) bytes_elems: Ty,
+    pub(crate) range: Ty,
 
     // Base classes for types with fields/methods.
     pub(crate) string_base_class: BuiltinClass,
@@ -244,6 +245,7 @@ pub(crate) fn builtin_types(db: &dyn Db) -> BuiltinTypes {
         TyKind::StringElems.intern(),
         TyKind::Bytes.intern(),
         TyKind::BytesElems.intern(),
+        TyKind::Range.intern(),
         make_string_base_class(db),
         make_bytes_base_class(db),
         make_list_base_class(db),

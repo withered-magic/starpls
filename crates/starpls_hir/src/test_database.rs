@@ -1,8 +1,8 @@
+use crate::{CustomDefs, Dialect, Ty, TyKind};
 use dashmap::{mapref::entry::Entry, DashMap};
+use starpls_bazel::Builtins;
 use starpls_common::{File, FileId};
 use std::sync::Arc;
-
-use crate::{Ty, TyKind};
 
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, crate::Jar)]
@@ -33,9 +33,11 @@ impl crate::Db for TestDatabase {
         TyKind::Any.intern()
     }
 
-    fn set_builtins(&mut self, _builtins: starpls_bazel::Builtins) {}
+    fn set_custom_defs(&mut self, _dialect: Dialect, _builtins: Builtins) {
+        unimplemented!()
+    }
 
-    fn get_builtins(&mut self) -> Option<&starpls_bazel::Builtins> {
-        None
+    fn get_custom_defs(&self, _dialect: &Dialect) -> CustomDefs {
+        unimplemented!()
     }
 }

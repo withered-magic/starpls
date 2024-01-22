@@ -46,7 +46,7 @@ impl Server {
         };
 
         let mut analysis = Analysis::new();
-        analysis.set_builtins(builtins);
+        analysis.set_custom_defs(builtins);
 
         Ok(Server {
             connection,
@@ -105,7 +105,7 @@ impl Server {
 }
 
 fn load_bazel_builtins() -> anyhow::Result<Builtins> {
-    let path = std::env::var("BAZEL_BUILTINS_PROTO_PATH")?;
-    let builtins = load_builtins(path)?;
+    // let path = std::env::var("BAZEL_BUILTINS_PROTO_PATH")?;
+    let builtins = load_builtins("")?;
     Ok(builtins)
 }

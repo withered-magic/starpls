@@ -83,13 +83,12 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
                     items.push(CompletionItem {
                         label: name.to_string(),
                         kind: match decl {
-                            Declaration::Function { .. } | Declaration::BuiltinFunction { .. } => {
-                                CompletionItemKind::Function
-                            }
+                            Declaration::Function { .. }
+                            | Declaration::BuiltinFunction { .. }
+                            | Declaration::CustomFunction { .. } => CompletionItemKind::Function,
                             Declaration::Variable { .. } | Declaration::Parameter { .. } => {
                                 CompletionItemKind::Variable
                             }
-
                             _ => CompletionItemKind::Variable,
                         },
                         mode: None,

@@ -48,7 +48,7 @@ pub struct Jar(
     typeck::custom::CustomGlobals,
     typeck::custom::CustomType,
     typeck::custom::CustomTypes,
-    typeck::custom::CustomVariable,
+    typeck::custom::custom_globals_query,
     typeck::custom::custom_types_query,
 );
 

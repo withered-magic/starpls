@@ -4,7 +4,7 @@ use crate::{
         Declaration, ExprId, ModuleSourceMap,
     },
     lower,
-    typeck::builtins::builtin_functions,
+    typeck::{builtins::builtin_functions, custom::custom_globals},
     Db, Name,
 };
 use starpls_common::File;
@@ -33,11 +33,32 @@ impl<'a> Resolver<'a> {
         }
 
         // Fall back to the builtins scope.
+        self.resolve_name_in_builtins(name)
+    }
+
+    pub fn resolve_name_in_builtins(&self, name: &Name) -> Option<Vec<Declaration>> {
         builtin_functions(self.db)
             .functions(self.db)
             .get(name)
             .copied()
             .map(|func| vec![Declaration::BuiltinFunction { func }])
+            .or_else(|| self.resolve_name_in_custom_globals(name))
+    }
+
+    pub fn resolve_name_in_custom_globals(&self, name: &Name) -> Option<Vec<Declaration>> {
+        let globals = custom_globals(self.db);
+        globals
+            .functions(self.db)
+            .get(name.as_str())
+            .copied()
+            .map(|func| vec![Declaration::CustomFunction { func }])
+            .or_else(|| {
+                globals
+                    .variables(self.db)
+                    .get(name.as_str())
+                    .cloned()
+                    .map(|type_ref| vec![Declaration::CustomVariable { type_ref }])
+            })
     }
 
     pub fn names(&self) -> HashMap<Name, Declaration> {
@@ -52,12 +73,30 @@ impl<'a> Resolver<'a> {
             }
         }
 
-        // Add names from the builtins scope.
-        // TODO(withered-magic): We probably don't want to do this by default since the builtins
-        // scope might be huge once we start loading things like Bazel definitions.
+        // Add names from Starlark builtins.
         for (key, func) in builtin_functions(self.db).functions(self.db).iter() {
             names.insert(key.clone(), Declaration::BuiltinFunction { func: *func });
         }
+
+        // Add global functions from third-party builtins (e.g. Bazel builtins).
+        let globals = custom_globals(self.db);
+        for (name, func) in globals.functions(self.db).iter() {
+            names.insert(
+                Name::from_str(&name),
+                Declaration::CustomFunction { func: *func },
+            );
+        }
+
+        // Add global variables from third-party builtins (e.g. Bazel builtins).
+        for (name, type_ref) in globals.variables(self.db).iter() {
+            names.insert(
+                Name::from_str(&name),
+                Declaration::CustomVariable {
+                    type_ref: type_ref.clone(),
+                },
+            );
+        }
+
         names
     }
 

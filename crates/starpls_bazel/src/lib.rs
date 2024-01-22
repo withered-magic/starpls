@@ -11,7 +11,6 @@ pub mod builtin {
 pub const BUILTINS_TYPES_DENY_LIST: &[&str] = &[
     "bool",
     "bytes",
-    "bytes.elems",
     "builtin_function_or_method",
     "dict",
     "float",
@@ -21,8 +20,9 @@ pub const BUILTINS_TYPES_DENY_LIST: &[&str] = &[
     "list",
     "range",
     "string",
-    "string.elems",
     "tuple",
+    "None",
+    "NoneType",
 ];
 
 pub const BUILTINS_VALUES_DENY_LIST: &[&str] = &[
@@ -51,6 +51,7 @@ pub const BUILTINS_VALUES_DENY_LIST: &[&str] = &[
     "repr",
     "reversed",
     "sorted",
+    "str",
     "tuple",
     "type",
     "zip",

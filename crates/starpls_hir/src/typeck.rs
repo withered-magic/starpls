@@ -7,7 +7,7 @@ use crate::{
             builtin_field_types, builtin_types, BuiltinClass, BuiltinFunction,
             BuiltinFunctionParam, BuiltinTypes,
         },
-        custom::{custom_types, CustomType, CustomTypes},
+        custom::{custom_types, CustomFunction, CustomType, CustomTypes},
     },
     Db, Declaration, Name, Resolver,
 };
@@ -108,6 +108,16 @@ pub enum TypeRef {
     Unknown,
 }
 
+impl TypeRef {
+    pub(crate) fn from_str_opt(name: &str) -> Self {
+        if name.is_empty() {
+            Self::Unknown
+        } else {
+            Self::Name(Name::from_str(name))
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Ty(Interned<TyKind>);
 
@@ -123,7 +133,18 @@ impl Ty {
             Some(
                 cty.fields(db)
                     .iter()
-                    .map(|field| (&field.name, TyKind::Unknown.intern()))
+                    .map(|field| {
+                        (
+                            &field.name,
+                            resolve_type_ref(db, &field.type_ref)
+                                .unwrap_or_else(|| TyKind::Unknown.intern()),
+                        )
+                    })
+                    .chain(
+                        cty.methods(db)
+                            .iter()
+                            .map(|func| (func.name(db), TyKind::CustomFunction(*func).intern())),
+                    )
                     .collect(),
             )
         } else {
@@ -180,7 +201,7 @@ impl Ty {
     pub fn is_fn(&self) -> bool {
         matches!(
             self.kind(),
-            TyKind::Function(_) | TyKind::BuiltinFunction(_, _)
+            TyKind::Function(_) | TyKind::BuiltinFunction(_, _) | TyKind::CustomFunction(_)
         )
     }
 
@@ -300,7 +321,7 @@ pub enum TyKind {
     BuiltinFunction(BuiltinFunction, Substitution),
     /// A function defined outside of the Starlark specification.
     /// For example, common Bazel functions like `genrule()`.
-    CustomFunction,
+    CustomFunction(CustomFunction),
     /// A type defined outside of the Starlark specification.
     /// For example, common Bazel types like `Label`.
     CustomType(CustomType),
@@ -402,7 +423,7 @@ impl DisplayWithDb for TyKind {
                 f.write_str(") -> ")?;
                 return func.ret_ty(db).substitute(&subst.args).fmt(db, f);
             }
-            TyKind::CustomFunction => "builtin_function_or_method",
+            TyKind::CustomFunction(_) => "builtin_function_or_method",
             TyKind::CustomType(type_) => type_.name(db).as_str(),
             TyKind::BoundVar(index) => return write!(f, "'{}", index),
         };
@@ -412,7 +433,7 @@ impl DisplayWithDb for TyKind {
     fn fmt_alt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TyKind::Function(_) => f.write_str("function"),
-            TyKind::BuiltinFunction(_, _) | TyKind::CustomFunction => {
+            TyKind::BuiltinFunction(_, _) | TyKind::CustomFunction(_) => {
                 f.write_str("builtin_function_or_method")
             }
             _ => self.fmt(db, f),
@@ -599,6 +620,11 @@ impl TyCtxt<'_> {
                         Declaration::BuiltinFunction { func } => {
                             TyKind::BuiltinFunction(func, Substitution::new_identity(0)).intern()
                         }
+                        Declaration::CustomFunction { func } => {
+                            TyKind::CustomFunction(func).intern()
+                        }
+                        Declaration::CustomVariable { type_ref } => resolve_type_ref(db, &type_ref)
+                            .unwrap_or_else(|| self.types.unknown(db)),
                         Declaration::Parameter { id, .. } => self.param_ty(file, id),
                         _ => self.types.any(db),
                     })
@@ -775,7 +801,7 @@ impl TyCtxt<'_> {
                 match callee_ty.kind() {
                     TyKind::Function(_) => {
                         // TODO: Handle slot assignments.
-                        self.types.unknown(db)
+                        self.types.any(db)
                     }
                     TyKind::BuiltinFunction(func, subst) => {
                         // Match arguments with their corresponding parameters.
@@ -996,6 +1022,8 @@ impl TyCtxt<'_> {
 
                         func.ret_ty(db).substitute(&subst.args)
                     }
+                    TyKind::CustomFunction(func) => resolve_type_ref(db, &func.ret_type_ref(db))
+                        .unwrap_or_else(|| self.types.unknown(db)),
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.types.unknown(db),
                     _ => self.add_diagnostic(
                         file,
@@ -1340,7 +1368,7 @@ impl TyCtxt<'_> {
         param: ParamId,
         type_ref: &TypeRef,
     ) -> Option<Ty> {
-        let opt = self.lower_type_ref(type_ref);
+        let opt = resolve_type_ref(self.db, type_ref);
         if opt.is_none() {
             let name = match type_ref {
                 TypeRef::Name(name) => name,
@@ -1355,25 +1383,26 @@ impl TyCtxt<'_> {
         }
         opt
     }
+}
 
-    fn lower_type_ref(&mut self, type_ref: &TypeRef) -> Option<Ty> {
-        let db = self.db;
-        Some(match type_ref {
-            TypeRef::Name(name) => match name.as_str() {
-                "None" | "NoneType" => self.types.none(db),
-                "bool" => self.types.bool(db),
-                "int" => self.types.int(db),
-                "float" => self.types.float(db),
-                "string" => self.types.string(db),
-                "bytes" => self.types.bytes(db),
-                "list" => TyKind::List(self.types.any(self.db)).intern(),
-                "dict" => TyKind::Dict(self.types.any(self.db), self.types.any(self.db)).intern(),
-                "range" => self.types.range(db),
-                name => return self.custom_types.types(db).get(name).cloned(),
-            },
-            TypeRef::Unknown => self.types.unknown(db),
-        })
-    }
+fn resolve_type_ref(db: &dyn Db, type_ref: &TypeRef) -> Option<Ty> {
+    let custom_types = custom_types(db);
+    let types = builtin_types(db);
+    Some(match type_ref {
+        TypeRef::Name(name) => match name.as_str() {
+            "None" | "NoneType" => types.none(db),
+            "bool" => types.bool(db),
+            "int" => types.int(db),
+            "float" => types.float(db),
+            "string" => types.string(db),
+            "bytes" => types.bytes(db),
+            "list" => TyKind::List(types.any(db)).intern(),
+            "dict" => TyKind::Dict(types.any(db), types.any(db)).intern(),
+            "range" => types.range(db),
+            name => return custom_types.types(db).get(name).cloned(),
+        },
+        TypeRef::Unknown => types.unknown(db),
+    })
 }
 
 fn assign_tys(source: &Ty, target: &Ty) -> bool {

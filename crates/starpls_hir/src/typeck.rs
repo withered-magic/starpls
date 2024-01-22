@@ -18,7 +18,7 @@ use smallvec::{smallvec, SmallVec};
 use starpls_common::{parse, Diagnostic, File, FileRange, Severity};
 use starpls_intern::{impl_internable, Interned};
 use starpls_syntax::{
-    ast::{self, AstNode, AstPtr, BinaryOp, UnaryOp},
+    ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, UnaryOp},
     TextRange,
 };
 use std::{
@@ -719,12 +719,21 @@ impl TyCtxt<'_> {
             } => {
                 let receiver_ty = self.infer_expr(file, *dot_expr);
 
-                // Special-casing for "Any", "Unknown", "Unbound", and missing names.
+                // Special-casing for "Any", "Unknown", "Unbound", invalid field
+                // names, and Bazel `struct`s.
+                // TODO(withered-magic): Is there a better way to handle `struct`s here?
                 if receiver_ty.is_any() {
                     return self.types.any(db);
                 }
+
                 if receiver_ty.is_unknown() || field.is_missing() {
                     return self.types.unknown(db);
+                }
+
+                if let TyKind::CustomType(type_) = receiver_ty.kind() {
+                    if type_.name(db).as_str() == "struct" {
+                        return self.types.unknown(db);
+                    }
                 }
 
                 receiver_ty
@@ -1139,7 +1148,8 @@ impl TyCtxt<'_> {
 
         match op {
             // TODO(withered-magic): Handle string interoplation with "%".
-            BinaryOp::Arith(_) => match (lhs, rhs) {
+            BinaryOp::Arith(op) => match (lhs, rhs) {
+                (TyKind::String, TyKind::String) if op == ArithOp::Add => self.types.string(db),
                 (TyKind::Int, TyKind::Int) => self.types.int(db),
                 (TyKind::Float, TyKind::Int)
                 | (TyKind::Int, TyKind::Float)

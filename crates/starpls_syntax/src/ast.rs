@@ -929,7 +929,7 @@ impl std::fmt::Display for BinaryOp {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ArithOp {
     Add,
     Sub,
@@ -952,7 +952,7 @@ impl std::fmt::Display for ArithOp {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BitwiseOp {
     And,
     Or,
@@ -973,7 +973,7 @@ impl std::fmt::Display for BitwiseOp {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CmpOp {
     Eq,
     Ne,
@@ -996,7 +996,7 @@ impl std::fmt::Display for CmpOp {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LogicOp {
     And,
     Or,
@@ -1011,7 +1011,7 @@ impl std::fmt::Display for LogicOp {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MemberOp {
     In,
     NotIn,
@@ -1026,7 +1026,7 @@ impl std::fmt::Display for MemberOp {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AssignOp {
     Normal,
     Arith(ArithAssignOp),
@@ -1043,7 +1043,7 @@ impl std::fmt::Display for AssignOp {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ArithAssignOp {
     Add,
     Sub,
@@ -1066,7 +1066,7 @@ impl std::fmt::Display for ArithAssignOp {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BitwiseAssignOp {
     And,
     Or,
@@ -1087,7 +1087,7 @@ impl std::fmt::Display for BitwiseAssignOp {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
     Arith(UnaryArithOp),
     Inv,
@@ -1104,7 +1104,7 @@ impl std::fmt::Display for UnaryOp {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum UnaryArithOp {
     Add,
     Sub,

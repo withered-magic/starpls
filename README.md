@@ -10,6 +10,37 @@ Steps to get up and running:
 3. Open VSCode, `Run and Debug > Run Extension (Debug Build)`.
 4. In the extension development host, open a `.star` file and enjoy syntax highlighting and error messages!
 
+## Roadmap
+- Parsing
+    - [x] Error resilient Starlark parser
+    - [x] Syntax error reporting
+- Semantic highlighting
+    - [x] Unbound variables
+    - [x] Type mismatches
+    - [ ] Function call argument validation (partial, works for Starlark builtins)
+- Auto-completion
+    - [x] Variables/function parameters
+    - [x] Fields 
+- Hover
+    - [x] Variable types
+    - [x] Function signatures
+    - [ ] Function/method docs
+- Type inference
+    - [x] Basic type inference
+    - [ ] Dataflow analysis
+    - [ ] PEP-484 type comments
+        - [ ] Variables
+        - [ ] Parameters (only basic types currently supported)
+        - [ ] Other constructs where type comments are supported
+- Third-party integrations
+    - [ ] Bazel builtins (partial, Bazel builtins are supported but still need to handle a number of edge cases)
+- Projects
+    - [ ] Type inference across multiple files
+    - [ ] `load` support
+        - [ ] Relative paths
+        - [ ] Bazel workspace
+    - [ ] Third-party Starlark libraries
+
 ## Disclaimer
 This project is still heavily WIP, so expect a decent amount of bugs and crashes if you decide to try it out! Additionally, I've elected to focus on implementing the core Starlark specification first before introducing Bazel- or Buck2-specific features.
 

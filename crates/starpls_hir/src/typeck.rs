@@ -7,7 +7,7 @@ use crate::{
             builtin_field_types, builtin_types, BuiltinClass, BuiltinFunction,
             BuiltinFunctionParam, BuiltinTypes,
         },
-        custom::{custom_types, CustomFunction, CustomType, CustomTypes},
+        custom::{custom_types, CustomFunction, CustomFunctionParam, CustomType, CustomTypes},
     },
     Db, Declaration, Name, Resolver,
 };
@@ -22,7 +22,7 @@ use starpls_syntax::{
     TextRange,
 };
 use std::{
-    fmt::Write,
+    fmt::{Display, Write},
     panic::{self, UnwindSafe},
     sync::Arc,
 };
@@ -115,6 +115,15 @@ impl TypeRef {
         } else {
             Self::Name(Name::from_str(name))
         }
+    }
+}
+
+impl std::fmt::Display for TypeRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            TypeRef::Name(name) => name.as_str(),
+            TypeRef::Unknown => "unknown",
+        })
     }
 }
 
@@ -423,7 +432,21 @@ impl DisplayWithDb for TyKind {
                 f.write_str(") -> ")?;
                 return func.ret_ty(db).substitute(&subst.args).fmt(db, f);
             }
-            TyKind::CustomFunction(_) => "builtin_function_or_method",
+            TyKind::CustomFunction(func) => {
+                write!(f, "def {}(", func.name(db).as_str())?;
+                for (i, param) in func.params(db).iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(", ")?;
+                    }
+                    match param {
+                        CustomFunctionParam::Normal { name, .. } => f.write_str(name.as_str())?,
+                        CustomFunctionParam::VarArgList { .. } => f.write_str("*args")?,
+                        CustomFunctionParam::VarArgDict => f.write_str("**kwargs")?,
+                    }
+                }
+                f.write_str(") -> ")?;
+                return func.ret_type_ref(db).fmt(f);
+            }
             TyKind::CustomType(type_) => type_.name(db).as_str(),
             TyKind::BoundVar(index) => return write!(f, "'{}", index),
         };

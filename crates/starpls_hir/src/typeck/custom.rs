@@ -81,10 +81,7 @@ pub(crate) fn custom_globals_query(db: &dyn Db, defs: CustomDefs) -> CustomGloba
             continue;
         }
 
-        eprintln!("buidting value {:?}", value.name);
-
         if let Some(callable) = &value.callable {
-            eprintln!("insert function");
             functions.insert(
                 value.name.clone(),
                 custom_function(db, &value.name, callable),

@@ -8,7 +8,7 @@ fn check_scope(fixture: &str, expected: &[&str]) {
     let (text, offset) = parse_fixture(fixture);
     let file = File::new(&test_db, file_id, text);
     let resolver = Resolver::new_for_offset(&test_db, file, offset);
-    let names = resolver.names();
+    let names = resolver.module_names();
     let mut actual = names.keys().map(|name| name.as_str()).collect::<Vec<_>>();
     actual.sort();
     assert_eq!(expected, &actual[..]);

@@ -33,11 +33,9 @@ impl crate::Db for TestDatabase {
         TyKind::Any.intern()
     }
 
-    fn set_custom_defs(&mut self, _dialect: Dialect, _builtins: Builtins) {
-        unimplemented!()
-    }
+    fn set_custom_defs(&mut self, _dialect: Dialect, _builtins: Builtins) {}
 
     fn get_custom_defs(&self, _dialect: &Dialect) -> CustomDefs {
-        unimplemented!()
+        CustomDefs::new(self, Default::default())
     }
 }

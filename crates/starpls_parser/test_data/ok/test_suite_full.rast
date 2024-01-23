@@ -4,8 +4,8 @@ MODULE
     WHITESPACE " "
     NAME
       IDENT "f"
-    OPEN_PAREN "("
     PARAMETERS
+      OPEN_PAREN "("
       SIMPLE_PARAMETER
         NAME
           IDENT "x"
@@ -14,7 +14,7 @@ MODULE
       SIMPLE_PARAMETER
         NAME
           IDENT "y"
-    CLOSE_PAREN ")"
+      CLOSE_PAREN ")"
     COLON ":"
     WHITESPACE " "
     SUITE
@@ -44,8 +44,8 @@ MODULE
     WHITESPACE " "
     NAME
       IDENT "g"
-    OPEN_PAREN "("
     PARAMETERS
+      OPEN_PAREN "("
       SIMPLE_PARAMETER
         NAME
           IDENT "x"
@@ -54,7 +54,7 @@ MODULE
       SIMPLE_PARAMETER
         NAME
           IDENT "y"
-    CLOSE_PAREN ")"
+      CLOSE_PAREN ")"
     COLON ":"
     SUITE
       NEWLINE "\n"

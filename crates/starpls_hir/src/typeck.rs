@@ -1220,12 +1220,10 @@ impl TyCtxt<'_> {
         }
 
         // Handle standard assigments, e.g. `x, y = 1, 2`.
-        if let Some(stmt) = ast::AssignStmt::cast(parent.clone()) {
-            if let Some(lhs) = stmt.lhs() {
-                let lhs_ptr = AstPtr::new(&lhs);
-                let expr = source_map.expr_map.get(&lhs_ptr).unwrap();
-                self.assign_expr_source_ty(file, *expr, *expr, source_ty);
-            }
+        if let Some(lhs) = ast::AssignStmt::cast(parent.clone()).and_then(|stmt| stmt.lhs()) {
+            let lhs_ptr = AstPtr::new(&lhs);
+            let expr = source_map.expr_map.get(&lhs_ptr).unwrap();
+            self.assign_expr_source_ty(file, *expr, *expr, source_ty);
             return;
         }
 

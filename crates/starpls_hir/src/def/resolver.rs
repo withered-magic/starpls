@@ -62,16 +62,8 @@ impl<'a> Resolver<'a> {
     }
 
     pub fn names(&self) -> HashMap<Name, Declaration> {
-        let mut names = HashMap::new();
-        for scope in self.scopes() {
-            for (name, decl) in scope.declarations.iter() {
-                if let Entry::Vacant(entry) = names.entry(name.clone()) {
-                    if let Some(decl) = decl.first().cloned() {
-                        entry.insert(decl);
-                    }
-                }
-            }
-        }
+        // Add names from this module.
+        let mut names = self.module_names();
 
         // Add names from Starlark builtins.
         for (key, func) in builtin_functions(self.db).functions(self.db).iter() {
@@ -97,6 +89,20 @@ impl<'a> Resolver<'a> {
             );
         }
 
+        names
+    }
+
+    pub(crate) fn module_names(&self) -> HashMap<Name, Declaration> {
+        let mut names = HashMap::new();
+        for scope in self.scopes() {
+            for (name, decl) in scope.declarations.iter() {
+                if let Entry::Vacant(entry) = names.entry(name.clone()) {
+                    if let Some(decl) = decl.first().cloned() {
+                        entry.insert(decl);
+                    }
+                }
+            }
+        }
         names
     }
 

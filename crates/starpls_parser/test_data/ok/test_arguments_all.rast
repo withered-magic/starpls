@@ -16,7 +16,8 @@ MODULE
       COMMA ","
       WHITESPACE " "
       KEYWORD_ARGUMENT
-        IDENT "y"
+        NAME
+          IDENT "y"
         EQ "="
         LITERAL_EXPR
           INT "1"

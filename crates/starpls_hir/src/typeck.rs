@@ -811,62 +811,41 @@ impl TyCtxt<'_> {
                 let lhs_ty = self.infer_expr(file, *lhs);
                 let index_ty = self.infer_expr(file, *index);
                 let int_ty = self.types.int(db);
-                let mut cannot_index = |receiver| {
+                let string_ty = self.types.string(db);
+
+                // Lists, dictionaries, strings, byte literals, and range values, as
+                // well as the `Indexable` and `SetIndexable` protocols, support indexing.
+                let (target, value, name) = match lhs_ty.kind() {
+                    TyKind::List(ty) => (&int_ty, ty, "list"),
+                    TyKind::Dict(key_ty, value_ty) => (key_ty, value_ty, "dict"),
+                    TyKind::String => (&int_ty, &string_ty, "string"),
+                    TyKind::Bytes => (&int_ty, &int_ty, "bytes"),
+                    TyKind::Range => (&int_ty, &int_ty, "range"),
+                    TyKind::Protocol(Protocol::Indexable(ty) | Protocol::SetIndexable(ty)) => {
+                        (&int_ty, ty, "Indexable")
+                    }
+                    _ => {
+                        let return_ty = self.add_expr_diagnostic(
+                            file,
+                            expr,
+                            format!("Type \"{}\" is not indexable", lhs_ty.display(db).alt()),
+                        );
+                        return self.set_expr_type(file, expr, return_ty);
+                    }
+                };
+
+                if assign_tys(&index_ty, target) {
+                    value.clone()
+                } else {
                     self.add_expr_diagnostic(
                         file,
                         *lhs,
                         format!(
                             "Cannot index {} with type \"{}\"",
-                            receiver,
+                            name,
                             index_ty.display(db).alt()
                         ),
                     )
-                };
-
-                // Indexing is currently only supported for lists, dicts,
-                // strings, bytes, and ranges.
-                match lhs_ty.kind() {
-                    TyKind::List(ty) => {
-                        if assign_tys(&index_ty, &int_ty) {
-                            ty.clone()
-                        } else {
-                            cannot_index("list")
-                        }
-                    }
-                    TyKind::Dict(key_ty, value_ty) => {
-                        if assign_tys(&index_ty, key_ty) {
-                            value_ty.clone()
-                        } else {
-                            cannot_index("dict")
-                        }
-                    }
-                    TyKind::String => {
-                        if assign_tys(&index_ty, &int_ty) {
-                            self.types.string(db)
-                        } else {
-                            cannot_index("string")
-                        }
-                    }
-                    TyKind::Bytes => {
-                        if assign_tys(&index_ty, &int_ty) {
-                            int_ty
-                        } else {
-                            cannot_index("bytes")
-                        }
-                    }
-                    TyKind::Range => {
-                        if assign_tys(&index_ty, &int_ty) {
-                            int_ty
-                        } else {
-                            cannot_index("range")
-                        }
-                    }
-                    TyKind::Any | TyKind::Unknown | TyKind::Unbound => self.types.unknown(db),
-                    _ => self.add_expr_diagnostic(
-                        file,
-                        *lhs,
-                        format!("Type \"{}\" is not indexable", lhs_ty.display(db).alt()),
-                    ),
                 }
             }
             Expr::Call { callee, args } => {

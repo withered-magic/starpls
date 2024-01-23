@@ -11,7 +11,6 @@ pub use crate::{
     },
 };
 
-mod api;
 mod def;
 mod display;
 mod test_database;
@@ -66,7 +65,6 @@ pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
 }
 
 #[salsa::tracked]
-
 fn lower_query(db: &dyn Db, parse: Parse) -> ModuleInfo {
     let file = parse.file(db);
     let (module, source_map) = Module::new_with_source_map(db, file, parse.tree(db));
@@ -77,4 +75,14 @@ fn lower_query(db: &dyn Db, parse: Parse) -> ModuleInfo {
 pub fn lower(db: &dyn Db, file: File) -> ModuleInfo {
     let parse = parse(db, file);
     lower_query(db, parse)
+}
+
+/// Shortcut to immediately access a `lower` query's `Module`.
+pub fn module(db: &dyn Db, file: File) -> &Module {
+    lower(db, file).module(db)
+}
+
+/// Shortcut to immediately access a `lower` query's `ModuleSourceMap`.
+pub fn source_map(db: &dyn Db, file: File) -> &ModuleSourceMap {
+    lower(db, file).source_map(db)
 }

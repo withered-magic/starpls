@@ -1,13 +1,13 @@
 use crate::{
     def::{Argument, Expr, ExprId, Function, Literal, ModuleSourceMap, Param, ParamId},
     display::DisplayWithDb,
-    lower as lower_,
+    module, source_map,
     typeck::{
         builtins::{
             builtin_field_types, builtin_types, BuiltinClass, BuiltinFunction,
             BuiltinFunctionParam, BuiltinTypes,
         },
-        custom::{custom_types, CustomFunction, CustomFunctionParam, CustomType, CustomTypes},
+        custom::{custom_types, CustomFunction, CustomFunctionParam, CustomType},
     },
     Db, Declaration, Name, Resolver,
 };
@@ -337,6 +337,8 @@ pub enum TyKind {
     /// A bound type variable, e.g. the argument to the `append()` method
     /// of the `list[int]` class.
     BoundVar(usize),
+    /// A marker type that indicates some specific behavior, e.g. Sequence[T].
+    Protocol(Protocol),
 }
 
 impl DisplayWithDb for TyKind {
@@ -449,6 +451,7 @@ impl DisplayWithDb for TyKind {
             }
             TyKind::CustomType(type_) => type_.name(db).as_str(),
             TyKind::BoundVar(index) => return write!(f, "'{}", index),
+            TyKind::Protocol(_proto) => "protocol",
         };
         f.write_str(text)
     }
@@ -524,6 +527,55 @@ impl Substitution {
     }
 }
 
+/// A marker type indicating that a value fulfills some behavior.
+/// For example, `list[int]` fulfills `Sequence[int]`. These types
+/// are used mostly by builtins that might return values that fulfill
+/// these behaviors but aren't known by the developer.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Protocol {
+    Iterable(Ty),
+    Sequence(Ty),
+    Indexable(Ty),
+    SetIndexable(Ty),
+    Mapping(Ty, Ty),
+}
+
+impl Protocol {
+    // TODO(withered-magic): This doesn't yet take subtypes into account.
+    pub(crate) fn assign_ty(&self, ty: &Ty) -> bool {
+        let kind = ty.kind();
+        match self {
+            // Dicts, lists, and tuples are all iterable sequences.
+            Protocol::Iterable(lhs_ty) | Protocol::Sequence(lhs_ty) => match kind {
+                TyKind::List(rhs_ty) | TyKind::Dict(rhs_ty, _) => assign_tys(rhs_ty, lhs_ty),
+                TyKind::Tuple(rhs_tys) => rhs_tys.iter().all(|rhs_ty| assign_tys(rhs_ty, lhs_ty)),
+                _ => false,
+            },
+            // Strings, byte literals, tuples, and lists are indexable.
+            Protocol::Indexable(target) => match kind {
+                TyKind::String => assign_tys(&TyKind::String.intern(), target),
+                TyKind::Bytes => assign_tys(&TyKind::Int.intern(), target),
+                TyKind::Tuple(_) => true,
+                TyKind::List(source) => assign_tys(source, target),
+                _ => false,
+            },
+            // Only lists can have their elements set by an indexing expression.
+            // Tuples are immutable and do not fall under this category.
+            Protocol::SetIndexable(target) => match kind {
+                TyKind::List(source) => assign_tys(source, target),
+                _ => false,
+            },
+            Protocol::Mapping(target_key_ty, target_value_ty) => match kind {
+                TyKind::Dict(source_key_ty, source_value_ty) => {
+                    assign_tys(source_key_ty, target_key_ty)
+                        && assign_tys(source_value_ty, target_value_ty)
+                }
+                _ => false,
+            },
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct GlobalCtxt {
     shared_state: Arc<SharedState>,
@@ -542,7 +594,6 @@ impl GlobalCtxt {
         let mut cx = self.cx.lock();
         let mut tcx = TyCtxt {
             db,
-            custom_types: custom_types(db),
             types: builtin_types(db),
             shared_state: Arc::clone(&self.shared_state),
             cx: &mut cx,
@@ -580,7 +631,6 @@ impl Drop for CancelGuard<'_> {
 
 pub struct TyCtxt<'a> {
     db: &'a dyn Db,
-    custom_types: CustomTypes,
     types: BuiltinTypes,
     shared_state: Arc<SharedState>,
     cx: &'a mut InferenceCtxt,
@@ -588,8 +638,7 @@ pub struct TyCtxt<'a> {
 
 impl TyCtxt<'_> {
     pub fn infer_all_exprs(&mut self, file: File) {
-        let info = lower_(self.db, file);
-        for (expr, _) in info.module(self.db).exprs.iter() {
+        for (expr, _) in module(self.db, file).exprs.iter() {
             self.infer_expr(file, expr);
         }
     }
@@ -622,8 +671,7 @@ impl TyCtxt<'_> {
         self.unwind_if_cancelled();
 
         let db = self.db;
-        let info = lower_(db, file);
-        let ty = match &info.module(db).exprs[expr] {
+        let ty = match &module(db, file).exprs[expr] {
             Expr::Name { name } => {
                 let resolver = Resolver::new_for_expr(db, file, expr);
                 resolver
@@ -652,7 +700,7 @@ impl TyCtxt<'_> {
                         _ => self.types.any(db),
                     })
                     .unwrap_or_else(|| {
-                        self.add_diagnostic(
+                        self.add_expr_diagnostic(
                             file,
                             expr,
                             format!("\"{}\" is not defined", name.as_str()),
@@ -748,7 +796,7 @@ impl TyCtxt<'_> {
                         }
                     })
                     .unwrap_or_else(|| {
-                        self.add_diagnostic(
+                        self.add_expr_diagnostic(
                             file,
                             expr,
                             format!(
@@ -764,7 +812,7 @@ impl TyCtxt<'_> {
                 let index_ty = self.infer_expr(file, *index);
                 let int_ty = self.types.int(db);
                 let mut cannot_index = |receiver| {
-                    self.add_diagnostic(
+                    self.add_expr_diagnostic(
                         file,
                         *lhs,
                         format!(
@@ -814,7 +862,7 @@ impl TyCtxt<'_> {
                         }
                     }
                     TyKind::Any | TyKind::Unknown | TyKind::Unbound => self.types.unknown(db),
-                    _ => self.add_diagnostic(
+                    _ => self.add_expr_diagnostic(
                         file,
                         *lhs,
                         format!("Type \"{}\" is not indexable", lhs_ty.display(db).alt()),
@@ -935,7 +983,7 @@ impl TyCtxt<'_> {
                                             _ => {}
                                         }
                                     }
-                                    self.add_diagnostic(
+                                    self.add_expr_diagnostic(
                                         file,
                                         expr,
                                         "Unexpected positional argument",
@@ -966,7 +1014,7 @@ impl TyCtxt<'_> {
                                             _ => {}
                                         }
                                     }
-                                    self.add_diagnostic(
+                                    self.add_expr_diagnostic(
                                         file,
                                         expr,
                                         format!(
@@ -1031,7 +1079,7 @@ impl TyCtxt<'_> {
                             let mut validate_provider = |provider| match provider {
                                 SlotProvider::Missing => {
                                     if !param.is_optional() {
-                                        self.add_diagnostic(
+                                        self.add_expr_diagnostic(
                                             file,
                                             expr,
                                             format!(
@@ -1043,7 +1091,7 @@ impl TyCtxt<'_> {
                                 }
                                 SlotProvider::Single(expr, ty) => {
                                     if !assign_tys(&ty, &param_ty) {
-                                        self.add_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to paramter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
+                                        self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to paramter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                 }
                                 _ => {}
@@ -1064,7 +1112,7 @@ impl TyCtxt<'_> {
                     TyKind::CustomFunction(func) => resolve_type_ref(db, &func.ret_type_ref(db))
                         .unwrap_or_else(|| self.types.unknown(db)),
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.types.unknown(db),
-                    _ => self.add_diagnostic(
+                    _ => self.add_expr_diagnostic(
                         file,
                         expr,
                         format!("Type \"{}\" is not callable", callee_ty.display(db).alt()),
@@ -1087,7 +1135,7 @@ impl TyCtxt<'_> {
         let db = self.db;
         let ty = self.infer_expr(file, expr);
         let mut unknown = || {
-            self.add_diagnostic(
+            self.add_expr_diagnostic(
                 file,
                 parent,
                 format!(
@@ -1137,7 +1185,7 @@ impl TyCtxt<'_> {
         let lhs = lhs.kind();
         let rhs = rhs.kind();
         let mut unknown = || {
-            self.add_diagnostic(
+            self.add_expr_diagnostic(
                 file,
                 parent,
                 format!(
@@ -1175,8 +1223,7 @@ impl TyCtxt<'_> {
         // Find the parent assignment node. This can be either an assignment statement (`x = 0`), a `for` statement (`for x in 1, 2, 3`), or
         // a for comp clause in a list/dict comprehension (`[x + 1 for x in [1, 2, 3]]`).
         let db = self.db;
-        let info = lower_(db, file);
-        let source_map = info.source_map(db);
+        let source_map = source_map(db, file);
         let source_ptr = match source_map.expr_map_back.get(&source) {
             Some(ptr) => ptr,
             _ => return,
@@ -1197,7 +1244,7 @@ impl TyCtxt<'_> {
         if let Some(stmt) = ast::AssignStmt::cast(parent.clone()) {
             if let Some(lhs) = stmt.lhs() {
                 let lhs_ptr = AstPtr::new(&lhs);
-                let expr = info.source_map(db).expr_map.get(&lhs_ptr).unwrap();
+                let expr = source_map.expr_map.get(&lhs_ptr).unwrap();
                 self.assign_expr_source_ty(file, *expr, *expr, source_ty);
             }
             return;
@@ -1228,7 +1275,7 @@ impl TyCtxt<'_> {
             TyKind::StringElems => self.types.string(db),
             TyKind::BytesElems => self.types.int(db),
             _ => {
-                self.add_diagnostic(
+                self.add_expr_diagnostic(
                     file,
                     source,
                     format!("Type \"{}\" is not iterable", source_ty.display(db)),
@@ -1247,8 +1294,7 @@ impl TyCtxt<'_> {
     }
 
     fn assign_expr_source_ty(&mut self, file: File, root: ExprId, expr: ExprId, source_ty: Ty) {
-        let module = lower_(self.db, file);
-        match module.module(self.db).exprs.get(expr).unwrap() {
+        match module(self.db, file).exprs.get(expr).unwrap() {
             Expr::Name { .. } => {
                 self.set_expr_type(file, expr, source_ty);
             }
@@ -1284,7 +1330,7 @@ impl TyCtxt<'_> {
                             self.assign_expr_unknown_rec(file, *expr);
                         }
                     }
-                    self.add_diagnostic(
+                    self.add_expr_diagnostic(
                         file,
                         root,
                         format!(
@@ -1301,7 +1347,7 @@ impl TyCtxt<'_> {
                 }
             }
             _ => {
-                self.add_diagnostic(
+                self.add_expr_diagnostic(
                     file,
                     root,
                     format!("Type \"{}\" is not iterable", source_ty.display(self.db)),
@@ -1316,7 +1362,7 @@ impl TyCtxt<'_> {
 
     fn assign_expr_unknown_rec(&mut self, file: File, expr: ExprId) {
         self.set_expr_type(file, expr, self.types.unknown(self.db));
-        lower_(self.db, file).module(self.db).exprs[expr].walk_child_exprs(|expr| {
+        module(self.db, file).exprs[expr].walk_child_exprs(|expr| {
             self.assign_expr_unknown_rec(file, expr);
         })
     }
@@ -1346,9 +1392,8 @@ impl TyCtxt<'_> {
             .unwrap_or(default)
     }
 
-    fn add_diagnostic<T: Into<String>>(&mut self, file: File, expr: ExprId, message: T) -> Ty {
-        let info = lower_(self.db, file);
-        let range = match info.source_map(self.db).expr_map_back.get(&expr) {
+    fn add_expr_diagnostic<T: Into<String>>(&mut self, file: File, expr: ExprId, message: T) -> Ty {
+        let range = match source_map(self.db, file).expr_map_back.get(&expr) {
             Some(ptr) => ptr.syntax_node_ptr().text_range(),
             None => return self.types.unknown(self.db),
         };
@@ -1377,19 +1422,18 @@ impl TyCtxt<'_> {
             return ty.clone();
         }
 
-        let info = lower_(self.db, file);
-        let ty = match &info.module(self.db).params[param] {
+        let module = module(self.db, file);
+        let source_map = source_map(self.db, file);
+        let ty = match &module.params[param] {
             Param::Simple { type_ref, .. } => type_ref
                 .as_ref()
-                .and_then(|type_ref| {
-                    self.lower_param_type_ref(file, &info.source_map(self.db), param, &type_ref)
-                })
+                .and_then(|type_ref| self.lower_param_type_ref(file, source_map, param, &type_ref))
                 .unwrap_or_else(|| self.types.unknown(self.db)),
             Param::ArgsList { type_ref, .. } => TyKind::List(
                 type_ref
                     .as_ref()
                     .and_then(|type_ref| {
-                        self.lower_param_type_ref(file, &info.source_map(self.db), param, type_ref)
+                        self.lower_param_type_ref(file, source_map, param, type_ref)
                     })
                     .unwrap_or_else(|| self.types.unknown(self.db)),
             )
@@ -1413,6 +1457,9 @@ impl TyCtxt<'_> {
         type_ref: &TypeRef,
     ) -> Option<Ty> {
         let opt = resolve_type_ref(self.db, type_ref);
+
+        // TODO(withered-magic): This will eventually need to handle diagnostics
+        // for other places that type comments can appear.
         if opt.is_none() {
             let name = match type_ref {
                 TypeRef::Name(name) => name,
@@ -1455,5 +1502,10 @@ fn assign_tys(source: &Ty, target: &Ty) -> bool {
     if source.is_any() || source.is_unknown() || target.is_any() || target.is_unknown() {
         return true;
     }
-    source == target
+
+    // With the exception of protocols, all other types are compared for equality.
+    match target.kind() {
+        TyKind::Protocol(protocol) => protocol.assign_ty(source),
+        _ => source == target,
+    }
 }

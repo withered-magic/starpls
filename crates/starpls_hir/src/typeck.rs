@@ -261,7 +261,7 @@ impl Field {
     pub fn doc(&self, db: &dyn Db) -> String {
         match self.0 {
             FieldInner::BuiltinField { parent, index } => parent.fields(db)[index].doc.clone(),
-            FieldInner::BuildinMethod { func } => func.doc(db),
+            FieldInner::BuildinMethod { func } => func.doc(db).clone(),
             FieldInner::IntrinsicField { .. } => String::new(),
         }
     }

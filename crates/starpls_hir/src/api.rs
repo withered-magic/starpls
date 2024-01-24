@@ -67,6 +67,14 @@ impl Type {
 
         fields.map(|(name, ty)| (name, ty.into())).collect()
     }
+
+    pub fn doc(&self, db: &dyn Db) -> String {
+        if let TyKind::BuiltinFunction(func) = self.ty.kind() {
+            func.doc(db).clone()
+        } else {
+            String::new()
+        }
+    }
 }
 
 impl From<Ty> for Type {

@@ -72,6 +72,13 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
 
         write!(&mut text, "{}", ty.display(db)).unwrap();
         text.push_str("\n```\n");
+
+        let doc = ty.doc(db);
+        if !doc.is_empty() {
+            text.push_str(&doc);
+            text.push('\n');
+        }
+
         return Some(text.into());
     } else if let Some(name) = ast::Name::cast(parent.clone()) {
         let parent = name.syntax().parent()?;

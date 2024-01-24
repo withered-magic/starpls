@@ -42,6 +42,7 @@ pub struct BuiltinFunction {
     #[return_ref]
     pub params: Vec<BuiltinFunctionParam>,
     pub ret_type_ref: TypeRef,
+    #[return_ref]
     pub doc: String,
 }
 

@@ -38,6 +38,12 @@ pub struct FileExprId {
     pub expr: ExprId,
 }
 
+impl FileExprId {
+    fn new(file: File, expr: ExprId) -> Self {
+        Self { file, expr }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FileParamId {
     pub file: File,
@@ -135,7 +141,7 @@ impl Ty {
         &self.0
     }
 
-    pub fn fields<'a>(&'a self, db: &'a dyn Db) -> Option<Vec<(&'a Name, Ty)>> {
+    pub fn fields<'a>(&'a self, db: &'a dyn Db) -> Option<Vec<(Name, Ty)>> {
         if let Some(class) = self.kind().builtin_class(db) {
             Some(self.builtin_class_fields(db, class))
         } else if let TyKind::BuiltinType(cty) = self.kind() {
@@ -144,7 +150,7 @@ impl Ty {
                     .iter()
                     .map(|field| {
                         (
-                            &field.name,
+                            field.name.clone(),
                             resolve_type_ref(db, &field.type_ref)
                                 .unwrap_or_else(|| TyKind::Unknown.intern()),
                         )
@@ -165,8 +171,8 @@ impl Ty {
         &'a self,
         db: &'a dyn Db,
         class: IntrinsicClass,
-    ) -> Vec<(&'a Name, Ty)> {
-        let names = class.fields(db).iter().map(|field| &field.name);
+    ) -> Vec<(Name, Ty)> {
+        let names = class.fields(db).iter().map(|field| field.name.clone());
         let mut subst = Substitution::new();
 
         // Build the substitution for lists and dicts.
@@ -662,7 +668,7 @@ impl TyCtxt<'_> {
         if let Some(ty) = self
             .cx
             .type_of_expr
-            .get(&FileExprId { file, expr })
+            .get(&FileExprId::new(file, expr))
             .cloned()
         {
             return ty;
@@ -681,7 +687,7 @@ impl TyCtxt<'_> {
                         Declaration::Variable { id, source } => self
                             .cx
                             .type_of_expr
-                            .get(&FileExprId { file, expr: id })
+                            .get(&FileExprId::new(file, id))
                             .cloned()
                             .unwrap_or_else(|| {
                                 source
@@ -689,7 +695,7 @@ impl TyCtxt<'_> {
                                         self.infer_source_expr_assign(file, source);
                                         self.cx
                                             .type_of_expr
-                                            .get(&FileExprId { file, expr: id })
+                                            .get(&FileExprId::new(file, id))
                                             .cloned()
                                     })
                                     .unwrap_or_else(|| self.unknown_ty())
@@ -793,7 +799,7 @@ impl TyCtxt<'_> {
                     .unwrap_or_else(|| Vec::new())
                     .iter()
                     .find_map(|(field2, ty)| {
-                        if field == *field2 {
+                        if field == field2 {
                             Some(ty.clone())
                         } else {
                             None
@@ -1350,7 +1356,7 @@ impl TyCtxt<'_> {
     fn set_expr_type(&mut self, file: File, expr: ExprId, ty: Ty) -> Ty {
         self.cx
             .type_of_expr
-            .insert(FileExprId { file, expr }, ty.clone());
+            .insert(FileExprId::new(file, expr), ty.clone());
         ty
     }
 
@@ -1402,19 +1408,15 @@ impl TyCtxt<'_> {
             return ty.clone();
         }
 
-        let module = module(self.db, file);
-        let source_map = source_map(self.db, file);
-        let ty = match &module.params[param] {
+        let ty = match &module(self.db, file)[param] {
             Param::Simple { type_ref, .. } => type_ref
                 .as_ref()
-                .and_then(|type_ref| self.lower_param_type_ref(file, source_map, param, &type_ref))
+                .and_then(|type_ref| self.lower_param_type_ref(file, param, &type_ref))
                 .unwrap_or_else(|| self.unknown_ty()),
             Param::ArgsList { type_ref, .. } => TyKind::List(
                 type_ref
                     .as_ref()
-                    .and_then(|type_ref| {
-                        self.lower_param_type_ref(file, source_map, param, type_ref)
-                    })
+                    .and_then(|type_ref| self.lower_param_type_ref(file, param, type_ref))
                     .unwrap_or_else(|| self.unknown_ty()),
             )
             .intern(),
@@ -1430,7 +1432,6 @@ impl TyCtxt<'_> {
     fn lower_param_type_ref(
         &mut self,
         file: File,
-        source_map: &ModuleSourceMap,
         param: ParamId,
         type_ref: &TypeRef,
     ) -> Option<Ty> {
@@ -1443,7 +1444,7 @@ impl TyCtxt<'_> {
                 TypeRef::Name(name) => name,
                 TypeRef::Unknown => return None,
             };
-            let ptr = source_map.param_map_back.get(&param)?;
+            let ptr = source_map(self.db, file).param_map_back.get(&param)?;
             self.add_diagnostic_for_range(
                 file,
                 ptr.syntax_node_ptr().text_range(),

@@ -1,6 +1,6 @@
 use crate::{util::pick_best_token, Database, FilePosition};
 use starpls_common::{parse, Db as _};
-use starpls_hir::{lower, source_map, Db as _, DisplayWithDb};
+use starpls_hir::{source_map, Db as _, DisplayWithDb, Semantics};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr},
     SyntaxKind::*,
@@ -31,6 +31,7 @@ impl From<String> for Hover {
 pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) -> Option<Hover> {
     let file = db.get_file(file_id)?;
     let parse = parse(db, file);
+    let sema = Semantics::new(db);
     let token = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
         T![ident] => 2,
         T!['('] | T![')'] | T!['['] | T![']'] | T!['{'] | T!['}'] => 0,
@@ -101,11 +102,8 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             write!(&mut text, "{}", field_ty.display(db)).unwrap();
             text.push_str("\n```\n");
             return Some(text.into());
-        } else if let Some(def_stmt) = ast::DefStmt::cast(parent.clone()) {
-            let ptr = AstPtr::new(&ast::Statement::cast(def_stmt.syntax().clone())?);
-            let info = lower(db, file);
-            let def_stmt = info.source_map(db).stmt_map.get(&ptr)?;
-            let func = info.module(db).function_for_stmt(*def_stmt)?;
+        } else if let Some(stmt) = ast::DefStmt::cast(parent.clone()) {
+            let func = sema.function_for_def(file, stmt)?;
             return Some(format!("```python\n(function) {}\n```\n", func.ty().display(db)).into());
         }
     }

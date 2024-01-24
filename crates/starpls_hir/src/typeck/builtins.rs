@@ -39,7 +39,6 @@ pub struct BuiltinGlobals {
 
 #[salsa::tracked]
 pub struct BuiltinFunction {
-    #[return_ref]
     pub name: Name,
     #[return_ref]
     pub params: Vec<BuiltinFunctionParam>,

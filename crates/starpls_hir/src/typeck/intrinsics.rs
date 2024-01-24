@@ -62,7 +62,7 @@ pub struct IntrinsicClass {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IntrinsicField {
-    pub name: Name,
+    pub(crate) name: Name,
     ty: Ty,
 }
 

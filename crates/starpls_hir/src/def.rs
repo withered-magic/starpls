@@ -62,13 +62,6 @@ impl Module {
     ) -> (Module, ModuleSourceMap) {
         lower::lower_module(db, file, syntax)
     }
-
-    pub fn function_for_stmt(&self, id: StmtId) -> Option<Function> {
-        match &self.stmts[id] {
-            Stmt::Def { func, .. } => Some(*func),
-            _ => None,
-        }
-    }
 }
 
 impl Index<ExprId> for Module {
@@ -393,11 +386,11 @@ impl Name {
 }
 
 #[salsa::tracked]
-pub struct Function {
-    pub file: File,
-    pub name: Name,
+pub(crate) struct Function {
+    pub(crate) file: File,
+    pub(crate) name: Name,
     #[return_ref]
-    params_: Box<[ParamId]>,
+    pub(crate) params_: Box<[ParamId]>,
 }
 
 impl Function {

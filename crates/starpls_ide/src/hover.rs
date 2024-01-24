@@ -78,9 +78,9 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
         if let Some(expr) = ast::DotExpr::cast(parent.clone()) {
             let ty = sema.type_of_expr(file, expr.expr()?.into())?;
             let fields = ty.fields(db);
-            let field_ty = fields.iter().find_map(|(field_name, ty)| {
-                if field_name.as_str() == name.syntax().text() {
-                    Some(ty)
+            let (field, field_ty) = fields.into_iter().find_map(|(field, ty)| {
+                if field.name(db).as_str() == name.syntax().text() {
+                    Some((field, ty))
                 } else {
                     None
                 }
@@ -97,6 +97,13 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             }
             write!(&mut text, "{}", field_ty.display(db)).unwrap();
             text.push_str("\n```\n");
+
+            let doc = field.doc(db);
+            if !doc.is_empty() {
+                text.push_str(&doc);
+                text.push('\n');
+            }
+
             return Some(text.into());
         } else if let Some(stmt) = ast::DefStmt::cast(parent.clone()) {
             let func = sema.function_for_def(file, stmt)?;

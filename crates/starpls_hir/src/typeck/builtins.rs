@@ -12,7 +12,6 @@ pub(crate) struct BuiltinTypes {
 
 #[salsa::tracked]
 pub struct BuiltinType {
-    #[return_ref]
     pub name: Name,
     #[return_ref]
     pub fields: Vec<BuiltinField>,

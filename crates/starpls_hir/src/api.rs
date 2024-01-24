@@ -7,6 +7,8 @@ use crate::{
 use starpls_common::File;
 use starpls_syntax::ast::{self, AstNode, AstPtr};
 
+pub use crate::typeck::Field;
+
 pub struct Semantics<'a> {
     db: &'a dyn Db,
 }
@@ -57,7 +59,7 @@ impl Type {
 }
 
 impl Type {
-    pub fn fields(&self, db: &dyn Db) -> Vec<(Name, Type)> {
+    pub fn fields(&self, db: &dyn Db) -> Vec<(Field, Type)> {
         let fields = match self.ty.fields(db) {
             Some(fields) => fields,
             None => return Vec::new(),

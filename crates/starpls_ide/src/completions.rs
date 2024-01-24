@@ -102,7 +102,7 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
         CompletionAnalysis::Name(NameContext::Dot { receiver_ty }) => {
             for (name, ty) in receiver_ty.fields(db) {
                 items.push(CompletionItem {
-                    label: name.to_string(),
+                    label: name.name(db).to_string(),
                     kind: if ty.is_function() {
                         CompletionItemKind::Function
                     } else {

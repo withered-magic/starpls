@@ -144,40 +144,47 @@ impl Ty {
     pub(crate) fn fields<'a>(
         &'a self,
         db: &'a dyn Db,
-    ) -> Option<impl Iterator<Item = (Name, Ty)> + 'a> {
+    ) -> Option<impl Iterator<Item = (Field, Ty)> + 'a> {
         if let Some(class) = self.kind().builtin_class(db) {
-            Some(TyFields::Intrinsic(self.builtin_class_fields(db, class)))
-        } else if let TyKind::BuiltinType(cty) = self.kind() {
-            Some(TyFields::Builtin(
-                cty.fields(db)
+            Some(Fields::Intrinsic(self.intrinsic_class_fields(db, class)))
+        } else if let TyKind::BuiltinType(ty) = self.kind() {
+            Some(Fields::Builtin(
+                ty.fields(db)
                     .iter()
-                    .map(|field| {
+                    .enumerate()
+                    .map(|(index, field)| {
                         (
-                            field.name.clone(),
+                            Field(FieldInner::BuiltinField { parent: *ty, index }),
                             resolve_type_ref(db, &field.type_ref)
                                 .unwrap_or_else(|| TyKind::Unknown.intern()),
                         )
                     })
-                    .chain(
-                        cty.methods(db)
-                            .iter()
-                            .map(|func| (func.name(db), TyKind::BuiltinFunction(*func).intern())),
-                    ),
+                    .chain(ty.methods(db).iter().map(|func| {
+                        (
+                            Field(FieldInner::BuildinMethod { func: *func }),
+                            TyKind::BuiltinFunction(*func).intern(),
+                        )
+                    })),
             ))
         } else {
             None
         }
     }
 
-    fn builtin_class_fields<'a>(
+    fn intrinsic_class_fields<'a>(
         &'a self,
         db: &'a dyn Db,
         class: IntrinsicClass,
-    ) -> impl Iterator<Item = (Name, Ty)> + 'a {
-        let names = class.fields(db).iter().map(|field| field.name.clone());
-        let mut subst = Substitution::new();
+    ) -> impl Iterator<Item = (Field, Ty)> + 'a {
+        let fields = (0..class.fields(db).len()).into_iter().map(move |index| {
+            Field(FieldInner::IntrinsicField {
+                parent: class,
+                index,
+            })
+        });
 
         // Build the substitution for lists and dicts.
+        let mut subst = Substitution::new();
         match self.kind() {
             TyKind::List(ty) => {
                 subst.args.push(ty.clone());
@@ -193,7 +200,7 @@ impl Ty {
             .field_tys(db)
             .iter()
             .map(move |binders| binders.substitute(&subst));
-        names.zip(types)
+        fields.zip(types)
     }
 
     pub(crate) fn params<'a>(&'a self, db: &'a dyn Db) -> Option<impl Iterator<Item = Name> + 'a> {
@@ -240,22 +247,56 @@ impl Ty {
     }
 }
 
-enum TyFields<I1, I2> {
+pub struct Field(FieldInner);
+
+impl Field {
+    pub fn name(&self, db: &dyn Db) -> Name {
+        match self.0 {
+            FieldInner::BuiltinField { parent, index } => parent.fields(db)[index].name.clone(),
+            FieldInner::BuildinMethod { func } => func.name(db),
+            FieldInner::IntrinsicField { parent, index } => parent.fields(db)[index].name.clone(),
+        }
+    }
+
+    pub fn doc(&self, db: &dyn Db) -> String {
+        match self.0 {
+            FieldInner::BuiltinField { parent, index } => parent.fields(db)[index].doc.clone(),
+            FieldInner::BuildinMethod { func } => func.doc(db),
+            FieldInner::IntrinsicField { .. } => String::new(),
+        }
+    }
+}
+
+enum FieldInner {
+    BuiltinField {
+        parent: BuiltinType,
+        index: usize,
+    },
+    BuildinMethod {
+        func: BuiltinFunction,
+    },
+    IntrinsicField {
+        parent: IntrinsicClass,
+        index: usize,
+    },
+}
+
+enum Fields<I1, I2> {
     Intrinsic(I1),
     Builtin(I2),
 }
 
-impl<I1, I2> Iterator for TyFields<I1, I2>
+impl<I1, I2> Iterator for Fields<I1, I2>
 where
-    I1: Iterator<Item = (Name, Ty)>,
-    I2: Iterator<Item = (Name, Ty)>,
+    I1: Iterator<Item = (Field, Ty)>,
+    I2: Iterator<Item = (Field, Ty)>,
 {
-    type Item = (Name, Ty);
+    type Item = (Field, Ty);
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            TyFields::Intrinsic(iter) => iter.next(),
-            TyFields::Builtin(iter) => iter.next(),
+            Self::Intrinsic(iter) => iter.next(),
+            Self::Builtin(iter) => iter.next(),
         }
     }
 }
@@ -448,7 +489,7 @@ impl DisplayWithDb for TyKind {
                 f.write_str(") -> ")?;
                 return func.ret_type_ref(db).fmt(f);
             }
-            TyKind::BuiltinType(type_) => type_.name(db).as_str(),
+            TyKind::BuiltinType(type_) => return f.write_str(type_.name(db).as_str()),
             TyKind::BoundVar(index) => return write!(f, "'{}", index),
             TyKind::Protocol(_proto) => "protocol",
         };
@@ -790,8 +831,8 @@ impl TyCtxt<'_> {
                 receiver_ty
                     .fields(db)
                     .and_then(|mut fields| {
-                        fields.find_map(|(field2, ty)| {
-                            if field == &field2 {
+                        fields.find_map(|(f, ty)| {
+                            if &f.name(db) == field {
                                 Some(ty.clone())
                             } else {
                                 None

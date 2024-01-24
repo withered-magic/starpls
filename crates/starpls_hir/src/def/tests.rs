@@ -99,3 +99,44 @@ $0",
         &["foo", "x"],
     )
 }
+
+#[test]
+fn test_list_comprehension() {
+    check_scope(
+        r"
+[x*y$0 for x in range(5) for y in range(5)]
+        ",
+        &["x", "y"],
+    )
+}
+
+#[test]
+fn test_list_comprehension_clause1() {
+    check_scope(
+        r"
+[x*y for x in range(5) for y in range(5) if x*y$0 > 10] 
+        ",
+        &["x", "y"],
+    )
+}
+
+#[test]
+fn test_list_comprehension_clause2() {
+    check_scope(
+        r"
+[x*y for x in range(5) if x$0 > 2 for y in range(5) if x*y > 10] 
+        ",
+        &["x"],
+    )
+}
+
+#[test]
+fn test_load() {
+    check_scope(
+        r#"
+load("foo.star", "go_binary")
+$0
+    "#,
+        &["go_binary"],
+    )
+}

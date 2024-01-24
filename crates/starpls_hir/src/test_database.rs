@@ -1,4 +1,4 @@
-use crate::{CustomDefs, Dialect, Ty, TyKind};
+use crate::{BuiltinDefs, Dialect, Ty, TyKind};
 use dashmap::{mapref::entry::Entry, DashMap};
 use starpls_bazel::Builtins;
 use starpls_common::{File, FileId};
@@ -33,9 +33,9 @@ impl crate::Db for TestDatabase {
         TyKind::Any.intern()
     }
 
-    fn set_custom_defs(&mut self, _dialect: Dialect, _builtins: Builtins) {}
+    fn set_builtin_defs(&mut self, _dialect: Dialect, _builtins: Builtins) {}
 
-    fn get_custom_defs(&self, _dialect: &Dialect) -> CustomDefs {
-        CustomDefs::new(self, Default::default())
+    fn get_builtin_defs(&self, _dialect: &Dialect) -> BuiltinDefs {
+        BuiltinDefs::new(self, Default::default())
     }
 }

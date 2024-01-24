@@ -1,6 +1,6 @@
 use crate::{
     lower as lower_,
-    typeck::{builtins::BuiltinFunction, custom::CustomFunction, TypeRef},
+    typeck::{builtins::BuiltinFunction, intrinsics::IntrinsicFunction, TypeRef},
     Db, Ty, TyKind,
 };
 use id_arena::{Arena, Id};
@@ -313,8 +313,8 @@ pub enum Literal {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Declaration {
     Function { id: StmtId, func: Function },
+    IntrinsicFunction { func: IntrinsicFunction },
     BuiltinFunction { func: BuiltinFunction },
-    CustomFunction { func: CustomFunction },
     CustomVariable { type_ref: TypeRef },
     Variable { id: ExprId, source: Option<ExprId> },
     Parameter { id: ParamId, func: Option<Function> },

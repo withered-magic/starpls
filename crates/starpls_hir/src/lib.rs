@@ -6,8 +6,8 @@ pub use crate::{
     def::{resolver::Resolver, scope::module_scopes, Declaration, ExprId, Module, Name},
     display::{DisplayWithDb, DisplayWithDbWrapper},
     typeck::{
-        builtins::BuiltinClass, custom::CustomDefs, Cancelled, FileExprId, GlobalCtxt, Ty, TyCtxt,
-        TyKind, TypeRef,
+        builtins::BuiltinDefs, intrinsics::IntrinsicClass, Cancelled, FileExprId, GlobalCtxt, Ty,
+        TyCtxt, TyKind, TypeRef,
     },
 };
 
@@ -34,21 +34,21 @@ pub struct Jar(
     def::scope::ModuleScopes,
     def::scope::module_scopes,
     def::scope::module_scopes_query,
-    typeck::builtins::BuiltinClass,
-    typeck::builtins::BuiltinFieldTypes,
+    typeck::builtins::BuiltinDefs,
     typeck::builtins::BuiltinFunction,
-    typeck::builtins::BuiltinFunctions,
+    typeck::builtins::BuiltinGlobals,
+    typeck::builtins::BuiltinType,
     typeck::builtins::BuiltinTypes,
-    typeck::builtins::builtin_field_types,
-    typeck::builtins::builtin_functions,
-    typeck::builtins::builtin_types,
-    typeck::custom::CustomDefs,
-    typeck::custom::CustomFunction,
-    typeck::custom::CustomGlobals,
-    typeck::custom::CustomType,
-    typeck::custom::CustomTypes,
-    typeck::custom::custom_globals_query,
-    typeck::custom::custom_types_query,
+    typeck::builtins::builtin_globals_query,
+    typeck::builtins::builtin_types_query,
+    typeck::intrinsics::IntrinsicClass,
+    typeck::intrinsics::IntrinsicFieldTypes,
+    typeck::intrinsics::IntrinsicFunction,
+    typeck::intrinsics::IntrinsicFunctions,
+    typeck::intrinsics::IntrinsicTypes,
+    typeck::intrinsics::intrinsic_field_types,
+    typeck::intrinsics::intrinsic_functions,
+    typeck::intrinsics::intrinsic_types,
 );
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -59,9 +59,9 @@ pub enum Dialect {
 pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
     fn infer_expr(&self, file: File, expr: ExprId) -> Ty;
 
-    fn set_custom_defs(&mut self, dialect: Dialect, builtins: Builtins);
+    fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins);
 
-    fn get_custom_defs(&self, dialect: &Dialect) -> CustomDefs;
+    fn get_builtin_defs(&self, dialect: &Dialect) -> BuiltinDefs;
 }
 
 #[salsa::tracked]

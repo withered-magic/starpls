@@ -3,11 +3,11 @@ use crate::{
     display::DisplayWithDb,
     module, source_map,
     typeck::{
-        builtins::{
-            builtin_field_types, builtin_types, BuiltinClass, BuiltinFunction,
-            BuiltinFunctionParam, BuiltinTypes,
+        builtins::{builtin_types, BuiltinFunction, BuiltinFunctionParam, BuiltinType},
+        intrinsics::{
+            intrinsic_field_types, intrinsic_types, IntrinsicClass, IntrinsicFunction,
+            IntrinsicFunctionParam, IntrinsicTypes,
         },
-        custom::{custom_types, CustomFunction, CustomFunctionParam, CustomType},
     },
     Db, Declaration, Name, Resolver,
 };
@@ -30,7 +30,7 @@ use std::{
 mod lower;
 
 pub(crate) mod builtins;
-pub(crate) mod custom;
+pub(crate) mod intrinsics;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FileExprId {
@@ -138,7 +138,7 @@ impl Ty {
     pub fn fields<'a>(&'a self, db: &'a dyn Db) -> Option<Vec<(&'a Name, Ty)>> {
         if let Some(class) = self.kind().builtin_class(db) {
             Some(self.builtin_class_fields(db, class))
-        } else if let TyKind::CustomType(cty) = self.kind() {
+        } else if let TyKind::BuiltinType(cty) = self.kind() {
             Some(
                 cty.fields(db)
                     .iter()
@@ -152,7 +152,7 @@ impl Ty {
                     .chain(
                         cty.methods(db)
                             .iter()
-                            .map(|func| (func.name(db), TyKind::CustomFunction(*func).intern())),
+                            .map(|func| (func.name(db), TyKind::BuiltinFunction(*func).intern())),
                     )
                     .collect(),
             )
@@ -164,7 +164,7 @@ impl Ty {
     fn builtin_class_fields<'a>(
         &'a self,
         db: &'a dyn Db,
-        class: BuiltinClass,
+        class: IntrinsicClass,
     ) -> Vec<(&'a Name, Ty)> {
         let names = class.fields(db).iter().map(|field| &field.name);
         let mut subst = Substitution::new();
@@ -181,7 +181,7 @@ impl Ty {
             _ => {}
         }
 
-        let types = builtin_field_types(db, class)
+        let types = intrinsic_field_types(db, class)
             .field_tys(db)
             .iter()
             .map(|binders| binders.substitute(&subst));
@@ -198,7 +198,7 @@ impl Ty {
                     | Param::KwargsList { name, .. } => name.clone(),
                 })
                 .collect(),
-            TyKind::BuiltinFunction(func, _) => func
+            TyKind::IntrinsicFunction(func, _) => func
                 .params(db)
                 .iter()
                 .filter_map(|param| param.name().cloned())
@@ -210,7 +210,7 @@ impl Ty {
     pub fn is_fn(&self) -> bool {
         matches!(
             self.kind(),
-            TyKind::Function(_) | TyKind::BuiltinFunction(_, _) | TyKind::CustomFunction(_)
+            TyKind::Function(_) | TyKind::IntrinsicFunction(_, _) | TyKind::BuiltinFunction(_)
         )
     }
 
@@ -272,8 +272,8 @@ impl Ty {
             TyKind::Dict(key_ty, value_ty) => {
                 TyKind::Dict(key_ty.substitute(args), value_ty.substitute(args)).intern()
             }
-            TyKind::BuiltinFunction(data, subst) => {
-                TyKind::BuiltinFunction(*data, subst.substitute(args)).intern()
+            TyKind::IntrinsicFunction(data, subst) => {
+                TyKind::IntrinsicFunction(*data, subst.substitute(args)).intern()
             }
             TyKind::BoundVar(index) => args[*index].clone(),
             _ => self.clone(),
@@ -327,13 +327,13 @@ pub enum TyKind {
     /// A user-defined function.
     Function(Function),
     /// A function predefined by the Starlark specification.
-    BuiltinFunction(BuiltinFunction, Substitution),
+    IntrinsicFunction(IntrinsicFunction, Substitution),
     /// A function defined outside of the Starlark specification.
     /// For example, common Bazel functions like `genrule()`.
-    CustomFunction(CustomFunction),
+    BuiltinFunction(BuiltinFunction),
     /// A type defined outside of the Starlark specification.
     /// For example, common Bazel types like `Label`.
-    CustomType(CustomType),
+    BuiltinType(BuiltinType),
     /// A bound type variable, e.g. the argument to the `append()` method
     /// of the `list[int]` class.
     BoundVar(usize),
@@ -402,31 +402,31 @@ impl DisplayWithDb for TyKind {
                 }
                 return f.write_str(") -> Unknown");
             }
-            TyKind::BuiltinFunction(func, subst) => {
+            TyKind::IntrinsicFunction(func, subst) => {
                 write!(f, "def {}(", func.name(db).as_str())?;
                 for (i, param) in func.params(db).iter().enumerate() {
                     if i > 0 {
                         f.write_str(", ")?;
                     }
                     match param {
-                        BuiltinFunctionParam::Positional { ty, optional } => {
+                        IntrinsicFunctionParam::Positional { ty, optional } => {
                             write!(f, "x{}: ", i)?;
                             ty.substitute(&subst.args).fmt(db, f)?;
                             if *optional {
                                 f.write_str(" = None")?;
                             }
                         }
-                        BuiltinFunctionParam::Keyword { name, ty } => {
+                        IntrinsicFunctionParam::Keyword { name, ty } => {
                             f.write_str(name.as_str())?;
                             f.write_str(": ")?;
                             ty.substitute(&subst.args).fmt(db, f)?;
                             f.write_str(" = None")?;
                         }
-                        BuiltinFunctionParam::VarArgList { ty } => {
+                        IntrinsicFunctionParam::VarArgList { ty } => {
                             f.write_str("*args: ")?;
                             ty.substitute(&subst.args).fmt(db, f)?;
                         }
-                        BuiltinFunctionParam::VarArgDict => {
+                        IntrinsicFunctionParam::VarArgDict => {
                             f.write_str("**kwargs")?;
                         }
                     }
@@ -434,22 +434,22 @@ impl DisplayWithDb for TyKind {
                 f.write_str(") -> ")?;
                 return func.ret_ty(db).substitute(&subst.args).fmt(db, f);
             }
-            TyKind::CustomFunction(func) => {
+            TyKind::BuiltinFunction(func) => {
                 write!(f, "def {}(", func.name(db).as_str())?;
                 for (i, param) in func.params(db).iter().enumerate() {
                     if i > 0 {
                         f.write_str(", ")?;
                     }
                     match param {
-                        CustomFunctionParam::Normal { name, .. } => f.write_str(name.as_str())?,
-                        CustomFunctionParam::VarArgList { .. } => f.write_str("*args")?,
-                        CustomFunctionParam::VarArgDict => f.write_str("**kwargs")?,
+                        BuiltinFunctionParam::Normal { name, .. } => f.write_str(name.as_str())?,
+                        BuiltinFunctionParam::VarArgList { .. } => f.write_str("*args")?,
+                        BuiltinFunctionParam::VarArgDict => f.write_str("**kwargs")?,
                     }
                 }
                 f.write_str(") -> ")?;
                 return func.ret_type_ref(db).fmt(f);
             }
-            TyKind::CustomType(type_) => type_.name(db).as_str(),
+            TyKind::BuiltinType(type_) => type_.name(db).as_str(),
             TyKind::BoundVar(index) => return write!(f, "'{}", index),
             TyKind::Protocol(_proto) => "protocol",
         };
@@ -459,7 +459,7 @@ impl DisplayWithDb for TyKind {
     fn fmt_alt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TyKind::Function(_) => f.write_str("function"),
-            TyKind::BuiltinFunction(_, _) | TyKind::CustomFunction(_) => {
+            TyKind::IntrinsicFunction(_, _) | TyKind::BuiltinFunction(_) => {
                 f.write_str("builtin_function_or_method")
             }
             _ => self.fmt(db, f),
@@ -474,8 +474,8 @@ impl TyKind {
         Ty(Interned::new(self))
     }
 
-    pub fn builtin_class(&self, db: &dyn Db) -> Option<BuiltinClass> {
-        let types = builtin_types(db);
+    pub fn builtin_class(&self, db: &dyn Db) -> Option<IntrinsicClass> {
+        let types = intrinsic_types(db);
         Some(match self {
             TyKind::String => types.string_base_class(db),
             TyKind::Bytes => types.bytes_base_class(db),
@@ -594,7 +594,7 @@ impl GlobalCtxt {
         let mut cx = self.cx.lock();
         let mut tcx = TyCtxt {
             db,
-            types: builtin_types(db),
+            types: intrinsic_types(db),
             shared_state: Arc::clone(&self.shared_state),
             cx: &mut cx,
         };
@@ -631,7 +631,7 @@ impl Drop for CancelGuard<'_> {
 
 pub struct TyCtxt<'a> {
     db: &'a dyn Db,
-    types: BuiltinTypes,
+    types: IntrinsicTypes,
     shared_state: Arc<SharedState>,
     cx: &'a mut InferenceCtxt,
 }
@@ -678,21 +678,28 @@ impl TyCtxt<'_> {
                     .resolve_name(name)
                     .and_then(|decls| decls.into_iter().last())
                     .map(|decl| match decl {
-                        Declaration::Variable { id, source } => source
-                            .and_then(|source| {
-                                self.infer_source_expr_assign(file, source);
-                                self.cx
-                                    .type_of_expr
-                                    .get(&FileExprId { file, expr: id })
-                                    .cloned()
-                            })
-                            .unwrap_or_else(|| self.types.unknown(db)),
+                        Declaration::Variable { id, source } => self
+                            .cx
+                            .type_of_expr
+                            .get(&FileExprId { file, expr: id })
+                            .cloned()
+                            .unwrap_or_else(|| {
+                                source
+                                    .and_then(|source| {
+                                        self.infer_source_expr_assign(file, source);
+                                        self.cx
+                                            .type_of_expr
+                                            .get(&FileExprId { file, expr: id })
+                                            .cloned()
+                                    })
+                                    .unwrap_or_else(|| self.types.unknown(db))
+                            }),
                         Declaration::Function { func, .. } => func.ty(),
-                        Declaration::BuiltinFunction { func } => {
-                            TyKind::BuiltinFunction(func, Substitution::new_identity(0)).intern()
+                        Declaration::IntrinsicFunction { func } => {
+                            TyKind::IntrinsicFunction(func, Substitution::new_identity(0)).intern()
                         }
-                        Declaration::CustomFunction { func } => {
-                            TyKind::CustomFunction(func).intern()
+                        Declaration::BuiltinFunction { func } => {
+                            TyKind::BuiltinFunction(func).intern()
                         }
                         Declaration::CustomVariable { type_ref } => resolve_type_ref(db, &type_ref)
                             .unwrap_or_else(|| self.types.unknown(db)),
@@ -778,7 +785,7 @@ impl TyCtxt<'_> {
                     return self.types.unknown(db);
                 }
 
-                if let TyKind::CustomType(type_) = receiver_ty.kind() {
+                if let TyKind::BuiltinType(type_) = receiver_ty.kind() {
                     if type_.name(db).as_str() == "struct" {
                         return self.types.unknown(db);
                     }
@@ -869,7 +876,7 @@ impl TyCtxt<'_> {
                         // TODO: Handle slot assignments.
                         self.types.any(db)
                     }
-                    TyKind::BuiltinFunction(func, subst) => {
+                    TyKind::IntrinsicFunction(func, subst) => {
                         // Match arguments with their corresponding parameters.
                         // The following routine is based on PEP 3102 (https://peps.python.org/pep-3102),
                         // but with a couple of modifications for handling "*args" and "**kwargs" arguments.
@@ -906,7 +913,7 @@ impl TyCtxt<'_> {
                         let params = func.params(db);
                         for param in params {
                             let slot = match param {
-                                BuiltinFunctionParam::Positional { .. } => {
+                                IntrinsicFunctionParam::Positional { .. } => {
                                     if saw_vararg {
                                         // TODO: Emit diagnostics for invalid parameters.
                                         break;
@@ -915,17 +922,17 @@ impl TyCtxt<'_> {
                                         provider: SlotProvider::Missing,
                                     }
                                 }
-                                BuiltinFunctionParam::Keyword { name, .. } => Slot::Keyword {
+                                IntrinsicFunctionParam::Keyword { name, .. } => Slot::Keyword {
                                     name: name.clone(),
                                     provider: SlotProvider::Missing,
                                 },
-                                BuiltinFunctionParam::VarArgList { .. } => {
+                                IntrinsicFunctionParam::VarArgList { .. } => {
                                     saw_vararg = true;
                                     Slot::VarArgList {
                                         providers: smallvec![],
                                     }
                                 }
-                                BuiltinFunctionParam::VarArgDict => {
+                                IntrinsicFunctionParam::VarArgDict => {
                                     saw_kwargs = true;
                                     Slot::VarArgDict {
                                         providers: smallvec![],
@@ -1045,10 +1052,10 @@ impl TyCtxt<'_> {
                         // Validate argument types.
                         for (param, slot) in params.iter().zip(slots) {
                             let param_ty = match param {
-                                BuiltinFunctionParam::Positional { ty, .. }
-                                | BuiltinFunctionParam::Keyword { ty, .. }
-                                | BuiltinFunctionParam::VarArgList { ty } => ty.clone(),
-                                BuiltinFunctionParam::VarArgDict => {
+                                IntrinsicFunctionParam::Positional { ty, .. }
+                                | IntrinsicFunctionParam::Keyword { ty, .. }
+                                | IntrinsicFunctionParam::VarArgList { ty } => ty.clone(),
+                                IntrinsicFunctionParam::VarArgDict => {
                                     TyKind::Dict(self.types.any(self.db), self.types.any(self.db))
                                         .intern()
                                 }
@@ -1088,7 +1095,7 @@ impl TyCtxt<'_> {
 
                         func.ret_ty(db).substitute(&subst.args)
                     }
-                    TyKind::CustomFunction(func) => resolve_type_ref(db, &func.ret_type_ref(db))
+                    TyKind::BuiltinFunction(func) => resolve_type_ref(db, &func.ret_type_ref(db))
                         .unwrap_or_else(|| self.types.unknown(db)),
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.types.unknown(db),
                     _ => self.add_expr_diagnostic(
@@ -1454,8 +1461,8 @@ impl TyCtxt<'_> {
 }
 
 fn resolve_type_ref(db: &dyn Db, type_ref: &TypeRef) -> Option<Ty> {
-    let custom_types = custom_types(db);
-    let types = builtin_types(db);
+    let builtin_types = builtin_types(db);
+    let types = intrinsic_types(db);
     Some(match type_ref {
         TypeRef::Name(name) => match name.as_str() {
             "None" | "NoneType" => types.none(db),
@@ -1467,7 +1474,7 @@ fn resolve_type_ref(db: &dyn Db, type_ref: &TypeRef) -> Option<Ty> {
             "list" => TyKind::List(types.any(db)).intern(),
             "dict" => TyKind::Dict(types.any(db), types.any(db)).intern(),
             "range" => types.range(db),
-            name => return custom_types.types(db).get(name).cloned(),
+            name => return builtin_types.types(db).get(name).cloned(),
         },
         TypeRef::Unknown => types.unknown(db),
     })

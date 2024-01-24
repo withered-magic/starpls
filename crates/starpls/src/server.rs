@@ -46,7 +46,7 @@ impl Server {
         };
 
         let mut analysis = Analysis::new();
-        analysis.set_custom_defs(builtins);
+        analysis.set_builtin_defs(builtins);
 
         Ok(Server {
             connection,

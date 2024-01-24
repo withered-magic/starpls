@@ -84,8 +84,8 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
                         label: name.to_string(),
                         kind: match decl {
                             Declaration::Function { .. }
-                            | Declaration::BuiltinFunction { .. }
-                            | Declaration::CustomFunction { .. } => CompletionItemKind::Function,
+                            | Declaration::IntrinsicFunction { .. }
+                            | Declaration::BuiltinFunction { .. } => CompletionItemKind::Function,
                             Declaration::Variable { .. } | Declaration::Parameter { .. } => {
                                 CompletionItemKind::Variable
                             }

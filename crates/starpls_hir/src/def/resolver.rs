@@ -4,9 +4,10 @@ use crate::{
         Declaration, ExprId, ModuleSourceMap,
     },
     lower,
-    typeck::{builtins::builtin_functions, custom::custom_globals},
+    typeck::{builtins::builtin_globals, intrinsics::intrinsic_functions},
     Db, Name,
 };
+
 use starpls_common::File;
 use starpls_syntax::{TextRange, TextSize};
 use std::{
@@ -37,21 +38,21 @@ impl<'a> Resolver<'a> {
     }
 
     pub fn resolve_name_in_builtins(&self, name: &Name) -> Option<Vec<Declaration>> {
-        builtin_functions(self.db)
+        intrinsic_functions(self.db)
             .functions(self.db)
             .get(name)
             .copied()
-            .map(|func| vec![Declaration::BuiltinFunction { func }])
-            .or_else(|| self.resolve_name_in_custom_globals(name))
+            .map(|func| vec![Declaration::IntrinsicFunction { func }])
+            .or_else(|| self.resolve_name_in_builtin_globals(name))
     }
 
-    pub fn resolve_name_in_custom_globals(&self, name: &Name) -> Option<Vec<Declaration>> {
-        let globals = custom_globals(self.db);
+    pub fn resolve_name_in_builtin_globals(&self, name: &Name) -> Option<Vec<Declaration>> {
+        let globals = builtin_globals(self.db);
         globals
             .functions(self.db)
             .get(name.as_str())
             .copied()
-            .map(|func| vec![Declaration::CustomFunction { func }])
+            .map(|func| vec![Declaration::BuiltinFunction { func }])
             .or_else(|| {
                 globals
                     .variables(self.db)
@@ -65,17 +66,17 @@ impl<'a> Resolver<'a> {
         // Add names from this module.
         let mut names = self.module_names();
 
-        // Add names from Starlark builtins.
-        for (key, func) in builtin_functions(self.db).functions(self.db).iter() {
-            names.insert(key.clone(), Declaration::BuiltinFunction { func: *func });
+        // Add names from Starlark intrinsics.
+        for (key, func) in intrinsic_functions(self.db).functions(self.db).iter() {
+            names.insert(key.clone(), Declaration::IntrinsicFunction { func: *func });
         }
 
         // Add global functions from third-party builtins (e.g. Bazel builtins).
-        let globals = custom_globals(self.db);
+        let globals = builtin_globals(self.db);
         for (name, func) in globals.functions(self.db).iter() {
             names.insert(
                 Name::from_str(&name),
-                Declaration::CustomFunction { func: *func },
+                Declaration::BuiltinFunction { func: *func },
             );
         }
 

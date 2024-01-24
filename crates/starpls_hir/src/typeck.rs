@@ -1,5 +1,5 @@
 use crate::{
-    def::{Argument, Expr, ExprId, Function, Literal, ModuleSourceMap, Param, ParamId},
+    def::{resolver::Resolver, Argument, Expr, ExprId, Function, Literal, Param, ParamId},
     display::DisplayWithDb,
     module, source_map,
     typeck::{
@@ -9,7 +9,7 @@ use crate::{
             IntrinsicFunctionParam, IntrinsicTypes, Intrinsics,
         },
     },
-    Db, Declaration, Name, Resolver,
+    Db, Declaration, Name,
 };
 use crossbeam::atomic::AtomicCell;
 use parking_lot::Mutex;
@@ -141,11 +141,14 @@ impl Ty {
         &self.0
     }
 
-    pub fn fields<'a>(&'a self, db: &'a dyn Db) -> Option<Vec<(Name, Ty)>> {
+    pub(crate) fn fields<'a>(
+        &'a self,
+        db: &'a dyn Db,
+    ) -> Option<impl Iterator<Item = (Name, Ty)> + 'a> {
         if let Some(class) = self.kind().builtin_class(db) {
-            Some(self.builtin_class_fields(db, class))
+            Some(TyFields::Intrinsic(self.builtin_class_fields(db, class)))
         } else if let TyKind::BuiltinType(cty) = self.kind() {
-            Some(
+            Some(TyFields::Builtin(
                 cty.fields(db)
                     .iter()
                     .map(|field| {
@@ -159,9 +162,8 @@ impl Ty {
                         cty.methods(db)
                             .iter()
                             .map(|func| (func.name(db), TyKind::BuiltinFunction(*func).intern())),
-                    )
-                    .collect(),
-            )
+                    ),
+            ))
         } else {
             None
         }
@@ -171,7 +173,7 @@ impl Ty {
         &'a self,
         db: &'a dyn Db,
         class: IntrinsicClass,
-    ) -> Vec<(Name, Ty)> {
+    ) -> impl Iterator<Item = (Name, Ty)> + 'a {
         let names = class.fields(db).iter().map(|field| field.name.clone());
         let mut subst = Substitution::new();
 
@@ -190,83 +192,34 @@ impl Ty {
         let types = intrinsic_field_types(db, class)
             .field_tys(db)
             .iter()
-            .map(|binders| binders.substitute(&subst));
-        names.zip(types).collect()
+            .map(move |binders| binders.substitute(&subst));
+        names.zip(types)
     }
 
-    pub fn param_names<'a>(&'a self, db: &'a dyn Db) -> Vec<Name> {
-        match self.kind() {
-            TyKind::Function(func) => func
-                .params(db)
-                .map(|param| match param {
+    pub(crate) fn params<'a>(&'a self, db: &'a dyn Db) -> Option<impl Iterator<Item = Name> + 'a> {
+        Some(match self.kind() {
+            TyKind::Function(func) => {
+                TyParams::Function(func.params(db).map(|param| match param {
                     Param::Simple { name, .. }
                     | Param::ArgsList { name, .. }
                     | Param::KwargsList { name, .. } => name.clone(),
-                })
-                .collect(),
-            TyKind::IntrinsicFunction(func, _) => func
-                .params(db)
-                .iter()
-                .filter_map(|param| param.name().cloned())
-                .collect(),
-            _ => vec![],
-        }
+                }))
+            }
+            TyKind::IntrinsicFunction(func, _) => TyParams::Intrinsic(
+                func.params(db)
+                    .iter()
+                    .filter_map(|param| param.name().cloned()),
+            ),
+            _ => return None,
+        })
     }
 
-    pub fn is_fn(&self) -> bool {
-        matches!(
-            self.kind(),
-            TyKind::Function(_) | TyKind::IntrinsicFunction(_, _) | TyKind::BuiltinFunction(_)
-        )
-    }
-
-    pub fn is_user_defined_fn(&self) -> bool {
-        matches!(self.kind(), TyKind::Function(_))
-    }
-
-    pub fn is_any(&self) -> bool {
+    fn is_any(&self) -> bool {
         self.kind() == &TyKind::Any
     }
 
-    pub fn is_unknown(&self) -> bool {
+    fn is_unknown(&self) -> bool {
         self.kind() == &TyKind::Unknown || self.kind() == &TyKind::Unbound
-    }
-
-    pub fn is_iterable(&self) -> bool {
-        matches!(
-            self.kind(),
-            TyKind::Dict(_, _)
-                | TyKind::List(_)
-                | TyKind::Tuple(_)
-                | TyKind::StringElems
-                | TyKind::BytesElems
-        )
-    }
-
-    pub fn is_sequence(&self) -> bool {
-        matches!(
-            self.kind(),
-            TyKind::Dict(_, _) | TyKind::List(_) | TyKind::Tuple(_)
-        )
-    }
-
-    pub fn is_indexable(&self) -> bool {
-        matches!(
-            self.kind(),
-            TyKind::String | TyKind::Bytes | TyKind::Tuple(_) | TyKind::List(_)
-        )
-    }
-
-    pub fn is_set_indexable(&self) -> bool {
-        matches!(self.kind(), TyKind::List(_))
-    }
-
-    pub fn is_mapping(&self) -> bool {
-        matches!(self.kind(), TyKind::Dict(_, _))
-    }
-
-    pub fn is_var(&self) -> bool {
-        matches!(self.kind(), TyKind::BoundVar(_))
     }
 
     fn substitute(&self, args: &[Ty]) -> Ty {
@@ -287,6 +240,46 @@ impl Ty {
     }
 }
 
+enum TyFields<I1, I2> {
+    Intrinsic(I1),
+    Builtin(I2),
+}
+
+impl<I1, I2> Iterator for TyFields<I1, I2>
+where
+    I1: Iterator<Item = (Name, Ty)>,
+    I2: Iterator<Item = (Name, Ty)>,
+{
+    type Item = (Name, Ty);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            TyFields::Intrinsic(iter) => iter.next(),
+            TyFields::Builtin(iter) => iter.next(),
+        }
+    }
+}
+
+enum TyParams<I1, I2> {
+    Function(I1),
+    Intrinsic(I2),
+}
+
+impl<I1, I2> Iterator for TyParams<I1, I2>
+where
+    I1: Iterator<Item = Name>,
+    I2: Iterator<Item = Name>,
+{
+    type Item = Name;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            TyParams::Function(iter) => iter.next(),
+            TyParams::Intrinsic(iter) => iter.next(),
+        }
+    }
+}
+
 impl DisplayWithDb for Ty {
     fn fmt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.kind().fmt(db, f)
@@ -294,7 +287,7 @@ impl DisplayWithDb for Ty {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum TyKind {
+pub(crate) enum TyKind {
     /// An unbound variable, e.g. a variable without a corresponding
     /// declaration.
     Unbound,
@@ -493,7 +486,7 @@ impl TyKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Binders {
+pub(crate) struct Binders {
     num_vars: usize,
     ty: Ty,
 }
@@ -509,7 +502,7 @@ impl Binders {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Substitution {
+pub(crate) struct Substitution {
     args: SmallVec<[Ty; 2]>,
 }
 
@@ -796,14 +789,14 @@ impl TyCtxt<'_> {
 
                 receiver_ty
                     .fields(db)
-                    .unwrap_or_else(|| Vec::new())
-                    .iter()
-                    .find_map(|(field2, ty)| {
-                        if field == field2 {
-                            Some(ty.clone())
-                        } else {
-                            None
-                        }
+                    .and_then(|mut fields| {
+                        fields.find_map(|(field2, ty)| {
+                            if field == &field2 {
+                                Some(ty.clone())
+                            } else {
+                                None
+                            }
+                        })
                     })
                     .unwrap_or_else(|| {
                         self.add_expr_diagnostic(

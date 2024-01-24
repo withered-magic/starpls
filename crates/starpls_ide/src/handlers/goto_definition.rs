@@ -1,6 +1,6 @@
 use crate::{util::pick_best_token, Database, FilePosition, Location};
 use starpls_common::{parse, Db};
-use starpls_hir::{lower, source_map, Declaration, Name, Resolver};
+use starpls_hir::{source_map, Declaration, Name, Resolver};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr},
     T,

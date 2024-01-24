@@ -53,15 +53,15 @@ impl Default for IntrinsicTypes {
 }
 
 #[salsa::tracked]
-pub struct IntrinsicClass {
-    pub name: Name,
-    pub num_vars: usize,
+pub(crate) struct IntrinsicClass {
+    pub(crate) name: Name,
+    pub(crate) num_vars: usize,
     #[return_ref]
-    pub fields: Vec<IntrinsicField>,
+    pub(crate) fields: Vec<IntrinsicField>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct IntrinsicField {
+pub(crate) struct IntrinsicField {
     pub(crate) name: Name,
     ty: Ty,
 }
@@ -76,13 +76,13 @@ impl IntrinsicField {
 }
 
 #[salsa::tracked]
-pub struct IntrinsicFieldTypes {
+pub(crate) struct IntrinsicFieldTypes {
     #[return_ref]
     pub(crate) field_tys: Vec<Binders>,
 }
 
 #[salsa::tracked]
-pub fn intrinsic_field_types(db: &dyn Db, class: IntrinsicClass) -> IntrinsicFieldTypes {
+pub(crate) fn intrinsic_field_types(db: &dyn Db, class: IntrinsicClass) -> IntrinsicFieldTypes {
     let field_tys = class
         .fields(db)
         .iter()
@@ -92,13 +92,13 @@ pub fn intrinsic_field_types(db: &dyn Db, class: IntrinsicClass) -> IntrinsicFie
 }
 
 #[salsa::tracked]
-pub struct IntrinsicFunctions {
+pub(crate) struct IntrinsicFunctions {
     #[return_ref]
     pub functions: FxHashMap<Name, IntrinsicFunction>,
 }
 
 #[salsa::tracked]
-pub struct IntrinsicFunction {
+pub(crate) struct IntrinsicFunction {
     pub name: Name,
     #[return_ref]
     pub params: Vec<IntrinsicFunctionParam>,
@@ -106,7 +106,7 @@ pub struct IntrinsicFunction {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum IntrinsicFunctionParam {
+pub(crate) enum IntrinsicFunctionParam {
     Positional { ty: Ty, optional: bool },
     Keyword { name: Name, ty: Ty },
     VarArgList { ty: Ty },
@@ -114,14 +114,14 @@ pub enum IntrinsicFunctionParam {
 }
 
 impl IntrinsicFunctionParam {
-    pub fn is_optional(&self) -> bool {
+    pub(crate) fn is_optional(&self) -> bool {
         match self {
             IntrinsicFunctionParam::Positional { optional, .. } => *optional,
             _ => true,
         }
     }
 
-    pub fn name(&self) -> Option<&Name> {
+    pub(crate) fn name(&self) -> Option<&Name> {
         match self {
             IntrinsicFunctionParam::Keyword { name, .. } => Some(name),
             _ => None,

@@ -5,9 +5,9 @@ use starpls_bazel::{
 };
 
 #[salsa::tracked]
-pub struct BuiltinTypes {
+pub(crate) struct BuiltinTypes {
     #[return_ref]
-    pub types: FxHashMap<String, Ty>,
+    pub(crate) types: FxHashMap<String, Ty>,
 }
 
 #[salsa::tracked]

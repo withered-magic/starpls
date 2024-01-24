@@ -425,6 +425,18 @@ impl AstNode for Expression {
     }
 }
 
+impl From<NameRef> for Expression {
+    fn from(value: NameRef) -> Self {
+        Self::Name(value)
+    }
+}
+
+impl From<DotExpr> for Expression {
+    fn from(value: DotExpr) -> Self {
+        Self::Dot(value)
+    }
+}
+
 ast_node! {
     Name => NAME
     child_token name -> IDENT;

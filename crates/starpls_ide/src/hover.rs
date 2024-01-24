@@ -1,8 +1,8 @@
 use crate::{util::pick_best_token, Database, FilePosition};
 use starpls_common::{parse, Db as _};
-use starpls_hir::{source_map, Db as _, DisplayWithDb, Semantics};
+use starpls_hir::{DisplayWithDb, Semantics};
 use starpls_syntax::{
-    ast::{self, AstNode, AstPtr},
+    ast::{self, AstNode},
     SyntaxKind::*,
     TextRange, T,
 };
@@ -57,19 +57,16 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
 
     // Otherwise, provide hover information for identifiers.
     let parent = token.parent()?;
-    if let Some(name_ref) = ast::NameRef::cast(parent.clone()) {
-        let expr_ptr = AstPtr::new(&ast::Expression::cast(name_ref.syntax().clone())?);
-        let expr = *source_map(db, file).expr_map.get(&expr_ptr)?;
-        let ty = db.infer_expr(file, expr);
-        let mut text = String::new();
-        text.push_str("```python\n");
+    if let Some(expr) = ast::NameRef::cast(parent.clone()) {
+        let ty = sema.type_of_expr(file, expr.clone().into())?;
+        let mut text = String::from("```python\n");
 
         // Handle special `def` formatting for function types.
-        if ty.is_fn() {
+        if ty.is_function() {
             text.push_str("(function) ");
         } else {
             text.push_str("(variable) ");
-            text.push_str(name_ref.name()?.text());
+            text.push_str(expr.name()?.text());
             text.push_str(": ");
         }
 
@@ -78,21 +75,20 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
         return Some(text.into());
     } else if let Some(name) = ast::Name::cast(parent.clone()) {
         let parent = name.syntax().parent()?;
-        if let Some(dot_expr) = ast::DotExpr::cast(parent.clone()) {
-            let receiver_ptr = AstPtr::new(&dot_expr.expr()?);
-            let receiver_expr = *source_map(db, file).expr_map.get(&receiver_ptr)?;
-            let receiver_ty = db.infer_expr(file, receiver_expr);
-            let field_ty = receiver_ty
-                .fields(db)?
-                .iter()
-                .find_map(|(field_name, ty)| {
-                    (field_name.as_str() == name.syntax().text()).then_some(ty.clone())
-                })?;
+        if let Some(expr) = ast::DotExpr::cast(parent.clone()) {
+            let ty = sema.type_of_expr(file, expr.expr()?.into())?;
+            let fields = ty.fields(db);
+            let field_ty = fields.iter().find_map(|(field_name, ty)| {
+                if field_name.as_str() == name.syntax().text() {
+                    Some(ty)
+                } else {
+                    None
+                }
+            })?;
 
             // Handle special `def` formatting for methods.
-            let mut text = String::new();
-            text.push_str("```python\n");
-            if field_ty.is_fn() {
+            let mut text = String::from("```python\n");
+            if field_ty.is_function() {
                 text.push_str("(method) ");
             } else {
                 text.push_str("(field) ");
@@ -107,5 +103,6 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             return Some(format!("```python\n(function) {}\n```\n", func.ty().display(db)).into());
         }
     }
+
     None
 }

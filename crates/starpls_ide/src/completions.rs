@@ -2,9 +2,9 @@
 
 use crate::FilePosition;
 use starpls_common::parse;
-use starpls_hir::{lower, source_map, Db, Declaration, Name, Resolver, Ty};
+use starpls_hir::{Db, Declaration, Name, Resolver, Semantics, Type};
 use starpls_syntax::{
-    ast::{self, AstNode, AstPtr},
+    ast::{self, AstNode},
     parse_module,
     SyntaxKind::*,
 };
@@ -41,7 +41,7 @@ enum CompletionAnalysis {
 
 enum NameContext {
     Def,
-    Dot { receiver_ty: Ty },
+    Dot { receiver_ty: Type },
 }
 
 struct NameRefContext {
@@ -100,18 +100,16 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
             }
         }
         CompletionAnalysis::Name(NameContext::Dot { receiver_ty }) => {
-            if let Some(fields) = receiver_ty.fields(db) {
-                for (name, ty) in fields {
-                    items.push(CompletionItem {
-                        label: name.to_string(),
-                        kind: if ty.is_fn() {
-                            CompletionItemKind::Function
-                        } else {
-                            CompletionItemKind::Variable
-                        },
-                        mode: None,
-                    })
-                }
+            for (name, ty) in receiver_ty.fields(db) {
+                items.push(CompletionItem {
+                    label: name.to_string(),
+                    kind: if ty.is_function() {
+                        CompletionItemKind::Function
+                    } else {
+                        CompletionItemKind::Variable
+                    },
+                    mode: None,
+                })
             }
         }
         CompletionAnalysis::Type => {
@@ -168,6 +166,7 @@ fn add_keywords(items: &mut Vec<CompletionItem>, is_in_def: bool, is_in_for: boo
 impl CompletionContext {
     fn new(db: &dyn Db, FilePosition { file_id, pos }: FilePosition) -> Option<Self> {
         // Reparse the file with a dummy identifier inserted at the current offset.
+        let sema = Semantics::new(db);
         let file = db.get_file(file_id)?;
         let parse = parse(db, file);
         let mut text = parse.syntax(db).text().to_string();
@@ -196,14 +195,8 @@ impl CompletionContext {
                 .and_then(|arg| arg.syntax().parent())
                 .and_then(|parent| ast::CallExpr::cast(parent))
                 .and_then(|expr| expr.callee())
-                .map(|reciever| {
-                    let ptr = AstPtr::new(&reciever);
-                    let ty = db.infer_expr(
-                        file,
-                        *lower(db, file).source_map(db).expr_map.get(&ptr).unwrap(),
-                    );
-                    ty.param_names(db)
-                })
+                .and_then(|expr| sema.type_of_expr(file, expr))
+                .map(|ty| ty.params(db))
                 .unwrap_or_else(|| vec![]);
 
             let resolver = Resolver::new_for_offset(db, file, pos);
@@ -235,9 +228,9 @@ impl CompletionContext {
         } else if let Some(name) = ast::Name::cast(parent.clone()) {
             let parent = name.syntax().parent()?;
             CompletionAnalysis::Name(if let Some(expr) = ast::DotExpr::cast(parent) {
-                let ptr = AstPtr::new(&expr.expr()?);
-                let ty = db.infer_expr(file, *source_map(db, file).expr_map.get(&ptr)?);
-                NameContext::Dot { receiver_ty: ty }
+                NameContext::Dot {
+                    receiver_ty: sema.type_of_expr(file, expr.expr()?.into())?,
+                }
             } else {
                 NameContext::Def
             })

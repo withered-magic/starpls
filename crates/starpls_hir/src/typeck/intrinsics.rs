@@ -6,7 +6,19 @@ use rustc_hash::FxHashMap;
 use smallvec::smallvec;
 
 #[salsa::tracked]
-pub struct IntrinsicTypes {
+pub(crate) struct Intrinsics {
+    #[return_ref]
+    pub(crate) types: IntrinsicTypes,
+
+    // Base classes for types with fields/methods.
+    pub(crate) string_base_class: IntrinsicClass,
+    pub(crate) bytes_base_class: IntrinsicClass,
+    pub(crate) list_base_class: IntrinsicClass,
+    pub(crate) dict_base_class: IntrinsicClass,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct IntrinsicTypes {
     pub(crate) any: Ty,
     pub(crate) unbound: Ty,
     pub(crate) unknown: Ty,
@@ -19,12 +31,25 @@ pub struct IntrinsicTypes {
     pub(crate) bytes: Ty,
     pub(crate) bytes_elems: Ty,
     pub(crate) range: Ty,
+}
 
-    // Base classes for types with fields/methods.
-    pub(crate) string_base_class: IntrinsicClass,
-    pub(crate) bytes_base_class: IntrinsicClass,
-    pub(crate) list_base_class: IntrinsicClass,
-    pub(crate) dict_base_class: IntrinsicClass,
+impl Default for IntrinsicTypes {
+    fn default() -> Self {
+        Self {
+            any: TyKind::Any.intern(),
+            unbound: TyKind::Unbound.intern(),
+            unknown: TyKind::Unknown.intern(),
+            none: TyKind::None.intern(),
+            bool: TyKind::Bool.intern(),
+            int: TyKind::Int.intern(),
+            float: TyKind::Float.intern(),
+            string: TyKind::String.intern(),
+            string_elems: TyKind::StringElems.intern(),
+            bytes: TyKind::Bytes.intern(),
+            bytes_elems: TyKind::BytesElems.intern(),
+            range: TyKind::Range.intern(),
+        }
+    }
 }
 
 #[salsa::tracked]
@@ -231,21 +256,10 @@ pub(crate) fn intrinsic_functions(db: &dyn Db) -> IntrinsicFunctions {
 }
 
 #[salsa::tracked]
-pub(crate) fn intrinsic_types(db: &dyn Db) -> IntrinsicTypes {
-    IntrinsicTypes::new(
+pub(crate) fn intrinsic_types(db: &dyn Db) -> Intrinsics {
+    Intrinsics::new(
         db,
-        TyKind::Any.intern(),
-        TyKind::Unbound.intern(),
-        TyKind::Unknown.intern(),
-        TyKind::None.intern(),
-        TyKind::Bool.intern(),
-        TyKind::Int.intern(),
-        TyKind::Float.intern(),
-        TyKind::String.intern(),
-        TyKind::StringElems.intern(),
-        TyKind::Bytes.intern(),
-        TyKind::BytesElems.intern(),
-        TyKind::Range.intern(),
+        Default::default(),
         make_string_base_class(db),
         make_bytes_base_class(db),
         make_list_base_class(db),

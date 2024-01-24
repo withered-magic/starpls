@@ -41,14 +41,14 @@ pub struct Jar(
     typeck::builtins::BuiltinTypes,
     typeck::builtins::builtin_globals_query,
     typeck::builtins::builtin_types_query,
+    typeck::intrinsics::Intrinsics,
     typeck::intrinsics::IntrinsicClass,
     typeck::intrinsics::IntrinsicFieldTypes,
     typeck::intrinsics::IntrinsicFunction,
     typeck::intrinsics::IntrinsicFunctions,
-    typeck::intrinsics::IntrinsicTypes,
+    typeck::intrinsics::intrinsic_types,
     typeck::intrinsics::intrinsic_field_types,
     typeck::intrinsics::intrinsic_functions,
-    typeck::intrinsics::intrinsic_types,
 );
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 use crate::{
     lower as lower_,
     typeck::{builtins::BuiltinFunction, intrinsics::IntrinsicFunction, TypeRef},
@@ -66,6 +68,38 @@ impl Module {
             Stmt::Def { func, .. } => Some(*func),
             _ => None,
         }
+    }
+}
+
+impl Index<ExprId> for Module {
+    type Output = Expr;
+
+    fn index(&self, index: ExprId) -> &Self::Output {
+        &self.exprs[index]
+    }
+}
+
+impl Index<StmtId> for Module {
+    type Output = Stmt;
+
+    fn index(&self, index: StmtId) -> &Self::Output {
+        &self.stmts[index]
+    }
+}
+
+impl Index<ParamId> for Module {
+    type Output = Param;
+
+    fn index(&self, index: ParamId) -> &Self::Output {
+        &self.params[index]
+    }
+}
+
+impl Index<LoadItemId> for Module {
+    type Output = LoadItem;
+
+    fn index(&self, index: LoadItemId) -> &Self::Output {
+        &self.load_items[index]
     }
 }
 

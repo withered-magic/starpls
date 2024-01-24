@@ -268,7 +268,7 @@ impl ScopeCollector<'_> {
     fn collect_expr(&mut self, expr: ExprId, current: ScopeId, source: Option<ExprId>) {
         if let Some(source) = source {
             // Possible assignment targets: NAME, LIST, TUPLE, PAREN, DOT, INDEX, SLICE.
-            match &self.module.exprs[expr] {
+            match &self.module[expr] {
                 Expr::Name { name } => {
                     self.scopes.add_decl(
                         current,
@@ -314,7 +314,7 @@ impl ScopeCollector<'_> {
                 ),
             }
         } else {
-            match &self.module.exprs[expr] {
+            match &self.module[expr] {
                 Expr::Missing => {}
                 Expr::Name { .. } => {
                     self.scopes.scopes_by_hir_id.insert(expr.into(), current);

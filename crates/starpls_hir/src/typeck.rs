@@ -6,7 +6,7 @@ use crate::{
         builtins::{builtin_types, BuiltinFunction, BuiltinFunctionParam, BuiltinType},
         intrinsics::{
             intrinsic_field_types, intrinsic_types, IntrinsicClass, IntrinsicFunction,
-            IntrinsicFunctionParam, IntrinsicTypes,
+            IntrinsicFunctionParam, IntrinsicTypes, Intrinsics,
         },
     },
     Db, Declaration, Name, Resolver,
@@ -475,12 +475,12 @@ impl TyKind {
     }
 
     pub fn builtin_class(&self, db: &dyn Db) -> Option<IntrinsicClass> {
-        let types = intrinsic_types(db);
+        let intrinsics = intrinsic_types(db);
         Some(match self {
-            TyKind::String => types.string_base_class(db),
-            TyKind::Bytes => types.bytes_base_class(db),
-            TyKind::List(_) => types.list_base_class(db),
-            TyKind::Dict(_, _) => types.dict_base_class(db),
+            TyKind::String => intrinsics.string_base_class(db),
+            TyKind::Bytes => intrinsics.bytes_base_class(db),
+            TyKind::List(_) => intrinsics.list_base_class(db),
+            TyKind::Dict(_, _) => intrinsics.dict_base_class(db),
             _ => return None,
         })
     }
@@ -594,9 +594,9 @@ impl GlobalCtxt {
         let mut cx = self.cx.lock();
         let mut tcx = TyCtxt {
             db,
-            types: intrinsic_types(db),
-            shared_state: Arc::clone(&self.shared_state),
             cx: &mut cx,
+            intrinsics: intrinsic_types(db),
+            shared_state: Arc::clone(&self.shared_state),
         };
         f(&mut tcx)
     }
@@ -631,9 +631,9 @@ impl Drop for CancelGuard<'_> {
 
 pub struct TyCtxt<'a> {
     db: &'a dyn Db,
-    types: IntrinsicTypes,
-    shared_state: Arc<SharedState>,
     cx: &'a mut InferenceCtxt,
+    intrinsics: Intrinsics,
+    shared_state: Arc<SharedState>,
 }
 
 impl TyCtxt<'_> {
@@ -671,7 +671,7 @@ impl TyCtxt<'_> {
         self.unwind_if_cancelled();
 
         let db = self.db;
-        let ty = match &module(db, file).exprs[expr] {
+        let ty = match &module(db, file)[expr] {
             Expr::Name { name } => {
                 let resolver = Resolver::new_for_expr(db, file, expr);
                 resolver
@@ -692,7 +692,7 @@ impl TyCtxt<'_> {
                                             .get(&FileExprId { file, expr: id })
                                             .cloned()
                                     })
-                                    .unwrap_or_else(|| self.types.unknown(db))
+                                    .unwrap_or_else(|| self.unknown_ty())
                             }),
                         Declaration::Function { func, .. } => func.ty(),
                         Declaration::IntrinsicFunction { func } => {
@@ -701,10 +701,11 @@ impl TyCtxt<'_> {
                         Declaration::BuiltinFunction { func } => {
                             TyKind::BuiltinFunction(func).intern()
                         }
-                        Declaration::CustomVariable { type_ref } => resolve_type_ref(db, &type_ref)
-                            .unwrap_or_else(|| self.types.unknown(db)),
+                        Declaration::CustomVariable { type_ref } => {
+                            resolve_type_ref(db, &type_ref).unwrap_or_else(|| self.unknown_ty())
+                        }
                         Declaration::Parameter { id, .. } => self.param_ty(file, id),
-                        _ => self.types.any(db),
+                        _ => self.any_ty(),
                     })
                     .unwrap_or_else(|| {
                         self.add_expr_diagnostic(
@@ -712,18 +713,14 @@ impl TyCtxt<'_> {
                             expr,
                             format!("\"{}\" is not defined", name.as_str()),
                         );
-                        self.types.unbound(db)
+                        self.unbound_ty()
                     })
             }
             Expr::List { exprs } => {
                 // Determine the full type of the list. If all of the specified elements are of the same type T, then
                 // we assign the list the type `list[T]`. Otherwise, we assign it the type `list[Unknown]`.
-                TyKind::List(self.get_common_type(
-                    file,
-                    exprs.iter().cloned(),
-                    self.types.unknown(db),
-                ))
-                .intern()
+                TyKind::List(self.get_common_type(file, exprs.iter().cloned(), self.unknown_ty()))
+                    .intern()
             }
             Expr::ListComp { expr, .. } => TyKind::List(self.infer_expr(file, *expr)).intern(),
             Expr::Dict { entries } => {
@@ -733,14 +730,14 @@ impl TyCtxt<'_> {
                 let key_ty = self.get_common_type(
                     file,
                     entries.iter().map(|entry| entry.key),
-                    self.types.any(db),
+                    self.any_ty(),
                 );
 
                 // Similarly, determine the dict's value type.
                 let value_ty = self.get_common_type(
                     file,
                     entries.iter().map(|entry| entry.value),
-                    self.types.unknown(db),
+                    self.unknown_ty(),
                 );
                 TyKind::Dict(key_ty, value_ty).intern()
             }
@@ -750,12 +747,12 @@ impl TyCtxt<'_> {
                 TyKind::Dict(key_ty, value_ty).intern()
             }
             Expr::Literal { literal } => match literal {
-                Literal::Int(_) => self.types.int(db),
-                Literal::Float => self.types.float(db),
-                Literal::String(_) => self.types.string(db),
-                Literal::Bytes => self.types.bytes(db),
-                Literal::Bool(_) => self.types.bool(db),
-                Literal::None => self.types.none(db),
+                Literal::Int(_) => self.int_ty(),
+                Literal::Float => self.float_ty(),
+                Literal::String(_) => self.string_ty(),
+                Literal::Bytes => self.bytes_ty(),
+                Literal::Bool(_) => self.bool_ty(),
+                Literal::None => self.none_ty(),
             },
             Expr::Unary {
                 op,
@@ -763,11 +760,11 @@ impl TyCtxt<'_> {
             } => op
                 .as_ref()
                 .map(|op| self.infer_unary_expr(file, expr, *unary_expr, op.clone()))
-                .unwrap_or_else(|| self.types.unknown(db)),
+                .unwrap_or_else(|| self.unknown_ty()),
             Expr::Binary { lhs, rhs, op } => op
                 .as_ref()
                 .map(|op| self.infer_binary_expr(file, expr, *lhs, *rhs, op.clone()))
-                .unwrap_or_else(|| self.types.unknown(db)),
+                .unwrap_or_else(|| self.unknown_ty()),
             Expr::Dot {
                 expr: dot_expr,
                 field,
@@ -778,16 +775,16 @@ impl TyCtxt<'_> {
                 // names, and Bazel `struct`s.
                 // TODO(withered-magic): Is there a better way to handle `struct`s here?
                 if receiver_ty.is_any() {
-                    return self.types.any(db);
+                    return self.any_ty();
                 }
 
                 if receiver_ty.is_unknown() || field.is_missing() {
-                    return self.types.unknown(db);
+                    return self.unknown_ty();
                 }
 
                 if let TyKind::BuiltinType(type_) = receiver_ty.kind() {
                     if type_.name(db).as_str() == "struct" {
-                        return self.types.unknown(db);
+                        return self.unknown_ty();
                     }
                 }
 
@@ -817,8 +814,8 @@ impl TyCtxt<'_> {
             Expr::Index { lhs, index } => {
                 let lhs_ty = self.infer_expr(file, *lhs);
                 let index_ty = self.infer_expr(file, *index);
-                let int_ty = self.types.int(db);
-                let string_ty = self.types.string(db);
+                let int_ty = self.int_ty();
+                let string_ty = self.string_ty();
 
                 // Lists, dictionaries, strings, byte literals, and range values, as
                 // well as the `Indexable` and `SetIndexable` protocols, support indexing.
@@ -874,7 +871,7 @@ impl TyCtxt<'_> {
                 match callee_ty.kind() {
                     TyKind::Function(_) => {
                         // TODO: Handle slot assignments.
-                        self.types.any(db)
+                        self.any_ty()
                     }
                     TyKind::IntrinsicFunction(func, subst) => {
                         // Match arguments with their corresponding parameters.
@@ -1056,8 +1053,7 @@ impl TyCtxt<'_> {
                                 | IntrinsicFunctionParam::Keyword { ty, .. }
                                 | IntrinsicFunctionParam::VarArgList { ty } => ty.clone(),
                                 IntrinsicFunctionParam::VarArgDict => {
-                                    TyKind::Dict(self.types.any(self.db), self.types.any(self.db))
-                                        .intern()
+                                    TyKind::Dict(self.any_ty(), self.any_ty()).intern()
                                 }
                             };
                             let param_ty = param_ty.substitute(&subst.args);
@@ -1096,8 +1092,8 @@ impl TyCtxt<'_> {
                         func.ret_ty(db).substitute(&subst.args)
                     }
                     TyKind::BuiltinFunction(func) => resolve_type_ref(db, &func.ret_type_ref(db))
-                        .unwrap_or_else(|| self.types.unknown(db)),
-                    TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.types.unknown(db),
+                        .unwrap_or_else(|| self.unknown_ty()),
+                    TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.unknown_ty(),
                     _ => self.add_expr_diagnostic(
                         file,
                         expr,
@@ -1112,7 +1108,7 @@ impl TyCtxt<'_> {
                     .collect(),
             )
             .intern(),
-            _ => self.types.any(db),
+            _ => self.any_ty(),
         };
         self.set_expr_type(file, expr, ty)
     }
@@ -1134,26 +1130,26 @@ impl TyCtxt<'_> {
 
         // Special handling for "Any".
         if ty.is_any() {
-            return self.types.any(db);
+            return self.any_ty();
         }
 
         // Special handling for "Unknown" and "Unbound".
         if ty.is_unknown() {
-            return self.types.unknown(db);
+            return self.unknown_ty();
         }
 
         let kind = ty.kind();
         match op {
             UnaryOp::Arith(_) => match kind {
-                TyKind::Int => self.types.int(db),
-                TyKind::Float => self.types.float(db),
+                TyKind::Int => self.int_ty(),
+                TyKind::Float => self.float_ty(),
                 _ => unknown(),
             },
             UnaryOp::Inv => match kind {
-                TyKind::Int => self.types.int(db),
+                TyKind::Int => self.int_ty(),
                 _ => unknown(),
             },
-            UnaryOp::Not => self.types.bool(db),
+            UnaryOp::Not => self.bool_ty(),
         }
     }
 
@@ -1184,24 +1180,24 @@ impl TyCtxt<'_> {
         };
 
         if lhs == &TyKind::Any || rhs == &TyKind::Any {
-            return self.types.any(db);
+            return self.any_ty();
         }
 
         match op {
             // TODO(withered-magic): Handle string interoplation with "%".
             BinaryOp::Arith(op) => match (lhs, rhs) {
-                (TyKind::String, TyKind::String) if op == ArithOp::Add => self.types.string(db),
-                (TyKind::Int, TyKind::Int) => self.types.int(db),
+                (TyKind::String, TyKind::String) if op == ArithOp::Add => self.string_ty(),
+                (TyKind::Int, TyKind::Int) => self.int_ty(),
                 (TyKind::Float, TyKind::Int)
                 | (TyKind::Int, TyKind::Float)
-                | (TyKind::Float, TyKind::Float) => self.types.float(db),
+                | (TyKind::Float, TyKind::Float) => self.float_ty(),
                 _ => unknown(),
             },
             BinaryOp::Bitwise(_) => match (lhs, rhs) {
-                (TyKind::Int, TyKind::Int) => self.types.int(db),
+                (TyKind::Int, TyKind::Int) => self.int_ty(),
                 _ => unknown(),
             },
-            _ => self.types.bool(self.db),
+            _ => self.bool_ty(),
         }
     }
 
@@ -1223,7 +1219,7 @@ impl TyCtxt<'_> {
         // Convert "Unbound" to "Unknown" in assignments to avoid confusion.
         let mut source_ty = self.infer_expr(file, source);
         if matches!(source_ty.kind(), TyKind::Unbound) {
-            source_ty = self.types.unknown(db);
+            source_ty = self.unknown_ty();
         }
 
         // Handle standard assigments, e.g. `x, y = 1, 2`.
@@ -1254,10 +1250,10 @@ impl TyCtxt<'_> {
         let sub_ty = match source_ty.kind() {
             TyKind::List(ty) => ty.clone(),
             TyKind::Dict(key_ty, _) => key_ty.clone(),
-            TyKind::Tuple(_) | TyKind::Any => self.types.any(db),
-            TyKind::Range => self.types.int(db),
-            TyKind::StringElems => self.types.string(db),
-            TyKind::BytesElems => self.types.int(db),
+            TyKind::Tuple(_) | TyKind::Any => self.any_ty(),
+            TyKind::Range => self.int_ty(),
+            TyKind::StringElems => self.string_ty(),
+            TyKind::BytesElems => self.int_ty(),
             _ => {
                 self.add_expr_diagnostic(
                     file,
@@ -1327,7 +1323,7 @@ impl TyCtxt<'_> {
             }
             TyKind::Any => {
                 for expr in exprs.iter().copied() {
-                    self.assign_expr_source_ty(file, root, expr, self.types.any(self.db));
+                    self.assign_expr_source_ty(file, root, expr, self.any_ty());
                 }
             }
             _ => {
@@ -1345,8 +1341,8 @@ impl TyCtxt<'_> {
     }
 
     fn assign_expr_unknown_rec(&mut self, file: File, expr: ExprId) {
-        self.set_expr_type(file, expr, self.types.unknown(self.db));
-        module(self.db, file).exprs[expr].walk_child_exprs(|expr| {
+        self.set_expr_type(file, expr, self.unknown_ty());
+        module(self.db, file)[expr].walk_child_exprs(|expr| {
             self.assign_expr_unknown_rec(file, expr);
         })
     }
@@ -1379,10 +1375,10 @@ impl TyCtxt<'_> {
     fn add_expr_diagnostic<T: Into<String>>(&mut self, file: File, expr: ExprId, message: T) -> Ty {
         let range = match source_map(self.db, file).expr_map_back.get(&expr) {
             Some(ptr) => ptr.syntax_node_ptr().text_range(),
-            None => return self.types.unknown(self.db),
+            None => return self.unknown_ty(),
         };
         self.add_diagnostic_for_range(file, range, message);
-        self.types.unknown(self.db)
+        self.unknown_ty()
     }
 
     fn add_diagnostic_for_range<T: Into<String>>(
@@ -1412,19 +1408,17 @@ impl TyCtxt<'_> {
             Param::Simple { type_ref, .. } => type_ref
                 .as_ref()
                 .and_then(|type_ref| self.lower_param_type_ref(file, source_map, param, &type_ref))
-                .unwrap_or_else(|| self.types.unknown(self.db)),
+                .unwrap_or_else(|| self.unknown_ty()),
             Param::ArgsList { type_ref, .. } => TyKind::List(
                 type_ref
                     .as_ref()
                     .and_then(|type_ref| {
                         self.lower_param_type_ref(file, source_map, param, type_ref)
                     })
-                    .unwrap_or_else(|| self.types.unknown(self.db)),
+                    .unwrap_or_else(|| self.unknown_ty()),
             )
             .intern(),
-            Param::KwargsList { .. } => {
-                TyKind::Dict(self.types.any(self.db), self.types.any(self.db)).intern()
-            }
+            Param::KwargsList { .. } => TyKind::Dict(self.any_ty(), self.any_ty()).intern(),
         };
 
         self.cx
@@ -1458,25 +1452,77 @@ impl TyCtxt<'_> {
         }
         opt
     }
+
+    fn types(&self) -> &IntrinsicTypes {
+        self.intrinsics.types(self.db)
+    }
+
+    fn any_ty(&self) -> Ty {
+        self.types().any.clone()
+    }
+
+    fn unbound_ty(&self) -> Ty {
+        self.types().unbound.clone()
+    }
+
+    fn unknown_ty(&self) -> Ty {
+        self.types().unknown.clone()
+    }
+
+    fn none_ty(&self) -> Ty {
+        self.types().none.clone()
+    }
+
+    fn bool_ty(&self) -> Ty {
+        self.types().bool.clone()
+    }
+
+    fn int_ty(&self) -> Ty {
+        self.types().int.clone()
+    }
+
+    fn float_ty(&self) -> Ty {
+        self.types().float.clone()
+    }
+
+    fn string_ty(&self) -> Ty {
+        self.types().string.clone()
+    }
+
+    fn string_elems_ty(&self) -> Ty {
+        self.types().string_elems.clone()
+    }
+
+    fn bytes_ty(&self) -> Ty {
+        self.types().bytes.clone()
+    }
+
+    fn bytes_elems_ty(&self) -> Ty {
+        self.types().bytes_elems.clone()
+    }
+
+    fn range_ty(&self) -> Ty {
+        self.types().range.clone()
+    }
 }
 
 fn resolve_type_ref(db: &dyn Db, type_ref: &TypeRef) -> Option<Ty> {
+    let types = intrinsic_types(db).types(db);
     let builtin_types = builtin_types(db);
-    let types = intrinsic_types(db);
     Some(match type_ref {
         TypeRef::Name(name) => match name.as_str() {
-            "None" | "NoneType" => types.none(db),
-            "bool" => types.bool(db),
-            "int" => types.int(db),
-            "float" => types.float(db),
-            "string" => types.string(db),
-            "bytes" => types.bytes(db),
-            "list" => TyKind::List(types.any(db)).intern(),
-            "dict" => TyKind::Dict(types.any(db), types.any(db)).intern(),
-            "range" => types.range(db),
+            "None" | "NoneType" => types.any.clone(),
+            "bool" => types.bool.clone(),
+            "int" => types.int.clone(),
+            "float" => types.float.clone(),
+            "string" => types.string.clone(),
+            "bytes" => types.bytes.clone(),
+            "list" => TyKind::List(types.any.clone()).intern(),
+            "dict" => TyKind::Dict(types.any.clone(), types.any.clone()).intern(),
+            "range" => types.range.clone(),
             name => return builtin_types.types(db).get(name).cloned(),
         },
-        TypeRef::Unknown => types.unknown(db),
+        TypeRef::Unknown => types.unknown.clone(),
     })
 }
 

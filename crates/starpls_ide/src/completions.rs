@@ -2,7 +2,7 @@
 
 use crate::FilePosition;
 use starpls_common::parse;
-use starpls_hir::{lower, Db, Declaration, Name, Resolver, Ty};
+use starpls_hir::{lower, source_map, Db, Declaration, Name, Resolver, Ty};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr},
     parse_module,
@@ -236,7 +236,7 @@ impl CompletionContext {
             let parent = name.syntax().parent()?;
             CompletionAnalysis::Name(if let Some(expr) = ast::DotExpr::cast(parent) {
                 let ptr = AstPtr::new(&expr.expr()?);
-                let ty = db.infer_expr(file, *lower(db, file).source_map(db).expr_map.get(&ptr)?);
+                let ty = db.infer_expr(file, *source_map(db, file).expr_map.get(&ptr)?);
                 NameContext::Dot { receiver_ty: ty }
             } else {
                 NameContext::Def

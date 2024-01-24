@@ -1,6 +1,6 @@
 use crate::{util::pick_best_token, Database, FilePosition};
 use starpls_common::{parse, Db as _};
-use starpls_hir::{lower, Db as _, DisplayWithDb};
+use starpls_hir::{lower, source_map, Db as _, DisplayWithDb};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr},
     SyntaxKind::*,
@@ -58,7 +58,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
     let parent = token.parent()?;
     if let Some(name_ref) = ast::NameRef::cast(parent.clone()) {
         let expr_ptr = AstPtr::new(&ast::Expression::cast(name_ref.syntax().clone())?);
-        let expr = *lower(db, file).source_map(db).expr_map.get(&expr_ptr)?;
+        let expr = *source_map(db, file).expr_map.get(&expr_ptr)?;
         let ty = db.infer_expr(file, expr);
         let mut text = String::new();
         text.push_str("```python\n");
@@ -79,7 +79,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
         let parent = name.syntax().parent()?;
         if let Some(dot_expr) = ast::DotExpr::cast(parent.clone()) {
             let receiver_ptr = AstPtr::new(&dot_expr.expr()?);
-            let receiver_expr = *lower(db, file).source_map(db).expr_map.get(&receiver_ptr)?;
+            let receiver_expr = *source_map(db, file).expr_map.get(&receiver_ptr)?;
             let receiver_ty = db.infer_expr(file, receiver_expr);
             let field_ty = receiver_ty
                 .fields(db)?

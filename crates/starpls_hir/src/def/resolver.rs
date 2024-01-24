@@ -3,7 +3,7 @@ use crate::{
         scope::{module_scopes, Scope, ScopeHirId, ScopeId, Scopes},
         Declaration, ExprId, ModuleSourceMap,
     },
-    lower,
+    source_map,
     typeck::{builtins::builtin_globals, intrinsics::intrinsic_functions},
     Db, Name,
 };
@@ -127,9 +127,8 @@ impl<'a> Resolver<'a> {
     }
 
     pub fn new_for_offset(db: &'a dyn Db, file: File, offset: TextSize) -> Self {
-        let info = lower(db, file);
         let scopes = module_scopes(db, file).scopes(db);
-        let source_map = info.source_map(db);
+        let source_map = source_map(db, file);
         let scope = scopes
             .scopes_by_hir_id
             .iter()

@@ -1,6 +1,6 @@
 use crate::{util::pick_best_token, Database, FilePosition, Location};
 use starpls_common::{parse, Db};
-use starpls_hir::{lower, Declaration, Name, Resolver};
+use starpls_hir::{lower, source_map, Declaration, Name, Resolver};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr},
     T,
@@ -23,8 +23,7 @@ pub(crate) fn goto_definition(
     // For now, we only handle identifiers.
     if let Some(name_ref) = ast::NameRef::cast(parent) {
         let ptr = AstPtr::new(&ast::Expression::cast(name_ref.syntax().clone())?);
-        let info = lower(db, file);
-        let source_map = info.source_map(db);
+        let source_map = source_map(db, file);
         let expr = source_map.expr_map.get(&ptr).cloned()?;
         let name = Name::from_ast_node(name_ref);
 

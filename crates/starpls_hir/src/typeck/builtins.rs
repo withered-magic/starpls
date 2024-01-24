@@ -18,12 +18,15 @@ pub struct BuiltinType {
     pub fields: Vec<BuiltinField>,
     #[return_ref]
     pub methods: Vec<BuiltinFunction>,
+    #[return_ref]
+    pub doc: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BuiltinField {
     pub name: Name,
     pub type_ref: TypeRef,
+    pub doc: String,
 }
 
 #[salsa::tracked]
@@ -41,6 +44,7 @@ pub struct BuiltinFunction {
     #[return_ref]
     pub params: Vec<BuiltinFunctionParam>,
     pub ret_type_ref: TypeRef,
+    pub doc: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -84,10 +88,13 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
         if let Some(callable) = &value.callable {
             functions.insert(
                 value.name.clone(),
-                builtin_function(db, &value.name, callable),
+                builtin_function(db, &value.name, callable, value.doc.clone()),
             );
         } else {
-            variables.insert(value.name.clone(), TypeRef::from_str_opt(&value.r#type));
+            variables.insert(
+                value.name.clone(),
+                TypeRef::from_str_opt(&normalize_typestr(&value.r#type)),
+            );
         }
     }
 
@@ -104,12 +111,10 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
     let mut types = FxHashMap::default();
     let builtins = defs.builtins(db);
 
-    for builtin_ty in builtins.r#type.iter() {
+    for type_ in builtins.r#type.iter() {
         // Skip deny-listed types, which are handled directly by the
         // language server.
-        if builtin_ty.name.is_empty()
-            || BUILTINS_TYPES_DENY_LIST.contains(&builtin_ty.name.as_str())
-        {
+        if type_.name.is_empty() || BUILTINS_TYPES_DENY_LIST.contains(&type_.name.as_str()) {
             continue;
         }
 
@@ -117,26 +122,42 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
         let mut fields = Vec::new();
         let mut methods = Vec::new();
 
-        for field in builtin_ty.field.iter() {
+        for field in type_.field.iter() {
             if let Some(callable) = &field.callable {
-                methods.push(builtin_function(db, &field.name, callable));
+                methods.push(builtin_function(
+                    db,
+                    &field.name,
+                    callable,
+                    field.doc.clone(),
+                ));
             } else {
                 fields.push(BuiltinField {
                     name: Name::from_str(&field.name),
                     type_ref: TypeRef::from_str_opt(&field.r#type),
+                    doc: field.doc.clone(),
                 });
             }
         }
 
-        let type_ = BuiltinType::new(db, Name::from_str(&builtin_ty.name), fields, methods);
-        types.insert(builtin_ty.name.clone(), TyKind::BuiltinType(type_).intern());
+        types.insert(
+            type_.name.clone(),
+            TyKind::BuiltinType(BuiltinType::new(
+                db,
+                Name::from_str(&type_.name),
+                fields,
+                methods,
+                type_.doc.clone(),
+            ))
+            .intern(),
+        );
     }
 
     BuiltinTypes::new(db, types)
 }
 
-fn builtin_function(db: &dyn Db, name: &str, callable: &Callable) -> BuiltinFunction {
+fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: String) -> BuiltinFunction {
     let mut params = Vec::new();
+
     for callable_param in callable.param.iter() {
         // We need to apply a few normalization steps to parameter types.
         params.push(if callable_param.is_star_arg {
@@ -154,10 +175,48 @@ fn builtin_function(db: &dyn Db, name: &str, callable: &Callable) -> BuiltinFunc
             }
         });
     }
+
     BuiltinFunction::new(
         db,
         Name::from_str(name),
         params,
-        TypeRef::from_str_opt(&callable.return_type),
+        TypeRef::from_str_opt(&normalize_typestr(&callable.return_type)),
+        doc,
     )
+}
+
+/// Normalizes types from the generated Bazel documentation.
+fn normalize_typestr(text: &str) -> String {
+    // The main thing we need to normalize is that many Bazel types in
+    // builtins file are wrapped with HTML tags, e.g. `<a>None</a>`.
+    // We fix this by removing any text between angle brackets.
+    let mut s = String::new();
+    let mut in_tag = false;
+    let mut chars = text.chars();
+
+    while let Some(ch) = chars.next() {
+        match (ch, in_tag) {
+            ('<', _) => in_tag = true,
+            ('>', _) => in_tag = false,
+            (_, false) => s.push(ch),
+            _ => {}
+        }
+    }
+
+    s.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_typestr() {
+        assert_eq!(normalize_typestr("int").as_str(), "int");
+        assert_eq!(normalize_typestr("<a>int</a>").as_str(), "int");
+        assert_eq!(
+            normalize_typestr("<a>int</a>; or <a>string</a>").as_str(),
+            "int; or string"
+        )
+    }
 }

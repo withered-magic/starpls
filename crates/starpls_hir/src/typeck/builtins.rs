@@ -87,12 +87,12 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
         if let Some(callable) = &value.callable {
             functions.insert(
                 value.name.clone(),
-                builtin_function(db, &value.name, callable, value.doc.clone()),
+                builtin_function(db, &value.name, callable, &value.doc),
             );
         } else {
             variables.insert(
                 value.name.clone(),
-                TypeRef::from_str_opt(&normalize_typestr(&value.r#type)),
+                TypeRef::from_str_opt(&normalize_doc_text(&value.r#type)),
             );
         }
     }
@@ -123,17 +123,12 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
 
         for field in type_.field.iter() {
             if let Some(callable) = &field.callable {
-                methods.push(builtin_function(
-                    db,
-                    &field.name,
-                    callable,
-                    field.doc.clone(),
-                ));
+                methods.push(builtin_function(db, &field.name, callable, &field.doc));
             } else {
                 fields.push(BuiltinField {
                     name: Name::from_str(&field.name),
                     type_ref: TypeRef::from_str_opt(&field.r#type),
-                    doc: field.doc.clone(),
+                    doc: normalize_doc_text(&field.doc),
                 });
             }
         }
@@ -145,7 +140,7 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
                 Name::from_str(&type_.name),
                 fields,
                 methods,
-                type_.doc.clone(),
+                normalize_doc_text(&type_.doc),
             ))
             .intern(),
         );
@@ -154,7 +149,7 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
     BuiltinTypes::new(db, types)
 }
 
-fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: String) -> BuiltinFunction {
+fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> BuiltinFunction {
     let mut params = Vec::new();
 
     for callable_param in callable.param.iter() {
@@ -179,13 +174,13 @@ fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: String) -
         db,
         Name::from_str(name),
         params,
-        TypeRef::from_str_opt(&normalize_typestr(&callable.return_type)),
-        doc,
+        TypeRef::from_str_opt(&normalize_doc_text(&callable.return_type)),
+        normalize_doc_text(&doc),
     )
 }
 
-/// Normalizes types from the generated Bazel documentation.
-fn normalize_typestr(text: &str) -> String {
+/// Normalizes text from the generated Bazel documentation.
+fn normalize_doc_text(text: &str) -> String {
     // The main thing we need to normalize is that many Bazel types in
     // builtins file are wrapped with HTML tags, e.g. `<a>None</a>`.
     // We fix this by removing any text between angle brackets.
@@ -210,11 +205,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_normalize_typestr() {
-        assert_eq!(normalize_typestr("int").as_str(), "int");
-        assert_eq!(normalize_typestr("<a>int</a>").as_str(), "int");
+    fn test_normalize_doc_text() {
+        assert_eq!(normalize_doc_text("int").as_str(), "int");
+        assert_eq!(normalize_doc_text("<a>int</a>").as_str(), "int");
         assert_eq!(
-            normalize_typestr("<a>int</a>; or <a>string</a>").as_str(),
+            normalize_doc_text("<a>int</a>; or <a>string</a>").as_str(),
             "int; or string"
         )
     }

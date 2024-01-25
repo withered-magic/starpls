@@ -2,7 +2,7 @@ use starpls_bazel::load_builtins;
 use std::collections::HashSet;
 
 fn main() -> anyhow::Result<()> {
-    let builtins = load_builtins("builtin.pb")?;
+    let builtins = load_builtins("builtins.pb")?;
     let types: HashSet<_> = builtins
         .r#type
         .iter()
@@ -10,7 +10,11 @@ fn main() -> anyhow::Result<()> {
         .collect();
 
     for builtin in builtins.global {
-        println!("{:?} {:?}", builtin.name, builtin.r#type);
+        println!("{:?} {:?} ", builtin.name, builtin.r#type,);
+    }
+
+    for builtin in builtins.r#type.iter() {
+        println!("{:?}", builtin.name)
     }
 
     // for builtin in builtins.r#type.iter() {

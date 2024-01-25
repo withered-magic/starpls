@@ -27,6 +27,7 @@ use std::{
     sync::Arc,
 };
 
+mod call;
 mod lower;
 
 pub(crate) mod builtins;
@@ -949,34 +950,6 @@ impl TyCtxt<'_> {
                         let mut saw_kwargs = false;
                         let params = func.params(db);
                         for param in params {
-                            let slot = match param {
-                                IntrinsicFunctionParam::Positional { .. } => {
-                                    if saw_vararg {
-                                        // TODO: Emit diagnostics for invalid parameters.
-                                        break;
-                                    }
-                                    Slot::Positional {
-                                        provider: SlotProvider::Missing,
-                                    }
-                                }
-                                IntrinsicFunctionParam::Keyword { name, .. } => Slot::Keyword {
-                                    name: name.clone(),
-                                    provider: SlotProvider::Missing,
-                                },
-                                IntrinsicFunctionParam::VarArgList { .. } => {
-                                    saw_vararg = true;
-                                    Slot::VarArgList {
-                                        providers: smallvec![],
-                                    }
-                                }
-                                IntrinsicFunctionParam::VarArgDict => {
-                                    saw_kwargs = true;
-                                    Slot::VarArgDict {
-                                        providers: smallvec![],
-                                    }
-                                }
-                            };
-
                             slots.push(slot);
 
                             // Nothing can follow a "**kwargs" parameter.
@@ -1546,7 +1519,7 @@ fn resolve_type_ref(db: &dyn Db, type_ref: &TypeRef) -> Option<Ty> {
     let builtin_types = builtin_types(db);
     Some(match type_ref {
         TypeRef::Name(name) => match name.as_str() {
-            "None" | "NoneType" => types.any.clone(),
+            "None" | "NoneType" => types.none.clone(),
             "bool" => types.bool.clone(),
             "int" => types.int.clone(),
             "float" => types.float.clone(),

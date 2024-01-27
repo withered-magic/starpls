@@ -110,7 +110,7 @@ pub(crate) enum IntrinsicFunctionParam {
     Positional { ty: Ty, optional: bool },
     Keyword { name: Name, ty: Ty },
     ArgsList { ty: Ty },
-    KwargsList,
+    KwargsDict,
 }
 
 impl IntrinsicFunctionParam {
@@ -161,7 +161,7 @@ pub(crate) fn intrinsic_functions(db: &dyn Db) -> IntrinsicFunctions {
         "dict",
         vec![
             positional_opt(List(Tuple(smallvec![Any.intern(), Any.intern()]).intern())),
-            KwargsList,
+            KwargsDict,
         ],
         Dict(Any.intern(), Any.intern()),
     );
@@ -302,7 +302,7 @@ fn make_string_base_class(db: &dyn Db) -> IntrinsicClass {
             function_field(
                 db,
                 "format",
-                vec![ArgsList { ty: Any.intern() }, KwargsList],
+                vec![ArgsList { ty: Any.intern() }, KwargsDict],
                 String,
                 0,
             ),
@@ -492,7 +492,7 @@ fn make_dict_base_class(db: &dyn Db) -> IntrinsicClass {
                     positional(List(
                         Tuple(smallvec![BoundVar(0).intern(), BoundVar(1).intern()]).intern(),
                     )),
-                    KwargsList,
+                    KwargsDict,
                 ],
                 None,
                 2,

@@ -283,7 +283,7 @@ impl<'a> LoweringContext<'a> {
                     name: self.lower_name_opt(param.name()),
                     type_ref,
                 },
-                ast::Parameter::KwargsList(param) => Param::KwargsList {
+                ast::Parameter::KwargsDict(param) => Param::KwargsDict {
                     name: self.lower_name_opt(param.name()),
                     type_ref,
                 },

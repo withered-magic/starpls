@@ -745,7 +745,7 @@ ast_node! {
 pub enum Parameter {
     Simple(SimpleParameter),
     ArgsList(ArgsListParameter),
-    KwargsList(KwargsListParameter),
+    KwargsDict(KwargsDictParameter),
 }
 
 impl Parameter {
@@ -756,6 +756,16 @@ impl Parameter {
             .take_while(|el| el.kind() != CLOSE_PAREN && !Self::can_cast(el.kind()))
             .filter_map(|el| el.into_node())
             .find_map(TypeComment::cast)
+    }
+
+    pub fn name(&self) -> Option<std::string::String> {
+        match self {
+            Parameter::Simple(param) => param.name(),
+            Parameter::ArgsList(param) => param.name(),
+            Parameter::KwargsDict(param) => param.name(),
+        }
+        .and_then(|name| name.name())
+        .map(|token| token.text().to_string())
     }
 }
 
@@ -779,7 +789,7 @@ impl AstNode for Parameter {
         Some(match syntax.kind() {
             SIMPLE_PARAMETER => Self::Simple(SimpleParameter { syntax }),
             ARGS_LIST_PARAMETER => Self::ArgsList(ArgsListParameter { syntax }),
-            KWARGS_LIST_PARAMETER => Self::KwargsList(KwargsListParameter { syntax }),
+            KWARGS_LIST_PARAMETER => Self::KwargsDict(KwargsDictParameter { syntax }),
             _ => return None,
         })
     }
@@ -788,7 +798,7 @@ impl AstNode for Parameter {
         match self {
             Self::Simple(SimpleParameter { syntax }) => syntax,
             Self::ArgsList(ArgsListParameter { syntax }) => syntax,
-            Self::KwargsList(KwargsListParameter { syntax }) => syntax,
+            Self::KwargsDict(KwargsDictParameter { syntax }) => syntax,
         }
     }
 }
@@ -810,7 +820,7 @@ ast_node! {
 }
 
 ast_node! {
-    KwargsListParameter => KWARGS_LIST_PARAMETER
+    KwargsDictParameter => KWARGS_LIST_PARAMETER
     child name -> Name;
 }
 

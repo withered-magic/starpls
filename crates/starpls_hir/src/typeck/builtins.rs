@@ -57,7 +57,7 @@ pub enum BuiltinFunctionParam {
     ArgsList {
         type_ref: TypeRef,
     },
-    KwargsList,
+    KwargsDict,
 }
 
 #[salsa::input]
@@ -159,7 +159,7 @@ fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> 
                 type_ref: TypeRef::Unknown,
             }
         } else if param.is_star_star_arg {
-            BuiltinFunctionParam::KwargsList
+            BuiltinFunctionParam::KwargsDict
         } else {
             BuiltinFunctionParam::Simple {
                 name: Name::from_str(&param.name),

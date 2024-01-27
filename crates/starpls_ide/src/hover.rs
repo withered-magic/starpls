@@ -58,7 +58,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
     // Otherwise, provide hover information for identifiers.
     let parent = token.parent()?;
     if let Some(expr) = ast::NameRef::cast(parent.clone()) {
-        let ty = sema.type_of_expr(file, expr.clone().into())?;
+        let ty = sema.type_of_expr(file, &expr.clone().into())?;
         let mut text = String::from("```python\n");
 
         // Handle special `def` formatting for function types.
@@ -83,7 +83,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
     } else if let Some(name) = ast::Name::cast(parent.clone()) {
         let parent = name.syntax().parent()?;
         if let Some(expr) = ast::DotExpr::cast(parent.clone()) {
-            let ty = sema.type_of_expr(file, expr.expr()?.into())?;
+            let ty = sema.type_of_expr(file, &expr.expr()?.into())?;
             let fields = ty.fields(db);
             let (field, field_ty) = fields.into_iter().find_map(|(field, ty)| {
                 if field.name(db).as_str() == name.syntax().text() {
@@ -115,6 +115,16 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
         } else if let Some(stmt) = ast::DefStmt::cast(parent.clone()) {
             let func = sema.function_for_def(file, stmt)?;
             return Some(format!("```python\n(function) {}\n```\n", func.ty().display(db)).into());
+        } else if let Some(param) = ast::Parameter::cast(parent) {
+            let ty = sema.type_of_param(file, &param)?;
+            return Some(
+                format!(
+                    "```python\n(parameter) {}: {}\n```\n",
+                    param.name()?,
+                    ty.display(db)
+                )
+                .into(),
+            );
         }
     }
 

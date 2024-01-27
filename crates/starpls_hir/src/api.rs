@@ -27,10 +27,16 @@ impl<'a> Semantics<'a> {
         }
     }
 
-    pub fn type_of_expr(&self, file: File, expr: ast::Expression) -> Option<Type> {
-        let ptr = AstPtr::new(&expr);
+    pub fn type_of_expr(&self, file: File, expr: &ast::Expression) -> Option<Type> {
+        let ptr = AstPtr::new(expr);
         let expr = source_map(self.db, file).expr_map.get(&ptr)?;
         Some(self.db.infer_expr(file, *expr).into())
+    }
+
+    pub fn type_of_param(&self, file: File, param: &ast::Parameter) -> Option<Type> {
+        let ptr = AstPtr::new(param);
+        let param = source_map(self.db, file).param_map.get(&ptr)?;
+        Some(self.db.infer_param(file, *param).into())
     }
 }
 

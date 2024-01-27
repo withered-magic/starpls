@@ -195,7 +195,7 @@ impl CompletionContext {
                 .and_then(|arg| arg.syntax().parent())
                 .and_then(|parent| ast::CallExpr::cast(parent))
                 .and_then(|expr| expr.callee())
-                .and_then(|expr| sema.type_of_expr(file, expr))
+                .and_then(|expr| sema.type_of_expr(file, &expr))
                 .map(|ty| ty.params(db))
                 .unwrap_or_else(|| vec![]);
 
@@ -229,7 +229,7 @@ impl CompletionContext {
             let parent = name.syntax().parent()?;
             CompletionAnalysis::Name(if let Some(expr) = ast::DotExpr::cast(parent) {
                 NameContext::Dot {
-                    receiver_ty: sema.type_of_expr(file, expr.expr()?.into())?,
+                    receiver_ty: sema.type_of_expr(file, &expr.expr()?.into())?,
                 }
             } else {
                 NameContext::Def

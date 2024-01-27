@@ -144,7 +144,7 @@ impl ScopeCollector<'_> {
                 match &self.module.params[param] {
                     Param::Simple { name, .. }
                     | Param::ArgsList { name, .. }
-                    | Param::KwargsList { name, .. } => {
+                    | Param::KwargsDict { name, .. } => {
                         self.scopes.add_decl(
                             scope,
                             name.clone(),
@@ -204,7 +204,7 @@ impl ScopeCollector<'_> {
                     },
                 );
                 deferred.push_back(FunctionData {
-                    params: func.params_(self.db).clone(),
+                    params: func.params(self.db).clone(),
                     stmts: stmts.clone(),
                     func: *func,
                 });
@@ -325,7 +325,7 @@ impl ScopeCollector<'_> {
                         match &self.module.params[param] {
                             Param::Simple { name, .. }
                             | Param::ArgsList { name, .. }
-                            | Param::KwargsList { name, .. } => {
+                            | Param::KwargsDict { name, .. } => {
                                 self.scopes.add_decl(
                                     scope,
                                     name.clone(),

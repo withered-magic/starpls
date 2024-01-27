@@ -7,7 +7,7 @@ use starpls_common::{parse, File, Parse};
 
 pub use crate::{
     api::*,
-    def::{resolver::Resolver, scope::module_scopes, Declaration, ExprId, Module, Name},
+    def::{resolver::Resolver, scope::module_scopes, Declaration, ExprId, Module, Name, ParamId},
     display::{DisplayWithDb, DisplayWithDbWrapper},
     typeck::{builtins::BuiltinDefs, Cancelled, FileExprId, GlobalCtxt, Ty, TyCtxt},
 };
@@ -60,6 +60,8 @@ pub enum Dialect {
 
 pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
     fn infer_expr(&self, file: File, expr: ExprId) -> Ty;
+
+    fn infer_param(&self, file: File, param: ParamId) -> Ty;
 
     fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins);
 

@@ -4,7 +4,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use salsa::ParallelDatabase;
 use starpls_bazel::Builtins;
 use starpls_common::{Db, Diagnostic, File, FileId};
-use starpls_hir::{BuiltinDefs, Db as _, Dialect, ExprId, GlobalCtxt, Ty};
+use starpls_hir::{BuiltinDefs, Db as _, Dialect, ExprId, GlobalCtxt, ParamId, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use std::sync::Arc;
 
@@ -66,6 +66,10 @@ impl starpls_common::Db for Database {
 impl starpls_hir::Db for Database {
     fn infer_expr(&self, file: File, expr: ExprId) -> Ty {
         self.gcx.with_tcx(self, |tcx| tcx.infer_expr(file, expr))
+    }
+
+    fn infer_param(&self, file: File, param: ParamId) -> Ty {
+        self.gcx.with_tcx(self, |tcx| tcx.infer_param(file, param))
     }
 
     fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins) {

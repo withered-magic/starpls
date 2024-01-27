@@ -298,10 +298,23 @@ pub enum Param {
         name: Name,
         type_ref: Option<TypeRef>,
     },
-    KwargsList {
+    KwargsDict {
         name: Name,
         type_ref: Option<TypeRef>,
     },
+}
+
+impl Param {
+    pub fn is_optional(&self) -> bool {
+        matches!(
+            self,
+            &Self::Simple {
+                default: Some(_),
+                ..
+            } | &Self::ArgsList { .. }
+                | &Self::KwargsDict { .. }
+        )
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -390,15 +403,10 @@ pub(crate) struct Function {
     pub(crate) file: File,
     pub(crate) name: Name,
     #[return_ref]
-    pub(crate) params_: Box<[ParamId]>,
+    pub(crate) params: Box<[ParamId]>,
 }
 
 impl Function {
-    pub fn params<'a>(&'a self, db: &'a dyn Db) -> impl Iterator<Item = &'a Param> + '_ {
-        let params = &lower_(db, self.file(db)).module(db).params;
-        self.params_(db).iter().map(|param| &params[*param])
-    }
-
     pub fn ty(&self) -> Ty {
         TyKind::Function(*self).intern()
     }

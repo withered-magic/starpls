@@ -2,20 +2,22 @@ use starpls_bazel::load_builtins;
 use std::collections::HashSet;
 
 fn main() -> anyhow::Result<()> {
-    let builtins = load_builtins("builtins.pb")?;
+    let builtins = load_builtins("")?;
     let types: HashSet<_> = builtins
         .r#type
         .iter()
         .map(|type_| type_.name.clone())
         .collect();
 
+    // println!("{:?}", builtins.global.len());
+
     for builtin in builtins.global {
         println!("{:?} {:?} ", builtin.name, builtin.r#type,);
     }
 
-    for builtin in builtins.r#type.iter() {
-        println!("{:?}", builtin.name)
-    }
+    // for builtin in builtins.r#type.iter() {
+    //     println!("{:?}", builtin.name)
+    // }
 
     // for builtin in builtins.r#type.iter() {
     //     for field in builtin.field.iter() {

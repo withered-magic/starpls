@@ -4,6 +4,7 @@ use crate::{
     module, source_map,
     typeck::{
         builtins::{builtin_types, BuiltinFunction, BuiltinFunctionParam, BuiltinType},
+        call::{Slot, SlotProvider, Slots},
         intrinsics::{
             intrinsic_field_types, intrinsic_types, IntrinsicClass, IntrinsicFunction,
             IntrinsicFunctionParam, IntrinsicTypes, Intrinsics,
@@ -463,11 +464,11 @@ impl DisplayWithDb for TyKind {
                             ty.substitute(&subst.args).fmt(db, f)?;
                             f.write_str(" = None")?;
                         }
-                        IntrinsicFunctionParam::VarArgList { ty } => {
+                        IntrinsicFunctionParam::ArgsList { ty } => {
                             f.write_str("*args: ")?;
                             ty.substitute(&subst.args).fmt(db, f)?;
                         }
-                        IntrinsicFunctionParam::VarArgDict => {
+                        IntrinsicFunctionParam::KwargsList => {
                             f.write_str("**kwargs")?;
                         }
                     }
@@ -482,9 +483,9 @@ impl DisplayWithDb for TyKind {
                         f.write_str(", ")?;
                     }
                     match param {
-                        BuiltinFunctionParam::Normal { name, .. } => f.write_str(name.as_str())?,
-                        BuiltinFunctionParam::VarArgList { .. } => f.write_str("*args")?,
-                        BuiltinFunctionParam::VarArgDict => f.write_str("**kwargs")?,
+                        BuiltinFunctionParam::Simple { name, .. } => f.write_str(name.as_str())?,
+                        BuiltinFunctionParam::ArgsList { .. } => f.write_str("*args")?,
+                        BuiltinFunctionParam::KwargsList => f.write_str("**kwargs")?,
                     }
                 }
                 f.write_str(") -> ")?;
@@ -910,53 +911,15 @@ impl TyCtxt<'_> {
                     .collect();
 
                 match callee_ty.kind() {
-                    TyKind::Function(_) => {
+                    TyKind::Function(func) => {
+                        let param: Vec<Param> = func.params(db).cloned().collect();
+
                         // TODO: Handle slot assignments.
                         self.any_ty()
                     }
                     TyKind::IntrinsicFunction(func, subst) => {
-                        // Match arguments with their corresponding parameters.
-                        // The following routine is based on PEP 3102 (https://peps.python.org/pep-3102),
-                        // but with a couple of modifications for handling "*args" and "**kwargs" arguments.
-                        #[derive(Clone, Debug, PartialEq, Eq)]
-                        enum SlotProvider {
-                            Missing,
-                            Single(ExprId, Ty),
-                            VarArgList(ExprId, Ty),
-                            VarArgDict(ExprId, Ty),
-                        }
-
-                        enum Slot {
-                            Positional {
-                                provider: SlotProvider,
-                            },
-                            Keyword {
-                                name: Name,
-                                provider: SlotProvider,
-                            },
-                            VarArgList {
-                                providers: SmallVec<[SlotProvider; 1]>,
-                            },
-                            VarArgDict {
-                                providers: SmallVec<[SlotProvider; 1]>,
-                            },
-                        }
-
-                        let mut slots: SmallVec<[Slot; 5]> = smallvec![];
-
-                        // Only match valid parameters. For example, don't match a second `*args` or
-                        // `**kwargs` parameter.
-                        let mut saw_vararg = false;
-                        let mut saw_kwargs = false;
                         let params = func.params(db);
-                        for param in params {
-                            slots.push(slot);
-
-                            // Nothing can follow a "**kwargs" parameter.
-                            if saw_kwargs {
-                                break;
-                            }
-                        }
+                        let mut slots: Slots = params[..].into();
 
                         'outer: for (arg, arg_ty) in args_with_ty {
                             match arg {
@@ -972,7 +935,7 @@ impl TyCtxt<'_> {
                                                 *provider2 = provider;
                                                 continue 'outer;
                                             }
-                                            Slot::VarArgList { providers } => {
+                                            Slot::ArgsList { providers } => {
                                                 providers.push(provider);
                                                 continue 'outer;
                                             }
@@ -998,12 +961,12 @@ impl TyCtxt<'_> {
                                                 name,
                                                 provider:
                                                     provider2 @ (SlotProvider::Missing
-                                                    | SlotProvider::VarArgDict(_, _)),
+                                                    | SlotProvider::KwargsList(_, _)),
                                             } if arg_name == name => {
                                                 *provider2 = provider;
                                                 continue 'outer;
                                             }
-                                            Slot::VarArgList { providers } => {
+                                            Slot::ArgsList { providers } => {
                                                 providers.push(provider);
                                                 continue 'outer;
                                             }
@@ -1028,10 +991,10 @@ impl TyCtxt<'_> {
                                                 provider: provider @ SlotProvider::Missing,
                                             } => {
                                                 *provider =
-                                                    SlotProvider::VarArgList(expr, arg_ty.clone())
+                                                    SlotProvider::ArgsList(expr, arg_ty.clone())
                                             }
-                                            Slot::VarArgList { providers } => {
-                                                providers.push(SlotProvider::VarArgList(
+                                            Slot::ArgsList { providers } => {
+                                                providers.push(SlotProvider::ArgsList(
                                                     expr,
                                                     arg_ty.clone(),
                                                 ));
@@ -1047,10 +1010,10 @@ impl TyCtxt<'_> {
                                         match slot {
                                             Slot::Keyword { provider, .. } => {
                                                 *provider =
-                                                    SlotProvider::VarArgDict(expr, arg_ty.clone())
+                                                    SlotProvider::KwargsList(expr, arg_ty.clone())
                                             }
-                                            Slot::VarArgDict { providers } => providers.push(
-                                                SlotProvider::VarArgDict(expr, arg_ty.clone()),
+                                            Slot::KwargsList { providers } => providers.push(
+                                                SlotProvider::KwargsList(expr, arg_ty.clone()),
                                             ),
                                             _ => {}
                                         }
@@ -1060,12 +1023,12 @@ impl TyCtxt<'_> {
                         }
 
                         // Validate argument types.
-                        for (param, slot) in params.iter().zip(slots) {
+                        for (param, slot) in params.iter().zip(slots.into_inner()) {
                             let param_ty = match param {
                                 IntrinsicFunctionParam::Positional { ty, .. }
                                 | IntrinsicFunctionParam::Keyword { ty, .. }
-                                | IntrinsicFunctionParam::VarArgList { ty } => ty.clone(),
-                                IntrinsicFunctionParam::VarArgDict => {
+                                | IntrinsicFunctionParam::ArgsList { ty } => ty.clone(),
+                                IntrinsicFunctionParam::KwargsList => {
                                     TyKind::Dict(self.any_ty(), self.any_ty()).intern()
                                 }
                             };
@@ -1096,7 +1059,7 @@ impl TyCtxt<'_> {
                                 Slot::Positional { provider } | Slot::Keyword { provider, .. } => {
                                     validate_provider(provider)
                                 }
-                                Slot::VarArgList { providers } | Slot::VarArgDict { providers } => {
+                                Slot::ArgsList { providers } | Slot::KwargsList { providers } => {
                                     providers.into_iter().for_each(validate_provider);
                                 }
                             }

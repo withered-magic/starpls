@@ -48,16 +48,16 @@ pub struct BuiltinFunction {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BuiltinFunctionParam {
-    Normal {
+    Simple {
         name: Name,
         type_ref: TypeRef,
-        kw_only: bool,
-        optional: bool,
+        default_value: Option<String>,
+        positional: bool,
     },
-    VarArgList {
+    ArgsList {
         type_ref: TypeRef,
     },
-    VarArgDict,
+    KwargsList,
 }
 
 #[salsa::input]
@@ -152,20 +152,24 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
 fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> BuiltinFunction {
     let mut params = Vec::new();
 
-    for callable_param in callable.param.iter() {
+    for param in callable.param.iter() {
         // We need to apply a few normalization steps to parameter types.
-        params.push(if callable_param.is_star_arg {
-            BuiltinFunctionParam::VarArgList {
+        params.push(if param.is_star_arg {
+            BuiltinFunctionParam::ArgsList {
                 type_ref: TypeRef::Unknown,
             }
-        } else if callable_param.is_star_star_arg {
-            BuiltinFunctionParam::VarArgDict
+        } else if param.is_star_star_arg {
+            BuiltinFunctionParam::KwargsList
         } else {
-            BuiltinFunctionParam::Normal {
-                name: Name::from_str(&callable_param.name),
+            BuiltinFunctionParam::Simple {
+                name: Name::from_str(&param.name),
                 type_ref: TypeRef::Unknown,
-                kw_only: false,
-                optional: !callable_param.is_mandatory,
+                default_value: if !param.default_value.is_empty() {
+                    Some(param.default_value.clone())
+                } else {
+                    None
+                },
+                positional: true,
             }
         });
     }

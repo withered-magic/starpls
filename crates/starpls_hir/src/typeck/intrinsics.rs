@@ -109,8 +109,8 @@ pub(crate) struct IntrinsicFunction {
 pub(crate) enum IntrinsicFunctionParam {
     Positional { ty: Ty, optional: bool },
     Keyword { name: Name, ty: Ty },
-    VarArgList { ty: Ty },
-    VarArgDict,
+    ArgsList { ty: Ty },
+    KwargsList,
 }
 
 impl IntrinsicFunctionParam {
@@ -161,7 +161,7 @@ pub(crate) fn intrinsic_functions(db: &dyn Db) -> IntrinsicFunctions {
         "dict",
         vec![
             positional_opt(List(Tuple(smallvec![Any.intern(), Any.intern()]).intern())),
-            VarArgDict,
+            KwargsList,
         ],
         Dict(Any.intern(), Any.intern()),
     );
@@ -172,7 +172,7 @@ pub(crate) fn intrinsic_functions(db: &dyn Db) -> IntrinsicFunctions {
         List(Tuple(smallvec![Int.intern(), Any.intern()]).intern()),
     );
     add_function("float", vec![positional(Any)], Float);
-    add_function("fail", vec![VarArgList { ty: Any.intern() }], None);
+    add_function("fail", vec![ArgsList { ty: Any.intern() }], None);
     add_function(
         "getattr",
         vec![positional(Any), positional(String), positional_opt(Any)],
@@ -188,7 +188,7 @@ pub(crate) fn intrinsic_functions(db: &dyn Db) -> IntrinsicFunctions {
     add_function(
         "max",
         vec![
-            VarArgList { ty: Any.intern() },
+            ArgsList { ty: Any.intern() },
             Keyword {
                 name: Name::new_inline("key"),
                 ty: Any.intern(),
@@ -199,7 +199,7 @@ pub(crate) fn intrinsic_functions(db: &dyn Db) -> IntrinsicFunctions {
     add_function(
         "min",
         vec![
-            VarArgList { ty: Any.intern() },
+            ArgsList { ty: Any.intern() },
             Keyword {
                 name: Name::new_inline("key"),
                 ty: Any.intern(),
@@ -210,7 +210,7 @@ pub(crate) fn intrinsic_functions(db: &dyn Db) -> IntrinsicFunctions {
     add_function(
         "print",
         vec![
-            VarArgList { ty: Any.intern() },
+            ArgsList { ty: Any.intern() },
             Keyword {
                 name: Name::new_inline("str"),
                 ty: String.intern(),
@@ -248,7 +248,7 @@ pub(crate) fn intrinsic_functions(db: &dyn Db) -> IntrinsicFunctions {
     add_function("tuple", vec![positional(Any)], Any);
     add_function(
         "zip",
-        vec![VarArgList { ty: Any.intern() }],
+        vec![ArgsList { ty: Any.intern() }],
         List(Any.intern()),
     );
 
@@ -302,7 +302,7 @@ fn make_string_base_class(db: &dyn Db) -> IntrinsicClass {
             function_field(
                 db,
                 "format",
-                vec![VarArgList { ty: Any.intern() }, VarArgDict],
+                vec![ArgsList { ty: Any.intern() }, KwargsList],
                 String,
                 0,
             ),
@@ -492,7 +492,7 @@ fn make_dict_base_class(db: &dyn Db) -> IntrinsicClass {
                     positional(List(
                         Tuple(smallvec![BoundVar(0).intern(), BoundVar(1).intern()]).intern(),
                     )),
-                    VarArgDict,
+                    KwargsList,
                 ],
                 None,
                 2,

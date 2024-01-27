@@ -975,7 +975,8 @@ impl TyCtxt<'_> {
                                 Slot::Positional { provider } | Slot::Keyword { provider, .. } => {
                                     validate_provider(provider);
                                 }
-                                Slot::ArgsList { providers } | Slot::KwargsDict { providers } => {
+                                Slot::ArgsList { providers, .. }
+                                | Slot::KwargsDict { providers } => {
                                     providers.into_iter().for_each(validate_provider);
                                 }
                             }
@@ -1027,7 +1028,8 @@ impl TyCtxt<'_> {
                                 Slot::Positional { provider } | Slot::Keyword { provider, .. } => {
                                     validate_provider(provider)
                                 }
-                                Slot::ArgsList { providers } | Slot::KwargsDict { providers } => {
+                                Slot::ArgsList { providers, .. }
+                                | Slot::KwargsDict { providers } => {
                                     providers.into_iter().for_each(validate_provider);
                                 }
                             }

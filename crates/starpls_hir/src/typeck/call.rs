@@ -38,7 +38,10 @@ impl Slots {
                                 *provider2 = provider;
                                 continue 'outer;
                             }
-                            Slot::ArgsList { providers } => {
+                            Slot::ArgsList {
+                                providers,
+                                bare: false,
+                            } => {
                                 providers.push(provider);
                                 continue 'outer;
                             }
@@ -59,6 +62,7 @@ impl Slots {
                     // name, or for the "**kwargs" parameter.
                     let provider = SlotProvider::Single(*expr, arg_ty.clone());
                     for slot in self.0.iter_mut() {
+                        eprintln!("test param {:?}", slot);
                         match slot {
                             Slot::Keyword {
                                 name,
@@ -69,7 +73,7 @@ impl Slots {
                                 *provider2 = provider;
                                 continue 'outer;
                             }
-                            Slot::ArgsList { providers } => {
+                            Slot::KwargsDict { providers } => {
                                 providers.push(provider);
                                 continue 'outer;
                             }
@@ -90,7 +94,11 @@ impl Slots {
                             Slot::Positional {
                                 provider: provider @ SlotProvider::Missing,
                             } => *provider = SlotProvider::ArgsList(*expr, arg_ty.clone()),
-                            Slot::ArgsList { providers } => {
+                            Slot::ArgsList {
+                                providers,
+                                bare: false,
+                                ..
+                            } => {
                                 providers.push(SlotProvider::ArgsList(*expr, arg_ty.clone()));
                             }
                             _ => {}
@@ -118,16 +126,13 @@ impl Slots {
         errors
     }
 
-    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = &mut Slot> {
-        self.0.iter_mut()
-    }
-
     pub(crate) fn into_inner(self) -> SmallVec<[Slot; 5]> {
         self.0
     }
 }
 
 /// A slot for a formal parameter, as defined in PEP 3102.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Slot {
     Positional {
         provider: SlotProvider,
@@ -139,6 +144,7 @@ pub(crate) enum Slot {
     },
     ArgsList {
         providers: SmallVec<[SlotProvider; 1]>,
+        bare: bool,
     },
     KwargsDict {
         providers: SmallVec<[SlotProvider; 1]>,
@@ -165,21 +171,16 @@ impl From<&[Param]> for Slots {
         // For example, don't match a second `**kwargs` parameter.
         for param in params.iter() {
             let slot = match param {
-                Param::Simple { name, .. } => {
-                    if saw_vararg {
-                        break;
-                    }
-
-                    Slot::Keyword {
-                        name: name.clone(),
-                        provider: SlotProvider::Missing,
-                        positional: !(saw_vararg || saw_kwargs),
-                    }
-                }
-                Param::ArgsList { .. } => {
+                Param::Simple { name, .. } => Slot::Keyword {
+                    name: name.clone(),
+                    provider: SlotProvider::Missing,
+                    positional: !(saw_vararg || saw_kwargs),
+                },
+                Param::ArgsList { name, .. } => {
                     saw_vararg = true;
                     Slot::ArgsList {
                         providers: smallvec![],
+                        bare: name.is_missing(),
                     }
                 }
                 Param::KwargsDict { .. } => {
@@ -230,6 +231,7 @@ impl From<&[IntrinsicFunctionParam]> for Slots {
                     saw_vararg = true;
                     Slot::ArgsList {
                         providers: smallvec![],
+                        bare: false,
                     }
                 }
                 IntrinsicFunctionParam::KwargsDict => {
@@ -256,7 +258,6 @@ impl From<&[BuiltinFunctionParam]> for Slots {
     fn from(params: &[BuiltinFunctionParam]) -> Self {
         // See the implementation for `IntrinsicFunctionParam` above.
         let mut slots = smallvec![];
-        let mut saw_vararg = false;
         let mut saw_kwargs = false;
 
         // Derive slots only from the valid formal parameters.
@@ -265,23 +266,15 @@ impl From<&[BuiltinFunctionParam]> for Slots {
             let slot = match param {
                 BuiltinFunctionParam::Simple {
                     name, positional, ..
-                } => {
-                    if saw_vararg {
-                        break;
-                    }
-
-                    Slot::Keyword {
-                        name: name.clone(),
-                        provider: SlotProvider::Missing,
-                        positional: *positional,
-                    }
-                }
-                BuiltinFunctionParam::ArgsList { .. } => {
-                    saw_vararg = true;
-                    Slot::ArgsList {
-                        providers: smallvec![],
-                    }
-                }
+                } => Slot::Keyword {
+                    name: name.clone(),
+                    provider: SlotProvider::Missing,
+                    positional: *positional,
+                },
+                BuiltinFunctionParam::ArgsList { .. } => Slot::ArgsList {
+                    providers: smallvec![],
+                    bare: false,
+                },
                 BuiltinFunctionParam::KwargsDict => {
                     saw_kwargs = true;
                     Slot::KwargsDict {

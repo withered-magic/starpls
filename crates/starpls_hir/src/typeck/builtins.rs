@@ -55,6 +55,7 @@ pub enum BuiltinFunctionParam {
         doc: String,
         default_value: Option<String>,
         positional: bool,
+        is_mandatory: bool,
     },
     ArgsList {
         type_ref: TypeRef,
@@ -72,6 +73,20 @@ impl BuiltinFunctionParam {
             | BuiltinFunctionParam::ArgsList { type_ref, .. } => type_ref.clone(),
             BuiltinFunctionParam::KwargsDict { .. } => return None,
         })
+    }
+
+    pub(crate) fn is_mandatory(&self) -> bool {
+        match self {
+            BuiltinFunctionParam::Simple { is_mandatory, .. } => *is_mandatory,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn name(&self) -> Name {
+        match self {
+            BuiltinFunctionParam::Simple { name, .. } => name.clone(),
+            _ => Name::missing(),
+        }
     }
 }
 
@@ -164,10 +179,6 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
 fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> BuiltinFunction {
     let mut params = Vec::new();
 
-    if name == "declare_file" {
-        eprintln!("{:?}", doc);
-    }
-
     for param in callable.param.iter() {
         // We need to apply a few normalization steps to parameter types.
         params.push(if param.is_star_arg {
@@ -190,6 +201,7 @@ fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> 
                     None
                 },
                 positional: true,
+                is_mandatory: param.is_mandatory,
             }
         });
     }

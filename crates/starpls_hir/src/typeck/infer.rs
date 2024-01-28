@@ -18,6 +18,8 @@ use starpls_syntax::{
     TextRange,
 };
 
+use super::resolve_type_ref_opt;
+
 impl TyCtxt<'_> {
     pub fn infer_all_exprs(&mut self, file: File) {
         for (expr, _) in module(self.db, file).exprs.iter() {
@@ -286,16 +288,7 @@ impl TyCtxt<'_> {
                         // Validate argument types.
                         for (param, slot) in params.zip(slots.into_inner()) {
                             let hir_param = &module[param];
-                            let param_ty = match &module[param] {
-                                Param::Simple { type_ref, .. }
-                                | Param::ArgsList { type_ref, .. } => type_ref
-                                    .as_ref()
-                                    .and_then(|type_ref| {
-                                        self.lower_param_type_ref(file, param, type_ref)
-                                    })
-                                    .unwrap_or_else(|| self.unknown_ty()),
-                                Param::KwargsDict { .. } => self.any_ty(),
-                            };
+                            let param_ty = resolve_type_ref_opt(db, hir_param.type_ref());
 
                             // TODO(withered-magic): Deduplicate the following logic for
                             // validating providers, as it's currently shared between
@@ -399,8 +392,66 @@ impl TyCtxt<'_> {
 
                         func.ret_ty(db).substitute(&subst.args)
                     }
-                    TyKind::BuiltinFunction(func) => resolve_type_ref(db, &func.ret_type_ref(db))
-                        .unwrap_or_else(|| self.unknown_ty()),
+                    TyKind::BuiltinFunction(func) => {
+                        let params = func.params(db);
+                        let mut slots: Slots = params[..].into();
+                        let errors = slots.assign_args(&args_with_ty);
+
+                        for error in errors {
+                            self.add_expr_diagnostic(file, error.expr, error.message);
+                        }
+
+                        let mut missing_params = Vec::new();
+
+                        // Validate argument types.
+                        for (param, slot) in params.iter().zip(slots.into_inner()) {
+                            let param_ty = resolve_type_ref_opt(db, param.type_ref());
+                            let mut validate_provider = |provider| match provider {
+                                SlotProvider::Missing => {
+                                    if param.is_mandatory() {
+                                        let name = param.name();
+                                        if !name.is_missing() {
+                                            missing_params.push(name.clone());
+                                        }
+                                    }
+                                }
+                                SlotProvider::Single(expr, ty) => {
+                                    if !assign_tys(&ty, &param_ty) {
+                                        self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to paramter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
+                                    }
+                                }
+                                _ => {}
+                            };
+
+                            match slot {
+                                Slot::Positional { provider } | Slot::Keyword { provider, .. } => {
+                                    validate_provider(provider)
+                                }
+                                Slot::ArgsList { providers, .. }
+                                | Slot::KwargsDict { providers } => {
+                                    providers.into_iter().for_each(validate_provider);
+                                }
+                            }
+                        }
+
+                        // Emit diagnostic for missing parameters.
+                        if !missing_params.is_empty() {
+                            let mut message = String::from("Argument missing for parameter(s) ");
+                            for (i, name) in missing_params.into_iter().enumerate() {
+                                if i > 0 {
+                                    message.push_str(", ");
+                                }
+                                message.push('"');
+                                message.push_str(name.as_str());
+                                message.push('"');
+                            }
+
+                            self.add_expr_diagnostic(file, expr, message);
+                        }
+
+                        resolve_type_ref(db, &func.ret_type_ref(db))
+                            .unwrap_or_else(|| self.unknown_ty())
+                    }
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.unknown_ty(),
                     _ => self.add_expr_diagnostic_ty(
                         file,

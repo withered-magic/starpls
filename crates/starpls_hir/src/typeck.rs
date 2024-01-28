@@ -840,16 +840,21 @@ pub(crate) fn resolve_type_ref(db: &dyn Db, type_ref: &TypeRef) -> Option<Ty> {
     })
 }
 
-pub(crate) fn assign_tys(source: &Ty, target: &Ty) -> bool {
-    // Assignments involving "Any", "Unknown", or "Unbound" at the top-level
-    // are always valid to avoid confusion.
-    if source.is_any() || source.is_unknown() || target.is_any() || target.is_unknown() {
-        return true;
-    }
+pub(crate) fn resolve_type_ref_opt(db: &dyn Db, type_ref: Option<TypeRef>) -> Ty {
+    type_ref
+        .and_then(|type_ref| resolve_type_ref(db, &type_ref))
+        .unwrap_or_else(|| TyKind::Unknown.intern())
+}
 
-    // With the exception of protocols, all other types are compared for equality.
-    match target.kind() {
-        TyKind::Protocol(protocol) => protocol.assign_ty(source),
-        _ => source == target,
+pub(crate) fn assign_tys(source: &Ty, target: &Ty) -> bool {
+    // // Assignments involving "Any", "Unknown", or "Unbound" at the top-level
+    // // are always valid to avoid confusion.
+    match (source.kind(), target.kind()) {
+        (TyKind::Any | TyKind::Unknown, _) | (_, TyKind::Any | TyKind::Unknown) => true,
+        (TyKind::List(source), TyKind::List(target)) => assign_tys(source, target),
+        (TyKind::Dict(key_source, value_source), TyKind::Dict(key_target, value_target)) => {
+            assign_tys(key_source, key_target) && assign_tys(value_source, value_target)
+        }
+        (source, target) => source == target,
     }
 }

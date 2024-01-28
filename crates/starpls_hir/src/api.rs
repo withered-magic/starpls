@@ -1,16 +1,11 @@
 use crate::{
     def::{Function as HirDefFunction, Stmt},
     module, source_map,
-    typeck::{
-        builtins::BuiltinFunction,
-        intrinsics::{IntrinsicFunction, IntrinsicFunctionParam},
-        Substitution, Ty,
-    },
+    typeck::{builtins::BuiltinFunction, intrinsics::IntrinsicFunction, Substitution, Ty},
     Db, DisplayWithDb, Name, TyKind,
 };
 use starpls_common::File;
 use starpls_syntax::ast::{self, AstNode, AstPtr};
-use std::iter;
 
 pub use crate::typeck::{Field, Param};
 

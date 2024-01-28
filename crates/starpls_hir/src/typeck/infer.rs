@@ -213,6 +213,8 @@ impl TyCtxt<'_> {
                     TyKind::Protocol(Protocol::Indexable(ty) | Protocol::SetIndexable(ty)) => {
                         (&int_ty, ty, "Indexable")
                     }
+                    TyKind::Any => return self.any_ty(),
+                    TyKind::Unknown => return self.unknown_ty(),
                     _ => {
                         let return_ty = self.add_expr_diagnostic_ty(
                             file,
@@ -523,8 +525,8 @@ impl TyCtxt<'_> {
         let db = self.db;
         let lhs = self.infer_expr(file, lhs);
         let rhs = self.infer_expr(file, rhs);
-        let lhs = lhs.kind();
-        let rhs = rhs.kind();
+        let lhs_kind = lhs.kind();
+        let rhs_kind = rhs.kind();
         let mut unknown = || {
             self.add_expr_diagnostic_ty(
                 file,
@@ -532,27 +534,35 @@ impl TyCtxt<'_> {
                 format!(
                     "Operator \"{}\" not supported for types \"{}\" and \"{}\"",
                     op,
-                    lhs.display(db),
-                    rhs.display(db)
+                    lhs_kind.display(db),
+                    rhs_kind.display(db)
                 ),
             )
         };
 
-        if lhs == &TyKind::Any || rhs == &TyKind::Any {
-            return self.any_ty();
+        match (lhs_kind, rhs_kind) {
+            (TyKind::Any | TyKind::Unknown, _) | (_, TyKind::Any | TyKind::Unknown) => {
+                return self.unknown_ty()
+            }
+            _ => {}
         }
 
         match op {
             // TODO(withered-magic): Handle string interoplation with "%".
-            BinaryOp::Arith(op) => match (lhs, rhs) {
-                (TyKind::String, TyKind::String) if op == ArithOp::Add => self.string_ty(),
-                (TyKind::Int, TyKind::Int) => self.int_ty(),
-                (TyKind::Float, TyKind::Int)
-                | (TyKind::Int, TyKind::Float)
-                | (TyKind::Float, TyKind::Float) => self.float_ty(),
+            BinaryOp::Arith(op) => match (lhs_kind, rhs_kind, op) {
+                (TyKind::String, TyKind::String, ArithOp::Add) => self.string_ty(),
+                (TyKind::List(target), TyKind::List(source), ArithOp::Add)
+                    if assign_tys(source, target) =>
+                {
+                    lhs
+                }
+                (TyKind::Int, TyKind::Int, _) => self.int_ty(),
+                (TyKind::Float, TyKind::Int, _)
+                | (TyKind::Int, TyKind::Float, _)
+                | (TyKind::Float, TyKind::Float, _) => self.float_ty(),
                 _ => unknown(),
             },
-            BinaryOp::Bitwise(_) => match (lhs, rhs) {
+            BinaryOp::Bitwise(_) => match (lhs_kind, rhs_kind) {
                 (TyKind::Int, TyKind::Int) => self.int_ty(),
                 _ => unknown(),
             },
@@ -613,6 +623,7 @@ impl TyCtxt<'_> {
             TyKind::Range => self.int_ty(),
             TyKind::StringElems => self.string_ty(),
             TyKind::BytesElems => self.int_ty(),
+            TyKind::Unknown => self.unknown_ty(),
             _ => {
                 self.add_expr_diagnostic(
                     file,
@@ -680,9 +691,9 @@ impl TyCtxt<'_> {
                     );
                 }
             }
-            TyKind::Any => {
+            TyKind::Any | TyKind::Unknown => {
                 for expr in exprs.iter().copied() {
-                    self.assign_expr_source_ty(file, root, expr, self.any_ty());
+                    self.assign_expr_source_ty(file, root, expr, self.unknown_ty());
                 }
             }
             _ => {

@@ -1,7 +1,10 @@
 use crate::{
     def::{Function as HirDefFunction, Stmt},
     module, source_map,
-    typeck::{builtins::BuiltinFunction, intrinsics::IntrinsicFunction, Substitution, Ty},
+    typeck::{
+        builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref, Substitution,
+        Ty, TypeRef,
+    },
     Db, DisplayWithDb, Name, TyKind,
 };
 use starpls_common::File;
@@ -25,6 +28,10 @@ impl<'a> Semantics<'a> {
             Stmt::Def { func, .. } => Some((*func).into()),
             _ => None,
         }
+    }
+
+    pub fn resolve_type(&self, type_: &ast::NamedType) -> Option<Type> {
+        Some(resolve_type_ref(self.db, &TypeRef::from_str_opt(type_.name()?.text()))?.into())
     }
 
     pub fn resolve_call_expr(&self, file: File, expr: &ast::CallExpr) -> Option<Function> {
@@ -72,9 +79,15 @@ impl Type {
             None => Vec::new(),
         }
     }
-}
 
-impl Type {
+    pub fn doc(&self, db: &dyn Db) -> Option<String> {
+        Some(match self.ty.kind() {
+            TyKind::BuiltinFunction(func) => func.doc(db).clone(),
+            TyKind::BuiltinType(type_) => type_.doc(db).clone(),
+            _ => return None,
+        })
+    }
+
     pub fn fields(&self, db: &dyn Db) -> Vec<(Field, Type)> {
         let fields = match self.ty.fields(db) {
             Some(fields) => fields,
@@ -82,14 +95,6 @@ impl Type {
         };
 
         fields.map(|(name, ty)| (name, ty.into())).collect()
-    }
-
-    pub fn doc(&self, db: &dyn Db) -> String {
-        if let TyKind::BuiltinFunction(func) = self.ty.kind() {
-            func.doc(db).clone()
-        } else {
-            String::new()
-        }
     }
 }
 

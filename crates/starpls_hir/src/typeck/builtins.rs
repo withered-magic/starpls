@@ -1,6 +1,5 @@
 use crate::{Db, Dialect, Name, Ty, TyKind, TypeRef};
 use rustc_hash::FxHashMap;
-use smallvec::SmallVec;
 use starpls_bazel::{
     builtin::Callable, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
 };

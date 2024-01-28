@@ -6,7 +6,7 @@ use starpls_syntax::{
     SyntaxKind::*,
     TextRange, T,
 };
-use std::fmt::Write;
+use std::fmt::{format, Write};
 
 mod docs;
 
@@ -73,8 +73,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
         write!(&mut text, "{}", ty.display(db)).unwrap();
         text.push_str("\n```\n");
 
-        let doc = ty.doc(db);
-        if !doc.is_empty() {
+        if let Some(doc) = ty.doc(db) {
             text.push_str(&doc);
             text.push('\n');
         }
@@ -160,6 +159,14 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             }
             return Some(text.into());
         }
+    } else if let Some(type_) = ast::NamedType::cast(parent) {
+        let ty = sema.resolve_type(&type_)?;
+        let mut text = format!("```python\n(type) {}\n```\n", ty.display(db));
+        if let Some(doc) = ty.doc(db) {
+            text.push_str(&doc);
+            text.push('\n');
+        }
+        return Some(text.into());
     }
 
     None

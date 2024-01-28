@@ -1,3 +1,4 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { Executable, LanguageClient, LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
 import { CommandFactory } from './commands';
@@ -55,7 +56,14 @@ export class Context {
     const serverPath = await this.ensureServerInstalled();
 
     // Set up language client/server options.
-    const executable: Executable = { command: serverPath };
+    const executable: Executable = {
+      command: serverPath,
+      options: {
+        env: {
+          'STARPLS_BAZEL_BUILTIN_PROTO_PATH': path.join(this.extensionContext.extensionPath, 'builtin.pb'),
+        },
+      },
+    };
     const serverOptions: ServerOptions = { debug: executable, run: executable };
     const clientOptions: LanguageClientOptions = {
       documentSelector: [{ scheme: 'file', language: 'starlark' }],
@@ -70,10 +78,8 @@ export class Context {
   }
 
   private async ensureServerInstalled(): Promise<string> {
-    const serverPath = process.env.__STARPLS_SERVER_DEBUG;
-    if (!serverPath) {
-      throw new Error('failed to find server executable: __STARPLS_SERVER_DEBUG is not set');
-    }
+    const defaultServerPath = path.join(this.extensionContext.extensionPath, '/bin/starpls');
+    const serverPath = process.env.__STARPLS_SERVER_DEBUG ? process.env.__STARPLS_SERVER_DEBUG : defaultServerPath;
     console.log('context: using server executable at %s', serverPath);
     return serverPath;
   }
@@ -82,7 +88,7 @@ export class Context {
     // Dispose of any currently active commands.
     this.disposables.forEach((disposable) => disposable.dispose());
     this._disposables = [];
-   
+
     // Register the commands.
     for (const [name, factory] of Object.entries(this.commandFactories)) {
       const disposable = vscode.commands.registerCommand(name, factory(this));

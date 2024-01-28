@@ -18,10 +18,6 @@ mod utils;
 
 fn main() -> anyhow::Result<()> {
     eprintln!("server: starpls, v0.1.0");
-    eprintln!(
-        "server: working directory is {:?}",
-        std::env::current_dir()?
-    );
 
     // Create the transport over stdio.
     let (connection, io_threads) = Connection::stdio();

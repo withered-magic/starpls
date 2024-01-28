@@ -242,7 +242,6 @@ fn normalize_doc(text: &str, is_type: bool) -> String {
             }
             (_, true) => tag.push(ch),
             (_, false) => s.push(ch),
-            _ => {}
         }
     }
 

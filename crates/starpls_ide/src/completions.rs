@@ -74,7 +74,7 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
                 items.push(CompletionItem {
                     label: format!("{}=", name.as_str()),
                     kind: CompletionItemKind::Variable,
-                    mode: None,
+                    mode: Some(CompletionMode::InsertText(format!("{} = ", name.as_str()))),
                 });
             }
             if !is_loop_variable {

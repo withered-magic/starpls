@@ -1,5 +1,8 @@
 use anyhow::Ok;
-use starpls_ide::{completions::CompletionItemKind, FilePosition, Location};
+use starpls_ide::{
+    completions::{CompletionItemKind, CompletionMode::InsertText},
+    FilePosition, Location,
+};
 
 use crate::{
     convert::{self, path_buf_from_url},
@@ -116,6 +119,9 @@ pub(crate) fn completion(
                     CompletionItemKind::Keyword => lsp_types::CompletionItemKind::KEYWORD,
                     // TODO(withered-magic): Only choosing `INTERFACE` because it looks cooler in VSCode :D
                     CompletionItemKind::Class => lsp_types::CompletionItemKind::CLASS,
+                }),
+                insert_text: item.mode.map(|mode| match mode {
+                    InsertText(text) => text,
                 }),
                 ..Default::default()
             })

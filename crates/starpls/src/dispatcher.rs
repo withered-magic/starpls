@@ -2,6 +2,7 @@ use crate::{
     event_loop::Task,
     server::{Server, ServerSnapshot},
 };
+use starpls_ide::Cancelled;
 
 pub(crate) struct RequestDispatcher<'a> {
     req: Option<lsp_server::Request>,
@@ -33,11 +34,14 @@ impl<'a> RequestDispatcher<'a> {
         self.server.task_pool_handle.spawn(move || {
             Task::ResponseReady(match f(&snapshot, params) {
                 Ok(res) => lsp_server::Response::new_ok(req.id, res),
-                Err(err) => lsp_server::Response::new_err(
-                    req.id,
-                    lsp_server::ErrorCode::RequestFailed as i32,
-                    err.to_string(),
-                ),
+                Err(err) => match err.downcast::<Cancelled>() {
+                    Ok(_) => return Task::Retry(req),
+                    Err(err) => lsp_server::Response::new_err(
+                        req.id,
+                        lsp_server::ErrorCode::RequestFailed as i32,
+                        err.to_string(),
+                    ),
+                },
             })
         });
 

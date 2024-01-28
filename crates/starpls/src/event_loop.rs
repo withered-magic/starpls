@@ -31,6 +31,8 @@ pub(crate) enum Task {
     DiagnosticsReady(Vec<(FileId, Vec<lsp_types::Diagnostic>)>),
     /// A request has been evaluated and its response is ready.
     ResponseReady(lsp_server::Response),
+    /// Retry a previously failed request (e.g. due to Salsa cancellation).
+    Retry(lsp_server::Request),
 }
 
 #[derive(Debug)]
@@ -183,6 +185,7 @@ impl Server {
             Task::ResponseReady(resp) => {
                 self.respond(resp);
             }
+            Task::Retry(req) => self.handle_request(req),
         }
     }
 

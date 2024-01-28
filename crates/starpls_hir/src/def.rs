@@ -315,6 +315,14 @@ impl Param {
                 | &Self::KwargsDict { .. }
         )
     }
+
+    pub fn name(&self) -> &Name {
+        match self {
+            Param::Simple { name, .. }
+            | Param::ArgsList { name, .. }
+            | Param::KwargsDict { name, .. } => name,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

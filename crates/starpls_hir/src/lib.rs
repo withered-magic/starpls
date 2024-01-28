@@ -9,7 +9,7 @@ pub use crate::{
     api::*,
     def::{resolver::Resolver, scope::module_scopes, Declaration, ExprId, Module, Name, ParamId},
     display::{DisplayWithDb, DisplayWithDbWrapper},
-    typeck::{builtins::BuiltinDefs, Cancelled, FileExprId, GlobalCtxt, Ty, TyCtxt},
+    typeck::{builtins::BuiltinDefs, Cancelled, GlobalCtxt, Ty, TyCtxt},
 };
 
 mod api;

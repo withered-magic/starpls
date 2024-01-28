@@ -2,7 +2,7 @@
 
 use crate::FilePosition;
 use starpls_common::parse;
-use starpls_hir::{Db, Declaration, Name, Resolver, Semantics, Type};
+use starpls_hir::{Db, Declaration, Name, Param, Resolver, Semantics, Type};
 use starpls_syntax::{
     ast::{self, AstNode},
     parse_module,
@@ -46,7 +46,7 @@ enum NameContext {
 
 struct NameRefContext {
     names: HashMap<Name, Declaration>,
-    param_names: Vec<Name>,
+    params: Vec<Param>,
     is_in_def: bool,
     is_in_for: bool,
     is_lone_expr: bool,
@@ -64,15 +64,15 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
     match &ctx.analysis {
         CompletionAnalysis::NameRef(NameRefContext {
             names,
-            param_names,
+            params,
             is_lone_expr,
             is_in_def,
             is_in_for,
             is_loop_variable,
         }) => {
-            for param_name in param_names.iter() {
+            for name in params.iter().filter_map(|param| param.name(db)) {
                 items.push(CompletionItem {
-                    label: format!("{}=", param_name.as_str()),
+                    label: format!("{}=", name.as_str()),
                     kind: CompletionItemKind::Variable,
                     mode: None,
                 });
@@ -186,7 +186,7 @@ impl CompletionContext {
 
         let analysis = if let Some(name_ref) = ast::NameRef::cast(parent.clone()) {
             // TODO(withered-magic): There's probably a better way to traverse up the tree.
-            let param_names = name_ref
+            let params = name_ref
                 .syntax()
                 .parent()
                 .and_then(|parent| ast::SimpleArgument::cast(parent))
@@ -219,7 +219,7 @@ impl CompletionContext {
                 .unwrap_or(true);
             CompletionAnalysis::NameRef(NameRefContext {
                 names: resolver.names(),
-                param_names,
+                params,
                 is_in_def,
                 is_in_for,
                 is_lone_expr,

@@ -1,5 +1,5 @@
 use crate::{
-    typeck::{Binders, Substitution, Ty, TyKind},
+    typeck::{Binders, Substitution, Tuple as TupleVariants, Ty, TyKind},
     Db, Name,
 };
 use rustc_hash::FxHashMap;
@@ -160,7 +160,9 @@ pub(crate) fn intrinsic_functions(db: &dyn Db) -> IntrinsicFunctions {
     add_function(
         "dict",
         vec![
-            positional_opt(List(Tuple(smallvec![Any.intern(), Any.intern()]).intern())),
+            positional_opt(List(
+                Tuple(TupleVariants::Simple(smallvec![Any.intern(), Any.intern()])).intern(),
+            )),
             KwargsDict,
         ],
         Dict(Any.intern(), Any.intern()),
@@ -169,7 +171,7 @@ pub(crate) fn intrinsic_functions(db: &dyn Db) -> IntrinsicFunctions {
     add_function(
         "enumerate",
         vec![positional(Any)],
-        List(Tuple(smallvec![Int.intern(), Any.intern()]).intern()),
+        List(Tuple(TupleVariants::Simple(smallvec![Int.intern(), Any.intern()])).intern()),
     );
     add_function("float", vec![positional(Any)], Float);
     add_function("fail", vec![ArgsList { ty: Any.intern() }], None);
@@ -327,7 +329,11 @@ fn make_string_base_class(db: &dyn Db) -> IntrinsicClass {
                 db,
                 "partition",
                 vec![positional(String)],
-                Tuple(smallvec![String.intern(), String.intern(), String.intern()]),
+                Tuple(TupleVariants::Simple(smallvec![
+                    String.intern(),
+                    String.intern(),
+                    String.intern()
+                ])),
                 0,
             ),
             function_field(db, "removeprefix", vec![positional(String)], String, 0),
@@ -357,7 +363,11 @@ fn make_string_base_class(db: &dyn Db) -> IntrinsicClass {
                 db,
                 "rpartition",
                 vec![positional(String)],
-                Tuple(smallvec![String.intern(), String.intern(), String.intern()]),
+                Tuple(TupleVariants::Simple(smallvec![
+                    String.intern(),
+                    String.intern(),
+                    String.intern()
+                ])),
                 0,
             ),
             function_field(
@@ -460,7 +470,13 @@ fn make_dict_base_class(db: &dyn Db) -> IntrinsicClass {
                 db,
                 "items",
                 vec![],
-                List(Tuple(smallvec![BoundVar(0).intern(), BoundVar(1).intern()]).intern()),
+                List(
+                    Tuple(TupleVariants::Simple(smallvec![
+                        BoundVar(0).intern(),
+                        BoundVar(1).intern()
+                    ]))
+                    .intern(),
+                ),
                 2,
             ),
             function_field(db, "keys", vec![], List(BoundVar(0).intern()), 2),
@@ -475,7 +491,10 @@ fn make_dict_base_class(db: &dyn Db) -> IntrinsicClass {
                 db,
                 "popitem",
                 vec![],
-                Tuple(smallvec![BoundVar(0).intern(), BoundVar(1).intern()]),
+                Tuple(TupleVariants::Simple(smallvec![
+                    BoundVar(0).intern(),
+                    BoundVar(1).intern()
+                ])),
                 2,
             ),
             function_field(
@@ -490,7 +509,11 @@ fn make_dict_base_class(db: &dyn Db) -> IntrinsicClass {
                 "update",
                 vec![
                     positional(List(
-                        Tuple(smallvec![BoundVar(0).intern(), BoundVar(1).intern()]).intern(),
+                        Tuple(TupleVariants::Simple(smallvec![
+                            BoundVar(0).intern(),
+                            BoundVar(1).intern()
+                        ]))
+                        .intern(),
                     )),
                     KwargsDict,
                 ],

@@ -7,7 +7,7 @@ use crate::{
 use starpls_common::File;
 use starpls_syntax::ast::{self, AstNode, AstPtr};
 
-pub use crate::typeck::Field;
+pub use crate::typeck::{Field, Param};
 
 pub struct Semantics<'a> {
     db: &'a dyn Db,
@@ -56,7 +56,7 @@ impl Type {
         matches!(self.ty.kind(), TyKind::Function(_))
     }
 
-    pub fn params(&self, db: &dyn Db) -> Vec<Name> {
+    pub fn params(&self, db: &dyn Db) -> Vec<Param> {
         match self.ty.params(db) {
             Some(params) => params.collect(),
             None => Vec::new(),

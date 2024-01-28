@@ -19,6 +19,8 @@ impl Slots {
     pub(crate) fn assign_args(&mut self, args_with_ty: &[(Argument, Ty)]) -> Vec<ArgError> {
         let mut errors = Vec::new();
 
+        // Assign positional arguments first, i.e. `Argument::Simple` and `Argument::UnpackedList`, which
+        // is treated as an unbounded list of "simple" arguments.
         'outer: for (arg, arg_ty) in args_with_ty {
             match arg {
                 Argument::Simple { expr } => {
@@ -54,6 +56,37 @@ impl Slots {
                         message: "Unexpected positional argument".to_string(),
                     });
                 }
+                Argument::UnpackedList { expr } => {
+                    // Mark all unfilled positional slots as well as the "*args" slot as being
+                    // provided by this argument.
+                    for slot in self.0.iter_mut() {
+                        match slot {
+                            Slot::Positional {
+                                provider: provider @ SlotProvider::Missing,
+                            }
+                            | Slot::Keyword {
+                                provider: provider @ SlotProvider::Missing,
+                                positional: true,
+                                ..
+                            } => *provider = SlotProvider::ArgsList(*expr, arg_ty.clone()),
+                            Slot::ArgsList {
+                                providers,
+                                bare: false,
+                                ..
+                            } => {
+                                providers.push(SlotProvider::ArgsList(*expr, arg_ty.clone()));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Keyword arguments are assigned next, i.e. `Argument::Keyword` and `Argument::UnpackedDict`.
+        'outer: for (arg, arg_ty) in args_with_ty {
+            match arg {
                 Argument::Keyword {
                     name: ref arg_name,
                     expr,
@@ -86,25 +119,6 @@ impl Slots {
                         message: format!("Unexpected keyword argument \"{}\"", arg_name.as_str()),
                     });
                 }
-                Argument::UnpackedList { expr } => {
-                    // Mark all unfilled positional slots as well as the "*args" slot as being
-                    // provided by this argument.
-                    for slot in self.0.iter_mut() {
-                        match slot {
-                            Slot::Positional {
-                                provider: provider @ SlotProvider::Missing,
-                            } => *provider = SlotProvider::ArgsList(*expr, arg_ty.clone()),
-                            Slot::ArgsList {
-                                providers,
-                                bare: false,
-                                ..
-                            } => {
-                                providers.push(SlotProvider::ArgsList(*expr, arg_ty.clone()));
-                            }
-                            _ => {}
-                        }
-                    }
-                }
                 Argument::UnpackedDict { expr } => {
                     // Mark all keyword slots as well as the "**kwargs" slot as being provided by
                     // this argument.
@@ -120,6 +134,7 @@ impl Slots {
                         }
                     }
                 }
+                _ => {}
             }
         }
 
@@ -249,6 +264,8 @@ impl From<&[IntrinsicFunctionParam]> for Slots {
                 break;
             }
         }
+
+        eprintln!("{:?}", slots);
 
         Self(slots)
     }

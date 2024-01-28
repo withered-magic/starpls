@@ -360,7 +360,7 @@ impl ScopeCollector<'_> {
                     entry,
                     comp_clauses,
                 } => {
-                    let mut comp = self.scopes.alloc_scope(current);
+                    let mut comp = current;
                     self.collect_comp_clauses(comp_clauses, &mut comp);
                     self.collect_expr(entry.key, comp, None);
                     self.collect_expr(entry.value, comp, None);
@@ -370,7 +370,7 @@ impl ScopeCollector<'_> {
                     expr: list_expr,
                     comp_clauses,
                 } => {
-                    let mut comp = self.scopes.alloc_scope(current);
+                    let mut comp = current;
                     self.collect_comp_clauses(comp_clauses, &mut comp);
                     self.collect_expr(*list_expr, comp, None);
                     self.scopes.scopes_by_hir_id.insert(expr.into(), current);
@@ -388,10 +388,10 @@ impl ScopeCollector<'_> {
             match comp_clause {
                 CompClause::For { iterable, targets } => {
                     self.collect_expr(*iterable, *current, None);
+                    *current = self.scopes.alloc_scope(*current);
                     targets.iter().copied().for_each(|expr| {
                         self.collect_expr(expr, *current, Some(*iterable));
                     });
-                    *current = self.scopes.alloc_scope(*current);
                 }
                 CompClause::If { test } => {
                     self.collect_expr(*test, *current, None);

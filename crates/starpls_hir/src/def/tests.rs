@@ -120,15 +120,15 @@ fn test_list_comprehension_clause1() {
     )
 }
 
-// #[test]
-// fn test_list_comprehension_clause2() {
-//     check_scope(
-//         r"
-// [x*y for x in range(5) if x$0 > 2 for y in range(5) if x*y > 10]
-//         ",
-//         &["x"],
-//     )
-// }
+#[test]
+fn test_list_comprehension_clause2() {
+    check_scope(
+        r"
+[x*y for x in range(5) if x$0yz > 2 for y in range(5) if x*y > 10]
+        ",
+        &["x"],
+    )
+}
 
 #[test]
 fn test_load() {

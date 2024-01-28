@@ -100,6 +100,7 @@ pub(crate) struct IntrinsicFunctions {
 #[salsa::tracked]
 pub(crate) struct IntrinsicFunction {
     pub name: Name,
+    pub num_vars: usize,
     #[return_ref]
     pub params: Vec<IntrinsicFunctionParam>,
     pub ret_ty: Ty,
@@ -151,10 +152,10 @@ pub(crate) fn intrinsic_functions(db: &dyn Db) -> IntrinsicFunctions {
     use IntrinsicFunctionParam::*;
     use TyKind::*;
     let mut functions = FxHashMap::default();
-    let mut add_function = |name, param_tys, ret_ty| {
+    let mut add_function = |name, params, ret_ty| {
         functions.insert(
             Name::new_inline(name),
-            function(db, name, param_tys, ret_ty),
+            function(db, name, params, 0, ret_ty),
         );
     };
 
@@ -538,9 +539,16 @@ fn function(
     db: &dyn Db,
     name: &'static str,
     params: Vec<IntrinsicFunctionParam>,
+    num_vars: usize,
     ret_ty: TyKind,
 ) -> IntrinsicFunction {
-    IntrinsicFunction::new(db, Name::new_inline(name), params, ret_ty.intern())
+    IntrinsicFunction::new(
+        db,
+        Name::new_inline(name),
+        num_vars,
+        params,
+        ret_ty.intern(),
+    )
 }
 
 fn function_field(
@@ -553,7 +561,7 @@ fn function_field(
     IntrinsicField::new_inline(
         name,
         TyKind::IntrinsicFunction(
-            function(db, name, params, ret_ty),
+            function(db, name, params, num_vars, ret_ty),
             Substitution::new_identity(num_vars),
         )
         .intern(),

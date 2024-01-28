@@ -753,7 +753,7 @@ impl TyCtxt<'_> {
         if opt.is_none() {
             let name = match type_ref {
                 TypeRef::Name(name) => name,
-                TypeRef::Unknown => return None,
+                _ => return None,
             };
             let ptr = source_map(self.db, file).param_map_back.get(&param)?;
             self.add_diagnostic_for_range(

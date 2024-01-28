@@ -109,6 +109,8 @@ struct SharedState {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TypeRef {
     Name(Name),
+    Sequence(Box<TypeRef>),
+    Union(Vec<TypeRef>),
     Unknown,
 }
 
@@ -126,7 +128,17 @@ impl std::fmt::Display for TypeRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             TypeRef::Name(name) => name.as_str(),
-            TypeRef::Unknown => "unknown",
+            TypeRef::Union(names) => {
+                for (i, type_ref) in names.iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(" | ")?;
+                    }
+                    type_ref.fmt(f)?;
+                }
+                return Ok(());
+            }
+            TypeRef::Sequence(type_ref) => return write!(f, "Sequence[{}]", type_ref),
+            TypeRef::Unknown => "Unknown",
         })
     }
 }
@@ -317,7 +329,7 @@ impl Param {
             }
             ParamInner::IntrinsicParam { parent, index } => parent.params(db)[index].ty(),
             ParamInner::BuiltinParam { parent, index } => parent.params(db)[index]
-                .type_ref(db)
+                .type_ref()
                 .and_then(|type_ref| resolve_type_ref(db, &type_ref)),
         }
         .unwrap_or_else(|| TyKind::Unknown.intern())
@@ -601,7 +613,19 @@ impl DisplayWithDb for TyKind {
                         f.write_str(", ")?;
                     }
                     match param {
-                        BuiltinFunctionParam::Simple { name, .. } => f.write_str(name.as_str())?,
+                        BuiltinFunctionParam::Simple {
+                            name,
+                            type_ref,
+                            default_value,
+                            ..
+                        } => {
+                            f.write_str(name.as_str())?;
+                            write!(f, ": {}", type_ref)?;
+                            if let Some(default_value) = default_value {
+                                f.write_str(" = ")?;
+                                f.write_str(&default_value)?;
+                            }
+                        }
                         BuiltinFunctionParam::ArgsList { .. } => f.write_str("*args")?,
                         BuiltinFunctionParam::KwargsDict { .. } => f.write_str("**kwargs")?,
                     }
@@ -812,7 +836,7 @@ pub(crate) fn resolve_type_ref(db: &dyn Db, type_ref: &TypeRef) -> Option<Ty> {
             "range" => types.range.clone(),
             name => return builtin_types.types(db).get(name).cloned(),
         },
-        TypeRef::Unknown => types.unknown.clone(),
+        _ => types.unknown.clone(),
     })
 }
 

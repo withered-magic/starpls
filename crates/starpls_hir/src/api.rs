@@ -133,24 +133,8 @@ impl Function {
         match self.0 {
             FunctionInner::HirDef(func) => TyKind::Function(func).intern(),
             FunctionInner::IntrinsicFunction(func) => {
-                // TODO(withered-magic): Probably a terrible hack for creating the substitution here.
-                let num_vars = func
-                    .params(db)
-                    .iter()
-                    .filter_map(|param| match param {
-                        IntrinsicFunctionParam::Positional { ty, .. }
-                        | IntrinsicFunctionParam::Keyword { ty, .. }
-                        | IntrinsicFunctionParam::ArgsList { ty } => Some(ty.clone()),
-                        IntrinsicFunctionParam::KwargsDict => None,
-                    })
-                    .chain(iter::once(func.ret_ty(db)))
-                    .map(|ty| match ty.kind() {
-                        TyKind::BoundVar(index) => *index,
-                        _ => 0,
-                    })
-                    .max()
-                    .unwrap_or(0);
-                TyKind::IntrinsicFunction(func, Substitution::new_identity(num_vars)).intern()
+                TyKind::IntrinsicFunction(func, Substitution::new_identity(func.num_vars(db)))
+                    .intern()
             }
             FunctionInner::BuiltinFunction(func) => TyKind::BuiltinFunction(func).intern(),
         }

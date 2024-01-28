@@ -1,5 +1,6 @@
 use crate::{Db, Dialect, Name, Ty, TyKind, TypeRef};
 use rustc_hash::FxHashMap;
+use smallvec::SmallVec;
 use starpls_bazel::{
     builtin::Callable, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
 };
@@ -65,11 +66,11 @@ pub enum BuiltinFunctionParam {
 }
 
 impl BuiltinFunctionParam {
-    pub(crate) fn type_ref(&self, db: &dyn Db) -> Option<TypeRef> {
+    pub(crate) fn type_ref(&self) -> Option<TypeRef> {
         Some(match self {
             BuiltinFunctionParam::Simple { type_ref, .. }
             | BuiltinFunctionParam::ArgsList { type_ref, .. } => type_ref.clone(),
-            BuiltinFunctionParam::KwargsDict { doc } => return None,
+            BuiltinFunctionParam::KwargsDict { .. } => return None,
         })
     }
 }
@@ -104,10 +105,7 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
                 builtin_function(db, &value.name, callable, &value.doc),
             );
         } else {
-            variables.insert(
-                value.name.clone(),
-                TypeRef::from_str_opt(&normalize_doc_text(&value.r#type)),
-            );
+            variables.insert(value.name.clone(), normalize_type_ref(&value.r#type));
         }
     }
 
@@ -141,7 +139,7 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
             } else {
                 fields.push(BuiltinField {
                     name: Name::from_str(&field.name),
-                    type_ref: TypeRef::from_str_opt(&field.r#type),
+                    type_ref: normalize_type_ref(&field.r#type),
                     doc: normalize_doc_text(&field.doc),
                 });
             }
@@ -166,11 +164,15 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
 fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> BuiltinFunction {
     let mut params = Vec::new();
 
+    if name == "declare_file" {
+        eprintln!("{:?}", doc);
+    }
+
     for param in callable.param.iter() {
         // We need to apply a few normalization steps to parameter types.
         params.push(if param.is_star_arg {
             BuiltinFunctionParam::ArgsList {
-                type_ref: TypeRef::Unknown,
+                type_ref: normalize_type_ref(&param.r#type),
                 doc: normalize_doc_text(&param.doc),
             }
         } else if param.is_star_star_arg {
@@ -180,7 +182,7 @@ fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> 
         } else {
             BuiltinFunctionParam::Simple {
                 name: Name::from_str(&param.name),
-                type_ref: TypeRef::Unknown,
+                type_ref: normalize_type_ref(&param.r#type),
                 doc: normalize_doc_text(&param.doc),
                 default_value: if !param.default_value.is_empty() {
                     Some(param.default_value.clone())
@@ -196,30 +198,80 @@ fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> 
         db,
         Name::from_str(name),
         params,
-        TypeRef::from_str_opt(&normalize_doc_text(&callable.return_type)),
+        normalize_type_ref(&callable.return_type),
         normalize_doc_text(&doc),
     )
 }
 
 /// Normalizes text from the generated Bazel documentation.
 fn normalize_doc_text(text: &str) -> String {
+    normalize_doc(text, false)
+}
+
+fn normalize_doc(text: &str, is_type: bool) -> String {
     // The main thing we need to normalize is that many Bazel types in
     // builtins file are wrapped with HTML tags, e.g. `<a>None</a>`.
     // We fix this by removing any text between angle brackets.
     let mut s = String::new();
     let mut in_tag = false;
     let mut chars = text.chars();
+    let mut tag = String::new();
 
     while let Some(ch) = chars.next() {
         match (ch, in_tag) {
             ('<', _) => in_tag = true,
-            ('>', _) => in_tag = false,
+            ('>', _) => {
+                match tag.as_str() {
+                    "p" => s.push_str("\n\n"),
+                    "code" | "/code" if !is_type => s.push('`'),
+                    _ => {}
+                }
+                in_tag = false;
+                tag.truncate(0);
+            }
+            (_, true) => tag.push(ch),
             (_, false) => s.push(ch),
             _ => {}
         }
     }
 
     s.to_string()
+}
+
+fn normalize_type_ref(text: &str) -> TypeRef {
+    let text = normalize_doc(text, true);
+    let mut type_refs = text
+        .split("; or ")
+        .map(|part| {
+            let mut parts = part.split(" of ");
+            match (
+                parts.next(),
+                parts.next().map(|element| {
+                    if element.ends_with('s') {
+                        &element[..element.len() - 1]
+                    } else {
+                        element
+                    }
+                }),
+            ) {
+                (Some("Sequence" | "sequence"), Some(element)) => {
+                    TypeRef::Sequence(Box::new(TypeRef::from_str_opt(element)))
+                }
+                // Quick hack to normalize `NoneType`.
+                (Some("NoneType"), _) => TypeRef::from_str_opt("None"),
+                (Some(name), _) => TypeRef::from_str_opt(name),
+                _ => TypeRef::Unknown,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    if type_refs.is_empty() {
+        TypeRef::Unknown
+    } else if type_refs.len() == 1 {
+        type_refs.pop().unwrap()
+    } else {
+        TypeRef::Union(type_refs)
+    }
 }
 
 #[cfg(test)]

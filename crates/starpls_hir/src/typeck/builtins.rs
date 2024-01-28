@@ -51,13 +51,27 @@ pub enum BuiltinFunctionParam {
     Simple {
         name: Name,
         type_ref: TypeRef,
+        doc: String,
         default_value: Option<String>,
         positional: bool,
     },
     ArgsList {
         type_ref: TypeRef,
+        doc: String,
     },
-    KwargsDict,
+    KwargsDict {
+        doc: String,
+    },
+}
+
+impl BuiltinFunctionParam {
+    pub(crate) fn type_ref(&self, db: &dyn Db) -> Option<TypeRef> {
+        Some(match self {
+            BuiltinFunctionParam::Simple { type_ref, .. }
+            | BuiltinFunctionParam::ArgsList { type_ref, .. } => type_ref.clone(),
+            BuiltinFunctionParam::KwargsDict { doc } => return None,
+        })
+    }
 }
 
 #[salsa::input]
@@ -157,13 +171,17 @@ fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> 
         params.push(if param.is_star_arg {
             BuiltinFunctionParam::ArgsList {
                 type_ref: TypeRef::Unknown,
+                doc: normalize_doc_text(&param.doc),
             }
         } else if param.is_star_star_arg {
-            BuiltinFunctionParam::KwargsDict
+            BuiltinFunctionParam::KwargsDict {
+                doc: normalize_doc_text(&param.doc),
+            }
         } else {
             BuiltinFunctionParam::Simple {
                 name: Name::from_str(&param.name),
                 type_ref: TypeRef::Unknown,
+                doc: normalize_doc_text(&param.doc),
                 default_value: if !param.default_value.is_empty() {
                     Some(param.default_value.clone())
                 } else {

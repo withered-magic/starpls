@@ -9,7 +9,7 @@ use crate::{
             IntrinsicFunctionParam, Intrinsics,
         },
     },
-    Db, Name,
+    Db, Name, Type,
 };
 use crossbeam::atomic::AtomicCell;
 use parking_lot::Mutex;
@@ -295,6 +295,34 @@ impl Param {
             },
         }
     }
+
+    pub fn doc(&self, db: &dyn Db) -> Option<String> {
+        Some(match self.0 {
+            ParamInner::BuiltinParam { parent, index } => match &parent.params(db)[index] {
+                BuiltinFunctionParam::Simple { doc, .. }
+                | BuiltinFunctionParam::ArgsList { doc, .. }
+                | BuiltinFunctionParam::KwargsDict { doc } => doc.clone(),
+            },
+            _ => return None,
+        })
+    }
+
+    pub fn ty(&self, db: &dyn Db) -> Type {
+        match self.0 {
+            ParamInner::Param { parent, index } => {
+                let module = module(db, parent.file(db));
+                module[parent.params(db)[index]]
+                    .type_ref()
+                    .and_then(|type_ref| resolve_type_ref(db, &type_ref))
+            }
+            ParamInner::IntrinsicParam { parent, index } => parent.params(db)[index].ty(),
+            ParamInner::BuiltinParam { parent, index } => parent.params(db)[index]
+                .type_ref(db)
+                .and_then(|type_ref| resolve_type_ref(db, &type_ref)),
+        }
+        .unwrap_or_else(|| TyKind::Unknown.intern())
+        .into()
+    }
 }
 
 enum Params<I1, I2, I3> {
@@ -575,7 +603,7 @@ impl DisplayWithDb for TyKind {
                     match param {
                         BuiltinFunctionParam::Simple { name, .. } => f.write_str(name.as_str())?,
                         BuiltinFunctionParam::ArgsList { .. } => f.write_str("*args")?,
-                        BuiltinFunctionParam::KwargsDict => f.write_str("**kwargs")?,
+                        BuiltinFunctionParam::KwargsDict { .. } => f.write_str("**kwargs")?,
                     }
                 }
                 f.write_str(") -> ")?;

@@ -95,7 +95,6 @@ impl Slots {
                     // name, or for the "**kwargs" parameter.
                     let provider = SlotProvider::Single(*expr, arg_ty.clone());
                     for slot in self.0.iter_mut() {
-                        eprintln!("test param {:?}", slot);
                         match slot {
                             Slot::Keyword {
                                 name,
@@ -265,8 +264,6 @@ impl From<&[IntrinsicFunctionParam]> for Slots {
             }
         }
 
-        eprintln!("{:?}", slots);
-
         Self(slots)
     }
 }
@@ -292,7 +289,7 @@ impl From<&[BuiltinFunctionParam]> for Slots {
                     providers: smallvec![],
                     bare: false,
                 },
-                BuiltinFunctionParam::KwargsDict => {
+                BuiltinFunctionParam::KwargsDict { .. } => {
                     saw_kwargs = true;
                     Slot::KwargsDict {
                         providers: smallvec![],

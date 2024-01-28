@@ -323,6 +323,14 @@ impl Param {
             | Param::KwargsDict { name, .. } => name,
         }
     }
+
+    pub fn type_ref(&self) -> Option<TypeRef> {
+        match self {
+            Param::Simple { type_ref, .. }
+            | Param::ArgsList { type_ref, .. }
+            | Param::KwargsDict { type_ref, .. } => type_ref.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

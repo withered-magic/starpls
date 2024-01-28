@@ -127,6 +127,15 @@ impl IntrinsicFunctionParam {
             _ => None,
         }
     }
+
+    pub(crate) fn ty(&self) -> Option<Ty> {
+        Some(match self {
+            IntrinsicFunctionParam::Positional { ty, .. }
+            | IntrinsicFunctionParam::Keyword { ty, .. }
+            | IntrinsicFunctionParam::ArgsList { ty } => ty.clone(),
+            IntrinsicFunctionParam::KwargsDict => return None,
+        })
+    }
 }
 
 #[salsa::tracked]

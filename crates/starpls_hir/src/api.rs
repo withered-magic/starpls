@@ -1,11 +1,16 @@
 use crate::{
     def::{Function as HirDefFunction, Stmt},
     module, source_map,
-    typeck::Ty,
+    typeck::{
+        builtins::BuiltinFunction,
+        intrinsics::{IntrinsicFunction, IntrinsicFunctionParam},
+        Substitution, Ty,
+    },
     Db, DisplayWithDb, Name, TyKind,
 };
 use starpls_common::File;
 use starpls_syntax::ast::{self, AstNode, AstPtr};
+use std::iter;
 
 pub use crate::typeck::{Field, Param};
 
@@ -25,6 +30,16 @@ impl<'a> Semantics<'a> {
             Stmt::Def { func, .. } => Some((*func).into()),
             _ => None,
         }
+    }
+
+    pub fn resolve_call_expr(&self, file: File, expr: &ast::CallExpr) -> Option<Function> {
+        let ty = self.type_of_expr(file, &expr.callee()?)?;
+        Some(match ty.ty.kind() {
+            TyKind::Function(func) => (*func).into(),
+            TyKind::IntrinsicFunction(func, _) => (*func).into(),
+            TyKind::BuiltinFunction(func) => (*func).into(),
+            _ => return None,
+        })
     }
 
     pub fn type_of_expr(&self, file: File, expr: &ast::Expression) -> Option<Type> {
@@ -99,22 +114,70 @@ impl DisplayWithDb for Type {
     }
 }
 
-pub struct Function {
-    func: HirDefFunction,
-}
+pub struct Function(FunctionInner);
 
 impl Function {
     pub fn name(&self, db: &dyn Db) -> Name {
-        self.func.name(db)
+        match self.0 {
+            FunctionInner::HirDef(func) => func.name(db),
+            FunctionInner::IntrinsicFunction(func) => func.name(db),
+            FunctionInner::BuiltinFunction(func) => func.name(db),
+        }
     }
 
-    pub fn ty(&self) -> Type {
-        TyKind::Function(self.func).intern().into()
+    pub fn params(&self, db: &dyn Db) -> Vec<Param> {
+        self.ty(db).params(db)
+    }
+
+    pub fn ty(&self, db: &dyn Db) -> Type {
+        match self.0 {
+            FunctionInner::HirDef(func) => TyKind::Function(func).intern(),
+            FunctionInner::IntrinsicFunction(func) => {
+                // TODO(withered-magic): Probably a terrible hack for creating the substitution here.
+                let num_vars = func
+                    .params(db)
+                    .iter()
+                    .filter_map(|param| match param {
+                        IntrinsicFunctionParam::Positional { ty, .. }
+                        | IntrinsicFunctionParam::Keyword { ty, .. }
+                        | IntrinsicFunctionParam::ArgsList { ty } => Some(ty.clone()),
+                        IntrinsicFunctionParam::KwargsDict => None,
+                    })
+                    .chain(iter::once(func.ret_ty(db)))
+                    .map(|ty| match ty.kind() {
+                        TyKind::BoundVar(index) => *index,
+                        _ => 0,
+                    })
+                    .max()
+                    .unwrap_or(0);
+                TyKind::IntrinsicFunction(func, Substitution::new_identity(num_vars)).intern()
+            }
+            FunctionInner::BuiltinFunction(func) => TyKind::BuiltinFunction(func).intern(),
+        }
+        .into()
     }
 }
 
 impl From<HirDefFunction> for Function {
     fn from(func: HirDefFunction) -> Self {
-        Self { func }
+        Self(FunctionInner::HirDef(func))
     }
+}
+
+impl From<IntrinsicFunction> for Function {
+    fn from(func: IntrinsicFunction) -> Self {
+        Self(FunctionInner::IntrinsicFunction(func))
+    }
+}
+
+impl From<BuiltinFunction> for Function {
+    fn from(func: BuiltinFunction) -> Self {
+        Self(FunctionInner::BuiltinFunction(func))
+    }
+}
+
+enum FunctionInner {
+    HirDef(HirDefFunction),
+    IntrinsicFunction(IntrinsicFunction),
+    BuiltinFunction(BuiltinFunction),
 }

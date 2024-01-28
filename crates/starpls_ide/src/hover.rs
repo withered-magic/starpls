@@ -82,11 +82,13 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
         return Some(text.into());
     } else if let Some(name) = ast::Name::cast(parent.clone()) {
         let parent = name.syntax().parent()?;
+        let name_token = name.name()?;
+        let name_text = name_token.text();
         if let Some(expr) = ast::DotExpr::cast(parent.clone()) {
             let ty = sema.type_of_expr(file, &expr.expr()?.into())?;
             let fields = ty.fields(db);
             let (field, field_ty) = fields.into_iter().find_map(|(field, ty)| {
-                if field.name(db).as_str() == name.syntax().text() {
+                if field.name(db).as_str() == name_text {
                     Some((field, ty))
                 } else {
                     None
@@ -99,7 +101,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
                 text.push_str("(method) ");
             } else {
                 text.push_str("(field) ");
-                text.push_str(name.name()?.text());
+                text.push_str(name_text);
                 text.push_str(": ");
             }
             write!(&mut text, "{}", field_ty.display(db)).unwrap();
@@ -114,8 +116,10 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             return Some(text.into());
         } else if let Some(stmt) = ast::DefStmt::cast(parent.clone()) {
             let func = sema.function_for_def(file, stmt)?;
-            return Some(format!("```python\n(function) {}\n```\n", func.ty().display(db)).into());
-        } else if let Some(param) = ast::Parameter::cast(parent) {
+            return Some(
+                format!("```python\n(function) {}\n```\n", func.ty(db).display(db)).into(),
+            );
+        } else if let Some(param) = ast::Parameter::cast(parent.clone()) {
             let ty = sema.type_of_param(file, &param)?;
             return Some(
                 format!(
@@ -125,6 +129,36 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
                 )
                 .into(),
             );
+        } else if let Some(arg) = ast::Argument::cast(parent) {
+            let call = arg
+                .syntax()
+                .parent()
+                .and_then(|parent| ast::Arguments::cast(parent))
+                .and_then(|args| args.syntax().parent())
+                .and_then(|parent| ast::CallExpr::cast(parent))?;
+            let func = sema.resolve_call_expr(file, &call)?;
+            let (name, param) = func.params(db).into_iter().find_map(|param| {
+                let name = param.name(db)?;
+                if name.as_str() == name_text {
+                    Some((name, param))
+                } else {
+                    None
+                }
+            })?;
+
+            let mut text = format!(
+                "```python\n(parameter) {}: {}\n```\n",
+                name.as_str(),
+                param.ty(db).display(db)
+            );
+
+            if let Some(doc) = param.doc(db) {
+                if !doc.is_empty() {
+                    text.push_str(&doc);
+                    text.push('\n');
+                }
+            }
+            return Some(text.into());
         }
     }
 

@@ -1,5 +1,6 @@
 use crate::{
     convert,
+    dispatcher::RequestDispatcher,
     document::DocumentSource,
     extensions,
     handlers::{notifications, requests},
@@ -150,73 +151,13 @@ impl Server {
     }
 
     fn handle_request(&mut self, req: lsp_server::Request) {
-        // TODO: Refactor this into a `RequestDispatcher`.
-        if let Some(params) = cast_request::<extensions::ShowSyntaxTree>(&req) {
-            let snapshot = self.snapshot();
-            self.task_pool_handle.spawn(move || {
-                let id = req.id.clone();
-                Task::ResponseReady(match requests::show_syntax_tree(&snapshot, params) {
-                    Ok(value) => lsp_server::Response::new_ok(id, value),
-                    Err(err) => lsp_server::Response::new_err(
-                        id,
-                        lsp_server::ErrorCode::RequestFailed as i32,
-                        err.to_string(),
-                    ),
-                })
-            });
-        } else if let Some(params) = cast_request::<extensions::ShowHir>(&req) {
-            let snapshot = self.snapshot();
-            self.task_pool_handle.spawn(move || {
-                let id = req.id.clone();
-                Task::ResponseReady(match requests::show_hir(&snapshot, params) {
-                    Ok(value) => lsp_server::Response::new_ok(id, value),
-                    Err(err) => lsp_server::Response::new_err(
-                        id,
-                        lsp_server::ErrorCode::RequestFailed as i32,
-                        err.to_string(),
-                    ),
-                })
-            });
-        } else if let Some(params) = cast_request::<lsp_types::request::GotoDefinition>(&req) {
-            let snapshot = self.snapshot();
-            self.task_pool_handle.spawn(move || {
-                let id = req.id.clone();
-                Task::ResponseReady(match requests::goto_definition(&snapshot, params) {
-                    Ok(value) => lsp_server::Response::new_ok(id, value),
-                    Err(err) => lsp_server::Response::new_err(
-                        id,
-                        lsp_server::ErrorCode::RequestFailed as i32,
-                        err.to_string(),
-                    ),
-                })
-            });
-        } else if let Some(params) = cast_request::<lsp_types::request::Completion>(&req) {
-            let snapshot = self.snapshot();
-            self.task_pool_handle.spawn(move || {
-                let id = req.id.clone();
-                Task::ResponseReady(match requests::completion(&snapshot, params) {
-                    Ok(value) => lsp_server::Response::new_ok(id, value),
-                    Err(err) => lsp_server::Response::new_err(
-                        id,
-                        lsp_server::ErrorCode::RequestFailed as i32,
-                        err.to_string(),
-                    ),
-                })
-            });
-        } else if let Some(params) = cast_request::<lsp_types::request::HoverRequest>(&req) {
-            let snapshot = self.snapshot();
-            self.task_pool_handle.spawn(move || {
-                let id = req.id.clone();
-                Task::ResponseReady(match requests::hover(&snapshot, params) {
-                    Ok(value) => lsp_server::Response::new_ok(id, value),
-                    Err(err) => lsp_server::Response::new_err(
-                        id,
-                        lsp_server::ErrorCode::RequestFailed as i32,
-                        err.to_string(),
-                    ),
-                })
-            });
-        }
+        RequestDispatcher::new(req, self)
+            .on::<extensions::ShowSyntaxTree>(requests::show_syntax_tree)
+            .on::<extensions::ShowHir>(requests::show_hir)
+            .on::<lsp_types::request::GotoDefinition>(requests::goto_definition)
+            .on::<lsp_types::request::Completion>(requests::completion)
+            .on::<lsp_types::request::HoverRequest>(requests::hover)
+            .finish();
     }
 
     fn handle_notification(&mut self, not: lsp_server::Notification) -> anyhow::Result<()> {
@@ -249,20 +190,6 @@ impl Server {
         if self.req_queue.incoming.complete(resp.id.clone()).is_some() {
             self.connection.sender.send(resp.into()).unwrap();
         }
-    }
-}
-
-fn cast_request<R>(req: &lsp_server::Request) -> Option<R::Params>
-where
-    R: lsp_types::request::Request,
-    R::Params: serde::de::DeserializeOwned,
-{
-    if req.method == R::METHOD {
-        // Unwrapping here is fine, since if we see invalid JSON, we can't really recover parsing afterwards.
-        let params = serde_json::from_value(req.params.clone()).expect("invalid JSON");
-        Some(params)
-    } else {
-        None
     }
 }
 

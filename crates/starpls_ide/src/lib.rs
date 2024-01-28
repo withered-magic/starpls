@@ -8,13 +8,15 @@ use starpls_hir::{BuiltinDefs, Db as _, Dialect, ExprId, GlobalCtxt, ParamId, Ty
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use std::sync::Arc;
 
+pub use starpls_hir::Cancelled;
+
 mod handlers;
 mod util;
 
 pub mod completions;
 pub mod hover;
 
-pub type Cancellable<T> = Result<T, starpls_hir::Cancelled>;
+pub type Cancellable<T> = Result<T, Cancelled>;
 
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, starpls_hir::Jar)]

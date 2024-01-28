@@ -6,7 +6,7 @@ use starpls_syntax::{
     SyntaxKind::*,
     TextRange, T,
 };
-use std::fmt::{format, Write};
+use std::fmt::Write;
 
 mod docs;
 

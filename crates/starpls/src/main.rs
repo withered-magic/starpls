@@ -7,6 +7,7 @@ use lsp_types::{
 mod convert;
 mod debouncer;
 mod diagnostics;
+mod dispatcher;
 mod document;
 mod event_loop;
 mod extensions;

@@ -34,13 +34,12 @@ pub(crate) fn show_syntax_tree(
 pub(crate) fn goto_definition(
     snapshot: &ServerSnapshot,
     params: lsp_types::GotoDefinitionParams,
-) -> anyhow::Result<lsp_types::GotoDefinitionResponse> {
-    let res = || Ok(Vec::<lsp_types::Location>::new().into());
+) -> anyhow::Result<Option<lsp_types::GotoDefinitionResponse>> {
     let path = path_buf_from_url(&params.text_document_position_params.text_document.uri)?;
 
     let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
         Some(file_id) => file_id,
-        None => return res(),
+        None => return Ok(None),
     };
 
     let pos = match convert::text_size_from_lsp_position(
@@ -49,12 +48,12 @@ pub(crate) fn goto_definition(
         params.text_document_position_params.position,
     )? {
         Some(pos) => pos,
-        None => return res(),
+        None => return Ok(None),
     };
 
     let line_index = match snapshot.analysis_snapshot.line_index(file_id)? {
         Some(line_index) => line_index,
-        None => return res(),
+        None => return Ok(None),
     };
 
     let to_lsp_location = |location: Location| -> Option<lsp_types::Location> {
@@ -71,26 +70,27 @@ pub(crate) fn goto_definition(
         })
     };
 
-    Ok(snapshot
-        .analysis_snapshot
-        .goto_definition(FilePosition { file_id, pos })?
-        .unwrap_or_else(|| Vec::new())
-        .into_iter()
-        .flat_map(to_lsp_location)
-        .collect::<Vec<_>>()
-        .into())
+    Ok(Some(
+        snapshot
+            .analysis_snapshot
+            .goto_definition(FilePosition { file_id, pos })?
+            .unwrap_or_else(|| Vec::new())
+            .into_iter()
+            .flat_map(to_lsp_location)
+            .collect::<Vec<_>>()
+            .into(),
+    ))
 }
 
 pub(crate) fn completion(
     snapshot: &ServerSnapshot,
     params: lsp_types::CompletionParams,
-) -> anyhow::Result<lsp_types::CompletionResponse> {
-    let res = || Ok(Vec::<lsp_types::CompletionItem>::new().into());
+) -> anyhow::Result<Option<lsp_types::CompletionResponse>> {
     let path = path_buf_from_url(&params.text_document_position.text_document.uri)?;
 
     let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
         Some(file_id) => file_id,
-        None => return res(),
+        None => return Ok(None),
     };
 
     let pos = match convert::text_size_from_lsp_position(
@@ -99,46 +99,40 @@ pub(crate) fn completion(
         params.text_document_position.position,
     )? {
         Some(pos) => pos,
-        None => return res(),
+        None => return Ok(None),
     };
 
-    Ok(snapshot
-        .analysis_snapshot
-        .completion(FilePosition { file_id, pos })?
-        .unwrap_or_else(|| Vec::new())
-        .into_iter()
-        .map(|item| lsp_types::CompletionItem {
-            label: item.label,
-            kind: Some(match item.kind {
-                CompletionItemKind::Function => lsp_types::CompletionItemKind::FUNCTION,
-                CompletionItemKind::Variable => lsp_types::CompletionItemKind::VARIABLE,
-                CompletionItemKind::Keyword => lsp_types::CompletionItemKind::KEYWORD,
-                // TODO(withered-magic): Only choosing `INTERFACE` because it looks cooler in VSCode :D
-                CompletionItemKind::Class => lsp_types::CompletionItemKind::CLASS,
-            }),
-            ..Default::default()
-        })
-        .collect::<Vec<_>>()
-        .into())
+    Ok(Some(
+        snapshot
+            .analysis_snapshot
+            .completion(FilePosition { file_id, pos })?
+            .unwrap_or_else(|| Vec::new())
+            .into_iter()
+            .map(|item| lsp_types::CompletionItem {
+                label: item.label,
+                kind: Some(match item.kind {
+                    CompletionItemKind::Function => lsp_types::CompletionItemKind::FUNCTION,
+                    CompletionItemKind::Variable => lsp_types::CompletionItemKind::VARIABLE,
+                    CompletionItemKind::Keyword => lsp_types::CompletionItemKind::KEYWORD,
+                    // TODO(withered-magic): Only choosing `INTERFACE` because it looks cooler in VSCode :D
+                    CompletionItemKind::Class => lsp_types::CompletionItemKind::CLASS,
+                }),
+                ..Default::default()
+            })
+            .collect::<Vec<_>>()
+            .into(),
+    ))
 }
 
 pub(crate) fn hover(
     snapshot: &ServerSnapshot,
     params: lsp_types::HoverParams,
-) -> anyhow::Result<lsp_types::Hover> {
-    let empty = || lsp_types::Hover {
-        contents: lsp_types::HoverContents::Markup(lsp_types::MarkupContent {
-            kind: lsp_types::MarkupKind::PlainText,
-            value: String::new(),
-        }),
-        range: None,
-    };
-
+) -> anyhow::Result<Option<lsp_types::Hover>> {
     let path = path_buf_from_url(&params.text_document_position_params.text_document.uri)?;
 
     let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
         Some(file_id) => file_id,
-        None => return Ok(empty()),
+        None => return Ok(None),
     };
 
     let pos = match convert::text_size_from_lsp_position(
@@ -147,7 +141,7 @@ pub(crate) fn hover(
         params.text_document_position_params.position,
     )? {
         Some(pos) => pos,
-        None => return Ok(empty()),
+        None => return Ok(None),
     };
 
     Ok(snapshot
@@ -159,6 +153,5 @@ pub(crate) fn hover(
                 value: hover.contents.value,
             }),
             range: None,
-        })
-        .unwrap_or_else(empty))
+        }))
 }

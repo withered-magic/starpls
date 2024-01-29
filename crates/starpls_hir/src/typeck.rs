@@ -108,8 +108,7 @@ struct SharedState {
 /// A reference to a type in a source file.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TypeRef {
-    Name(Name),
-    Sequence(Box<TypeRef>),
+    Name(Name, Option<Box<[TypeRef]>>),
     Union(Vec<TypeRef>),
     Unknown,
 }
@@ -119,15 +118,29 @@ impl TypeRef {
         if name.is_empty() {
             Self::Unknown
         } else {
-            Self::Name(Name::from_str(name))
+            Self::Name(Name::from_str(name), None)
         }
     }
 }
 
 impl std::fmt::Display for TypeRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            TypeRef::Name(name) => name.as_str(),
+        match self {
+            TypeRef::Name(name, args) => {
+                f.write_str(name.as_str());
+                if let Some(args) = args {
+                    f.write_char('[')?;
+                    for (i, arg) in args.iter().enumerate() {
+                        if i > 0 {
+                            f.write_str(", ")?;
+                        }
+                        arg.fmt(f)?;
+                    }
+                    f.write_char(']')
+                } else {
+                    Ok(())
+                }
+            }
             TypeRef::Union(names) => {
                 for (i, type_ref) in names.iter().enumerate() {
                     if i > 0 {
@@ -137,9 +150,8 @@ impl std::fmt::Display for TypeRef {
                 }
                 return Ok(());
             }
-            TypeRef::Sequence(type_ref) => return write!(f, "Sequence[{}]", type_ref),
-            TypeRef::Unknown => "Unknown",
-        })
+            TypeRef::Unknown => f.write_str("Unknown"),
+        }
     }
 }
 
@@ -165,8 +177,7 @@ impl Ty {
                     .map(|(index, field)| {
                         (
                             Field(FieldInner::BuiltinField { parent: *ty, index }),
-                            resolve_type_ref(db, &field.type_ref)
-                                .unwrap_or_else(|| TyKind::Unknown.intern()),
+                            resolve_type_ref(db, &field.type_ref).0,
                         )
                     })
                     .chain(ty.methods(db).iter().map(|func| {
@@ -325,12 +336,12 @@ impl Param {
                 let module = module(db, parent.file(db));
                 module[parent.params(db)[index]]
                     .type_ref()
-                    .and_then(|type_ref| resolve_type_ref(db, &type_ref))
+                    .map(|type_ref| resolve_type_ref(db, &type_ref).0)
             }
             ParamInner::IntrinsicParam { parent, index } => parent.params(db)[index].ty(),
             ParamInner::BuiltinParam { parent, index } => parent.params(db)[index]
                 .type_ref()
-                .and_then(|type_ref| resolve_type_ref(db, &type_ref)),
+                .map(|type_ref| resolve_type_ref(db, &type_ref).0),
         }
         .unwrap_or_else(|| TyKind::Unknown.intern())
         .into()
@@ -540,7 +551,7 @@ impl DisplayWithDb for TyKind {
 
                     let format_type_ref_opt = |f, type_ref: &Option<TypeRef>| match type_ref
                         .as_ref()
-                        .and_then(|type_ref| resolve_type_ref(db, &type_ref))
+                        .map(|type_ref| resolve_type_ref(db, &type_ref).0)
                     {
                         Some(ty) => ty.fmt(db, f),
                         None => f.write_str("Unknown"),
@@ -635,7 +646,23 @@ impl DisplayWithDb for TyKind {
             }
             TyKind::BuiltinType(type_) => return f.write_str(type_.name(db).as_str()),
             TyKind::BoundVar(index) => return write!(f, "'{}", index),
-            TyKind::Protocol(_proto) => "protocol",
+            TyKind::Protocol(proto) => {
+                let (name, ty) = match proto {
+                    Protocol::Iterable(ty) => ("Iterable", ty),
+                    Protocol::Sequence(ty) => ("Sequence", ty),
+                    Protocol::Indexable(ty) => ("Indexable", ty),
+                    Protocol::SetIndexable(ty) => ("SetIndexable", ty),
+                    Protocol::Mapping(key_ty, value_ty) => {
+                        return write!(
+                            f,
+                            "Mapping[{}, {}]",
+                            key_ty.display(db).alt(),
+                            value_ty.display(db).alt()
+                        )
+                    }
+                };
+                return write!(f, "{}[{}]", name, ty.display(db).alt());
+            }
         };
         f.write_str(text)
     }
@@ -820,38 +847,112 @@ pub struct TyCtxt<'a> {
     shared_state: Arc<SharedState>,
 }
 
-pub(crate) fn resolve_type_ref(db: &dyn Db, type_ref: &TypeRef) -> Option<Ty> {
-    let types = intrinsic_types(db).types(db);
-    let builtin_types = builtin_types(db);
-    Some(match type_ref {
-        TypeRef::Name(name) => match name.as_str() {
-            "None" | "NoneType" => types.none.clone(),
-            "bool" => types.bool.clone(),
-            "int" => types.int.clone(),
-            "float" => types.float.clone(),
-            "string" => types.string.clone(),
-            "bytes" => types.bytes.clone(),
-            "list" => TyKind::List(types.any.clone()).intern(),
-            "dict" => TyKind::Dict(types.any.clone(), types.any.clone()).intern(),
-            "range" => types.range.clone(),
-            name => return builtin_types.types(db).get(name).cloned(),
-        },
-        _ => types.unknown.clone(),
-    })
+struct TypeRefResolver<'a> {
+    db: &'a dyn Db,
+    errors: Vec<String>,
+}
+
+impl<'a> TypeRefResolver<'a> {
+    fn resolve_type_ref(mut self, type_ref: &TypeRef) -> (Ty, Vec<String>) {
+        let ty = self.resolve_type_ref_inner(type_ref);
+        (ty, self.errors)
+    }
+
+    fn resolve_type_ref_inner(&mut self, type_ref: &TypeRef) -> Ty {
+        let types = intrinsic_types(self.db).types(self.db);
+        let builtin_types = builtin_types(self.db);
+        match type_ref {
+            TypeRef::Name(name, args) => match name.as_str() {
+                "None" | "NoneType" => types.none.clone(),
+                "bool" => types.bool.clone(),
+                "int" => types.int.clone(),
+                "float" => types.float.clone(),
+                "string" => types.string.clone(),
+                "bytes" => types.bytes.clone(),
+                "list" => TyKind::List(types.any.clone()).intern(),
+                "dict" => TyKind::Dict(types.any.clone(), types.any.clone()).intern(),
+                "range" => types.range.clone(),
+                "Iterable" | "iterable" => {
+                    self.resolve_single_arg_protocol(args, Protocol::Iterable)
+                }
+                "Sequence" | "sequence" => {
+                    self.resolve_single_arg_protocol(args, Protocol::Sequence)
+                }
+                name => match builtin_types.types(self.db).get(name).cloned() {
+                    Some(ty) => ty,
+                    None => {
+                        self.errors.push(format!("Unknown type \"{}\"", name));
+                        types.unknown.clone()
+                    }
+                },
+            },
+            _ => types.unknown.clone(),
+        }
+    }
+
+    fn resolve_single_arg_protocol(
+        &mut self,
+        args: &Option<Box<[TypeRef]>>,
+        f: fn(Ty) -> Protocol,
+    ) -> Ty {
+        let arg = if let Some(args) = args {
+            let mut args = args.iter();
+            match (args.next(), args.next()) {
+                (Some(first), second) => {
+                    if second.is_some() {
+                        self.errors
+                            .push("Expected exactly one type argument".to_string())
+                    }
+                    self.resolve_type_ref_inner(first)
+                }
+                _ => TyKind::Unknown.intern(),
+            }
+        } else {
+            TyKind::Unknown.intern()
+        };
+
+        TyKind::Protocol(f(arg)).intern()
+    }
+}
+
+pub(crate) fn resolve_type_ref(db: &dyn Db, type_ref: &TypeRef) -> (Ty, Vec<String>) {
+    TypeRefResolver { db, errors: vec![] }.resolve_type_ref(type_ref)
 }
 
 pub(crate) fn resolve_type_ref_opt(db: &dyn Db, type_ref: Option<TypeRef>) -> Ty {
     type_ref
-        .and_then(|type_ref| resolve_type_ref(db, &type_ref))
+        .map(|type_ref| resolve_type_ref(db, &type_ref).0)
         .unwrap_or_else(|| TyKind::Unknown.intern())
 }
 
+// TODO(withered-magic): This function currently assumes that all types are covariant in their arguments.
 pub(crate) fn assign_tys(source: &Ty, target: &Ty) -> bool {
+    use Protocol::*;
+
     // // Assignments involving "Any", "Unknown", or "Unbound" at the top-level
     // // are always valid to avoid confusion.
     match (source.kind(), target.kind()) {
         (TyKind::Any | TyKind::Unknown, _) | (_, TyKind::Any | TyKind::Unknown) => true,
-        (TyKind::List(source), TyKind::List(target)) => assign_tys(source, target),
+        (
+            TyKind::List(source),
+            TyKind::List(target)
+            | TyKind::Protocol(
+                Iterable(target) | Sequence(target) | Indexable(target) | SetIndexable(target),
+            ),
+        ) => assign_tys(source, target),
+        (
+            TyKind::Tuple(tuple),
+            TyKind::Protocol(Iterable(target) | Sequence(target) | Indexable(target)),
+        ) => match tuple {
+            Tuple::Simple(sources) => sources.iter().all(|source| assign_tys(source, target)),
+            Tuple::Variable(source) => assign_tys(source, target),
+        },
+        (TyKind::Protocol(source), TyKind::Protocol(target)) => match &(source, target) {
+            (Iterable(source), Iterable(target))
+            | (Sequence(source), Sequence(target))
+            | (Indexable(source), Indexable(target)) => assign_tys(source, target),
+            _ => false,
+        },
         (TyKind::Dict(key_source, value_source), TyKind::Dict(key_target, value_target)) => {
             assign_tys(key_source, key_target) && assign_tys(value_source, value_target)
         }

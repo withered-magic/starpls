@@ -264,9 +264,22 @@ fn normalize_type_ref(text: &str) -> TypeRef {
                     }
                 }),
             ) {
-                (Some("Sequence" | "sequence"), Some(element)) => {
-                    TypeRef::Sequence(Box::new(TypeRef::from_str_opt(element)))
-                }
+                (Some("Iterable" | "iterable"), element) => TypeRef::Name(
+                    Name::from_str("Iterable"),
+                    Some(
+                        vec![element
+                            .map_or(TypeRef::Unknown, |element| TypeRef::from_str_opt(element))]
+                        .into_boxed_slice(),
+                    ),
+                ),
+                (Some("Sequence" | "sequence"), element) => TypeRef::Name(
+                    Name::from_str("Sequence"),
+                    Some(
+                        vec![element
+                            .map_or(TypeRef::Unknown, |element| TypeRef::from_str_opt(element))]
+                        .into_boxed_slice(),
+                    ),
+                ),
                 // Quick hack to normalize `NoneType`.
                 (Some("NoneType"), _) => TypeRef::from_str_opt("None"),
                 (Some(name), _) => TypeRef::from_str_opt(name),

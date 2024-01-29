@@ -6,8 +6,8 @@ use crate::{
         assign_tys,
         call::{Slot, SlotProvider, Slots},
         intrinsics::{IntrinsicFunctionParam, IntrinsicTypes},
-        resolve_type_ref, FileExprId, FileParamId, Protocol, Substitution, Tuple, Ty, TyCtxt,
-        TyKind, TypeRef, TypecheckCancelled,
+        resolve_type_ref, resolve_type_ref_opt, FileExprId, FileParamId, Protocol, Substitution,
+        Tuple, Ty, TyCtxt, TyKind, TypeRef, TypecheckCancelled,
     },
     Declaration,
 };
@@ -18,12 +18,16 @@ use starpls_syntax::{
     TextRange,
 };
 
-use super::resolve_type_ref_opt;
-
 impl TyCtxt<'_> {
     pub fn infer_all_exprs(&mut self, file: File) {
         for (expr, _) in module(self.db, file).exprs.iter() {
             self.infer_expr(file, expr);
+        }
+    }
+
+    pub fn infer_all_params(&mut self, file: File) {
+        for (param, _) in module(self.db, file).params.iter() {
+            self.infer_param(file, param);
         }
     }
 
@@ -86,7 +90,7 @@ impl TyCtxt<'_> {
                             TyKind::BuiltinFunction(func).intern()
                         }
                         Declaration::CustomVariable { type_ref } => {
-                            resolve_type_ref(db, &type_ref).unwrap_or_else(|| self.unknown_ty())
+                            resolve_type_ref(db, &type_ref).0
                         }
                         Declaration::Parameter { id, .. } => self.infer_param(file, id),
                         _ => self.any_ty(),
@@ -307,7 +311,7 @@ impl TyCtxt<'_> {
                                 }
                                 SlotProvider::Single(expr, ty) => {
                                     if !assign_tys(&ty, &param_ty) {
-                                        self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to paramter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
+                                        self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                 }
                                 _ => {}
@@ -375,7 +379,7 @@ impl TyCtxt<'_> {
                                 }
                                 SlotProvider::Single(expr, ty) => {
                                     if !assign_tys(&ty, &param_ty) {
-                                        self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to paramter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
+                                        self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                 }
                                 _ => {}
@@ -419,7 +423,7 @@ impl TyCtxt<'_> {
                                 }
                                 SlotProvider::Single(expr, ty) => {
                                     if !assign_tys(&ty, &param_ty) {
-                                        self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to paramter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
+                                        self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                 }
                                 _ => {}
@@ -451,8 +455,7 @@ impl TyCtxt<'_> {
                             self.add_expr_diagnostic(file, expr, message);
                         }
 
-                        resolve_type_ref(db, &func.ret_type_ref(db))
-                            .unwrap_or_else(|| self.unknown_ty())
+                        resolve_type_ref(db, &func.ret_type_ref(db)).0
                     }
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.unknown_ty(),
                     _ => self.add_expr_diagnostic_ty(
@@ -784,12 +787,12 @@ impl TyCtxt<'_> {
         let ty = match &module(self.db, file)[param] {
             Param::Simple { type_ref, .. } => type_ref
                 .as_ref()
-                .and_then(|type_ref| self.lower_param_type_ref(file, param, &type_ref))
+                .map(|type_ref| self.lower_param_type_ref(file, param, &type_ref))
                 .unwrap_or_else(|| self.unknown_ty()),
             Param::ArgsList { type_ref, .. } => TyKind::Tuple(Tuple::Variable(
                 type_ref
                     .as_ref()
-                    .and_then(|type_ref| self.lower_param_type_ref(file, param, type_ref))
+                    .map(|type_ref| self.lower_param_type_ref(file, param, type_ref))
                     .unwrap_or_else(|| self.unknown_ty()),
             ))
             .intern(),
@@ -802,29 +805,18 @@ impl TyCtxt<'_> {
         ty
     }
 
-    fn lower_param_type_ref(
-        &mut self,
-        file: File,
-        param: ParamId,
-        type_ref: &TypeRef,
-    ) -> Option<Ty> {
-        let opt = resolve_type_ref(self.db, type_ref);
+    fn lower_param_type_ref(&mut self, file: File, param: ParamId, type_ref: &TypeRef) -> Ty {
+        let (ty, errors) = resolve_type_ref(self.db, type_ref);
 
         // TODO(withered-magic): This will eventually need to handle diagnostics
         // for other places that type comments can appear.
-        if opt.is_none() {
-            let name = match type_ref {
-                TypeRef::Name(name) => name,
-                _ => return None,
-            };
-            let ptr = source_map(self.db, file).param_map_back.get(&param)?;
-            self.add_diagnostic_for_range(
-                file,
-                ptr.syntax_node_ptr().text_range(),
-                format!("Unknown type \"{}\" in type comment", name.as_str()),
-            );
+        for error in errors {
+            if let Some(ptr) = source_map(self.db, file).param_map_back.get(&param) {
+                self.add_diagnostic_for_range(file, ptr.syntax_node_ptr().text_range(), error);
+            }
         }
-        opt
+
+        ty
     }
 
     fn types(&self) -> &IntrinsicTypes {

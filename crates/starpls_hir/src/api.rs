@@ -31,7 +31,11 @@ impl<'a> Semantics<'a> {
     }
 
     pub fn resolve_type(&self, type_: &ast::NamedType) -> Option<Type> {
-        Some(resolve_type_ref(self.db, &TypeRef::from_str_opt(type_.name()?.text()))?.into())
+        Some(
+            resolve_type_ref(self.db, &TypeRef::from_str_opt(type_.name()?.text()))
+                .0
+                .into(),
+        )
     }
 
     pub fn resolve_call_expr(&self, file: File, expr: &ast::CallExpr) -> Option<Function> {

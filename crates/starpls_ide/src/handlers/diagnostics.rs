@@ -9,6 +9,7 @@ pub(crate) fn diagnostics(db: &Database, file_id: FileId) -> Vec<Diagnostic> {
     };
 
     let diagnostics = db.gcx.with_tcx(db, |tcx| {
+        tcx.infer_all_params(file);
         tcx.infer_all_exprs(file);
         tcx.diagnostics_for_file(file)
     });

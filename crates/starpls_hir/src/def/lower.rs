@@ -430,7 +430,7 @@ impl<'a> LoweringContext<'a> {
             .and_then(|type_| match type_ {
                 ast::Type::NamedType(named_type) => named_type.name(),
             })
-            .map(|name| TypeRef::Name(Name::from_str(name.text())))
+            .map(|name| TypeRef::Name(Name::from_str(name.text()), None))
             .unwrap_or_else(|| TypeRef::Unknown)
     }
 

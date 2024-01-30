@@ -170,6 +170,7 @@ impl TyCtxt<'_> {
                     return self.unknown_ty();
                 }
 
+                // Special handling for Bazel structs, which can have arbitrary fields.
                 if let TyKind::BuiltinType(type_) = receiver_ty.kind() {
                     if type_.name(db).as_str() == "struct" {
                         return self.unknown_ty();
@@ -229,7 +230,7 @@ impl TyCtxt<'_> {
                     }
                 };
 
-                if assign_tys(&index_ty, target) {
+                if assign_tys(db, &index_ty, target) {
                     value.clone()
                 } else {
                     self.add_expr_diagnostic_ty(
@@ -310,7 +311,7 @@ impl TyCtxt<'_> {
                                     }
                                 }
                                 SlotProvider::Single(expr, ty) => {
-                                    if !assign_tys(&ty, &param_ty) {
+                                    if !assign_tys(db, &ty, &param_ty) {
                                         self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                 }
@@ -378,7 +379,7 @@ impl TyCtxt<'_> {
                                     }
                                 }
                                 SlotProvider::Single(expr, ty) => {
-                                    if !assign_tys(&ty, &param_ty) {
+                                    if !assign_tys(db, &ty, &param_ty) {
                                         self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                 }
@@ -422,7 +423,7 @@ impl TyCtxt<'_> {
                                     }
                                 }
                                 SlotProvider::Single(expr, ty) => {
-                                    if !assign_tys(&ty, &param_ty) {
+                                    if !assign_tys(db, &ty, &param_ty) {
                                         self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                 }
@@ -553,9 +554,9 @@ impl TyCtxt<'_> {
         match op {
             // TODO(withered-magic): Handle string interoplation with "%".
             BinaryOp::Arith(op) => match (lhs_kind, rhs_kind, op) {
-                (TyKind::String, TyKind::String, ArithOp::Add) => self.string_ty(),
+                (TyKind::String, TyKind::String, ArithOp::Add | ArithOp::Mod) => self.string_ty(),
                 (TyKind::List(target), TyKind::List(source), ArithOp::Add)
-                    if assign_tys(source, target) =>
+                    if assign_tys(db, source, target) =>
                 {
                     lhs
                 }

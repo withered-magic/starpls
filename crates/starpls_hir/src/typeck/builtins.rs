@@ -264,22 +264,16 @@ fn normalize_type_ref(text: &str) -> TypeRef {
                     }
                 }),
             ) {
-                (Some("Iterable" | "iterable"), element) => TypeRef::Name(
-                    Name::from_str("Iterable"),
-                    Some(
-                        vec![element
-                            .map_or(TypeRef::Unknown, |element| TypeRef::from_str_opt(element))]
-                        .into_boxed_slice(),
-                    ),
-                ),
-                (Some("Sequence" | "sequence"), element) => TypeRef::Name(
-                    Name::from_str("Sequence"),
-                    Some(
-                        vec![element
-                            .map_or(TypeRef::Unknown, |element| TypeRef::from_str_opt(element))]
-                        .into_boxed_slice(),
-                    ),
-                ),
+                (Some("Iterable" | "iterable"), element) => {
+                    type_ref_with_single_arg("Iterable", element)
+                }
+                (Some("Sequence" | "sequence"), element) => {
+                    type_ref_with_single_arg("Sequence", element)
+                }
+                (Some("List" | "list"), element) => type_ref_with_single_arg("list", element),
+                (Some("String"), _) => TypeRef::from_str_opt("string"),
+                (Some("Boolean" | "boolean"), _) => TypeRef::from_str_opt("bool"),
+                (Some("label"), _) => TypeRef::from_str_opt("Label"),
                 // Quick hack to normalize `NoneType`.
                 (Some("NoneType"), _) => TypeRef::from_str_opt("None"),
                 (Some(name), _) => TypeRef::from_str_opt(name),
@@ -295,6 +289,16 @@ fn normalize_type_ref(text: &str) -> TypeRef {
     } else {
         TypeRef::Union(type_refs)
     }
+}
+
+fn type_ref_with_single_arg(name: &str, element: Option<&str>) -> TypeRef {
+    TypeRef::Name(
+        Name::from_str(name),
+        Some(
+            vec![element.map_or(TypeRef::Unknown, |element| normalize_type_ref(element))]
+                .into_boxed_slice(),
+        ),
+    )
 }
 
 #[cfg(test)]

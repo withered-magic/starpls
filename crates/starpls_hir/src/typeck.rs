@@ -127,7 +127,7 @@ impl std::fmt::Display for TypeRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TypeRef::Name(name, args) => {
-                f.write_str(name.as_str());
+                f.write_str(name.as_str())?;
                 if let Some(args) = args {
                     f.write_char('[')?;
                     for (i, arg) in args.iter().enumerate() {
@@ -751,42 +751,6 @@ pub enum Protocol {
     Mapping(Ty, Ty),
 }
 
-impl Protocol {
-    // TODO(withered-magic): This doesn't yet take subtypes into account.
-    pub(crate) fn assign_ty(&self, ty: &Ty) -> bool {
-        let kind = ty.kind();
-        match self {
-            // Dicts, lists, and tuples are all iterable sequences.
-            Protocol::Iterable(lhs_ty) | Protocol::Sequence(lhs_ty) => match kind {
-                TyKind::List(rhs_ty) | TyKind::Dict(rhs_ty, _) => assign_tys(rhs_ty, lhs_ty),
-                // TyKind::Tuple(rhs_tys) => rhs_tys.iter().all(|rhs_ty| assign_tys(rhs_ty, lhs_ty)),
-                _ => false,
-            },
-            // Strings, byte literals, tuples, and lists are indexable.
-            Protocol::Indexable(target) => match kind {
-                TyKind::String => assign_tys(&TyKind::String.intern(), target),
-                TyKind::Bytes => assign_tys(&TyKind::Int.intern(), target),
-                TyKind::Tuple(_) => true,
-                TyKind::List(source) => assign_tys(source, target),
-                _ => false,
-            },
-            // Only lists can have their elements set by an indexing expression.
-            // Tuples are immutable and do not fall under this category.
-            Protocol::SetIndexable(target) => match kind {
-                TyKind::List(source) => assign_tys(source, target),
-                _ => false,
-            },
-            Protocol::Mapping(target_key_ty, target_value_ty) => match kind {
-                TyKind::Dict(source_key_ty, source_value_ty) => {
-                    assign_tys(source_key_ty, target_key_ty)
-                        && assign_tys(source_value_ty, target_value_ty)
-                }
-                _ => false,
-            },
-        }
-    }
-}
-
 #[derive(Default)]
 pub struct GlobalCtxt {
     shared_state: Arc<SharedState>,
@@ -869,7 +833,7 @@ impl<'a> TypeRefResolver<'a> {
                 "float" => types.float.clone(),
                 "string" => types.string.clone(),
                 "bytes" => types.bytes.clone(),
-                "list" => TyKind::List(types.any.clone()).intern(),
+                "list" => self.resolve_single_arg_type_constructor(args, TyKind::List),
                 "dict" => TyKind::Dict(types.any.clone(), types.any.clone()).intern(),
                 "range" => types.range.clone(),
                 "Iterable" | "iterable" => {
@@ -895,6 +859,14 @@ impl<'a> TypeRefResolver<'a> {
         args: &Option<Box<[TypeRef]>>,
         f: fn(Ty) -> Protocol,
     ) -> Ty {
+        self.resolve_single_arg_type_constructor(args, |ty| TyKind::Protocol(f(ty)))
+    }
+
+    fn resolve_single_arg_type_constructor(
+        &mut self,
+        args: &Option<Box<[TypeRef]>>,
+        f: impl Fn(Ty) -> TyKind,
+    ) -> Ty {
         let arg = if let Some(args) = args {
             let mut args = args.iter();
             match (args.next(), args.next()) {
@@ -911,7 +883,7 @@ impl<'a> TypeRefResolver<'a> {
             TyKind::Unknown.intern()
         };
 
-        TyKind::Protocol(f(arg)).intern()
+        f(arg).intern()
     }
 }
 
@@ -926,7 +898,7 @@ pub(crate) fn resolve_type_ref_opt(db: &dyn Db, type_ref: Option<TypeRef>) -> Ty
 }
 
 // TODO(withered-magic): This function currently assumes that all types are covariant in their arguments.
-pub(crate) fn assign_tys(source: &Ty, target: &Ty) -> bool {
+pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
     use Protocol::*;
 
     // // Assignments involving "Any", "Unknown", or "Unbound" at the top-level
@@ -939,22 +911,27 @@ pub(crate) fn assign_tys(source: &Ty, target: &Ty) -> bool {
             | TyKind::Protocol(
                 Iterable(target) | Sequence(target) | Indexable(target) | SetIndexable(target),
             ),
-        ) => assign_tys(source, target),
+        ) => assign_tys(db, source, target),
         (
             TyKind::Tuple(tuple),
             TyKind::Protocol(Iterable(target) | Sequence(target) | Indexable(target)),
         ) => match tuple {
-            Tuple::Simple(sources) => sources.iter().all(|source| assign_tys(source, target)),
-            Tuple::Variable(source) => assign_tys(source, target),
+            Tuple::Simple(sources) => sources.iter().all(|source| assign_tys(db, source, target)),
+            Tuple::Variable(source) => assign_tys(db, source, target),
         },
         (TyKind::Protocol(source), TyKind::Protocol(target)) => match &(source, target) {
             (Iterable(source), Iterable(target))
             | (Sequence(source), Sequence(target))
-            | (Indexable(source), Indexable(target)) => assign_tys(source, target),
+            | (Indexable(source), Indexable(target)) => assign_tys(db, source, target),
             _ => false,
         },
         (TyKind::Dict(key_source, value_source), TyKind::Dict(key_target, value_target)) => {
-            assign_tys(key_source, key_target) && assign_tys(value_source, value_target)
+            assign_tys(db, key_source, key_target) && assign_tys(db, value_source, value_target)
+        }
+        (TyKind::String, TyKind::BuiltinType(ty)) | (TyKind::BuiltinType(ty), TyKind::String)
+            if ty.name(db).as_str() == "Label" =>
+        {
+            true
         }
         (source, target) => source == target,
     }

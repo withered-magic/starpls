@@ -19,6 +19,21 @@ fn main() -> anyhow::Result<()> {
     //     println!("{:?}", builtin.name)
     // }
 
+    for global in builtins.global {
+        eprintln!("{:?}", global.name);
+        if global.name == "proto_lang_toolchain" {
+            eprintln!("{:?}", global)
+        }
+    }
+
+    // for type_ in builtins.r#type.iter() {
+    //     // if type_.name == "native" {
+    //     //     for field in type_.field.iter() {
+    //     //         eprintln!("{:?}", field.name);
+    //     //     }
+    //     // }
+    // }
+
     let mut types = HashSet::new();
 
     for builtin in builtins.r#type.iter() {
@@ -39,7 +54,7 @@ fn main() -> anyhow::Result<()> {
 
                     for el in s.split("; or ") {
                         if el.contains(" of ") {
-                            eprintln!("{}", el);
+                            // eprintln!("{}", el);
                         }
                         let mut parts = el.split(" of ");
                         if let Some(part) = parts.next() {
@@ -81,7 +96,7 @@ fn main() -> anyhow::Result<()> {
 
                 for el in s.split("; or ") {
                     if el.contains(" of ") {
-                        eprintln!("{}", el);
+                        // eprintln!("{}", el);
                     }
                     let mut parts = el.split(" of ");
                     if let Some(part) = parts.next() {
@@ -129,9 +144,9 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    for type_ in types {
-        eprintln!("{}", type_)
-    }
+    // for type_ in types {
+    //     eprintln!("{}", type_)
+    // }
 
     Ok(())
 }

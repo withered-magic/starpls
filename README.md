@@ -4,6 +4,9 @@
 ## Development
 `starpls` currently requires a nightly build of Rust, due to usage of `trait_upcasting` as specified by [RFC3324](https://rust-lang.github.io/rfcs/3324-dyn-upcasting.html).
 
+### Prerequisites
+Make sure you have `protoc` installed, as it's used to compile `builtin.proto`.
+
 Steps to get up and running:
 1. `rustup override set nightly`
 2. `cargo build`

@@ -1,6 +1,6 @@
 use crate::{
     def::{ExprId, Function, Param as HirDefParam, ParamId},
-    display::DisplayWithDb,
+    display::{delimited, DisplayWithDb},
     module,
     typeck::{
         builtins::{builtin_types, BuiltinFunction, BuiltinFunctionParam, BuiltinType},
@@ -155,6 +155,9 @@ impl std::fmt::Display for TypeRef {
     }
 }
 
+/// A reference to a function type, i.e. in a function type comment.
+pub struct FunctionTypeRef(Vec<TypeRef>, TypeRef);
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Ty(Interned<TyKind>);
 
@@ -187,6 +190,20 @@ impl Ty {
                         )
                     })),
             ))
+        } else if let TyKind::Union(tys) = self.kind() {
+            // TODO(withered-magic): Can probably do better than a Vec here?
+            let mut acc = Vec::new();
+            tys.iter().for_each(|ty| {
+                let fields = match ty.fields(db) {
+                    Some(fields) => fields,
+                    None => return,
+                };
+
+                for (field, ty) in fields {
+                    acc.push((field, ty));
+                }
+            });
+            Some(Fields::Union(acc.into_iter()))
         } else {
             None
         }
@@ -405,15 +422,17 @@ enum FieldInner {
     },
 }
 
-enum Fields<I1, I2> {
+enum Fields<I1, I2, I3> {
     Intrinsic(I1),
     Builtin(I2),
+    Union(I3),
 }
 
-impl<I1, I2> Iterator for Fields<I1, I2>
+impl<I1, I2, I3> Iterator for Fields<I1, I2, I3>
 where
     I1: Iterator<Item = (Field, Ty)>,
     I2: Iterator<Item = (Field, Ty)>,
+    I3: Iterator<Item = (Field, Ty)>,
 {
     type Item = (Field, Ty);
 
@@ -421,6 +440,7 @@ where
         match self {
             Self::Intrinsic(iter) => iter.next(),
             Self::Builtin(iter) => iter.next(),
+            Self::Union(iter) => iter.next(),
         }
     }
 }
@@ -483,6 +503,8 @@ pub(crate) enum TyKind {
     BoundVar(usize),
     /// A marker type that indicates some specific behavior, e.g. Sequence[T].
     Protocol(Protocol),
+    /// A union of two or more types.
+    Union(SmallVec<[Ty; 2]>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -514,12 +536,7 @@ impl DisplayWithDb for TyKind {
                 f.write_str("tuple[")?;
                 match tuple {
                     Tuple::Simple(tys) => {
-                        for (i, ty) in tys.iter().enumerate() {
-                            if i > 0 {
-                                f.write_str(", ")?;
-                            }
-                            ty.fmt(db, f)?;
-                        }
+                        delimited(db, f, &tys, ", ")?;
                     }
                     Tuple::Variable(ty) => {
                         ty.fmt(db, f)?;
@@ -663,7 +680,11 @@ impl DisplayWithDb for TyKind {
                 };
                 return write!(f, "{}[{}]", name, ty.display(db).alt());
             }
+            TyKind::Union(tys) => {
+                return delimited(db, f, tys, " | ");
+            }
         };
+
         f.write_str(text)
     }
 
@@ -842,6 +863,27 @@ impl<'a> TypeRefResolver<'a> {
                 "Sequence" | "sequence" => {
                     self.resolve_single_arg_protocol(args, Protocol::Sequence)
                 }
+                "Union" | "union" => {
+                    let args: Vec<_> = args
+                        .iter()
+                        .map(|args| args.iter())
+                        .flatten()
+                        .cloned()
+                        .collect();
+
+                    // Unions require at least two type arguments. We can handle this nicely by
+                    // converting Union[] to Unknown and Union[t1] to t1.
+                    match args.len() {
+                        0 => TyKind::Unknown.intern(),
+                        1 => self.resolve_type_ref_inner(&args[1]),
+                        _ => TyKind::Union(
+                            args.into_iter()
+                                .map(|arg| self.resolve_type_ref_inner(&arg))
+                                .collect(),
+                        )
+                        .intern(),
+                    }
+                }
                 name => match builtin_types.types(self.db).get(name).cloned() {
                     Some(ty) => ty,
                     None => {
@@ -850,7 +892,17 @@ impl<'a> TypeRefResolver<'a> {
                     }
                 },
             },
-            _ => types.unknown.clone(),
+            TypeRef::Union(args) => match args.len() {
+                0 => TyKind::Unknown.intern(),
+                1 => self.resolve_type_ref_inner(&args[0]),
+                _ => TyKind::Union(
+                    args.iter()
+                        .map(|arg| self.resolve_type_ref_inner(arg))
+                        .collect(),
+                )
+                .intern(),
+            },
+            TypeRef::Unknown => types.unknown.clone(),
         }
     }
 
@@ -933,6 +985,8 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
         {
             true
         }
+        // TODO(withered-magic): Handling union-union assignments.
+        (_, TyKind::Union(tys)) => tys.iter().any(|target| assign_tys(db, source, target)),
         (source, target) => source == target,
     }
 }

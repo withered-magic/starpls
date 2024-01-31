@@ -8,7 +8,7 @@ use crate::{
 };
 use starpls_common::{Diagnostic, Diagnostics, File, FileRange, Severity};
 use starpls_syntax::{
-    ast::{self, AstNode, AstPtr, AstToken, LoopVariables, TypeComment},
+    ast::{self, AstNode, AstPtr, AstToken},
     SyntaxToken,
 };
 
@@ -365,7 +365,10 @@ impl<'a> LoweringContext<'a> {
             .into_boxed_slice()
     }
 
-    fn lower_loop_variables_opt(&mut self, loop_variables: Option<LoopVariables>) -> Box<[ExprId]> {
+    fn lower_loop_variables_opt(
+        &mut self,
+        loop_variables: Option<ast::LoopVariables>,
+    ) -> Box<[ExprId]> {
         loop_variables
             .iter()
             .flat_map(|loop_variables| loop_variables.exprs())
@@ -417,21 +420,33 @@ impl<'a> LoweringContext<'a> {
             .unwrap_or_else(|| String::new().into_boxed_str())
     }
 
-    fn lower_type_comment_opt(&self, node: Option<TypeComment>) -> Option<TypeRef> {
+    fn lower_type_comment_opt(&self, node: Option<ast::TypeComment>) -> Option<TypeRef> {
         node.map(|node| self.lower_type_comment(node))
     }
 
-    fn lower_type_comment(&self, node: TypeComment) -> TypeRef {
-        // TODO(withered-magic): As a first attempt for supporting type comments, we
-        // only consider the first entry, and only NAMED_TYPE nodes.
-        node.type_list()
-            .map(|types| types.types())
-            .and_then(|mut types| types.next())
-            .and_then(|type_| match type_ {
-                ast::Type::NamedType(named_type) => named_type.name(),
-            })
-            .map(|name| TypeRef::Name(Name::from_str(name.text()), None))
+    fn lower_type_comment(&self, node: ast::TypeComment) -> TypeRef {
+        node.type_()
+            .map(|type_| self.lower_type(type_))
             .unwrap_or_else(|| TypeRef::Unknown)
+    }
+
+    fn lower_type(&self, type_: ast::Type) -> TypeRef {
+        match type_ {
+            ast::Type::NamedType(type_) => type_.name().map(|name| {
+                TypeRef::Name(
+                    Name::from_str(name.text()),
+                    type_.generic_arguments().map(|args| {
+                        let args = args.types().map(|type_| self.lower_type(type_));
+                        args.collect::<Vec<_>>().into_boxed_slice()
+                    }),
+                )
+            }),
+            ast::Type::UnionType(type_) => Some(TypeRef::Union(
+                type_.types().map(|type_| self.lower_type(type_)).collect(),
+            )),
+            ast::Type::NoneType(_) => Some(TypeRef::Name(Name::new_inline("None"), None)),
+        }
+        .unwrap_or_else(|| TypeRef::Unknown)
     }
 
     fn alloc_stmt(&mut self, stmt: Stmt, ptr: StmtPtr) -> StmtId {

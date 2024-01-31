@@ -129,12 +129,15 @@ pub enum SyntaxKind {
     LOAD_STMT,
 
     // Types.
-    NAMED_TYPE,
     NONE_TYPE,
-    FUNCTION_TYPE,
-    TYPE_REF,
-    GENERIC_ARGUMENTS,
-    PARAMETER_TYPES,
+    UNION_TYPE, // int | None
+
+    NAMED_TYPE,        // tuple[int, int, string]
+    GENERIC_ARGUMENTS, // [int, int, string] in the type above
+
+    FUNCTION_TYPE,   // e.g. (int, int) -> int
+    PARAMETER_TYPES, // the (int, int) in the signature above
+
     TYPE_COMMENT,
     TYPE_COMMENT_PREFIX,
     TYPE_LIST,

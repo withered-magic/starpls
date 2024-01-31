@@ -1,5 +1,5 @@
 use crate::Db;
-use std::fmt;
+use std::fmt::{self, Display};
 
 pub trait DisplayWithDb {
     fn fmt(&self, db: &dyn Db, f: &mut fmt::Formatter<'_>) -> fmt::Result;
@@ -15,6 +15,22 @@ pub trait DisplayWithDb {
             alt: false,
         }
     }
+}
+
+pub fn delimited<D: DisplayWithDb>(
+    db: &dyn Db,
+    f: &mut fmt::Formatter,
+    args: &[D],
+    delimiter: &str,
+) -> fmt::Result {
+    for (i, arg) in args.iter().enumerate() {
+        if i > 0 {
+            f.write_str(delimiter)?;
+        }
+        arg.display(db).fmt(f)?;
+    }
+
+    Ok(())
 }
 
 pub struct DisplayWithDbWrapper<'a, T: DisplayWithDb + ?Sized> {

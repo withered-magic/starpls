@@ -58,7 +58,7 @@ impl<'a> RequestDispatcher<'a> {
             Task::ResponseReady(lsp_server::Response::new_err(
                 req.id,
                 lsp_server::ErrorCode::MethodNotFound as i32,
-                "method not found".to_string(),
+                format!("method not found: {}", req.method),
             ))
         });
     }

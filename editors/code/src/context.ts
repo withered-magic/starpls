@@ -60,7 +60,7 @@ export class Context {
       command: serverPath,
       options: {
         env: {
-          'STARPLS_BAZEL_BUILTIN_PROTO_PATH': path.join(this.extensionContext.extensionPath, 'builtin.pb'),
+          'BAZEL_LSP_BUILTIN_PROTO': path.join(this.extensionContext.extensionPath, 'builtin.pb'),
         },
       },
     };

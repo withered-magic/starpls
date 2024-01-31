@@ -9,7 +9,10 @@ pub(crate) fn types(p: &mut Parser, stop: Option<SyntaxKind>) {
         Some(stop) => !p.at(EOF) && !p.at(stop),
         None => !p.at(EOF),
     };
-    type_(p);
+    if !cond(p) {
+        return;
+    }
+    union_type(p);
     while cond(p) {
         if !p.eat(T![,]) {
             p.error_recover_until("Expected \",\"", EMPTY);
@@ -19,8 +22,25 @@ pub(crate) fn types(p: &mut Parser, stop: Option<SyntaxKind>) {
             p.error_recover_until("Expected type", EMPTY);
             break;
         }
+        union_type(p);
+    }
+}
+
+pub(crate) fn union_type(p: &mut Parser) {
+    let mut m = match type_(p) {
+        Some(m) => m,
+        None => return,
+    };
+    let union_marker = if p.at(T![|]) {
+        m.precede(p)
+    } else {
+        return;
+    };
+    while p.at(T![|]) {
+        p.bump(T![|]);
         type_(p);
     }
+    union_marker.complete(p, UNION_TYPE);
 }
 
 pub(crate) fn type_(p: &mut Parser) -> Option<CompletedMarker> {
@@ -33,6 +53,13 @@ pub(crate) fn type_(p: &mut Parser) -> Option<CompletedMarker> {
         T![ident] => {
             let m = p.start();
             p.bump(T![ident]);
+            if p.at(T!['[']) {
+                let m = p.start();
+                p.bump(T!['[']);
+                types(p, Some(T![']']));
+                p.eat(T![']']);
+                m.complete(p, GENERIC_ARGUMENTS);
+            }
             m.complete(p, NAMED_TYPE)
         }
         T!['('] => function_type(p),

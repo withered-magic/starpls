@@ -105,7 +105,7 @@ impl Server {
 }
 
 fn load_bazel_builtins() -> anyhow::Result<Builtins> {
-    let path = match std::env::var("STARPLS_BAZEL_BUILTIN_PROTO_PATH") {
+    let path = match std::env::var("BAZEL_LSP_BUILTIN_PROTO") {
         Ok(path) => path,
         Err(_) => {
             eprintln!("server: no path specified for the Bazel builtin proto");

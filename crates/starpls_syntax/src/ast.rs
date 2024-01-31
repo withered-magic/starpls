@@ -1265,7 +1265,7 @@ pub enum LiteralKind {
 
 ast_node! {
     TypeComment => TYPE_COMMENT
-    child type_list -> TypeList;
+    child type_ -> Type;
 }
 
 ast_node! {
@@ -1275,6 +1275,8 @@ ast_node! {
 
 pub enum Type {
     NamedType(NamedType),
+    UnionType(UnionType),
+    NoneType(NoneType),
 }
 
 impl AstNode for Type {
@@ -1284,7 +1286,7 @@ impl AstNode for Type {
     where
         Self: Sized,
     {
-        matches!(kind, NAMED_TYPE)
+        matches!(kind, NAMED_TYPE | UNION_TYPE | NONE_TYPE)
     }
 
     fn cast(syntax: SyntaxNode) -> Option<Self>
@@ -1293,18 +1295,39 @@ impl AstNode for Type {
     {
         Some(match syntax.kind() {
             NAMED_TYPE => Self::NamedType(NamedType { syntax }),
+            UNION_TYPE => Self::UnionType(UnionType { syntax }),
+            NONE_TYPE => Self::NoneType(NoneType { syntax }),
             _ => return None,
         })
     }
 
     fn syntax(&self) -> &rowan::SyntaxNode<Self::Language> {
-        todo!()
+        match self {
+            Type::NamedType(type_) => type_.syntax(),
+            Type::UnionType(type_) => type_.syntax(),
+            Type::NoneType(type_) => type_.syntax(),
+        }
     }
 }
 
 ast_node! {
     NamedType => NAMED_TYPE
+    child generic_arguments -> GenericArguments;
     child_token name -> IDENT;
+}
+
+ast_node! {
+    UnionType => UNION_TYPE
+    children types -> Type;
+}
+
+ast_node! {
+    NoneType => NONE_TYPE
+}
+
+ast_node! {
+    GenericArguments => GENERIC_ARGUMENTS
+    children types -> Type;
 }
 
 struct Cursor<'a> {

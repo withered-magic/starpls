@@ -2,7 +2,7 @@ use std::ops::Index;
 
 use crate::{
     lower as lower_,
-    typeck::{builtins::BuiltinFunction, intrinsics::IntrinsicFunction, TypeRef},
+    typeck::{builtins::BuiltinFunction, intrinsics::IntrinsicFunction, FunctionTypeRef, TypeRef},
     Db, Ty, TyKind,
 };
 use id_arena::{Arena, Id};
@@ -420,6 +420,7 @@ pub(crate) struct Function {
     pub(crate) name: Name,
     #[return_ref]
     pub(crate) params: Box<[ParamId]>,
+    pub(crate) ret_type_ref: Option<TypeRef>,
 }
 
 impl Function {

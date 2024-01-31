@@ -28,7 +28,7 @@ pub(crate) fn parameter(p: &mut Parser) {
             if name(p).is_none() {
                 p.error("Expected identifier")
             }
-            m.complete(p, KWARGS_LIST_PARAMETER);
+            m.complete(p, KWARGS_DICT_PARAMETER);
         }
         T![ident] => {
             assert!(name(p).is_some());

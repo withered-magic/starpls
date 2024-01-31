@@ -21,7 +21,14 @@ pub(crate) fn module(p: &mut Parser) {
 }
 
 pub(crate) fn type_(p: &mut Parser) {
-    union_type(p);
+    if p.at(T!['(']) {
+        function_type(p);
+    } else {
+        union_type(p);
+    }
+
+    // We only parse one type, so if there's any remaining tokens, add them
+    // to an error node.
     if !p.at(EOF) {
         p.error_recover_until("Unexpected token", SyntaxKindSet::new(&[]));
     }

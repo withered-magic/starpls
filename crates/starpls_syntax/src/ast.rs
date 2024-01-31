@@ -243,6 +243,14 @@ ast_node! {
     child name -> Name;
 }
 
+impl DefStmt {
+    pub fn spec(&self) -> Option<FunctionType> {
+        self.suite()
+            .and_then(|suite| suite.type_comment())
+            .and_then(|type_comment| type_comment.function_type())
+    }
+}
+
 ast_node! {
     /// An `if` statement.
     IfStmt => IF_STMT
@@ -672,6 +680,15 @@ ast_node! {
     children statements -> Statement;
 }
 
+impl Suite {
+    /// Only call this if you know the parent suite belongs to a function.
+    pub fn type_comment(&self) -> Option<TypeComment> {
+        self.syntax()
+            .first_child()
+            .and_then(|node| TypeComment::cast(node))
+    }
+}
+
 pub enum Argument {
     Simple(SimpleArgument),
     Keyword(KeywordArgument),
@@ -778,7 +795,7 @@ impl AstNode for Parameter {
     {
         matches!(
             kind,
-            SIMPLE_PARAMETER | ARGS_LIST_PARAMETER | KWARGS_LIST_PARAMETER
+            SIMPLE_PARAMETER | ARGS_LIST_PARAMETER | KWARGS_DICT_PARAMETER
         )
     }
 
@@ -789,7 +806,7 @@ impl AstNode for Parameter {
         Some(match syntax.kind() {
             SIMPLE_PARAMETER => Self::Simple(SimpleParameter { syntax }),
             ARGS_LIST_PARAMETER => Self::ArgsList(ArgsListParameter { syntax }),
-            KWARGS_LIST_PARAMETER => Self::KwargsDict(KwargsDictParameter { syntax }),
+            KWARGS_DICT_PARAMETER => Self::KwargsDict(KwargsDictParameter { syntax }),
             _ => return None,
         })
     }
@@ -820,7 +837,7 @@ ast_node! {
 }
 
 ast_node! {
-    KwargsDictParameter => KWARGS_LIST_PARAMETER
+    KwargsDictParameter => KWARGS_DICT_PARAMETER
     child name -> Name;
 }
 
@@ -1266,6 +1283,7 @@ pub enum LiteralKind {
 ast_node! {
     TypeComment => TYPE_COMMENT
     child type_ -> Type;
+    child function_type -> FunctionType;
 }
 
 ast_node! {
@@ -1328,6 +1346,82 @@ ast_node! {
 ast_node! {
     GenericArguments => GENERIC_ARGUMENTS
     children types -> Type;
+}
+
+ast_node! {
+    FunctionType => FUNCTION_TYPE
+    child parameter_types -> ParameterTypes;
+    child ret_type -> Type;
+}
+
+ast_node! {
+    ParameterTypes => PARAMETER_TYPES
+    children types -> ParameterType;
+}
+
+pub enum ParameterType {
+    Simple(SimpleParameterType),
+    ArgsList(ArgsListParameterType),
+    KwargsDict(KwargsDictParameterType),
+}
+
+impl ParameterType {
+    pub fn type_(&self) -> Option<Type> {
+        match self {
+            ParameterType::Simple(type_) => type_.type_(),
+            ParameterType::ArgsList(type_) => type_.type_(),
+            ParameterType::KwargsDict(type_) => type_.type_(),
+        }
+    }
+}
+
+impl AstNode for ParameterType {
+    type Language = StarlarkLanguage;
+
+    fn can_cast(kind: <Self::Language as rowan::Language>::Kind) -> bool
+    where
+        Self: Sized,
+    {
+        matches!(
+            kind,
+            SIMPLE_PARAMETER_TYPE | ARGS_LIST_PARAMETER_TYPE | KWARGS_DICT_PARAMETER_TYPE
+        )
+    }
+
+    fn cast(syntax: rowan::SyntaxNode<Self::Language>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        Some(match syntax.kind() {
+            SIMPLE_PARAMETER_TYPE => Self::Simple(SimpleParameterType { syntax }),
+            ARGS_LIST_PARAMETER_TYPE => Self::ArgsList(ArgsListParameterType { syntax }),
+            KWARGS_DICT_PARAMETER_TYPE => Self::KwargsDict(KwargsDictParameterType { syntax }),
+            _ => return None,
+        })
+    }
+
+    fn syntax(&self) -> &rowan::SyntaxNode<Self::Language> {
+        match self {
+            ParameterType::Simple(type_) => type_.syntax(),
+            ParameterType::ArgsList(type_) => type_.syntax(),
+            ParameterType::KwargsDict(type_) => type_.syntax(),
+        }
+    }
+}
+
+ast_node! {
+    SimpleParameterType => SIMPLE_PARAMETER_TYPE
+    child type_ -> Type;
+}
+
+ast_node! {
+    ArgsListParameterType => ARGS_LIST_PARAMETER_TYPE
+    child type_ -> Type;
+}
+
+ast_node! {
+    KwargsDictParameterType => KWARGS_DICT_PARAMETER_TYPE
+    child type_ -> Type;
 }
 
 struct Cursor<'a> {

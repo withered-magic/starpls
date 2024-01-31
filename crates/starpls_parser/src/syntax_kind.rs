@@ -135,8 +135,11 @@ pub enum SyntaxKind {
     NAMED_TYPE,        // tuple[int, int, string]
     GENERIC_ARGUMENTS, // [int, int, string] in the type above
 
-    FUNCTION_TYPE,   // e.g. (int, int) -> int
-    PARAMETER_TYPES, // the (int, int) in the signature above
+    FUNCTION_TYPE,              // e.g. (int, int) -> int
+    PARAMETER_TYPES,            // the (int, int) in the signature above
+    SIMPLE_PARAMETER_TYPE,      // int
+    ARGS_LIST_PARAMETER_TYPE,   // *int
+    KWARGS_DICT_PARAMETER_TYPE, // **int
 
     TYPE_COMMENT,
     TYPE_COMMENT_PREFIX,
@@ -151,7 +154,7 @@ pub enum SyntaxKind {
     PARAMETERS,
     SIMPLE_PARAMETER,      // def f(x, y="default")
     ARGS_LIST_PARAMETER,   // def f(*, *args)
-    KWARGS_LIST_PARAMETER, // def f(**kwargs)
+    KWARGS_DICT_PARAMETER, // def f(**kwargs)
 
     SUITE,
     LOOP_VARIABLES,

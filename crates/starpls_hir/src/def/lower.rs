@@ -4,6 +4,7 @@ use crate::{
         LoadItemId, LoadItemPtr, Module, ModuleSourceMap, Name, Param, ParamId, ParamPtr, Stmt,
         StmtId, StmtPtr,
     },
+    typeck::FunctionTypeRef,
     Db, TypeRef,
 };
 use starpls_common::{Diagnostic, Diagnostics, File, FileRange, Severity};
@@ -83,12 +84,16 @@ impl<'a> LoweringContext<'a> {
     fn lower_stmt(&mut self, stmt: ast::Statement) -> StmtId {
         let ptr = AstPtr::new(&stmt);
         let statement = match stmt {
-            ast::Statement::Def(syntax) => {
-                let name = self.lower_name_opt(syntax.name());
-                let params = self.lower_params_opt(syntax.parameters());
-                let stmts = self.lower_suite_opt(syntax.suite());
+            ast::Statement::Def(node) => {
+                let name = self.lower_name_opt(node.name());
+                let spec = self.lower_func_type_opt(node.spec());
+                let params = self.lower_params_opt(
+                    node.parameters(),
+                    spec.as_ref().map(|spec| &spec.0[..]).unwrap_or(&[]),
+                );
+                let stmts = self.lower_suite_opt(node.suite());
                 Stmt::Def {
-                    func: Function::new(self.db, self.file, name, params),
+                    func: Function::new(self.db, self.file, name, params, spec.map(|spec| spec.1)),
                     stmts,
                 }
             }
@@ -187,7 +192,7 @@ impl<'a> LoweringContext<'a> {
                 Expr::Binary { lhs, rhs, op }
             }
             ast::Expression::Lambda(node) => {
-                let params = self.lower_params_opt(node.parameters());
+                let params = self.lower_params_opt(node.parameters(), &[]);
                 let body = self.lower_expr_opt(node.body());
                 Expr::Lambda { params, body }
             }
@@ -264,11 +269,21 @@ impl<'a> LoweringContext<'a> {
         self.alloc_expr(expr, ptr)
     }
 
-    fn lower_params_opt(&mut self, syntax: Option<ast::Parameters>) -> Box<[ParamId]> {
+    fn lower_params_opt(
+        &mut self,
+        syntax: Option<ast::Parameters>,
+        spec_type_refs: &[TypeRef],
+    ) -> Box<[ParamId]> {
         let mut params = Vec::new();
-        for param in syntax.iter().flat_map(|params| params.parameters()) {
+        for (i, param) in syntax
+            .iter()
+            .flat_map(|params| params.parameters())
+            .enumerate()
+        {
             let ptr = AstPtr::new(&param);
-            let type_ref = self.lower_type_comment_opt(param.type_comment());
+            let type_ref = self
+                .lower_type_comment_opt(param.type_comment())
+                .or(spec_type_refs.get(i).cloned());
             let param = match param {
                 ast::Parameter::Simple(param) => {
                     let name = self.lower_name_opt(param.name());
@@ -430,6 +445,23 @@ impl<'a> LoweringContext<'a> {
             .unwrap_or_else(|| TypeRef::Unknown)
     }
 
+    fn lower_func_type_opt(&self, node: Option<ast::FunctionType>) -> Option<FunctionTypeRef> {
+        node.map(|func_type| {
+            let params = match func_type.parameter_types() {
+                Some(params) => params
+                    .types()
+                    .map(|param| self.lower_type_opt(param.type_()))
+                    .collect(),
+                None => vec![],
+            };
+            let ret_type_ref = func_type
+                .ret_type()
+                .map(|type_| self.lower_type(type_))
+                .unwrap_or(TypeRef::Unknown);
+            FunctionTypeRef(params, ret_type_ref)
+        })
+    }
+
     fn lower_type(&self, type_: ast::Type) -> TypeRef {
         match type_ {
             ast::Type::NamedType(type_) => type_.name().map(|name| {
@@ -447,6 +479,12 @@ impl<'a> LoweringContext<'a> {
             ast::Type::NoneType(_) => Some(TypeRef::Name(Name::new_inline("None"), None)),
         }
         .unwrap_or_else(|| TypeRef::Unknown)
+    }
+
+    fn lower_type_opt(&self, type_: Option<ast::Type>) -> TypeRef {
+        type_
+            .map(|type_| self.lower_type(type_))
+            .unwrap_or(TypeRef::Unknown)
     }
 
     fn alloc_stmt(&mut self, stmt: Stmt, ptr: StmtPtr) -> StmtId {

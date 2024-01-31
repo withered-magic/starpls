@@ -20,8 +20,8 @@ fn main() -> anyhow::Result<()> {
     // }
 
     for global in builtins.global {
-        eprintln!("{:?}", global.name);
-        if global.name == "proto_lang_toolchain" {
+        if global.name == "Label" {
+            eprintln!("{:?}", global.name);
             eprintln!("{:?}", global)
         }
     }

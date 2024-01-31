@@ -12,6 +12,7 @@ use crate::{
     Db, Name, Type,
 };
 use crossbeam::atomic::AtomicCell;
+use itertools::Itertools;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
@@ -156,7 +157,8 @@ impl std::fmt::Display for TypeRef {
 }
 
 /// A reference to a function type, i.e. in a function type comment.
-pub struct FunctionTypeRef(Vec<TypeRef>, TypeRef);
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FunctionTypeRef(pub Vec<TypeRef>, pub TypeRef);
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Ty(Interned<TyKind>);
@@ -600,7 +602,11 @@ impl DisplayWithDb for TyKind {
                         }
                     }
                 }
-                return f.write_str(") -> Unknown");
+                return write!(
+                    f,
+                    ") -> {}",
+                    func.ret_type_ref(db).unwrap_or(TypeRef::Unknown)
+                );
             }
             TyKind::IntrinsicFunction(func, subst) => {
                 write!(f, "def {}(", func.name(db).as_str())?;
@@ -667,16 +673,6 @@ impl DisplayWithDb for TyKind {
                 let (name, ty) = match proto {
                     Protocol::Iterable(ty) => ("Iterable", ty),
                     Protocol::Sequence(ty) => ("Sequence", ty),
-                    Protocol::Indexable(ty) => ("Indexable", ty),
-                    Protocol::SetIndexable(ty) => ("SetIndexable", ty),
-                    Protocol::Mapping(key_ty, value_ty) => {
-                        return write!(
-                            f,
-                            "Mapping[{}, {}]",
-                            key_ty.display(db).alt(),
-                            value_ty.display(db).alt()
-                        )
-                    }
                 };
                 return write!(f, "{}[{}]", name, ty.display(db).alt());
             }
@@ -767,9 +763,6 @@ impl Substitution {
 pub enum Protocol {
     Iterable(Ty),
     Sequence(Ty),
-    Indexable(Ty),
-    SetIndexable(Ty),
-    Mapping(Ty, Ty),
 }
 
 #[derive(Default)]
@@ -869,6 +862,7 @@ impl<'a> TypeRefResolver<'a> {
                         .map(|args| args.iter())
                         .flatten()
                         .cloned()
+                        .unique()
                         .collect();
 
                     // Unions require at least two type arguments. We can handle this nicely by
@@ -897,6 +891,7 @@ impl<'a> TypeRefResolver<'a> {
                 1 => self.resolve_type_ref_inner(&args[0]),
                 _ => TyKind::Union(
                     args.iter()
+                        .unique()
                         .map(|arg| self.resolve_type_ref_inner(arg))
                         .collect(),
                 )
@@ -959,22 +954,20 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
         (TyKind::Any | TyKind::Unknown, _) | (_, TyKind::Any | TyKind::Unknown) => true,
         (
             TyKind::List(source),
-            TyKind::List(target)
-            | TyKind::Protocol(
-                Iterable(target) | Sequence(target) | Indexable(target) | SetIndexable(target),
-            ),
+            TyKind::List(target) | TyKind::Protocol(Iterable(target) | Sequence(target)),
         ) => assign_tys(db, source, target),
-        (
-            TyKind::Tuple(tuple),
-            TyKind::Protocol(Iterable(target) | Sequence(target) | Indexable(target)),
-        ) => match tuple {
-            Tuple::Simple(sources) => sources.iter().all(|source| assign_tys(db, source, target)),
-            Tuple::Variable(source) => assign_tys(db, source, target),
-        },
+        (TyKind::Tuple(tuple), TyKind::Protocol(Iterable(target) | Sequence(target))) => {
+            match tuple {
+                Tuple::Simple(sources) => {
+                    sources.iter().all(|source| assign_tys(db, source, target))
+                }
+                Tuple::Variable(source) => assign_tys(db, source, target),
+            }
+        }
         (TyKind::Protocol(source), TyKind::Protocol(target)) => match &(source, target) {
-            (Iterable(source), Iterable(target))
-            | (Sequence(source), Sequence(target))
-            | (Indexable(source), Indexable(target)) => assign_tys(db, source, target),
+            (Iterable(source), Iterable(target)) | (Sequence(source), Sequence(target)) => {
+                assign_tys(db, source, target)
+            }
             _ => false,
         },
         (TyKind::Dict(key_source, value_source), TyKind::Dict(key_target, value_target)) => {

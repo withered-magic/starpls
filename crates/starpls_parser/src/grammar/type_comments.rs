@@ -1,6 +1,8 @@
 use crate::{grammar::*, marker::CompletedMarker, syntax_kind::SyntaxKindSet, SyntaxKind};
 
-const TYPE_START: SyntaxKindSet = SyntaxKindSet::new(&[T![ident], T!['(']]);
+const TYPE_START: SyntaxKindSet = SyntaxKindSet::new(&[T![ident]]);
+
+const PARAMETER_TYPE_START: SyntaxKindSet = TYPE_START.union(SyntaxKindSet::new(&[T![*], T![**]]));
 
 const EMPTY: SyntaxKindSet = SyntaxKindSet::new(&[]);
 
@@ -23,6 +25,35 @@ pub(crate) fn types(p: &mut Parser, stop: Option<SyntaxKind>) {
             break;
         }
         union_type(p);
+    }
+}
+
+pub(crate) fn parameter_types(p: &mut Parser) {
+    parameter_type(p);
+    while p.at(T![,]) && PARAMETER_TYPE_START.contains(p.nth(1)) {
+        p.bump(T![,]);
+        parameter_type(p);
+    }
+}
+
+pub(crate) fn parameter_type(p: &mut Parser) {
+    let m = p.start();
+    match p.current() {
+        T![ident] => {
+            union_type(p);
+            m.complete(p, SIMPLE_PARAMETER_TYPE);
+        }
+        T![*] => {
+            p.bump(T![*]);
+            union_type(p);
+            m.complete(p, ARGS_LIST_PARAMETER_TYPE);
+        }
+        T![**] => {
+            p.bump(T![**]);
+            union_type(p);
+            m.complete(p, KWARGS_DICT_PARAMETER_TYPE);
+        }
+        _ => unreachable!(),
     }
 }
 
@@ -75,7 +106,7 @@ pub(crate) fn function_type(p: &mut Parser) -> CompletedMarker {
     p.bump(T!['(']);
     if p.at_kinds(TYPE_START) {
         let m = p.start();
-        types(p, Some(T![')']));
+        parameter_types(p);
         m.complete(p, PARAMETER_TYPES);
     }
     if !p.eat(T![')']) {

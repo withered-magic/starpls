@@ -6,8 +6,8 @@ use crate::{
         assign_tys,
         call::{Slot, SlotProvider, Slots},
         intrinsics::{IntrinsicFunctionParam, IntrinsicTypes},
-        resolve_type_ref, resolve_type_ref_opt, FileExprId, FileParamId, Protocol, Substitution,
-        Tuple, Ty, TyCtxt, TyKind, TypeRef, TypecheckCancelled,
+        resolve_type_ref, resolve_type_ref_opt, FileExprId, FileParamId, Substitution, Tuple, Ty,
+        TyCtxt, TyKind, TypeRef, TypecheckCancelled,
     },
     Declaration,
 };
@@ -215,9 +215,6 @@ impl TyCtxt<'_> {
                     TyKind::String => (&int_ty, &string_ty, "string"),
                     TyKind::Bytes => (&int_ty, &int_ty, "bytes"),
                     TyKind::Range => (&int_ty, &int_ty, "range"),
-                    TyKind::Protocol(Protocol::Indexable(ty) | Protocol::SetIndexable(ty)) => {
-                        (&int_ty, ty, "Indexable")
-                    }
                     TyKind::Any => return self.any_ty(),
                     TyKind::Unknown => return self.unknown_ty(),
                     _ => {
@@ -344,7 +341,9 @@ impl TyCtxt<'_> {
                             self.add_expr_diagnostic(file, expr, message);
                         }
 
-                        self.unknown_ty()
+                        func.ret_type_ref(db)
+                            .map(|type_ref| resolve_type_ref(db, &type_ref).0)
+                            .unwrap_or_else(|| self.unknown_ty())
                     }
                     TyKind::IntrinsicFunction(func, subst) => {
                         let params = func.params(db);
@@ -797,7 +796,14 @@ impl TyCtxt<'_> {
                     .unwrap_or_else(|| self.unknown_ty()),
             ))
             .intern(),
-            Param::KwargsDict { .. } => TyKind::Dict(self.string_ty(), self.unknown_ty()).intern(),
+            Param::KwargsDict { type_ref, .. } => TyKind::Dict(
+                self.string_ty(),
+                type_ref
+                    .as_ref()
+                    .map(|type_ref| self.lower_param_type_ref(file, param, type_ref))
+                    .unwrap_or_else(|| self.unknown_ty()),
+            )
+            .intern(),
         };
 
         self.cx

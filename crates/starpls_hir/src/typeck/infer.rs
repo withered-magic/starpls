@@ -1,5 +1,5 @@
 use crate::{
-    def::{resolver::Resolver, Argument, Expr, ExprId, Literal, Param, ParamId},
+    def::{resolver::Resolver, Argument, Expr, ExprId, Literal, Param, ParamId, Stmt},
     display::DisplayWithDb,
     module, source_map,
     typeck::{
@@ -89,7 +89,7 @@ impl TyCtxt<'_> {
                         Declaration::BuiltinFunction { func } => {
                             TyKind::BuiltinFunction(func).intern()
                         }
-                        Declaration::CustomVariable { type_ref } => {
+                        Declaration::BuiltinVariable { type_ref } => {
                             resolve_type_ref(db, &type_ref).0
                         }
                         Declaration::Parameter { id, .. } => self.infer_param(file, id),
@@ -595,11 +595,26 @@ impl TyCtxt<'_> {
         }
 
         // Handle standard assigments, e.g. `x, y = 1, 2`.
-        if let Some(lhs) = ast::AssignStmt::cast(parent.clone()).and_then(|stmt| stmt.lhs()) {
-            let lhs_ptr = AstPtr::new(&lhs);
-            let expr = source_map.expr_map.get(&lhs_ptr).unwrap();
-            self.assign_expr_source_ty(file, *expr, *expr, source_ty);
-            return;
+        if let Some(node) = ast::AssignStmt::cast(parent.clone()) {
+            let ptr = AstPtr::new(&ast::Statement::Assign(node.clone()));
+            let expected_ty = match &module(db, file)[*source_map.stmt_map.get(&ptr).unwrap()] {
+                Stmt::Assign { type_ref, .. } => type_ref.as_ref().and_then(|type_ref| {
+                    let (expected_ty, errors) = resolve_type_ref(db, &type_ref);
+                    if errors.is_empty() {
+                        Some(expected_ty)
+                    } else {
+                        None
+                    }
+                }),
+                _ => None,
+            };
+
+            if let Some(lhs) = node.lhs() {
+                let lhs_ptr = AstPtr::new(&lhs);
+                let expr = source_map.expr_map.get(&lhs_ptr).unwrap();
+                self.assign_expr_source_ty(file, source, *expr, source_ty, expected_ty);
+                return;
+            }
         }
 
         // Handle assignments in "for" statements and comphrehensions.
@@ -640,21 +655,44 @@ impl TyCtxt<'_> {
             }
         };
         if targets.len() == 1 {
-            self.assign_expr_source_ty(file, targets[0], targets[0], sub_ty);
+            self.assign_expr_source_ty(file, targets[0], targets[0], sub_ty, None);
         } else {
             self.assign_exprs_source_ty(file, source, &targets, sub_ty);
         }
     }
 
-    fn assign_expr_source_ty(&mut self, file: File, root: ExprId, expr: ExprId, source_ty: Ty) {
+    fn assign_expr_source_ty(
+        &mut self,
+        file: File,
+        root: ExprId,
+        expr: ExprId,
+        source_ty: Ty,
+        expected_ty: Option<Ty>,
+    ) {
         match module(self.db, file).exprs.get(expr).unwrap() {
             Expr::Name { .. } => {
-                self.set_expr_type(file, expr, source_ty);
+                // If we have an expected type from a type comment, use that.
+                // We also emit any error if the source and expected types aren't compatible.
+                if let Some(expected_ty) = expected_ty {
+                    if !assign_tys(self.db, &source_ty, &expected_ty) {
+                        self.add_expr_diagnostic(
+                            file,
+                            root,
+                            format!(
+                                "Expected value of type \"{}\"",
+                                expected_ty.display(self.db)
+                            ),
+                        )
+                    }
+                    self.set_expr_type(file, expr, expected_ty);
+                } else {
+                    self.set_expr_type(file, expr, source_ty);
+                }
             }
             Expr::List { exprs } | Expr::Tuple { exprs } => {
                 self.assign_exprs_source_ty(file, root, exprs, source_ty);
             }
-            Expr::Paren { expr } => self.assign_expr_source_ty(file, root, *expr, source_ty),
+            Expr::Paren { expr } => self.assign_expr_source_ty(file, root, *expr, source_ty, None),
             _ => {}
         }
     }
@@ -669,13 +707,13 @@ impl TyCtxt<'_> {
         match source_ty.kind() {
             TyKind::List(ty) | TyKind::Tuple(Tuple::Variable(ty)) => {
                 for expr in exprs.iter().copied() {
-                    self.assign_expr_source_ty(file, root, expr, ty.clone());
+                    self.assign_expr_source_ty(file, root, expr, ty.clone(), None);
                 }
             }
             TyKind::Tuple(Tuple::Simple(tys)) => {
                 let mut pairs = exprs.iter().copied().zip(tys.iter());
                 while let Some((expr, ty)) = pairs.next() {
-                    self.assign_expr_source_ty(file, root, expr, ty.clone());
+                    self.assign_expr_source_ty(file, root, expr, ty.clone(), None);
                 }
                 if exprs.len() != tys.len() {
                     if exprs.len() > tys.len() {
@@ -696,7 +734,7 @@ impl TyCtxt<'_> {
             }
             TyKind::Any | TyKind::Unknown => {
                 for expr in exprs.iter().copied() {
-                    self.assign_expr_source_ty(file, root, expr, self.unknown_ty());
+                    self.assign_expr_source_ty(file, root, expr, self.unknown_ty(), None);
                 }
             }
             _ => {

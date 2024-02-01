@@ -143,6 +143,7 @@ pub enum SyntaxKind {
 
     TYPE_COMMENT,
     TYPE_COMMENT_PREFIX,
+    TYPE_COMMENT_BODY,
     TYPE_LIST,
 
     ARGUMENTS,

@@ -850,6 +850,8 @@ impl<'a> TypeRefResolver<'a> {
         let builtin_types = builtin_types(self.db);
         match type_ref {
             TypeRef::Name(name, args) => match name.as_str() {
+                "Any" => types.any.clone(),
+                "Unknown" => types.unknown.clone(),
                 "None" | "NoneType" => types.none.clone(),
                 "bool" => types.bool.clone(),
                 "int" => types.int.clone(),

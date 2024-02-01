@@ -1296,6 +1296,21 @@ pub enum LiteralKind {
 
 ast_node! {
     TypeComment => TYPE_COMMENT
+    child body -> TypeCommentBody;
+}
+
+impl TypeComment {
+    pub fn type_(&self) -> Option<Type> {
+        self.body().and_then(|body| body.type_())
+    }
+
+    pub fn function_type(&self) -> Option<FunctionType> {
+        self.body().and_then(|body| body.function_type())
+    }
+}
+
+ast_node! {
+    TypeCommentBody => TYPE_COMMENT_BODY
     child type_ -> Type;
     child function_type -> FunctionType;
 }

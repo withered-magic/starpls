@@ -48,6 +48,21 @@ fn check_infer(input: &str, expect: Expect) {
         .unwrap();
     }
 
+    if !cx.diagnostics.is_empty() {
+        res.push('\n');
+
+        for diagnostic in cx.diagnostics.iter() {
+            writeln!(
+                res,
+                "{:?}..{:?} {}",
+                diagnostic.range.range.start(),
+                diagnostic.range.range.end(),
+                diagnostic.message
+            )
+            .unwrap();
+        }
+    }
+
     expect.assert_eq(&res);
 }
 
@@ -166,4 +181,19 @@ fn test_common_type() {
             51..67 "{\"a\": 1, 1: \"a\"}": dict[Any, Unknown]
         "#]],
     );
+}
+
+#[test]
+fn test_bad_assign_type_comment() {
+    check_infer(
+        r#"
+greeting = 1 # type: string
+    "#,
+        expect![[r#"
+            1..9 "greeting": string
+            12..13 "1": int
+
+            12..13 Expected value of type "string"
+        "#]],
+    )
 }

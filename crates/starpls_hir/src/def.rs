@@ -270,6 +270,7 @@ pub enum Stmt {
         lhs: ExprId,
         rhs: ExprId,
         op: Option<AssignOp>,
+        type_ref: Option<TypeRef>,
     },
     Load {
         items: Box<[LoadItemId]>,
@@ -382,7 +383,7 @@ pub enum Declaration {
     Function { id: StmtId, func: Function },
     IntrinsicFunction { func: IntrinsicFunction },
     BuiltinFunction { func: BuiltinFunction },
-    CustomVariable { type_ref: TypeRef },
+    BuiltinVariable { type_ref: TypeRef },
     Variable { id: ExprId, source: Option<ExprId> },
     Parameter { id: ParamId, func: Option<Function> },
     LoadItem { id: LoadItemId },

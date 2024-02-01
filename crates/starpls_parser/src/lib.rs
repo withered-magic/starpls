@@ -30,7 +30,7 @@ pub fn parse(input: &Input) -> Output {
 
 pub fn parse_type_list(input: &Input) -> Output {
     let mut p = Parser::new(input);
-    grammar::type_(&mut p);
+    grammar::type_comment_body(&mut p);
     step::postprocess_step_events(p.events)
 }
 

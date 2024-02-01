@@ -139,7 +139,13 @@ impl<'a> LoweringContext<'a> {
                 let lhs = self.lower_expr_opt(stmt.lhs());
                 let rhs = self.lower_expr_opt(stmt.rhs());
                 let op = stmt.assign_op_info().map(|info| info.1);
-                Stmt::Assign { lhs, rhs, op }
+                let type_ref = self.lower_type_comment_opt(stmt.type_comment());
+                Stmt::Assign {
+                    lhs,
+                    rhs,
+                    op,
+                    type_ref,
+                }
             }
             ast::Statement::Load(stmt) => {
                 let items = self.lower_load_items(stmt.items());

@@ -790,7 +790,7 @@ impl Cursor<'_> {
         };
 
         // TODO(withered-magic): Loop on self.first() instead.
-        if self.first() == '\n' {
+        if self.first() == '\n' && !triple_quoted {
             return (false, triple_quoted);
         }
 
@@ -811,7 +811,7 @@ impl Cursor<'_> {
                     closing_streak = 0;
                 }
             }
-            if self.first() == '\n' {
+            if self.first() == '\n' && !triple_quoted {
                 break;
             }
         }

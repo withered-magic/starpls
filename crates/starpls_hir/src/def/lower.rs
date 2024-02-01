@@ -87,13 +87,22 @@ impl<'a> LoweringContext<'a> {
             ast::Statement::Def(node) => {
                 let name = self.lower_name_opt(node.name());
                 let spec = self.lower_func_type_opt(node.spec());
+                let doc = node.doc().and_then(|doc| doc.value());
                 let params = self.lower_params_opt(
                     node.parameters(),
                     spec.as_ref().map(|spec| &spec.0[..]).unwrap_or(&[]),
+                    &doc,
                 );
                 let stmts = self.lower_suite_opt(node.suite());
                 Stmt::Def {
-                    func: Function::new(self.db, self.file, name, params, spec.map(|spec| spec.1)),
+                    func: Function::new(
+                        self.db,
+                        self.file,
+                        name,
+                        spec.map(|spec| spec.1),
+                        doc,
+                        params,
+                    ),
                     stmts,
                 }
             }
@@ -192,7 +201,7 @@ impl<'a> LoweringContext<'a> {
                 Expr::Binary { lhs, rhs, op }
             }
             ast::Expression::Lambda(node) => {
-                let params = self.lower_params_opt(node.parameters(), &[]);
+                let params = self.lower_params_opt(node.parameters(), &[], &None);
                 let body = self.lower_expr_opt(node.body());
                 Expr::Lambda { params, body }
             }
@@ -273,8 +282,31 @@ impl<'a> LoweringContext<'a> {
         &mut self,
         syntax: Option<ast::Parameters>,
         spec_type_refs: &[TypeRef],
+        doc: &Option<Box<str>>,
     ) -> Box<[ParamId]> {
         let mut params = Vec::new();
+
+        // Support Google-style parameter documentation, e.g.
+        //
+        // Args:
+        //     x: The first argument
+        //     y: The second argument
+        //
+        // This may be extended to support other styles in the future.
+        let find_doc = |name: &str| {
+            let prefix = format!("{}:", name);
+            doc.as_ref().and_then(|doc| {
+                doc.lines().find_map(|line| {
+                    let line = line.trim();
+                    if line.starts_with(&prefix) {
+                        Some(line[prefix.len()..].to_string().into_boxed_str())
+                    } else {
+                        None
+                    }
+                })
+            })
+        };
+
         for (i, param) in syntax
             .iter()
             .flat_map(|params| params.parameters())
@@ -287,21 +319,33 @@ impl<'a> LoweringContext<'a> {
             let param = match param {
                 ast::Parameter::Simple(param) => {
                     let name = self.lower_name_opt(param.name());
+                    let doc = find_doc(name.as_str());
                     let default = self.lower_expr_maybe(param.default());
                     Param::Simple {
                         name,
                         default,
                         type_ref,
+                        doc,
                     }
                 }
-                ast::Parameter::ArgsList(param) => Param::ArgsList {
-                    name: self.lower_name_opt(param.name()),
-                    type_ref,
-                },
-                ast::Parameter::KwargsDict(param) => Param::KwargsDict {
-                    name: self.lower_name_opt(param.name()),
-                    type_ref,
-                },
+                ast::Parameter::ArgsList(param) => {
+                    let name = self.lower_name_opt(param.name());
+                    let doc = find_doc(name.as_str());
+                    Param::ArgsList {
+                        name,
+                        type_ref,
+                        doc,
+                    }
+                }
+                ast::Parameter::KwargsDict(param) => {
+                    let name = self.lower_name_opt(param.name());
+                    let doc = find_doc(name.as_str());
+                    Param::KwargsDict {
+                        name,
+                        type_ref,
+                        doc,
+                    }
+                }
             };
             params.push(self.alloc_param(param, ptr));
         }

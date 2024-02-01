@@ -293,14 +293,17 @@ pub enum Param {
         name: Name,
         default: Option<ExprId>,
         type_ref: Option<TypeRef>,
+        doc: Option<Box<str>>,
     },
     ArgsList {
         name: Name,
         type_ref: Option<TypeRef>,
+        doc: Option<Box<str>>,
     },
     KwargsDict {
         name: Name,
         type_ref: Option<TypeRef>,
+        doc: Option<Box<str>>,
     },
 }
 
@@ -329,6 +332,14 @@ impl Param {
             Param::Simple { type_ref, .. }
             | Param::ArgsList { type_ref, .. }
             | Param::KwargsDict { type_ref, .. } => type_ref.clone(),
+        }
+    }
+
+    pub fn doc(&self) -> Option<&str> {
+        match self {
+            Param::Simple { doc, .. }
+            | Param::ArgsList { doc, .. }
+            | Param::KwargsDict { doc, .. } => doc.as_deref(),
         }
     }
 }
@@ -418,9 +429,10 @@ impl Name {
 pub(crate) struct Function {
     pub(crate) file: File,
     pub(crate) name: Name,
+    pub(crate) ret_type_ref: Option<TypeRef>,
+    pub(crate) doc: Option<Box<str>>,
     #[return_ref]
     pub(crate) params: Box<[ParamId]>,
-    pub(crate) ret_type_ref: Option<TypeRef>,
 }
 
 impl Function {

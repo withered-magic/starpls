@@ -115,9 +115,14 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             return Some(text.into());
         } else if let Some(stmt) = ast::DefStmt::cast(parent.clone()) {
             let func = sema.function_for_def(file, stmt)?;
-            return Some(
-                format!("```python\n(function) {}\n```\n", func.ty(db).display(db)).into(),
-            );
+            let mut text = String::from("```python\n(function) ");
+            write!(text, "{}\n```\n", func.ty(db).display(db)).ok()?;
+            if let Some(doc) = func.doc(db) {
+                // TODO(withered-magic): Preserve indentation.
+                text.push_str(doc.trim());
+                text.push('\n');
+            }
+            return Some(text.into());
         } else if let Some(param) = ast::Parameter::cast(parent.clone()) {
             let ty = sema.type_of_param(file, &param)?;
             return Some(

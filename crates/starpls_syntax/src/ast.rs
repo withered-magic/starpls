@@ -249,6 +249,20 @@ impl DefStmt {
             .and_then(|suite| suite.type_comment())
             .and_then(|type_comment| type_comment.function_type())
     }
+
+    pub fn doc(&self) -> Option<String> {
+        self.suite()
+            .and_then(|suite| {
+                suite
+                    .syntax()
+                    .children()
+                    .find_map(|node| LiteralExpr::cast(node))
+            })
+            .and_then(|expr| match expr.kind() {
+                LiteralKind::String(token) => Some(token),
+                _ => None,
+            })
+    }
 }
 
 ast_node! {

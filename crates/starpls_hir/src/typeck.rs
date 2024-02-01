@@ -340,12 +340,18 @@ impl Param {
 
     pub fn doc(&self, db: &dyn Db) -> Option<String> {
         Some(match self.0 {
+            ParamInner::Param { parent, index } => {
+                let module = module(db, parent.file(db));
+                return module[parent.params(db)[index]]
+                    .doc()
+                    .map(|doc| doc.to_string());
+            }
             ParamInner::BuiltinParam { parent, index } => match &parent.params(db)[index] {
                 BuiltinFunctionParam::Simple { doc, .. }
                 | BuiltinFunctionParam::ArgsList { doc, .. }
                 | BuiltinFunctionParam::KwargsDict { doc } => doc.clone(),
             },
-            _ => return None,
+            ParamInner::IntrinsicParam { .. } => return None,
         })
     }
 

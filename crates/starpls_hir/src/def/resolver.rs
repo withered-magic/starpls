@@ -58,7 +58,7 @@ impl<'a> Resolver<'a> {
                     .variables(self.db)
                     .get(name.as_str())
                     .cloned()
-                    .map(|type_ref| vec![Declaration::CustomVariable { type_ref }])
+                    .map(|type_ref| vec![Declaration::BuiltinVariable { type_ref }])
             })
     }
 
@@ -84,7 +84,7 @@ impl<'a> Resolver<'a> {
         for (name, type_ref) in globals.variables(self.db).iter() {
             names.insert(
                 Name::from_str(&name),
-                Declaration::CustomVariable {
+                Declaration::BuiltinVariable {
                     type_ref: type_ref.clone(),
                 },
             );

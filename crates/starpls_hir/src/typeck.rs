@@ -28,6 +28,9 @@ mod call;
 mod infer;
 mod lower;
 
+#[cfg(test)]
+mod tests;
+
 pub(crate) mod builtins;
 pub(crate) mod intrinsics;
 
@@ -44,9 +47,9 @@ impl FileExprId {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct FileParamId {
-    pub file: File,
-    pub param: ParamId,
+pub(crate) struct FileParamId {
+    pub(crate) file: File,
+    pub(crate) param: ParamId,
 }
 
 #[derive(Debug)]
@@ -798,10 +801,10 @@ impl GlobalCtxt {
 }
 
 #[derive(Default)]
-struct InferenceCtxt {
-    diagnostics: Vec<Diagnostic>,
-    param_tys: FxHashMap<FileParamId, Ty>,
-    type_of_expr: FxHashMap<FileExprId, Ty>,
+pub(crate) struct InferenceCtxt {
+    pub(crate) diagnostics: Vec<Diagnostic>,
+    pub(crate) param_tys: FxHashMap<FileParamId, Ty>,
+    pub(crate) type_of_expr: FxHashMap<FileExprId, Ty>,
 }
 
 pub struct CancelGuard<'a> {

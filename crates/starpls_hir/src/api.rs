@@ -144,6 +144,13 @@ impl Function {
         }
         .into()
     }
+
+    pub fn doc(&self, db: &dyn Db) -> Option<String> {
+        match self.0 {
+            FunctionInner::HirDef(func) => func.doc(db).map(|doc| doc.to_string()),
+            _ => None,
+        }
+    }
 }
 
 impl From<HirDefFunction> for Function {

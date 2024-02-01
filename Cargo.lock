@@ -881,6 +881,7 @@ version = "0.1.0"
 dependencies = [
  "crossbeam",
  "dashmap",
+ "expect-test",
  "id-arena",
  "itertools 0.12.1",
  "parking_lot",

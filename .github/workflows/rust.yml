@@ -16,6 +16,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Download protoc
+      run: |
+        mkdir -p vendor/protoc && cd vendor/protoc
+        wget https://github.com/protocolbuffers/protobuf/releases/download/v25.2/protoc-25.2-linux-x86_64.zip
+        unzip protoc-25.2-linux-x86_64.zip && rm protoc-25.2-linux-x86_64.zip
+        echo "PROTOC=$(pwd)/bin/protoc"
+        echo "PROTOC=$(pwd)/bin/protoc" >> $GITHUB_ENV
     - name: Build
       run: cargo build --verbose
     - name: Run tests

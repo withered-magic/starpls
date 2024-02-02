@@ -15,7 +15,12 @@ pub(crate) struct TestDatabase {
 impl TestDatabase {
     #[allow(dead_code)]
     pub(crate) fn infer_all_exprs(&self, file: File) {
-        self.gcx.with_tcx(self, |tcx| tcx.infer_all_exprs(file))
+        self.gcx.with_tcx(self, |tcx| tcx.infer_all_exprs(file));
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn infer_all_params(&self, file: File) {
+        self.gcx.with_tcx(self, |tcx| tcx.infer_all_params(file));
     }
 }
 

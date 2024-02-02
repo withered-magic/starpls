@@ -24,20 +24,20 @@ Additionally, you may want to enable auto-completion and other features for Baze
 - Semantic highlighting
     - [x] Unbound variables
     - [x] Type mismatches
-    - [ ] Function call argument validation (partial, works for Starlark builtins)
+    - [x] Function call argument validation (partial, works for Starlark builtins)
 - Auto-completion
     - [x] Variables/function parameters
     - [x] Fields 
 - Hover
     - [x] Variable types
     - [x] Function signatures
-    - [ ] Function/method docs
+    - [x] Function/method docs
 - Type inference
     - [x] Basic type inference
     - [ ] Dataflow analysis
     - [ ] PEP-484 type comments
         - [ ] Variables
-        - [ ] Parameters (only basic types currently supported)
+        - [x] Parameters (only basic types currently supported)
         - [ ] Other constructs where type comments are supported
 - Third-party integrations
     - [ ] Bazel builtins (partial, Bazel builtins are supported but still need to handle a number of edge cases)

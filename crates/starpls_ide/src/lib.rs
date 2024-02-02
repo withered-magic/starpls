@@ -157,8 +157,8 @@ impl AnalysisSnapshot {
         self.query(|db| hover::hover(db, pos))
     }
 
-    pub fn line_index(&self, file_id: FileId) -> Cancellable<Option<LineIndex>> {
-        self.query(|db| line_index::line_index(db, file_id))
+    pub fn line_index<'a>(&'a self, file_id: FileId) -> Cancellable<Option<&'a LineIndex>> {
+        self.query(move |db| line_index::line_index(db, file_id))
     }
 
     pub fn show_hir(&self, file_id: FileId) -> Cancellable<Option<String>> {
@@ -170,9 +170,9 @@ impl AnalysisSnapshot {
     }
 
     /// Helper method to handle Salsa cancellations.
-    fn query<F, T>(&self, f: F) -> Cancellable<T>
+    fn query<'a, F, T>(&'a self, f: F) -> Cancellable<T>
     where
-        F: FnOnce(&Database) -> T + std::panic::UnwindSafe,
+        F: FnOnce(&'a Database) -> T + std::panic::UnwindSafe,
     {
         starpls_hir::Cancelled::catch(|| f(&self.db))
     }

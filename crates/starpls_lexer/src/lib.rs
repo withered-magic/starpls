@@ -106,6 +106,8 @@ pub enum TokenKind {
     From,
     /// "global"
     Global,
+    /// "ignore"
+    Ignore,
     /// "import"
     Import,
     /// "is"
@@ -663,6 +665,7 @@ impl Cursor<'_> {
             "finally" => Finally,
             "from" => From,
             "global" => Global,
+            "ignore" if self.type_comment_tokens => Ignore,
             "import" => Import,
             "is" => Is,
             "nonlocal" => Nonlocal,

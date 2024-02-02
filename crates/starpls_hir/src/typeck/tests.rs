@@ -1,12 +1,9 @@
+use crate::{source_map, test_database::TestDatabase, Db as _, DisplayWithDb};
 use expect_test::{expect, Expect};
 use itertools::Itertools;
-use starpls_common::{parse, Db, FileId};
+use starpls_common::{parse, Db as _, FileId};
 use starpls_syntax::ast::AstNode;
 use std::{cmp::Ordering, fmt::Write};
-
-use crate::{source_map, test_database::TestDatabase, DisplayWithDb};
-
-use super::FileExprId;
 
 fn check_infer(input: &str, expect: Expect) {
     let mut db = TestDatabase::default();
@@ -15,10 +12,7 @@ fn check_infer(input: &str, expect: Expect) {
     let root = parse(&db, file).syntax(&db);
     let source_map = source_map(&db, file);
 
-    db.infer_all_exprs(file);
-
     let mut res = String::new();
-    let cx = db.gcx.cx.lock();
 
     for (ptr, range) in source_map
         .expr_map
@@ -35,7 +29,7 @@ fn check_infer(input: &str, expect: Expect) {
         })
     {
         let expr = *source_map.expr_map.get(&ptr).unwrap();
-        let ty = cx.type_of_expr.get(&FileExprId::new(file, expr)).unwrap();
+        let ty = db.infer_expr(file, expr);
         let node = ptr.to_node(&root);
         writeln!(
             res,
@@ -48,10 +42,10 @@ fn check_infer(input: &str, expect: Expect) {
         .unwrap();
     }
 
-    if !cx.diagnostics.is_empty() {
+    let diagnostics = db.gcx.with_tcx(&db, |tcx| tcx.diagnostics_for_file(file));
+    if !diagnostics.is_empty() {
         res.push('\n');
-
-        for diagnostic in cx.diagnostics.iter() {
+        for diagnostic in diagnostics.iter() {
             writeln!(
                 res,
                 "{:?}..{:?} {}",
@@ -194,6 +188,28 @@ greeting = 1 # type: string
             12..13 "1": int
 
             12..13 Expected value of type "string"
+        "#]],
+    )
+}
+
+#[test]
+fn test_type_ignore_comment() {
+    check_infer(
+        r#"
+res1 = 1 + "x"
+res2 = 2 + "y" # type: ignore
+    "#,
+        expect![[r#"
+            1..5 "res1": Unknown
+            8..9 "1": int
+            12..15 "\"x\"": string
+            8..15 "1 + \"x\"": Unknown
+            16..20 "res2": Unknown
+            23..24 "2": int
+            27..30 "\"y\"": string
+            23..30 "2 + \"y\"": Unknown
+
+            8..15 Operator "+" not supported for types "int" and "string"
         "#]],
     )
 }

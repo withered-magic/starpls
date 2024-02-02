@@ -8,7 +8,14 @@ mod diagnostics;
 mod util;
 
 #[salsa::jar(db = Db)]
-pub struct Jar(Diagnostics, File, LineIndexResult, Parse, parse, line_index);
+pub struct Jar(
+    Diagnostics,
+    File,
+    LineIndexResult,
+    Parse,
+    parse,
+    line_index_query,
+);
 
 /// A Key corresponding to an interned file path. Use these instead of `Path`s to refer to files.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -63,12 +70,17 @@ pub fn parse(db: &dyn Db, file: File) -> Parse {
 }
 
 #[salsa::tracked]
-pub struct LineIndexResult {
+struct LineIndexResult {
+    #[return_ref]
     pub inner: LineIndex,
 }
 
 #[salsa::tracked]
-pub fn line_index(db: &dyn Db, file: File) -> LineIndexResult {
+fn line_index_query(db: &dyn Db, file: File) -> LineIndexResult {
     let line_index = syntax_line_index(&file.contents(db));
     LineIndexResult::new(db, line_index)
+}
+
+pub fn line_index(db: &dyn Db, file: File) -> &LineIndex {
+    line_index_query(db, file).inner(db)
 }

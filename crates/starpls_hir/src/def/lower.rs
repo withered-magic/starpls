@@ -7,7 +7,7 @@ use crate::{
     typeck::FunctionTypeRef,
     Db, TypeRef,
 };
-use starpls_common::{Diagnostic, Diagnostics, File, FileRange, Severity};
+use starpls_common::{line_index, Diagnostic, Diagnostics, File, FileRange, Severity};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr, AstToken},
     SyntaxToken,
@@ -47,6 +47,12 @@ struct LoweringContext<'a> {
 
 impl<'a> LoweringContext<'a> {
     fn lower(mut self, syntax: ast::Module) -> (Module, ModuleSourceMap) {
+        let line_index = line_index(self.db, self.file);
+        self.module.type_ignore_comment_lines = syntax
+            .type_ignore_comment_positions()
+            .map(|pos| line_index.line_col(pos).line)
+            .collect();
+
         let mut top_level = Vec::new();
         for statement in syntax.statements() {
             let stmt = self.lower_stmt(statement.clone());

@@ -12,7 +12,7 @@ use crate::{
     Declaration,
 };
 use smallvec::SmallVec;
-use starpls_common::{parse, Diagnostic, File, FileRange, Severity};
+use starpls_common::{line_index, parse, Diagnostic, File, FileRange, Severity};
 use starpls_syntax::{
     ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, UnaryOp},
     TextRange,
@@ -32,10 +32,20 @@ impl TyCtxt<'_> {
     }
 
     pub fn diagnostics_for_file(&self, file: File) -> Vec<Diagnostic> {
+        let line_index = line_index(self.db, file);
+        let module = module(self.db, file);
         self.cx
             .diagnostics
             .iter()
-            .filter(|diagnostic| diagnostic.range.file_id == file.id(self.db))
+            .filter(|diagnostic| {
+                if diagnostic.range.file_id != file.id(self.db) {
+                    return false;
+                }
+                let start_line = line_index.line_col(diagnostic.range.range.start()).line;
+                let end_line = line_index.line_col(diagnostic.range.range.end()).line;
+                (start_line..=end_line)
+                    .all(|line| !module.type_ignore_comment_lines.contains(&line))
+            })
             .cloned()
             .collect()
     }

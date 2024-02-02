@@ -1,4 +1,4 @@
-use crate::{BuiltinDefs, Dialect, GlobalCtxt, Ty, TyKind};
+use crate::{def::ExprId, BuiltinDefs, Dialect, GlobalCtxt, ParamId, Ty, TyKind};
 use dashmap::{mapref::entry::Entry, DashMap};
 use starpls_bazel::Builtins;
 use starpls_common::{File, FileId};
@@ -36,12 +36,12 @@ impl starpls_common::Db for TestDatabase {
 }
 
 impl crate::Db for TestDatabase {
-    fn infer_expr(&self, _file: File, _expr: crate::def::ExprId) -> Ty {
-        unimplemented!()
+    fn infer_expr(&self, file: File, expr: ExprId) -> Ty {
+        self.gcx.with_tcx(self, |tcx| tcx.infer_expr(file, expr))
     }
 
-    fn infer_param(&self, _file: File, _param: crate::ParamId) -> Ty {
-        unimplemented!()
+    fn infer_param(&self, file: File, param: ParamId) -> Ty {
+        self.gcx.with_tcx(self, |tcx| tcx.infer_param(file, param))
     }
 
     fn set_builtin_defs(&mut self, _dialect: Dialect, _builtins: Builtins) {}

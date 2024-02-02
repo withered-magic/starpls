@@ -609,10 +609,14 @@ impl TyCtxt<'_> {
             let ptr = AstPtr::new(&ast::Statement::Assign(node.clone()));
             let expected_ty = match &module(db, file)[*source_map.stmt_map.get(&ptr).unwrap()] {
                 Stmt::Assign { type_ref, .. } => type_ref.as_ref().and_then(|type_ref| {
-                    let (expected_ty, errors) = resolve_type_ref(db, &type_ref);
+                    let (expected_ty, errors) = resolve_type_ref(db, &type_ref.0);
                     if errors.is_empty() {
                         Some(expected_ty)
                     } else {
+                        // Add TypeRef resolution errors.
+                        for error in errors.iter() {
+                            self.add_diagnostic_for_range(file, type_ref.1, error);
+                        }
                         None
                     }
                 }),

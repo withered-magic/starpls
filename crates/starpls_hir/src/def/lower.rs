@@ -10,7 +10,7 @@ use crate::{
 use starpls_common::{line_index, Diagnostic, Diagnostics, File, FileRange, Severity};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr, AstToken},
-    SyntaxToken,
+    SyntaxToken, TextRange,
 };
 
 pub(super) fn lower_module(
@@ -327,6 +327,7 @@ impl<'a> LoweringContext<'a> {
             let ptr = AstPtr::new(&param);
             let type_ref = self
                 .lower_type_comment_opt(param.type_comment())
+                .map(|res| res.0)
                 .or(spec_type_refs.get(i).cloned());
             let param = match param {
                 ast::Parameter::Simple(param) => {
@@ -491,8 +492,14 @@ impl<'a> LoweringContext<'a> {
             .unwrap_or_else(|| String::new().into_boxed_str())
     }
 
-    fn lower_type_comment_opt(&self, node: Option<ast::TypeComment>) -> Option<TypeRef> {
-        node.map(|node| self.lower_type_comment(node))
+    fn lower_type_comment_opt(
+        &self,
+        node: Option<ast::TypeComment>,
+    ) -> Option<(TypeRef, TextRange)> {
+        node.map(|node| {
+            let range = node.syntax().text_range();
+            (self.lower_type_comment(node), range)
+        })
     }
 
     fn lower_type_comment(&self, node: ast::TypeComment) -> TypeRef {

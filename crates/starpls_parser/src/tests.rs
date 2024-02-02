@@ -25,7 +25,7 @@ fn check(input: &str, expected: ExpectFile) {
             indent.pop();
             indent.pop();
         }
-        StrStep::Token { kind, text } => {
+        StrStep::Token { kind, text, .. } => {
             writeln!(buf, "{indent}{kind:?} {text:?}").unwrap();
         }
         StrStep::Error { message, pos } => errors.push((message, pos)),

@@ -34,12 +34,6 @@ pub(crate) fn type_comment_body(p: &mut Parser) {
         _ => union_type(p),
     }
 
-    if p.at(T!['(']) {
-        function_type(p);
-    } else {
-        union_type(p);
-    }
-
     // We only parse one type, so if there's any remaining tokens, add them
     // to an error node.
     if !p.at(EOF) {

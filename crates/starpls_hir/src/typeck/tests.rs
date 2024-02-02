@@ -42,6 +42,24 @@ fn check_infer(input: &str, expect: Expect) {
         .unwrap();
     }
 
+    for (ptr, _) in source_map
+        .param_map
+        .keys()
+        .map(|ptr| (ptr, ptr.syntax_node_ptr().text_range()))
+        .sorted_by(|(_, lhs), (_, rhs)| {
+            if lhs.contains_range(rhs.clone()) {
+                Ordering::Greater
+            } else if rhs.contains_range(lhs.clone()) {
+                Ordering::Less
+            } else {
+                lhs.start().cmp(&rhs.start())
+            }
+        })
+    {
+        let param = *source_map.param_map.get(&ptr).unwrap();
+        db.infer_param(file, param);
+    }
+
     let diagnostics = db.gcx.with_tcx(&db, |tcx| tcx.diagnostics_for_file(file));
     if !diagnostics.is_empty() {
         res.push('\n');
@@ -210,6 +228,27 @@ res2 = 2 + "y" # type: ignore
             23..30 "2 + \"y\"": Unknown
 
             8..15 Operator "+" not supported for types "int" and "string"
+        "#]],
+    )
+}
+
+#[test]
+fn test_invalid_type_refs() {
+    check_infer(
+        r#"
+num = 1 # type: foo
+
+def frobnicate(
+    x, # type: bar
+):
+    pass
+"#,
+        expect![[r#"
+            1..4 "num": int
+            7..8 "1": int
+
+            9..20 Unknown type "foo"
+            42..43 Unknown type "bar"
         "#]],
     )
 }

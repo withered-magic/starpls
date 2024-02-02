@@ -851,7 +851,7 @@ impl<'a> TypeRefResolver<'a> {
         match type_ref {
             TypeRef::Name(name, args) => match name.as_str() {
                 "Any" => types.any.clone(),
-                "Unknown" => types.unknown.clone(),
+                "Unknown" | "unknown" => types.unknown.clone(),
                 "None" | "NoneType" => types.none.clone(),
                 "bool" => types.bool.clone(),
                 "int" => types.int.clone(),

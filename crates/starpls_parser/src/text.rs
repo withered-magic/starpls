@@ -6,10 +6,19 @@ use starpls_lexer::{
 use std::mem;
 
 pub enum StrStep<'a> {
-    Start { kind: SyntaxKind },
+    Start {
+        kind: SyntaxKind,
+    },
     Finish,
-    Token { kind: SyntaxKind, text: &'a str },
-    Error { message: String, pos: usize },
+    Token {
+        kind: SyntaxKind,
+        text: &'a str,
+        pos: usize,
+    },
+    Error {
+        message: String,
+        pos: usize,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -295,7 +304,11 @@ impl Builder<'_, '_> {
 
     fn do_token(&mut self, kind: SyntaxKind) {
         let text = self.str_with_tokens.token_text(self.pos);
-        (self.sink)(StrStep::Token { kind, text });
+        (self.sink)(StrStep::Token {
+            kind,
+            text,
+            pos: self.pos,
+        });
         self.pos += 1;
     }
 }

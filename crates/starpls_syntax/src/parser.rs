@@ -51,9 +51,14 @@ pub fn parse_module(input: &str, errors_sink: &mut dyn FnMut(SyntaxError)) -> Pa
         StrStep::Finish => {
             builder.finish_node();
         }
-        StrStep::Token { kind, text } => {
+        StrStep::Token { kind, text, pos } => {
             if kind == COMMENT && text.starts_with(TYPE_COMMENT_PREFIX_STR) {
-                build_type_comment(&mut builder, text, errors_sink);
+                build_type_comment(
+                    &mut builder,
+                    text,
+                    str_with_tokens.token_pos(pos) as usize,
+                    errors_sink,
+                );
                 return;
             }
             builder.token(StarlarkLanguage::kind_to_raw(kind), text);
@@ -78,6 +83,7 @@ pub fn parse_module(input: &str, errors_sink: &mut dyn FnMut(SyntaxError)) -> Pa
 fn build_type_comment(
     builder: &mut GreenNodeBuilder,
     text: &str,
+    text_start: usize,
     errors_sink: &mut dyn FnMut(SyntaxError),
 ) {
     builder.start_node(StarlarkLanguage::kind_to_raw(TYPE_COMMENT));
@@ -94,9 +100,17 @@ fn build_type_comment(
     str_with_tokens.build_with_trivia(output, &mut |str_step| match str_step {
         StrStep::Start { kind } => builder.start_node(StarlarkLanguage::kind_to_raw(kind)),
         StrStep::Finish => builder.finish_node(),
-        StrStep::Token { kind, text } => builder.token(StarlarkLanguage::kind_to_raw(kind), text),
-        StrStep::Error { .. } => {
-            // TODO(withered-magic): Add missing error handling logic.
+        StrStep::Token { kind, text, .. } => {
+            builder.token(StarlarkLanguage::kind_to_raw(kind), text)
+        }
+        StrStep::Error { message, pos } => {
+            let offset = ((text_start + TYPE_COMMENT_PREFIX_STR.len()) as u32
+                + str_with_tokens.token_pos(pos))
+            .into();
+            errors_sink(SyntaxError {
+                message,
+                range: TextRange::new(offset, offset),
+            })
         }
     });
 

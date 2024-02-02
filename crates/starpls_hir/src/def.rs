@@ -10,7 +10,7 @@ use smol_str::SmolStr;
 use starpls_common::File;
 use starpls_syntax::{
     ast::{self, AssignOp, AstPtr, BinaryOp, UnaryOp},
-    TextSize,
+    TextRange,
 };
 
 pub mod lower;
@@ -273,7 +273,7 @@ pub enum Stmt {
         lhs: ExprId,
         rhs: ExprId,
         op: Option<AssignOp>,
-        type_ref: Option<TypeRef>,
+        type_ref: Option<(TypeRef, TextRange)>,
     },
     Load {
         items: Box<[LoadItemId]>,

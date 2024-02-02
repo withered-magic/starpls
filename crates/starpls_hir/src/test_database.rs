@@ -1,4 +1,4 @@
-use crate::{def::ExprId, BuiltinDefs, Dialect, GlobalCtxt, ParamId, Ty, TyKind};
+use crate::{def::ExprId, BuiltinDefs, Dialect, GlobalCtxt, ParamId, Ty};
 use dashmap::{mapref::entry::Entry, DashMap};
 use starpls_bazel::Builtins;
 use starpls_common::{File, FileId};
@@ -13,6 +13,7 @@ pub(crate) struct TestDatabase {
 }
 
 impl TestDatabase {
+    #[allow(dead_code)]
     pub(crate) fn infer_all_exprs(&self, file: File) {
         self.gcx.with_tcx(self, |tcx| tcx.infer_all_exprs(file))
     }

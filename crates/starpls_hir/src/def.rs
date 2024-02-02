@@ -1,15 +1,17 @@
-use std::ops::Index;
+use std::{collections::HashSet, ops::Index};
 
 use crate::{
-    lower as lower_,
-    typeck::{builtins::BuiltinFunction, intrinsics::IntrinsicFunction, FunctionTypeRef, TypeRef},
+    typeck::{builtins::BuiltinFunction, intrinsics::IntrinsicFunction, TypeRef},
     Db, Ty, TyKind,
 };
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 use starpls_common::File;
-use starpls_syntax::ast::{self, AssignOp, AstPtr, BinaryOp, UnaryOp};
+use starpls_syntax::{
+    ast::{self, AssignOp, AstPtr, BinaryOp, UnaryOp},
+    TextSize,
+};
 
 pub mod lower;
 pub mod resolver;
@@ -39,6 +41,7 @@ pub struct Module {
     pub(crate) params: Arena<Param>,
     pub(crate) load_items: Arena<LoadItem>,
     pub(crate) top_level: Box<[StmtId]>,
+    pub(crate) type_ignore_comment_lines: HashSet<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

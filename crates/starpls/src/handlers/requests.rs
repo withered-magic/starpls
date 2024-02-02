@@ -60,7 +60,7 @@ pub(crate) fn goto_definition(
     };
 
     let to_lsp_location = |location: Location| -> Option<lsp_types::Location> {
-        let range = convert::lsp_range_from_text_range(location.range, &line_index);
+        let range = convert::lsp_range_from_text_range(location.range, line_index);
         Some(lsp_types::Location {
             uri: lsp_types::Url::from_file_path(
                 snapshot

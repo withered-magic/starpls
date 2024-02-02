@@ -45,6 +45,7 @@ pub enum SyntaxKind {
     FINALLY,
     FROM,
     GLOBAL,
+    IGNORE,
     IMPORT,
     IS,
     NONLOCAL,
@@ -135,6 +136,7 @@ pub enum SyntaxKind {
     NAMED_TYPE,        // tuple[int, int, string]
     GENERIC_ARGUMENTS, // [int, int, string] in the type above
 
+    IGNORE_TYPE,
     FUNCTION_TYPE,              // e.g. (int, int) -> int
     PARAMETER_TYPES,            // the (int, int) in the signature above
     SIMPLE_PARAMETER_TYPE,      // int
@@ -232,6 +234,7 @@ macro_rules! T {
     [<<=] => { $ crate :: SyntaxKind :: LT_LT_EQ };
     [>>=] => { $ crate :: SyntaxKind :: GT_GT_EQ };
     [:] => { $ crate :: SyntaxKind :: COLON };
+    [ignore] => { $ crate :: SyntaxKind :: IGNORE };
 }
 
 impl SyntaxKind {
@@ -305,6 +308,7 @@ impl From<starpls_lexer::TokenKind> for SyntaxKind {
             starpls_lexer::TokenKind::Finally => FINALLY,
             starpls_lexer::TokenKind::From => FROM,
             starpls_lexer::TokenKind::Global => GLOBAL,
+            starpls_lexer::TokenKind::Ignore => IGNORE,
             starpls_lexer::TokenKind::Import => IMPORT,
             starpls_lexer::TokenKind::Is => IS,
             starpls_lexer::TokenKind::Nonlocal => NONLOCAL,

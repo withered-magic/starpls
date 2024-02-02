@@ -22,6 +22,18 @@ pub(crate) fn module(p: &mut Parser) {
 
 pub(crate) fn type_comment_body(p: &mut Parser) {
     let m = p.start();
+    match p.current() {
+        T![ignore] => {
+            let m = p.start();
+            p.bump(T![ignore]);
+            m.complete(p, IGNORE_TYPE);
+        }
+        T!['('] => {
+            function_type(p);
+        }
+        _ => union_type(p),
+    }
+
     if p.at(T!['(']) {
         function_type(p);
     } else {

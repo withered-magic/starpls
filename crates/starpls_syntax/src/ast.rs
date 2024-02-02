@@ -1,7 +1,7 @@
 use crate::{
     StarlarkLanguage,
     SyntaxKind::{self, *},
-    SyntaxNode, SyntaxNodeChildren, SyntaxToken, T,
+    SyntaxNode, SyntaxNodeChildren, SyntaxToken, TextSize, T,
 };
 use std::{
     fmt::{Debug, Write},
@@ -160,6 +160,15 @@ ast_node! {
     /// A Starlark module. This is typically the root of the AST.
     Module => MODULE
     children statements -> Statement;
+}
+
+impl Module {
+    pub fn type_ignore_comment_positions(&self) -> impl Iterator<Item = TextSize> {
+        self.syntax()
+            .descendants()
+            .filter_map(IgnoreType::cast)
+            .map(|node| node.syntax().text_range().start())
+    }
 }
 
 /// A statement.
@@ -1313,6 +1322,7 @@ ast_node! {
     TypeCommentBody => TYPE_COMMENT_BODY
     child type_ -> Type;
     child function_type -> FunctionType;
+    child ignore -> IgnoreType;
 }
 
 ast_node! {
@@ -1375,6 +1385,10 @@ ast_node! {
 ast_node! {
     GenericArguments => GENERIC_ARGUMENTS
     children types -> Type;
+}
+
+ast_node! {
+    IgnoreType => IGNORE_TYPE
 }
 
 ast_node! {

@@ -36,6 +36,10 @@ impl starpls_common::Db for TestDatabase {
         file
     }
 
+    fn load_file_contents(&self, _path: &str, _from: FileId) -> std::io::Result<File> {
+        Ok(File::new(self, FileId(0), String::new()))
+    }
+
     fn get_file(&self, file_id: FileId) -> Option<File> {
         self.files.get(&file_id).map(|file| *file)
     }

@@ -154,7 +154,8 @@ impl<'a> LoweringContext<'a> {
                 }
             }
             ast::Statement::Load(stmt) => {
-                let items = self.lower_load_items(stmt.items());
+                let module = self.lower_string_opt(stmt.module());
+                let items = self.lower_load_items(module, stmt.items());
                 Stmt::Load { items }
             }
             ast::Statement::Expr(stmt) => {
@@ -462,6 +463,7 @@ impl<'a> LoweringContext<'a> {
 
     fn lower_load_items(
         &mut self,
+        module: Box<str>,
         load_items: impl Iterator<Item = ast::LoadItem>,
     ) -> Box<[LoadItemId]> {
         load_items
@@ -469,11 +471,13 @@ impl<'a> LoweringContext<'a> {
                 let ptr = AstPtr::new(&load_item);
                 let load_item = match load_item {
                     ast::LoadItem::Direct(item) => LoadItem::Direct {
+                        module: module.clone(),
                         name: self.lower_string_opt(item.name()),
                     },
                     ast::LoadItem::Aliased(item) => {
                         let alias = self.lower_name_opt(item.alias());
                         LoadItem::Aliased {
+                            module: module.clone(),
                             alias,
                             name: self.lower_string_opt(item.name()),
                         }

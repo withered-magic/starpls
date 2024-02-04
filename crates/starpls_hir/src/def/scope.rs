@@ -8,25 +8,25 @@ use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
 use starpls_common::{Diagnostic, Diagnostics, File, FileRange, Severity};
 use std::collections::{hash_map::Entry, VecDeque};
-use std::sync::Arc;
 
 pub(crate) type ScopeId = Id<Scope>;
 
 #[salsa::tracked]
 pub struct ModuleScopes {
-    pub(crate) scopes: Arc<Scopes>,
+    #[return_ref]
+    pub(crate) scopes: Scopes,
 }
 
 #[salsa::tracked]
-pub(crate) fn module_scopes_query(db: &dyn Db, file: File, info: ModuleInfo) -> ModuleScopes {
-    let scopes = Scopes::new_for_module(db, file, info);
-    ModuleScopes::new(db, Arc::new(scopes))
+pub(crate) fn module_scopes_query(db: &dyn Db, info: ModuleInfo) -> ModuleScopes {
+    let scopes = Scopes::new_for_module(db, info);
+    ModuleScopes::new(db, scopes)
 }
 
 #[salsa::tracked]
 pub fn module_scopes(db: &dyn Db, file: File) -> ModuleScopes {
     let info = lower(db, file);
-    module_scopes_query(db, file, info)
+    module_scopes_query(db, info)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -72,11 +72,11 @@ struct FunctionData {
 }
 
 impl Scopes {
-    fn new_for_module(db: &dyn Db, file: File, info: ModuleInfo) -> Self {
+    fn new_for_module(db: &dyn Db, info: ModuleInfo) -> Self {
         ScopeCollector {
             db,
             deferred: VecDeque::new(),
-            file,
+            file: info.file(db),
             module: info.module(db),
             source_map: info.source_map(db),
             scopes: Scopes {
@@ -130,12 +130,12 @@ impl ScopeCollector<'_> {
             declarations: Default::default(),
             parent: None,
         });
+
+        // Compute scopes by walking the module HIR, starting at the top-level statements.
+        let root = self.collect_stmts_defer(&self.module.top_level, root);
         self.scopes
             .scopes_by_hir_id
             .insert(ScopeHirId::Module, root);
-
-        // Compute scopes by walking the module HIR, starting at the top-level statements.
-        self.collect_stmts_defer(&self.module.top_level, root);
 
         // Compute deferred scopes. This mainly applies to function definitions.
         while let Some(DeferredScope { parent, data }) = self.deferred.pop_front() {
@@ -162,7 +162,7 @@ impl ScopeCollector<'_> {
         self.scopes
     }
 
-    fn collect_stmts_defer(&mut self, stmts: &Box<[StmtId]>, mut current: ScopeId) {
+    fn collect_stmts_defer(&mut self, stmts: &Box<[StmtId]>, mut current: ScopeId) -> ScopeId {
         let mut deferred = VecDeque::new();
         for stmt in stmts.iter().copied() {
             self.collect_stmt(&mut deferred, stmt, &mut current);
@@ -173,6 +173,7 @@ impl ScopeCollector<'_> {
                 data,
             });
         }
+        current
     }
 
     fn collect_stmts(
@@ -242,7 +243,7 @@ impl ScopeCollector<'_> {
                 *current = self.scopes.alloc_scope(*current);
                 for item in items.iter() {
                     let name: &str = match &self.module.load_items[*item] {
-                        LoadItem::Direct { name } => &name,
+                        LoadItem::Direct { name, .. } => &name,
                         LoadItem::Aliased { alias, .. } => alias.as_str(),
                     };
                     self.scopes.add_decl(

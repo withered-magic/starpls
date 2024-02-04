@@ -1,5 +1,8 @@
 use crate::{
-    def::{resolver::Resolver, Argument, Expr, ExprId, Literal, Param, ParamId, Stmt},
+    def::{
+        resolver::{Export, Resolver},
+        Argument, Expr, ExprId, Literal, LoadItem, LoadItemId, Param, ParamId, Stmt,
+    },
     display::DisplayWithDb,
     module, source_map,
     typeck::{
@@ -9,7 +12,7 @@ use crate::{
         resolve_type_ref, resolve_type_ref_opt, FileExprId, FileParamId, Substitution, Tuple, Ty,
         TyCtxt, TyKind, TypeRef, TypecheckCancelled,
     },
-    Declaration,
+    Declaration, Name,
 };
 use smallvec::SmallVec;
 use starpls_common::{line_index, parse, Diagnostic, File, FileRange, Severity};
@@ -17,6 +20,8 @@ use starpls_syntax::{
     ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, UnaryOp},
     TextRange,
 };
+
+use super::FileLoadItemId;
 
 impl TyCtxt<'_> {
     pub fn infer_all_exprs(&mut self, file: File) {
@@ -28,6 +33,12 @@ impl TyCtxt<'_> {
     pub fn infer_all_params(&mut self, file: File) {
         for (param, _) in module(self.db, file).params.iter() {
             self.infer_param(file, param);
+        }
+    }
+
+    pub fn infer_all_load_items(&mut self, file: File) {
+        for (load_item, _) in module(self.db, file).load_items.iter() {
+            self.infer_load_item(file, load_item);
         }
     }
 
@@ -69,7 +80,8 @@ impl TyCtxt<'_> {
         self.unwind_if_cancelled();
 
         let db = self.db;
-        let ty = match &module(db, file)[expr] {
+        let curr_module = module(db, file);
+        let ty = match &curr_module[expr] {
             Expr::Name { name } => {
                 let resolver = Resolver::new_for_expr(db, file, expr);
                 resolver
@@ -103,6 +115,7 @@ impl TyCtxt<'_> {
                             resolve_type_ref(db, &type_ref).0
                         }
                         Declaration::Parameter { id, .. } => self.infer_param(file, id),
+                        Declaration::LoadItem { id } => self.infer_load_item(file, id),
                         _ => self.any_ty(),
                     })
                     .unwrap_or_else(|| {
@@ -832,7 +845,7 @@ impl TyCtxt<'_> {
     }
 
     pub fn infer_param(&mut self, file: File, param: ParamId) -> Ty {
-        if let Some(ty) = self.cx.param_tys.get(&FileParamId { file, param }) {
+        if let Some(ty) = self.cx.type_of_param.get(&FileParamId { file, param }) {
             return ty.clone();
         }
 
@@ -859,7 +872,7 @@ impl TyCtxt<'_> {
         };
 
         self.cx
-            .param_tys
+            .type_of_param
             .insert(FileParamId { file, param }, ty.clone());
         ty
     }
@@ -876,6 +889,62 @@ impl TyCtxt<'_> {
         }
 
         ty
+    }
+
+    pub fn infer_load_item(&mut self, file: File, load_item: LoadItemId) -> Ty {
+        if let Some(ty) = self
+            .cx
+            .type_of_load_item
+            .get(&FileLoadItemId::new(file, load_item))
+        {
+            return ty.clone();
+        }
+
+        let db = self.db;
+        let range = || {
+            let ptr = source_map(db, file)
+                .load_item_map_back
+                .get(&load_item)
+                .unwrap();
+            ptr.syntax_node_ptr().text_range()
+        };
+
+        match &module(db, file).load_items[load_item] {
+            LoadItem::Direct { module, name } | LoadItem::Aliased { module, name, .. } => {
+                match db.load_file_contents(&module, file.id(db)) {
+                    Ok(loaded_file) => {
+                        match Resolver::resolve_export_in_file(
+                            db,
+                            loaded_file,
+                            &Name::from_str(&name),
+                        ) {
+                            Some(Export::Function { func }) => func.ty(),
+                            Some(Export::Variable { expr }) => self.infer_expr(loaded_file, expr),
+                            None => {
+                                self.add_diagnostic_for_range(
+                                    file,
+                                    range(),
+                                    format!(
+                                        "Could not resolve symbol \"{}\" in module \"{}\"",
+                                        name, module
+                                    ),
+                                );
+                                self.unknown_ty()
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("Error loading path {:?}", err);
+                        self.add_diagnostic_for_range(
+                            file,
+                            range(),
+                            format!("Could not resolve module \"{}\"", module),
+                        );
+                        self.unknown_ty()
+                    }
+                }
+            }
+        }
     }
 
     fn types(&self) -> &IntrinsicTypes {

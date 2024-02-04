@@ -358,6 +358,7 @@ impl AssignStmt {
 
 ast_node! {
     LoadStmt => LOAD_STMT
+    child_token module -> STRING;
     children items -> LoadItem;
 }
 

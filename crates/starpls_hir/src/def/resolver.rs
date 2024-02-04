@@ -1,30 +1,39 @@
 use crate::{
     def::{
         scope::{module_scopes, Scope, ScopeHirId, ScopeId, Scopes},
-        Declaration, ExprId, ModuleSourceMap,
+        Declaration, ExprId, Function, ModuleSourceMap,
     },
     source_map,
     typeck::{builtins::builtin_globals, intrinsics::intrinsic_functions},
     Db, Name,
 };
-
 use starpls_common::File;
 use starpls_syntax::{TextRange, TextSize};
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    sync::Arc,
-};
+use std::collections::{hash_map::Entry, HashMap};
 
 /// Resolves things like variables, function definition, etc. For now this is implemented as a simple list
 /// of "module" scopes that hold variable declarations, but will need to be updated later to support other
 /// features, e.g. type declarations, builtins, etc.
 pub struct Resolver<'a> {
     db: &'a dyn Db,
-    scopes: Arc<Scopes>,
+    scopes: &'a Scopes,
     scope_chain: Vec<ScopeId>,
 }
 
+pub(crate) enum Export {
+    Variable { expr: ExprId },
+    Function { func: Function },
+}
+
 impl<'a> Resolver<'a> {
+    pub(crate) fn resolve_export_in_file(
+        db: &'a dyn Db,
+        file: File,
+        name: &Name,
+    ) -> Option<Export> {
+        Self::new_for_module(db, file).resolve_export(name)
+    }
+
     pub fn resolve_name(&self, name: &Name) -> Option<Vec<Declaration>> {
         // Check module scopes first.
         for scope in self.scopes() {
@@ -35,6 +44,23 @@ impl<'a> Resolver<'a> {
 
         // Fall back to the builtins scope.
         self.resolve_name_in_builtins(name)
+    }
+
+    pub(crate) fn resolve_export(&self, name: &Name) -> Option<Export> {
+        self.scopes().find_map(|scope| {
+            eprintln!("{:?}", scope.declarations);
+            scope
+                .declarations
+                .get(name)
+                .and_then(|decls| decls.last())
+                .and_then(|decl| {
+                    Some(match decl {
+                        Declaration::Variable { id, .. } => Export::Variable { expr: *id },
+                        Declaration::Function { func, .. } => Export::Function { func: *func },
+                        _ => return None,
+                    })
+                })
+        })
     }
 
     pub fn resolve_name_in_builtins(&self, name: &Name) -> Option<Vec<Declaration>> {
@@ -112,6 +138,18 @@ impl<'a> Resolver<'a> {
             .iter()
             .rev()
             .map(|scope| &self.scopes.scopes[*scope])
+    }
+
+    pub fn new_for_module(db: &'a dyn Db, file: File) -> Self {
+        let scopes = module_scopes(db, file).scopes(db);
+        let scope = scopes.scope_for_hir_id(ScopeHirId::Module);
+        let mut scope_chain = scopes.scope_chain(scope).collect::<Vec<_>>();
+        scope_chain.reverse();
+        Self {
+            db,
+            scopes,
+            scope_chain,
+        }
     }
 
     pub fn new_for_expr(db: &'a dyn Db, file: File, expr: ExprId) -> Self {

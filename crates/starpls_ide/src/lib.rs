@@ -6,6 +6,7 @@ use starpls_bazel::Builtins;
 use starpls_common::{Db, Diagnostic, File, FileId};
 use starpls_hir::{BuiltinDefs, Db as _, Dialect, ExprId, GlobalCtxt, ParamId, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
+use std::fmt::Debug;
 use std::sync::Arc;
 
 pub use starpls_hir::Cancelled;
@@ -18,12 +19,12 @@ pub mod hover;
 
 pub type Cancellable<T> = Result<T, Cancelled>;
 
-#[derive(Default)]
 #[salsa::db(starpls_common::Jar, starpls_hir::Jar)]
 pub(crate) struct Database {
     builtin_defs: Arc<DashMap<Dialect, BuiltinDefs>>,
     storage: salsa::Storage<Self>,
     files: Arc<DashMap<FileId, File>>,
+    loader: Arc<dyn FileLoader>,
     gcx: Arc<GlobalCtxt>,
 }
 
@@ -45,6 +46,7 @@ impl salsa::ParallelDatabase for Database {
             builtin_defs: self.builtin_defs.clone(),
             files: self.files.clone(),
             gcx: self.gcx.clone(),
+            loader: self.loader.clone(),
             storage: self.storage.snapshot(),
         })
     }
@@ -58,6 +60,16 @@ impl starpls_common::Db for Database {
         };
         file.set_contents(self).to(contents);
         file
+    }
+
+    fn load_file_contents(&self, path: &str, from: FileId) -> std::io::Result<File> {
+        let (file_id, contents) = self.loader.load_file(path, from)?;
+        Ok(match self.files.entry(file_id) {
+            Entry::Occupied(entry) => *entry.get(),
+            Entry::Vacant(entry) => {
+                *entry.insert(File::new(self, file_id, contents.unwrap_or_default()))
+            }
+        })
     }
 
     fn get_file(&self, file_id: FileId) -> Option<File> {
@@ -112,9 +124,15 @@ pub struct Analysis {
 }
 
 impl Analysis {
-    pub fn new() -> Self {
+    pub fn new(loader: Arc<dyn FileLoader>) -> Self {
         Self {
-            db: Default::default(),
+            db: Database {
+                builtin_defs: Default::default(),
+                files: Default::default(),
+                gcx: Default::default(),
+                storage: Default::default(),
+                loader,
+            },
         }
     }
 
@@ -190,4 +208,8 @@ pub struct Location {
 pub struct FilePosition {
     pub file_id: FileId,
     pub pos: TextSize,
+}
+
+pub trait FileLoader: Debug + Send + Sync + 'static {
+    fn load_file(&self, path: &str, from: FileId) -> std::io::Result<(FileId, Option<String>)>;
 }

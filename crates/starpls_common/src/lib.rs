@@ -25,6 +25,8 @@ pub struct FileId(pub u32);
 pub trait Db: salsa::DbWithJar<Jar> {
     fn set_file_contents(&mut self, file_id: FileId, contents: String) -> File;
 
+    fn load_file_contents(&self, path: &str, from: FileId) -> std::io::Result<File>;
+
     fn get_file(&self, file_id: FileId) -> Option<File>;
 }
 

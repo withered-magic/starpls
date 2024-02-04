@@ -350,8 +350,15 @@ impl Param {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LoadItem {
-    Direct { name: Box<str> },
-    Aliased { alias: Name, name: Box<str> },
+    Direct {
+        module: Box<str>,
+        name: Box<str>,
+    },
+    Aliased {
+        module: Box<str>,
+        alias: Name,
+        name: Box<str>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

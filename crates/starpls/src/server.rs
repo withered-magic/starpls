@@ -1,7 +1,7 @@
 use crate::{
     debouncer::AnalysisDebouncer,
     diagnostics::DiagnosticsManager,
-    document::DocumentManager,
+    document::{DefaultFileLoader, DocumentManager, PathInterner},
     event_loop::Task,
     task_pool::{TaskPool, TaskPoolHandle},
 };
@@ -45,14 +45,17 @@ impl Server {
             }
         };
 
-        let mut analysis = Analysis::new();
+        let path_interner = Arc::new(PathInterner::default());
+        let loader = DefaultFileLoader::new(path_interner.clone());
+
+        let mut analysis = Analysis::new(Arc::new(loader));
         analysis.set_builtin_defs(builtins);
 
         Ok(Server {
             connection,
             req_queue: Default::default(),
             task_pool_handle,
-            document_manager: Default::default(),
+            document_manager: Arc::new(RwLock::new(DocumentManager::new(path_interner))),
             diagnostics_manager: Default::default(),
             analysis,
             analysis_debouncer: AnalysisDebouncer::new(DEBOUNCE_INTERVAL, sender),

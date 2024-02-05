@@ -1,13 +1,14 @@
 use crate::{
     debouncer::AnalysisDebouncer,
     diagnostics::DiagnosticsManager,
-    document::{DefaultFileLoader, DocumentManager, PathInterner},
+    document::{DefaultFileLoader, DocumentChangeKind, DocumentManager, PathInterner},
     event_loop::Task,
     task_pool::{TaskPool, TaskPoolHandle},
 };
 use lsp_server::{Connection, ReqQueue};
 use parking_lot::RwLock;
 use starpls_bazel::{load_builtins, Builtins};
+use starpls_common::Dialect;
 use starpls_ide::{Analysis, AnalysisSnapshot, Change};
 use std::{sync::Arc, time::Duration};
 
@@ -79,12 +80,19 @@ impl Server {
             return has_opened_or_closed_documents;
         }
 
-        for file_id in changed_file_ids {
+        for (file_id, change_kind) in changed_file_ids {
             let contents = document_manager
                 .contents(file_id)
                 .map(|contents| contents.to_string())
                 .unwrap_or_else(|| String::new());
-            change.add_file(file_id, contents);
+            match change_kind {
+                DocumentChangeKind::Create => {
+                    change.create_file(file_id, Dialect::Standard, contents);
+                }
+                DocumentChangeKind::Update => {
+                    change.update_file(file_id, contents);
+                }
+            }
         }
 
         drop(document_manager);

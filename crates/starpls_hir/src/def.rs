@@ -9,7 +9,7 @@ use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 use starpls_common::File;
 use starpls_syntax::{
-    ast::{self, AssignOp, AstPtr, BinaryOp, UnaryOp},
+    ast::{self, AssignOp, AstPtr, BinaryOp, SyntaxNodePtr, UnaryOp},
     TextRange,
 };
 
@@ -276,6 +276,7 @@ pub enum Stmt {
         type_ref: Option<(TypeRef, TextRange)>,
     },
     Load {
+        load_stmt: LoadStmt,
         items: Box<[LoadItemId]>,
     },
     Expr {
@@ -348,17 +349,17 @@ impl Param {
     }
 }
 
+#[salsa::tracked]
+pub(crate) struct LoadStmt {
+    #[return_ref]
+    pub(crate) module: Box<str>,
+    pub(crate) ptr: SyntaxNodePtr,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LoadItem {
-    Direct {
-        module: Box<str>,
-        name: Box<str>,
-    },
-    Aliased {
-        module: Box<str>,
-        alias: Name,
-        name: Box<str>,
-    },
+    Direct { name: Box<str> },
+    Aliased { alias: Name, name: Box<str> },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -396,7 +397,7 @@ pub enum Declaration {
     BuiltinVariable { type_ref: TypeRef },
     Variable { id: ExprId, source: Option<ExprId> },
     Parameter { id: ParamId, func: Option<Function> },
-    LoadItem { id: LoadItemId },
+    LoadItem { id: LoadItemId, load_stmt: LoadStmt },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

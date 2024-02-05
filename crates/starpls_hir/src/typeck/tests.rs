@@ -1,17 +1,16 @@
 use crate::{source_map, test_database::TestDatabase, Db as _, DisplayWithDb};
 use expect_test::{expect, Expect};
 use itertools::Itertools;
-use starpls_common::{parse, Db as _, FileId};
+use starpls_common::{parse, Db as _, Dialect, FileId};
 use starpls_syntax::ast::AstNode;
 use std::{cmp::Ordering, fmt::Write};
 
 fn check_infer(input: &str, expect: Expect) {
     let mut db = TestDatabase::default();
     let file_id = FileId(0);
-    let file = db.set_file_contents(file_id, input.to_string());
+    let file = db.create_file(file_id, Dialect::Standard, input.to_string());
     let root = parse(&db, file).syntax(&db);
     let source_map = source_map(&db, file);
-
     let mut res = String::new();
 
     for (ptr, range) in source_map

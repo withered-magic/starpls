@@ -1,7 +1,7 @@
 use crate::{
     def::{
         resolver::{Export, Resolver},
-        Argument, Expr, ExprId, Literal, LoadItem, LoadItemId, Param, ParamId, Stmt,
+        Argument, Expr, ExprId, Literal, LoadItem, LoadItemId, LoadStmt, Param, ParamId, Stmt,
     },
     display::DisplayWithDb,
     module, source_map,
@@ -21,7 +21,7 @@ use starpls_syntax::{
     TextRange,
 };
 
-use super::FileLoadItemId;
+use super::{FileLoadItemId, FileLoadStmt};
 
 impl TyCtxt<'_> {
     pub fn infer_all_exprs(&mut self, file: File) {
@@ -37,8 +37,15 @@ impl TyCtxt<'_> {
     }
 
     pub fn infer_all_load_items(&mut self, file: File) {
-        for (load_item, _) in module(self.db, file).load_items.iter() {
-            self.infer_load_item(file, load_item);
+        let module = module(self.db, file);
+
+        for stmt in module.top_level.iter().copied() {
+            if let Stmt::Load { load_stmt, items } = &module.stmts[stmt] {
+                self.resolve_load_stmt(file, *load_stmt);
+                for load_item in items.iter().copied() {
+                    self.infer_load_item(file, *load_stmt, load_item);
+                }
+            }
         }
     }
 
@@ -115,7 +122,9 @@ impl TyCtxt<'_> {
                             resolve_type_ref(db, &type_ref).0
                         }
                         Declaration::Parameter { id, .. } => self.infer_param(file, id),
-                        Declaration::LoadItem { id } => self.infer_load_item(file, id),
+                        Declaration::LoadItem { id, load_stmt } => {
+                            self.infer_load_item(file, load_stmt, id)
+                        }
                         _ => self.any_ty(),
                     })
                     .unwrap_or_else(|| {
@@ -845,7 +854,7 @@ impl TyCtxt<'_> {
     }
 
     pub fn infer_param(&mut self, file: File, param: ParamId) -> Ty {
-        if let Some(ty) = self.cx.type_of_param.get(&FileParamId { file, param }) {
+        if let Some(ty) = self.cx.type_of_param.get(&FileParamId::new(file, param)) {
             return ty.clone();
         }
 
@@ -873,7 +882,7 @@ impl TyCtxt<'_> {
 
         self.cx
             .type_of_param
-            .insert(FileParamId { file, param }, ty.clone());
+            .insert(FileParamId::new(file, param), ty.clone());
         ty
     }
 
@@ -891,7 +900,12 @@ impl TyCtxt<'_> {
         ty
     }
 
-    pub fn infer_load_item(&mut self, file: File, load_item: LoadItemId) -> Ty {
+    pub(crate) fn infer_load_item(
+        &mut self,
+        file: File,
+        load_stmt: LoadStmt,
+        load_item: LoadItemId,
+    ) -> Ty {
         if let Some(ty) = self
             .cx
             .type_of_load_item
@@ -909,42 +923,131 @@ impl TyCtxt<'_> {
             ptr.syntax_node_ptr().text_range()
         };
 
-        match &module(db, file).load_items[load_item] {
-            LoadItem::Direct { module, name } | LoadItem::Aliased { module, name, .. } => {
-                match db.load_file_contents(&module, file.id(db)) {
-                    Ok(loaded_file) => {
-                        match Resolver::resolve_export_in_file(
-                            db,
-                            loaded_file,
-                            &Name::from_str(&name),
-                        ) {
-                            Some(Export::Function { func }) => func.ty(),
-                            Some(Export::Variable { expr }) => self.infer_expr(loaded_file, expr),
-                            None => {
+        let ty = match &module(db, file).load_items[load_item] {
+            LoadItem::Direct { name } | LoadItem::Aliased { name, .. } => {
+                self.resolve_load_stmt(file, load_stmt)
+                    .map(|loaded_file| {
+                        // Check for potential circular imports, including importing the current file.
+                        if file == loaded_file {
+                            self.add_diagnostic_for_range(
+                                file,
+                                range(),
+                                "Cannot load the current file",
+                            );
+                            return self.unknown_ty();
+                        } else if self
+                            .cx
+                            .load_resolution_stack
+                            .iter()
+                            .find(|(entry_file, _)| loaded_file == *entry_file)
+                            .is_some()
+                        {
+                            let mut message = String::from("Detected circular import\n");
+                            for (_, load_stmt) in self.cx.load_resolution_stack.iter() {
+                                message.push_str("- ");
+                                message.push_str(&load_stmt.module(db));
+                                message.push('\n');
+                            }
+                            message.push_str("- ");
+                            message.push_str(&load_stmt.module(db));
+                            message.push('\n');
+
+                            // Use a range here to avoid having to allocate.
+                            for i in 0..self.cx.load_resolution_stack.len() {
+                                let (file, load_stmt) = self.cx.load_resolution_stack[i].clone();
                                 self.add_diagnostic_for_range(
                                     file,
-                                    range(),
-                                    format!(
-                                        "Could not resolve symbol \"{}\" in module \"{}\"",
-                                        name, module
-                                    ),
-                                );
-                                self.unknown_ty()
+                                    load_stmt.ptr(db).text_range(),
+                                    message.clone(),
+                                )
                             }
+
+                            // Also add the current (importing) file.
+                            self.add_diagnostic_for_range(
+                                file,
+                                load_stmt.ptr(db).text_range(),
+                                message,
+                            );
+
+                            return self.unknown_ty();
                         }
-                    }
-                    Err(err) => {
-                        eprintln!("Error loading path {:?}", err);
-                        self.add_diagnostic_for_range(
-                            file,
-                            range(),
-                            format!("Could not resolve module \"{}\"", module),
-                        );
-                        self.unknown_ty()
-                    }
-                }
+
+                        // Add the current file to the load resolution stack.
+                        self.push_load_resolution(file, load_stmt, |tcx| {
+                            tcx.infer_all_load_items(loaded_file);
+
+                            match Resolver::resolve_export_in_file(
+                                db,
+                                loaded_file,
+                                &Name::from_str(name),
+                            ) {
+                                Some(Export::Variable { expr }) => {
+                                    tcx.infer_expr(loaded_file, expr)
+                                }
+                                Some(Export::Function { func }) => func.ty(),
+                                None => {
+                                    tcx.add_diagnostic_for_range(
+                                        file,
+                                        range(),
+                                        format!(
+                                            "Could not resolve symbol \"{}\" in module \"{}\"",
+                                            name,
+                                            load_stmt.module(db)
+                                        ),
+                                    );
+                                    tcx.unknown_ty()
+                                }
+                            }
+                        })
+                    })
+                    .unwrap_or_else(|| self.unknown_ty())
             }
+        };
+
+        self.cx
+            .type_of_load_item
+            .insert(FileLoadItemId::new(file, load_item), ty.clone());
+        ty
+    }
+
+    fn resolve_load_stmt(&mut self, file: File, load_stmt: LoadStmt) -> Option<File> {
+        let id = FileLoadStmt::new(file, load_stmt);
+
+        if let Some(loaded_file) = self.cx.resolved_load_stmts.get(&id) {
+            return *loaded_file;
         }
+
+        let module = load_stmt.module(self.db);
+        let res = match self
+            .db
+            .load_file(&module, file.dialect(self.db), file.id(self.db))
+        {
+            Ok(loaded_file) => Some(loaded_file),
+            Err(_err) => {
+                self.add_diagnostic_for_range(
+                    file,
+                    load_stmt.ptr(self.db).text_range(),
+                    format!(
+                        "Could not resolved module \"{}\"",
+                        load_stmt.module(self.db)
+                    ),
+                );
+                None
+            }
+        };
+
+        self.cx.resolved_load_stmts.insert(id, res.clone());
+        res
+    }
+
+    fn push_load_resolution<F, T>(&mut self, file: File, load_stmt: LoadStmt, f: F) -> T
+    where
+        F: FnOnce(&mut Self) -> T,
+    {
+        self.cx.load_resolution_stack.push((file, load_stmt));
+        let res = f(self);
+        self.cx.load_resolution_stack.pop();
+        res
     }
 
     fn types(&self) -> &IntrinsicTypes {

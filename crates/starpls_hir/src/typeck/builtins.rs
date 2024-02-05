@@ -1,8 +1,9 @@
-use crate::{Db, Dialect, Name, Ty, TyKind, TypeRef};
+use crate::{Db, Name, Ty, TyKind, TypeRef};
 use rustc_hash::FxHashMap;
 use starpls_bazel::{
     builtin::Callable, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
 };
+use starpls_common::Dialect;
 
 #[salsa::tracked]
 pub(crate) struct BuiltinTypes {

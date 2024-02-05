@@ -51,7 +51,7 @@ pub(crate) fn goto_definition(
                             range: ptr.syntax_node_ptr().text_range(),
                         })
                     }
-                    Declaration::LoadItem { id } => {
+                    Declaration::LoadItem { id, .. } => {
                         source_map.load_item_map_back.get(&id).map(|ptr| Location {
                             file_id,
                             range: ptr.syntax_node_ptr().text_range(),

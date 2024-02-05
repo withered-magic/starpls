@@ -1,15 +1,15 @@
 use crate::{
     def::{
         Argument, CompClause, DictEntry, Expr, ExprId, ExprPtr, Function, Literal, LoadItem,
-        LoadItemId, LoadItemPtr, Module, ModuleSourceMap, Name, Param, ParamId, ParamPtr, Stmt,
-        StmtId, StmtPtr,
+        LoadItemId, LoadItemPtr, LoadStmt, Module, ModuleSourceMap, Name, Param, ParamId, ParamPtr,
+        Stmt, StmtId, StmtPtr,
     },
     typeck::FunctionTypeRef,
     Db, TypeRef,
 };
 use starpls_common::{line_index, Diagnostic, Diagnostics, File, FileRange, Severity};
 use starpls_syntax::{
-    ast::{self, AstNode, AstPtr, AstToken},
+    ast::{self, AstNode, AstPtr, AstToken, SyntaxNodePtr},
     SyntaxToken, TextRange,
 };
 
@@ -154,9 +154,11 @@ impl<'a> LoweringContext<'a> {
                 }
             }
             ast::Statement::Load(stmt) => {
+                let ptr = SyntaxNodePtr::new(&stmt.syntax());
                 let module = self.lower_string_opt(stmt.module());
-                let items = self.lower_load_items(module, stmt.items());
-                Stmt::Load { items }
+                let load_stmt = LoadStmt::new(self.db, module, ptr);
+                let items = self.lower_load_items(stmt.items());
+                Stmt::Load { load_stmt, items }
             }
             ast::Statement::Expr(stmt) => {
                 let expr = self.lower_expr(stmt);
@@ -463,7 +465,6 @@ impl<'a> LoweringContext<'a> {
 
     fn lower_load_items(
         &mut self,
-        module: Box<str>,
         load_items: impl Iterator<Item = ast::LoadItem>,
     ) -> Box<[LoadItemId]> {
         load_items
@@ -471,13 +472,11 @@ impl<'a> LoweringContext<'a> {
                 let ptr = AstPtr::new(&load_item);
                 let load_item = match load_item {
                     ast::LoadItem::Direct(item) => LoadItem::Direct {
-                        module: module.clone(),
                         name: self.lower_string_opt(item.name()),
                     },
                     ast::LoadItem::Aliased(item) => {
                         let alias = self.lower_name_opt(item.alias());
                         LoadItem::Aliased {
-                            module: module.clone(),
                             alias,
                             name: self.lower_string_opt(item.name()),
                         }

@@ -1,5 +1,5 @@
 use crate::{
-    def::{ExprId, Function, LoadItemId, Param as HirDefParam, ParamId},
+    def::{ExprId, Function, LoadItemId, LoadStmt, Param as HirDefParam, ParamId},
     display::{delimited, DisplayWithDb},
     module,
     typeck::{
@@ -55,6 +55,18 @@ pub(crate) struct FileParamId {
 impl FileParamId {
     fn new(file: File, param: ParamId) -> Self {
         Self { file, param }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct FileLoadStmt {
+    pub(crate) file: File,
+    pub(crate) load_stmt: LoadStmt,
+}
+
+impl FileLoadStmt {
+    fn new(file: File, load_stmt: LoadStmt) -> Self {
+        Self { file, load_stmt }
     }
 }
 
@@ -821,6 +833,8 @@ impl GlobalCtxt {
 #[derive(Default)]
 pub(crate) struct InferenceCtxt {
     pub(crate) diagnostics: Vec<Diagnostic>,
+    pub(crate) resolved_load_stmts: FxHashMap<FileLoadStmt, Option<File>>,
+    pub(crate) load_resolution_stack: Vec<(File, LoadStmt)>,
     pub(crate) type_of_expr: FxHashMap<FileExprId, Ty>,
     pub(crate) type_of_load_item: FxHashMap<FileLoadItemId, Ty>,
     pub(crate) type_of_param: FxHashMap<FileParamId, Ty>,

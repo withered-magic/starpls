@@ -33,6 +33,7 @@ pub struct Jar(
     lower_query,
     ModuleInfo,
     def::Function,
+    def::LoadStmt,
     def::scope::ModuleScopes,
     def::scope::module_scopes,
     def::scope::module_scopes_query,

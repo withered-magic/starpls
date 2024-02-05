@@ -239,7 +239,7 @@ impl ScopeCollector<'_> {
                 *current = self.scopes.alloc_scope(*current);
                 self.collect_expr(*lhs, *current, Some(*rhs));
             }
-            Stmt::Load { items } => {
+            Stmt::Load { load_stmt, items } => {
                 *current = self.scopes.alloc_scope(*current);
                 for item in items.iter() {
                     let name: &str = match &self.module.load_items[*item] {
@@ -249,7 +249,10 @@ impl ScopeCollector<'_> {
                     self.scopes.add_decl(
                         *current,
                         Name::from_str(name),
-                        Declaration::LoadItem { id: *item },
+                        Declaration::LoadItem {
+                            id: *item,
+                            load_stmt: *load_stmt,
+                        },
                     )
                 }
             }

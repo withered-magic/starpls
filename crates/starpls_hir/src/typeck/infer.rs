@@ -923,7 +923,7 @@ impl TyCtxt<'_> {
             ptr.syntax_node_ptr().text_range()
         };
 
-        match &module(db, file).load_items[load_item] {
+        let ty = match &module(db, file).load_items[load_item] {
             LoadItem::Direct { name } | LoadItem::Aliased { name, .. } => {
                 self.resolve_load_stmt(file, load_stmt)
                     .map(|loaded_file| {
@@ -942,17 +942,40 @@ impl TyCtxt<'_> {
                             .find(|(entry_file, _)| loaded_file == *entry_file)
                             .is_some()
                         {
+                            let mut message = String::from("Detected circular import\n");
+                            for (_, load_stmt) in self.cx.load_resolution_stack.iter() {
+                                message.push_str("- ");
+                                message.push_str(&load_stmt.module(db));
+                                message.push('\n');
+                            }
+                            message.push_str("- ");
+                            message.push_str(&load_stmt.module(db));
+                            message.push('\n');
+
+                            // Use a range here to avoid having to allocate.
+                            for i in 0..self.cx.load_resolution_stack.len() {
+                                let (file, load_stmt) = self.cx.load_resolution_stack[i].clone();
+                                self.add_diagnostic_for_range(
+                                    file,
+                                    load_stmt.ptr(db).text_range(),
+                                    message.clone(),
+                                )
+                            }
+
+                            // Also add the current (importing) file.
                             self.add_diagnostic_for_range(
                                 file,
-                                range(),
-                                "Detected circular import",
+                                load_stmt.ptr(db).text_range(),
+                                message,
                             );
+
                             return self.unknown_ty();
                         }
 
                         // Add the current file to the load resolution stack.
                         self.push_load_resolution(file, load_stmt, |tcx| {
-                            // TODO(withered-magic): Force resolution of load statements in the loaded file.
+                            tcx.infer_all_load_items(loaded_file);
+
                             match Resolver::resolve_export_in_file(
                                 db,
                                 loaded_file,
@@ -979,7 +1002,12 @@ impl TyCtxt<'_> {
                     })
                     .unwrap_or_else(|| self.unknown_ty())
             }
-        }
+        };
+
+        self.cx
+            .type_of_load_item
+            .insert(FileLoadItemId::new(file, load_item), ty.clone());
+        ty
     }
 
     fn resolve_load_stmt(&mut self, file: File, load_stmt: LoadStmt) -> Option<File> {

@@ -3,7 +3,7 @@ use crate::{
     typeck::{TyKind, TypeRef},
 };
 use starpls_bazel::Builtins;
-use starpls_common::{parse, File, Parse};
+use starpls_common::{parse, Dialect, File, Parse};
 
 pub use crate::{
     api::*,
@@ -53,11 +53,6 @@ pub struct Jar(
     typeck::intrinsics::intrinsic_field_types,
     typeck::intrinsics::intrinsic_functions,
 );
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Dialect {
-    Bazel,
-}
 
 pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
     fn infer_expr(&self, file: File, expr: ExprId) -> Ty;

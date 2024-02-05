@@ -33,11 +33,16 @@ impl Document {
     }
 }
 
+pub(crate) enum DocumentChangeKind {
+    Create,
+    Update,
+}
+
 /// A collection of documents.
 pub(crate) struct DocumentManager {
     documents: HashMap<FileId, Document>,
     has_closed_or_opened_documents: bool,
-    changed_file_ids: Vec<FileId>,
+    changed_file_ids: Vec<(FileId, DocumentChangeKind)>,
     path_interner: Arc<PathInterner>,
 }
 
@@ -58,7 +63,8 @@ impl DocumentManager {
         let file_id = self.path_interner.intern_path(path);
         self.documents
             .insert(file_id, Document::new(contents, Some(version)));
-        self.changed_file_ids.push(file_id);
+        self.changed_file_ids
+            .push((file_id, DocumentChangeKind::Create));
     }
 
     pub(crate) fn close(&mut self, path: &PathBuf) {
@@ -75,11 +81,12 @@ impl DocumentManager {
         if let Some(document) = self.documents.get_mut(&file_id) {
             document.contents = contents;
             document.source = version.into();
-            self.changed_file_ids.push(file_id);
+            self.changed_file_ids
+                .push((file_id, DocumentChangeKind::Update));
         };
     }
 
-    pub(crate) fn take_changes(&mut self) -> (bool, Vec<FileId>) {
+    pub(crate) fn take_changes(&mut self) -> (bool, Vec<(FileId, DocumentChangeKind)>) {
         let changed_documents = mem::take(&mut self.changed_file_ids);
         let has_opened_or_closed_documents = self.has_closed_or_opened_documents;
         self.has_closed_or_opened_documents = false;

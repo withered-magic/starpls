@@ -27,17 +27,20 @@ impl TestDatabase {
 impl salsa::Database for TestDatabase {}
 
 impl starpls_common::Db for TestDatabase {
-    fn set_file_contents(&mut self, file_id: FileId, contents: String) -> File {
-        let file = match self.files.entry(file_id) {
-            Entry::Occupied(entry) => *entry.get(),
-            Entry::Vacant(entry) => return *entry.insert(File::new(self, file_id, contents)),
-        };
-        file.set_contents(self).to(contents);
+    fn create_file(&mut self, file_id: FileId, dialect: Dialect, contents: String) -> File {
+        let file = File::new(self, file_id, dialect, contents);
+        self.files.insert(file_id, file);
         file
     }
 
-    fn load_file_contents(&self, _path: &str, _from: FileId) -> std::io::Result<File> {
-        Ok(File::new(self, FileId(0), String::new()))
+    fn update_file(&mut self, file_id: FileId, contents: String) {
+        if let Some(file) = self.files.get(&file_id).map(|file_id| *file_id) {
+            file.set_contents(self).to(contents);
+        }
+    }
+
+    fn load_file(&self, _path: &str, _dialect: Dialect, _from: FileId) -> std::io::Result<File> {
+        Ok(File::new(self, FileId(0), Dialect::Standard, String::new()))
     }
 
     fn get_file(&self, file_id: FileId) -> Option<File> {

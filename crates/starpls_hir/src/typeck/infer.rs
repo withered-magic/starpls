@@ -854,7 +854,7 @@ impl TyCtxt<'_> {
     }
 
     pub fn infer_param(&mut self, file: File, param: ParamId) -> Ty {
-        if let Some(ty) = self.cx.type_of_param.get(&FileParamId { file, param }) {
+        if let Some(ty) = self.cx.type_of_param.get(&FileParamId::new(file, param)) {
             return ty.clone();
         }
 
@@ -882,7 +882,7 @@ impl TyCtxt<'_> {
 
         self.cx
             .type_of_param
-            .insert(FileParamId { file, param }, ty.clone());
+            .insert(FileParamId::new(file, param), ty.clone());
         ty
     }
 
@@ -1018,7 +1018,10 @@ impl TyCtxt<'_> {
         }
 
         let module = load_stmt.module(self.db);
-        let res = match self.db.load_file_contents(&module, file.id(self.db)) {
+        let res = match self
+            .db
+            .load_file(&module, file.dialect(self.db), file.id(self.db))
+        {
             Ok(loaded_file) => Some(loaded_file),
             Err(_err) => {
                 self.add_diagnostic_for_range(

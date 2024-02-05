@@ -17,22 +17,37 @@ pub struct Jar(
     line_index_query,
 );
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Dialect {
+    Standard,
+    Bazel,
+}
+
 /// A Key corresponding to an interned file path. Use these instead of `Path`s to refer to files.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileId(pub u32);
 
 /// The base Salsa database. Supports file-related operations, like getting/setting file contents.
 pub trait Db: salsa::DbWithJar<Jar> {
-    fn set_file_contents(&mut self, file_id: FileId, contents: String) -> File;
+    /// Creates a `File` in the database. This will overwrite the currently active
+    /// `File` for the given `FileId`, if it exists.
+    fn create_file(&mut self, file_id: FileId, dialect: Dialect, contents: String) -> File;
 
-    fn load_file_contents(&self, path: &str, from: FileId) -> std::io::Result<File>;
+    /// Sets the contents the `File` identified by the given `FileId`. Has no affect
+    /// if the file doesn't exist.
+    fn update_file(&mut self, file_id: FileId, contents: String);
 
+    /// Loads a file from disk.
+    fn load_file(&self, path: &str, dialect: Dialect, from: FileId) -> std::io::Result<File>;
+
+    /// Returns the `File` identified by the given `FileId`.
     fn get_file(&self, file_id: FileId) -> Option<File>;
 }
 
 #[salsa::input]
 pub struct File {
     pub id: FileId,
+    pub dialect: Dialect,
     #[return_ref]
     pub contents: String,
 }

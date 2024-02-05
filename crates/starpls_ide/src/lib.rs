@@ -3,8 +3,8 @@ use completions::CompletionItem;
 use dashmap::{mapref::entry::Entry, DashMap};
 use salsa::ParallelDatabase;
 use starpls_bazel::Builtins;
-use starpls_common::{Db, Diagnostic, File, FileId};
-use starpls_hir::{BuiltinDefs, Db as _, Dialect, ExprId, GlobalCtxt, ParamId, Ty};
+use starpls_common::{Db, Diagnostic, Dialect, File, FileId};
+use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, ParamId, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -29,11 +29,18 @@ pub(crate) struct Database {
 }
 
 impl Database {
-    fn apply_file_changes(&mut self, changes: Vec<(FileId, String)>) {
+    fn apply_file_changes(&mut self, changes: Vec<(FileId, FileChange)>) {
         let gcx = self.gcx.clone();
         let _guard = gcx.cancel();
-        for (file_id, contents) in changes {
-            self.set_file_contents(file_id, contents);
+        for (file_id, change) in changes {
+            match change {
+                FileChange::Create { dialect, contents } => {
+                    self.create_file(file_id, dialect, contents);
+                }
+                FileChange::Update { contents } => {
+                    self.update_file(file_id, contents);
+                }
+            }
         }
     }
 }
@@ -53,22 +60,28 @@ impl salsa::ParallelDatabase for Database {
 }
 
 impl starpls_common::Db for Database {
-    fn set_file_contents(&mut self, file_id: FileId, contents: String) -> File {
-        let file = match self.files.entry(file_id) {
-            Entry::Occupied(entry) => *entry.get(),
-            Entry::Vacant(entry) => return *entry.insert(File::new(self, file_id, contents)),
-        };
-        file.set_contents(self).to(contents);
+    fn create_file(&mut self, file_id: FileId, dialect: Dialect, contents: String) -> File {
+        let file = File::new(self, file_id, dialect, contents);
+        self.files.insert(file_id, file);
         file
     }
 
-    fn load_file_contents(&self, path: &str, from: FileId) -> std::io::Result<File> {
+    fn update_file(&mut self, file_id: FileId, contents: String) {
+        if let Some(file) = self.files.get(&file_id).map(|file_id| *file_id) {
+            file.set_contents(self).to(contents);
+        }
+    }
+
+    fn load_file(&self, path: &str, dialect: Dialect, from: FileId) -> std::io::Result<File> {
         let (file_id, contents) = self.loader.load_file(path, from)?;
         Ok(match self.files.entry(file_id) {
             Entry::Occupied(entry) => *entry.get(),
-            Entry::Vacant(entry) => {
-                *entry.insert(File::new(self, file_id, contents.unwrap_or_default()))
-            }
+            Entry::Vacant(entry) => *entry.insert(File::new(
+                self,
+                file_id,
+                dialect,
+                contents.unwrap_or_default(),
+            )),
         })
     }
 
@@ -105,16 +118,28 @@ impl starpls_hir::Db for Database {
     }
 }
 
+#[derive(Debug)]
+enum FileChange {
+    Create { dialect: Dialect, contents: String },
+    Update { contents: String },
+}
+
 /// A batch of changes to be applied to the database. For now, this consists simply of a map of changed file IDs to
 /// their updated contents.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Change {
-    changed_files: Vec<(FileId, String)>,
+    changed_files: Vec<(FileId, FileChange)>,
 }
 
 impl Change {
-    pub fn add_file(&mut self, file_id: FileId, contents: String) {
-        self.changed_files.push((file_id, contents))
+    pub fn create_file(&mut self, file_id: FileId, dialect: Dialect, contents: String) {
+        self.changed_files
+            .push((file_id, FileChange::Create { dialect, contents }))
+    }
+
+    pub fn update_file(&mut self, file_id: FileId, contents: String) {
+        self.changed_files
+            .push((file_id, FileChange::Update { contents }))
     }
 }
 

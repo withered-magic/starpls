@@ -1024,8 +1024,17 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
         {
             true
         }
-        // TODO(withered-magic): Handling union-union assignments.
+        (TyKind::Union(source_tys), TyKind::Union(target_tys)) => {
+            source_tys.iter().all(|source_ty| {
+                target_tys
+                    .iter()
+                    .any(|target_ty| assign_tys(db, source_ty, target_ty))
+            })
+        }
+        // TODO(withered-magic): The logic below also temporarily allows assignments like `int | None` to `int`. Fix
+        // this once we support type guards.
         (_, TyKind::Union(tys)) => tys.iter().any(|target| assign_tys(db, source, target)),
+        (TyKind::Union(tys), _) => tys.iter().any(|source| assign_tys(db, source, target)),
         (source, target) => source == target,
     }
 }

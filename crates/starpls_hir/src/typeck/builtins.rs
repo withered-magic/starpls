@@ -96,8 +96,8 @@ pub struct BuiltinDefs {
     pub builtins: Builtins,
 }
 
-pub(crate) fn builtin_globals(db: &dyn Db) -> BuiltinGlobals {
-    let defs = db.get_builtin_defs(&Dialect::Bazel);
+pub(crate) fn builtin_globals(db: &dyn Db, dialect: Dialect) -> BuiltinGlobals {
+    let defs = db.get_builtin_defs(&dialect);
     builtin_globals_query(db, defs)
 }
 
@@ -127,8 +127,8 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
     BuiltinGlobals::new(db, functions, variables)
 }
 
-pub(crate) fn builtin_types(db: &dyn Db) -> BuiltinTypes {
-    let defs = db.get_builtin_defs(&Dialect::Bazel);
+pub(crate) fn builtin_types(db: &dyn Db, dialect: Dialect) -> BuiltinTypes {
+    let defs = db.get_builtin_defs(&dialect);
     builtin_types_query(db, defs)
 }
 

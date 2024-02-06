@@ -1,5 +1,5 @@
 use crate::{def::ExprId, BuiltinDefs, Dialect, GlobalCtxt, ParamId, Ty};
-use dashmap::{mapref::entry::Entry, DashMap};
+use dashmap::DashMap;
 use starpls_bazel::Builtins;
 use starpls_common::{File, FileId};
 use std::sync::Arc;

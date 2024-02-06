@@ -8,7 +8,6 @@ use crate::{
 use lsp_server::{Connection, ReqQueue};
 use parking_lot::RwLock;
 use starpls_bazel::{load_builtins, Builtins};
-use starpls_common::Dialect;
 use starpls_ide::{Analysis, AnalysisSnapshot, Change};
 use std::{sync::Arc, time::Duration};
 
@@ -81,16 +80,16 @@ impl Server {
         }
 
         for (file_id, change_kind) in changed_file_ids {
-            let contents = document_manager
-                .contents(file_id)
-                .map(|contents| contents.to_string())
-                .unwrap_or_else(|| String::new());
+            let document = match document_manager.get(file_id) {
+                Some(document) => document,
+                None => continue,
+            };
             match change_kind {
                 DocumentChangeKind::Create => {
-                    change.create_file(file_id, Dialect::Standard, contents);
+                    change.create_file(file_id, document.dialect, document.contents.clone());
                 }
                 DocumentChangeKind::Update => {
-                    change.update_file(file_id, contents);
+                    change.update_file(file_id, document.contents.clone());
                 }
             }
         }

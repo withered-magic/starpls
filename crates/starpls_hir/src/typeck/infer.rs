@@ -15,7 +15,7 @@ use crate::{
     Declaration, Name,
 };
 use smallvec::SmallVec;
-use starpls_common::{line_index, parse, Diagnostic, File, FileRange, Severity};
+use starpls_common::{line_index, parse, Diagnostic, Dialect, File, FileRange, Severity};
 use starpls_syntax::{
     ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, UnaryOp},
     TextRange,
@@ -125,7 +125,6 @@ impl TyCtxt<'_> {
                         Declaration::LoadItem { id, load_stmt } => {
                             self.infer_load_item(file, load_stmt, id)
                         }
-                        _ => self.any_ty(),
                     })
                     .unwrap_or_else(|| {
                         self.add_expr_diagnostic(
@@ -922,6 +921,14 @@ impl TyCtxt<'_> {
                 .unwrap();
             ptr.syntax_node_ptr().text_range()
         };
+
+        // TODO(withered-magic): Next step is to support resolving Bazel source files.
+        if file.dialect(db) != Dialect::Standard {
+            self.cx
+                .type_of_load_item
+                .insert(FileLoadItemId::new(file, load_item), self.unknown_ty());
+            return self.unknown_ty();
+        }
 
         let ty = match &module(db, file).load_items[load_item] {
             LoadItem::Direct { name } | LoadItem::Aliased { name, .. } => {

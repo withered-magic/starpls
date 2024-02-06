@@ -16,6 +16,7 @@ use std::collections::{hash_map::Entry, HashMap};
 /// features, e.g. type declarations, builtins, etc.
 pub struct Resolver<'a> {
     db: &'a dyn Db,
+    file: File,
     scopes: &'a Scopes,
     scope_chain: Vec<ScopeId>,
 }
@@ -48,7 +49,6 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn resolve_export(&self, name: &Name) -> Option<Export> {
         self.scopes().find_map(|scope| {
-            eprintln!("{:?}", scope.declarations);
             scope
                 .declarations
                 .get(name)
@@ -73,7 +73,7 @@ impl<'a> Resolver<'a> {
     }
 
     pub fn resolve_name_in_builtin_globals(&self, name: &Name) -> Option<Vec<Declaration>> {
-        let globals = builtin_globals(self.db);
+        let globals = builtin_globals(self.db, self.file.dialect(self.db));
         globals
             .functions(self.db)
             .get(name.as_str())
@@ -98,7 +98,7 @@ impl<'a> Resolver<'a> {
         }
 
         // Add global functions from third-party builtins (e.g. Bazel builtins).
-        let globals = builtin_globals(self.db);
+        let globals = builtin_globals(self.db, self.file.dialect(self.db));
         for (name, func) in globals.functions(self.db).iter() {
             names.insert(
                 Name::from_str(&name),
@@ -147,6 +147,7 @@ impl<'a> Resolver<'a> {
         scope_chain.reverse();
         Self {
             db,
+            file,
             scopes,
             scope_chain,
         }
@@ -159,6 +160,7 @@ impl<'a> Resolver<'a> {
         scope_chain.reverse();
         Self {
             db,
+            file,
             scopes,
             scope_chain,
         }
@@ -195,6 +197,7 @@ impl<'a> Resolver<'a> {
         scope_chain.reverse();
         Self {
             db,
+            file,
             scopes,
             scope_chain,
         }

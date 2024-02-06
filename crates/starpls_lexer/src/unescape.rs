@@ -37,7 +37,7 @@ pub enum EscapeError {
     OutOfRangeUnicodeEscape,
 }
 
-pub fn unescape_string<F>(input: &str, raw: bool, triple_quoted: bool, callback: &mut F)
+pub fn unescape_string<F>(input: &str, _raw: bool, _triple_quoted: bool, callback: &mut F)
 where
     F: FnMut(Range<usize>, Result<char, EscapeError>),
 {

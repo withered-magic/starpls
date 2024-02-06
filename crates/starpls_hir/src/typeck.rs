@@ -16,7 +16,7 @@ use itertools::Itertools;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
-use starpls_common::{Diagnostic, File};
+use starpls_common::{Diagnostic, Dialect, File};
 use starpls_intern::{impl_internable, Interned};
 use std::{
     fmt::{Display, Write},
@@ -880,7 +880,9 @@ impl<'a> TypeRefResolver<'a> {
 
     fn resolve_type_ref_inner(&mut self, type_ref: &TypeRef) -> Ty {
         let types = intrinsic_types(self.db).types(self.db);
-        let builtin_types = builtin_types(self.db);
+        // TODO(withered-magic): Need to resolve based on the dialect, but unclear how
+        // to get that information from things like the `DisplayWithDb` impl for `TyKind`.
+        let builtin_types = builtin_types(self.db, Dialect::Bazel);
         match type_ref {
             TypeRef::Name(name, args) => match name.as_str() {
                 "Any" => types.any.clone(),

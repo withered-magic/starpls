@@ -5,6 +5,7 @@ pub(crate) fn did_open_text_document(
     params: lsp_types::DidOpenTextDocumentParams,
 ) -> anyhow::Result<()> {
     let path = convert::path_buf_from_url(&params.text_document.uri)?;
+    eprintln!("open {:?}", path);
     server.document_manager.write().open(
         path,
         params.text_document.version,
@@ -30,9 +31,10 @@ pub(crate) fn did_change_text_document(
     let path = convert::path_buf_from_url(&params.text_document.uri)?;
     if let Some(file_id) = document_manager.lookup_by_path_buf(&path) {
         let contents = document_manager
-            .contents(file_id)
+            .get(file_id)
+            .map(|document| document.contents.clone())
             .expect("lookup contents of non-existent file");
-        let contents = apply_document_content_changes(contents.to_string(), params.content_changes);
+        let contents = apply_document_content_changes(contents, params.content_changes);
         document_manager.modify(path, contents, Some(params.text_document.version))
     }
 

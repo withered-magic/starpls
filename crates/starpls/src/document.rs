@@ -1,7 +1,7 @@
 use indexmap::IndexSet;
 use parking_lot::RwLock;
 use rustc_hash::FxHasher;
-use starpls_common::FileId;
+use starpls_common::{Dialect, FileId};
 use starpls_ide::FileLoader;
 use std::{collections::HashMap, fs, hash::BuildHasherDefault, mem, path::PathBuf, sync::Arc};
 
@@ -21,13 +21,15 @@ impl From<Option<i32>> for DocumentSource {
 /// or from the editor.
 pub(crate) struct Document {
     pub(crate) contents: String,
+    pub(crate) dialect: Dialect,
     pub(crate) source: DocumentSource,
 }
 
 impl Document {
-    fn new(contents: String, version: Option<i32>) -> Self {
+    fn new(contents: String, dialect: Dialect, version: Option<i32>) -> Self {
         Self {
             contents,
+            dialect,
             source: version.into(),
         }
     }
@@ -60,9 +62,24 @@ impl DocumentManager {
         self.has_closed_or_opened_documents = true;
 
         // Create/update the document with the given contents.
+        let basename = match path.file_name().and_then(|name| name.to_str()) {
+            Some(basename) => basename,
+            None => return,
+        };
+
+        let dialect = match basename {
+            "BUILD" | "BUILD.bazel" | "MODULE.bazel" | "REPO.bazel" | "WORKSPACE"
+            | "WORKSPACE.bazel" => Dialect::Bazel,
+            _ => match path.extension().and_then(|ext| ext.to_str()) {
+                Some("sky" | "star") => Dialect::Standard,
+                Some("bzl") => Dialect::Bazel,
+                _ => return,
+            },
+        };
+
         let file_id = self.path_interner.intern_path(path);
         self.documents
-            .insert(file_id, Document::new(contents, Some(version)));
+            .insert(file_id, Document::new(contents, dialect, Some(version)));
         self.changed_file_ids
             .push((file_id, DocumentChangeKind::Create));
     }
@@ -91,10 +108,6 @@ impl DocumentManager {
         let has_opened_or_closed_documents = self.has_closed_or_opened_documents;
         self.has_closed_or_opened_documents = false;
         (has_opened_or_closed_documents, changed_documents)
-    }
-
-    pub(crate) fn contents(&self, file_id: FileId) -> Option<&str> {
-        self.get(file_id).map(|document| document.contents.as_str())
     }
 
     pub(crate) fn get(&self, file_id: FileId) -> Option<&Document> {
@@ -165,8 +178,6 @@ impl FileLoader for DefaultFileLoader {
         if let Some(file_id) = self.interner.lookup_by_path_buf(&path) {
             return Ok((file_id, None));
         }
-
-        eprintln!("load path {:?}", path);
 
         let contents = fs::read_to_string(&path)?;
         let file_id = self.interner.intern_path(path);

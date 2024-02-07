@@ -1,7 +1,7 @@
 use crate::{def::ExprId, BuiltinDefs, Dialect, GlobalCtxt, ParamId, Ty};
 use dashmap::DashMap;
 use starpls_bazel::Builtins;
-use starpls_common::{File, FileId};
+use starpls_common::{File, FileId, LoadItemCandidate};
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -45,6 +45,14 @@ impl starpls_common::Db for TestDatabase {
 
     fn get_file(&self, file_id: FileId) -> Option<File> {
         self.files.get(&file_id).map(|file| *file)
+    }
+
+    fn list_load_candidates(
+        &self,
+        _path: &str,
+        _from: FileId,
+    ) -> std::io::Result<Option<Vec<LoadItemCandidate>>> {
+        unimplemented!()
     }
 }
 

@@ -1,12 +1,13 @@
 //! Partially replicates the "completions" API in the LSP specification.
 
 use crate::FilePosition;
-use starpls_common::parse;
+use starpls_common::{parse, FileId};
 use starpls_hir::{Db, Declaration, Name, Param, Resolver, Semantics, Type};
 use starpls_syntax::{
-    ast::{self, AstNode},
+    ast::{self, AstNode, AstToken},
     parse_module,
     SyntaxKind::*,
+    SyntaxNode, TextRange, TextSize,
 };
 use std::collections::HashMap;
 
@@ -29,8 +30,14 @@ impl CompletionItem {
     }
 }
 
+pub struct TextEdit {
+    pub range: TextRange,
+    pub new_text: String,
+}
+
 pub enum CompletionMode {
     InsertText(String),
+    TextEdit(TextEdit),
 }
 
 pub enum CompletionItemKind {
@@ -38,6 +45,8 @@ pub enum CompletionItemKind {
     Variable,
     Keyword,
     Class,
+    File,
+    Folder,
 }
 
 #[repr(u16)]
@@ -50,6 +59,7 @@ enum CompletionRelevance {
 enum CompletionAnalysis {
     Name(NameContext),
     NameRef(NameRefContext),
+    String(StringContext),
     Type,
 }
 
@@ -65,6 +75,10 @@ struct NameRefContext {
     is_in_for: bool,
     is_lone_expr: bool,
     is_loop_variable: bool,
+}
+
+enum StringContext {
+    LoadModule { file_id: FileId, text: ast::String },
 }
 
 struct CompletionContext {
@@ -139,6 +153,26 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
                 })
             }
         }
+        CompletionAnalysis::String(StringContext::LoadModule { file_id, text }) => {
+            let (value, offset) = text.value_and_offset()?;
+            let token_start = text.syntax().text_range().start() + TextSize::from(offset);
+            for candidate in db.list_load_candidates(&value, *file_id).ok()?? {
+                let start =
+                    TextSize::from(value.rfind('/').map(|start| start + 1).unwrap_or(0) as u32);
+                items.push(CompletionItem {
+                    label: candidate.path.clone(),
+                    kind: CompletionItemKind::File,
+                    mode: Some(CompletionMode::TextEdit(TextEdit {
+                        range: TextRange::new(
+                            start + token_start,
+                            TextSize::from(value.len() as u32) + token_start,
+                        ),
+                        new_text: candidate.path,
+                    })),
+                    relevance: CompletionRelevance::VariableOrKeyword,
+                });
+            }
+        }
         _ => {}
     }
     Some(items)
@@ -183,12 +217,31 @@ fn add_keywords(items: &mut Vec<CompletionItem>, is_in_def: bool, is_in_for: boo
     }
 }
 
+fn maybe_str_context(file_id: FileId, root: &SyntaxNode, pos: TextSize) -> Option<StringContext> {
+    let token = root.token_at_offset(pos).right_biased()?;
+    let text = ast::String::cast(token.clone())?;
+    let parent = token.parent()?;
+
+    if ast::LoadModule::can_cast(parent.kind()) {
+        Some(StringContext::LoadModule { file_id, text })
+    } else {
+        None
+    }
+}
+
 impl CompletionContext {
     fn new(db: &dyn Db, FilePosition { file_id, pos }: FilePosition) -> Option<Self> {
         // Reparse the file with a dummy identifier inserted at the current offset.
         let sema = Semantics::new(db);
         let file = db.get_file(file_id)?;
         let parse = parse(db, file);
+
+        if let Some(cx) = maybe_str_context(file_id, &parse.syntax(db), pos) {
+            return Some(CompletionContext {
+                analysis: CompletionAnalysis::String(cx),
+            });
+        }
+
         let mut text = parse.syntax(db).text().to_string();
         let insert_pos: usize = pos.into();
         if insert_pos > text.len() {

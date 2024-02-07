@@ -5,7 +5,6 @@ pub(crate) fn did_open_text_document(
     params: lsp_types::DidOpenTextDocumentParams,
 ) -> anyhow::Result<()> {
     let path = convert::path_buf_from_url(&params.text_document.uri)?;
-    eprintln!("open {:?}", path);
     server.document_manager.write().open(
         path,
         params.text_document.version,

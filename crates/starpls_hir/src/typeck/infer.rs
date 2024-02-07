@@ -1034,10 +1034,7 @@ impl TyCtxt<'_> {
                 self.add_diagnostic_for_range(
                     file,
                     load_stmt.ptr(self.db).text_range(),
-                    format!(
-                        "Could not resolved module \"{}\"",
-                        load_stmt.module(self.db)
-                    ),
+                    format!("Could not resolve module \"{}\"", load_stmt.module(self.db)),
                 );
                 None
             }

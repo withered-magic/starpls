@@ -26,7 +26,7 @@ fn main() -> anyhow::Result<()> {
     // only of `TextDocumentSyncKind.Full`.
     let server_capabilities = serde_json::to_value(&ServerCapabilities {
         completion_provider: Some(CompletionOptions {
-            trigger_characters: Some(vec![".".to_string()]),
+            trigger_characters: Some(vec![".".to_string(), "\"".to_string(), "'".to_string()]),
             ..Default::default()
         }),
         definition_provider: Some(OneOf::Left(true)),

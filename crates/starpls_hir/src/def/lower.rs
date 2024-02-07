@@ -155,7 +155,7 @@ impl<'a> LoweringContext<'a> {
             }
             ast::Statement::Load(stmt) => {
                 let ptr = SyntaxNodePtr::new(&stmt.syntax());
-                let module = self.lower_string_opt(stmt.module());
+                let module = self.lower_string_opt(stmt.module().and_then(|module| module.name()));
                 let load_stmt = LoadStmt::new(self.db, module, ptr);
                 let items = self.lower_load_items(stmt.items());
                 Stmt::Load { load_stmt, items }

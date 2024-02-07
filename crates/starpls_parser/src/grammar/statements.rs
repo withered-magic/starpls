@@ -274,11 +274,14 @@ pub(crate) fn load_stmt(p: &mut Parser) {
         m.complete(p, LOAD_STMT);
         return;
     }
-    if !p.eat(STRING) {
+    if !p.at(STRING) {
         p.error_recover_until("Expected module name", STMT_RECOVERY);
         m.complete(p, LOAD_STMT);
         return;
     }
+    let source_marker = p.start();
+    p.bump(STRING);
+    source_marker.complete(p, LOAD_MODULE);
     while p.at(T![,]) && matches!(p.nth(1), T![ident] | STRING) {
         p.bump(T![,]);
         match p.current() {

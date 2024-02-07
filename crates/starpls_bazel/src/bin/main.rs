@@ -1,8 +1,16 @@
 use starpls_bazel::load_builtins;
 use std::collections::HashSet;
 
+#[repr(u16)]
+#[derive(Debug)]
+enum CompletionItemRelevance {
+    First,
+    Second,
+}
+
 fn main() -> anyhow::Result<()> {
     let builtins = load_builtins("../../editors/code/builtin.pb")?;
+    eprintln!("{:?}", CompletionItemRelevance::First as u16);
     // let types: HashSet<_> = builtins
     //     .r#type
     //     .iter()

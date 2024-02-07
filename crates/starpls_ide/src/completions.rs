@@ -20,6 +20,13 @@ pub struct CompletionItem {
     pub label: String,
     pub kind: CompletionItemKind,
     pub mode: Option<CompletionMode>,
+    relevance: CompletionRelevance,
+}
+
+impl CompletionItem {
+    pub fn sort_text(&self) -> String {
+        format!("{}-{}", self.relevance as u16, self.label)
+    }
 }
 
 pub enum CompletionMode {
@@ -31,6 +38,13 @@ pub enum CompletionItemKind {
     Variable,
     Keyword,
     Class,
+}
+
+#[repr(u16)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CompletionRelevance {
+    Parameter,
+    VariableOrKeyword,
 }
 
 enum CompletionAnalysis {
@@ -75,6 +89,7 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
                     label: format!("{}=", name.as_str()),
                     kind: CompletionItemKind::Variable,
                     mode: Some(CompletionMode::InsertText(format!("{} = ", name.as_str()))),
+                    relevance: CompletionRelevance::Parameter,
                 });
             }
             if !is_loop_variable {
@@ -92,6 +107,7 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
                             _ => CompletionItemKind::Variable,
                         },
                         mode: None,
+                        relevance: CompletionRelevance::VariableOrKeyword,
                     });
                 }
                 if *is_lone_expr {
@@ -109,6 +125,7 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
                         CompletionItemKind::Variable
                     },
                     mode: None,
+                    relevance: CompletionRelevance::VariableOrKeyword,
                 })
             }
         }
@@ -118,6 +135,7 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
                     label: name.to_string(),
                     kind: CompletionItemKind::Class,
                     mode: None,
+                    relevance: CompletionRelevance::VariableOrKeyword,
                 })
             }
         }
@@ -132,6 +150,7 @@ pub(crate) fn add_globals(items: &mut Vec<CompletionItem>) {
             label: global.to_string(),
             kind: CompletionItemKind::Keyword,
             mode: None,
+            relevance: CompletionRelevance::VariableOrKeyword,
         })
     };
     add_global("True");
@@ -145,6 +164,7 @@ fn add_keywords(items: &mut Vec<CompletionItem>, is_in_def: bool, is_in_for: boo
             label: keyword.to_string(),
             kind: CompletionItemKind::Keyword,
             mode: None,
+            relevance: CompletionRelevance::VariableOrKeyword,
         })
     };
     add_keyword("def");

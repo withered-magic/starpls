@@ -111,19 +111,22 @@ pub(crate) fn completion(
             .completion(FilePosition { file_id, pos })?
             .unwrap_or_else(|| Vec::new())
             .into_iter()
-            .map(|item| lsp_types::CompletionItem {
-                label: item.label,
-                kind: Some(match item.kind {
-                    CompletionItemKind::Function => lsp_types::CompletionItemKind::FUNCTION,
-                    CompletionItemKind::Variable => lsp_types::CompletionItemKind::VARIABLE,
-                    CompletionItemKind::Keyword => lsp_types::CompletionItemKind::KEYWORD,
-                    // TODO(withered-magic): Only choosing `INTERFACE` because it looks cooler in VSCode :D
-                    CompletionItemKind::Class => lsp_types::CompletionItemKind::CLASS,
-                }),
-                insert_text: item.mode.map(|mode| match mode {
-                    InsertText(text) => text,
-                }),
-                ..Default::default()
+            .map(|item| {
+                let sort_text = Some(item.sort_text());
+                lsp_types::CompletionItem {
+                    label: item.label,
+                    kind: Some(match item.kind {
+                        CompletionItemKind::Function => lsp_types::CompletionItemKind::FUNCTION,
+                        CompletionItemKind::Variable => lsp_types::CompletionItemKind::VARIABLE,
+                        CompletionItemKind::Keyword => lsp_types::CompletionItemKind::KEYWORD,
+                        CompletionItemKind::Class => lsp_types::CompletionItemKind::CLASS,
+                    }),
+                    insert_text: item.mode.map(|mode| match mode {
+                        InsertText(text) => text,
+                    }),
+                    sort_text,
+                    ..Default::default()
+                }
             })
             .collect::<Vec<_>>()
             .into(),

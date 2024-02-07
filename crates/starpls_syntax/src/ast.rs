@@ -358,8 +358,13 @@ impl AssignStmt {
 
 ast_node! {
     LoadStmt => LOAD_STMT
-    child_token module -> STRING;
+    child module -> LoadModule;
     children items -> LoadItem;
+}
+
+ast_node! {
+    LoadModule => LOAD_MODULE
+    child_token name -> STRING;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1212,7 +1217,7 @@ ast_token! {
 }
 
 impl String {
-    pub fn value(&self) -> Option<Box<str>> {
+    pub fn value_and_offset(&self) -> Option<(Box<str>, u32)> {
         let mut cursor = Cursor::new(self.text());
         let mut is_raw = false;
         let mut is_bytes = false;
@@ -1286,7 +1291,16 @@ impl String {
             },
         );
 
-        ok.then(|| s.into_boxed_str())
+        ok.then(|| {
+            (
+                s.into_boxed_str(),
+                (self.text().len() - cursor.text().len()) as u32,
+            )
+        })
+    }
+
+    pub fn value(&self) -> Option<Box<str>> {
+        self.value_and_offset().map(|(value, _)| value)
     }
 }
 

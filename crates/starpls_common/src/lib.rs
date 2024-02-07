@@ -1,3 +1,5 @@
+use std::{io, path::PathBuf};
+
 use starpls_syntax::{
     line_index as syntax_line_index, parse_module, LineIndex, Module, ParseTree, SyntaxNode,
 };
@@ -23,6 +25,18 @@ pub enum Dialect {
     Bazel,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LoadItemCandidateKind {
+    Directory,
+    File,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LoadItemCandidate {
+    pub kind: LoadItemCandidateKind,
+    pub path: String,
+}
+
 /// A Key corresponding to an interned file path. Use these instead of `Path`s to refer to files.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileId(pub u32);
@@ -37,11 +51,17 @@ pub trait Db: salsa::DbWithJar<Jar> {
     /// if the file doesn't exist.
     fn update_file(&mut self, file_id: FileId, contents: String);
 
-    /// Loads a file from disk.
-    fn load_file(&self, path: &str, dialect: Dialect, from: FileId) -> std::io::Result<File>;
+    /// Loads a file from the filesystem.
+    fn load_file(&self, path: &str, dialect: Dialect, from: FileId) -> io::Result<File>;
 
     /// Returns the `File` identified by the given `FileId`.
     fn get_file(&self, file_id: FileId) -> Option<File>;
+
+    fn list_load_candidates(
+        &self,
+        path: &str,
+        from: FileId,
+    ) -> io::Result<Option<Vec<LoadItemCandidate>>>;
 }
 
 #[salsa::input]

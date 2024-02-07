@@ -1,6 +1,9 @@
 use anyhow::Ok;
 use starpls_ide::{
-    completions::{CompletionItemKind, CompletionMode::InsertText},
+    completions::{
+        CompletionItemKind,
+        CompletionMode::{InsertText, TextEdit},
+    },
     FilePosition, Location,
 };
 
@@ -96,6 +99,11 @@ pub(crate) fn completion(
         None => return Ok(None),
     };
 
+    let line_index = match snapshot.analysis_snapshot.line_index(file_id)? {
+        Some(line_index) => line_index,
+        None => return Ok(None),
+    };
+
     let pos = match convert::text_size_from_lsp_position(
         snapshot,
         file_id,
@@ -113,6 +121,19 @@ pub(crate) fn completion(
             .into_iter()
             .map(|item| {
                 let sort_text = Some(item.sort_text());
+                let (insert_text, text_edit) = match item.mode {
+                    Some(mode) => match mode {
+                        InsertText(text) => (Some(text), None),
+                        TextEdit(edit) => (
+                            None,
+                            Some(lsp_types::CompletionTextEdit::Edit(lsp_types::TextEdit {
+                                range: convert::lsp_range_from_text_range(edit.range, line_index),
+                                new_text: edit.new_text,
+                            })),
+                        ),
+                    },
+                    None => (None, None),
+                };
                 lsp_types::CompletionItem {
                     label: item.label,
                     kind: Some(match item.kind {
@@ -120,11 +141,12 @@ pub(crate) fn completion(
                         CompletionItemKind::Variable => lsp_types::CompletionItemKind::VARIABLE,
                         CompletionItemKind::Keyword => lsp_types::CompletionItemKind::KEYWORD,
                         CompletionItemKind::Class => lsp_types::CompletionItemKind::CLASS,
-                    }),
-                    insert_text: item.mode.map(|mode| match mode {
-                        InsertText(text) => text,
+                        CompletionItemKind::File => lsp_types::CompletionItemKind::FILE,
+                        CompletionItemKind::Folder => lsp_types::CompletionItemKind::FOLDER,
                     }),
                     sort_text,
+                    insert_text,
+                    text_edit,
                     ..Default::default()
                 }
             })

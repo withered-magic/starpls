@@ -3,10 +3,11 @@ use completions::CompletionItem;
 use dashmap::{mapref::entry::Entry, DashMap};
 use salsa::ParallelDatabase;
 use starpls_bazel::Builtins;
-use starpls_common::{Db, Diagnostic, Dialect, File, FileId};
+use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate};
 use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, ParamId, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use std::fmt::Debug;
+use std::io;
 use std::sync::Arc;
 
 pub use starpls_hir::Cancelled;
@@ -72,7 +73,7 @@ impl starpls_common::Db for Database {
         }
     }
 
-    fn load_file(&self, path: &str, dialect: Dialect, from: FileId) -> std::io::Result<File> {
+    fn load_file(&self, path: &str, dialect: Dialect, from: FileId) -> io::Result<File> {
         let (file_id, contents) = self.loader.load_file(path, from)?;
         Ok(match self.files.entry(file_id) {
             Entry::Occupied(entry) => *entry.get(),
@@ -87,6 +88,14 @@ impl starpls_common::Db for Database {
 
     fn get_file(&self, file_id: FileId) -> Option<File> {
         self.files.get(&file_id).map(|file| *file)
+    }
+
+    fn list_load_candidates(
+        &self,
+        path: &str,
+        from: FileId,
+    ) -> io::Result<Option<Vec<LoadItemCandidate>>> {
+        self.loader.list_load_candidates(path, from)
     }
 }
 
@@ -236,5 +245,11 @@ pub struct FilePosition {
 }
 
 pub trait FileLoader: Debug + Send + Sync + 'static {
-    fn load_file(&self, path: &str, from: FileId) -> std::io::Result<(FileId, Option<String>)>;
+    fn load_file(&self, path: &str, from: FileId) -> io::Result<(FileId, Option<String>)>;
+
+    fn list_load_candidates(
+        &self,
+        path: &str,
+        from: FileId,
+    ) -> io::Result<Option<Vec<LoadItemCandidate>>>;
 }

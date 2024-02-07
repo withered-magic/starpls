@@ -1,9 +1,16 @@
 use indexmap::IndexSet;
 use parking_lot::RwLock;
 use rustc_hash::FxHasher;
-use starpls_common::{Dialect, FileId};
+use starpls_common::{Dialect, FileId, LoadItemCandidate, LoadItemCandidateKind};
 use starpls_ide::FileLoader;
-use std::{collections::HashMap, fs, hash::BuildHasherDefault, mem, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    fs,
+    hash::BuildHasherDefault,
+    io, mem,
+    path::{PathBuf, MAIN_SEPARATOR},
+    sync::Arc,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum DocumentSource {
@@ -165,8 +172,17 @@ impl DefaultFileLoader {
     }
 }
 
+impl DefaultFileLoader {
+    fn dirname(&self, file_id: FileId) -> PathBuf {
+        // Find the importing file's directory.
+        let mut from_path = self.interner.lookup_by_file_id(file_id);
+        assert!(from_path.pop());
+        from_path
+    }
+}
+
 impl FileLoader for DefaultFileLoader {
-    fn load_file(&self, path: &str, from: FileId) -> std::io::Result<(FileId, Option<String>)> {
+    fn load_file(&self, path: &str, from: FileId) -> io::Result<(FileId, Option<String>)> {
         // Find the importing file's directory.
         let mut from_path = self.interner.lookup_by_file_id(from);
         assert!(from_path.pop());
@@ -182,5 +198,42 @@ impl FileLoader for DefaultFileLoader {
         let contents = fs::read_to_string(&path)?;
         let file_id = self.interner.intern_path(path);
         Ok((file_id, Some(contents)))
+    }
+
+    fn list_load_candidates(
+        &self,
+        path: &str,
+        from: FileId,
+    ) -> io::Result<Option<Vec<LoadItemCandidate>>> {
+        let from_dir = self.dirname(from);
+        let has_trailing_slash = path.ends_with(MAIN_SEPARATOR);
+        let mut path = from_dir.join(path);
+
+        if !has_trailing_slash {
+            if !path.pop() {
+                return Ok(None);
+            }
+        }
+
+        let path = path.canonicalize()?;
+        let mut candidates = vec![];
+        let readdir = fs::read_dir(path)?;
+
+        for entry in readdir {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            if file_type.is_file() {
+                if let Some(name) = entry.file_name().to_str() {
+                    if name.ends_with(".star") || name.ends_with(".sky") {
+                        candidates.push(LoadItemCandidate {
+                            kind: LoadItemCandidateKind::File,
+                            path: name.to_string(),
+                        })
+                    }
+                }
+            }
+        }
+
+        Ok(Some(candidates))
     }
 }

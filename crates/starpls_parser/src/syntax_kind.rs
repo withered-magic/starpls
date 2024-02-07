@@ -165,6 +165,7 @@ pub enum SyntaxKind {
     COMP_CLAUSE_IF,
     DICT_ENTRY,
 
+    LOAD_MODULE,
     DIRECT_LOAD_ITEM,
     ALIASED_LOAD_ITEM,
 

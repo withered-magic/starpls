@@ -1,0 +1,36 @@
+load("@rules_rust//rust:defs.bzl", "rust_library")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "starpls_hir",
+    srcs = glob(["src/**/*.rs"]),
+    aliases = {
+        "@crates//:salsa": "salsa",
+    },
+    deps = [
+        "//crates/starpls_bazel",
+        "//crates/starpls_common",
+        "//crates/starpls_intern",
+        "//crates/starpls_syntax",
+        "//crates/starpls_test_util",
+        "@crates//:crossbeam",
+        "@crates//:dashmap",
+        "@crates//:id-arena",
+        "@crates//:itertools",
+        "@crates//:parking_lot",
+        "@crates//:rustc-hash",
+        "@crates//:salsa",
+        "@crates//:smallvec",
+        "@crates//:smol_str",
+    ],
+)
+
+# rust_test(
+#     name = "starpls_hir_test",
+#     aliases = {
+#         "@crates//:salsa": "salsa",
+#     },
+#     crate = ":starpls_hir",
+#     deps = ["@crates//:expect-test"],
+# )

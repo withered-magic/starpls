@@ -1,0 +1,32 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@rules_rust//proto/prost:defs.bzl", "rust_prost_library")
+load("@rules_rust//rust:defs.bzl", "rust_library")
+
+package(default_visibility = ["//visibility:public"])
+
+proto_library(
+    name = "builtin_proto",
+    srcs = ["src/builtin.proto"],
+)
+
+rust_prost_library(
+    name = "builtin_proto_rust",
+    proto = ":builtin_proto",
+    visibility = ["//visibility:public"],
+)
+
+rust_library(
+    name = "starpls_bazel",
+    srcs = glob(["src/**/*.rs"]),
+    aliases = {
+        "@crates//:salsa": "salsa",
+    },
+    rustc_flags = ["--cfg=bazel"],
+    deps = [
+        ":builtin_proto_rust",
+        "//crates/starpls_syntax",
+        "@crates//:anyhow",
+        "@crates//:bytes",
+        "@crates//:prost",
+    ],
+)

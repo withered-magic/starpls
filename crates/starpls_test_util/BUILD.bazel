@@ -1,0 +1,11 @@
+load("@rules_rust//rust:defs.bzl", "rust_library")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "starpls_test_util",
+    srcs = glob(["src/**/*.rs"]),
+    deps = [
+        "//crates/starpls_syntax",
+    ],
+)

@@ -4,6 +4,12 @@ use std::path::Path;
 
 pub use builtin::Builtins;
 
+#[cfg(bazel)]
+pub mod builtin {
+    pub use builtin_proto::builtin::*;
+}
+
+#[cfg(not(bazel))]
 pub mod builtin {
     include!(concat!(env!("OUT_DIR"), "/builtin.rs"));
 }

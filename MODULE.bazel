@@ -1,7 +1,14 @@
+single_version_override(
+    module_name = "rules_rust",
+    patches = ["//:bazel/patches/0001-bzlmod-support-nightly.patch"],
+)
+
 bazel_dep(name = "aspect_bazel_lib", version = "2.4.1")
 bazel_dep(name = "aspect_rules_js", version = "1.37.1")
 bazel_dep(name = "aspect_rules_swc", version = "1.1.0")
 bazel_dep(name = "aspect_rules_ts", version = "2.1.1")
+bazel_dep(name = "protobuf", version = "23.1")
+bazel_dep(name = "rules_rust", version = "0.38.0")
 
 rules_ts_ext = use_extension(
     "@aspect_rules_ts//ts:extensions.bzl",
@@ -26,3 +33,54 @@ npm.npm_translate_lock(
 )
 
 use_repo(npm, "npm")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+
+rust.toolchain(
+    edition = "2021",
+    versions = [
+        "nightly/2023-12-06",
+    ],
+)
+
+use_repo(rust, "rust_toolchains")
+
+register_toolchains("@rust_toolchains//:all")
+
+crate = use_extension(
+    "@rules_rust//crate_universe:extension.bzl",
+    "crate",
+)
+
+crate.from_cargo(
+    name = "crates",
+    cargo_lockfile = "//:Cargo.lock",
+    manifests = [
+        "//:Cargo.toml",
+        "//crates/starpls:Cargo.toml",
+        "//crates/starpls_bazel:Cargo.toml",
+        "//crates/starpls_common:Cargo.toml",
+        "//crates/starpls_hir:Cargo.toml",
+        "//crates/starpls_ide:Cargo.toml",
+        "//crates/starpls_intern:Cargo.toml",
+        "//crates/starpls_lexer:Cargo.toml",
+        "//crates/starpls_parser:Cargo.toml",
+        "//crates/starpls_syntax:Cargo.toml",
+        "//crates/starpls_test_util:Cargo.toml",
+        "//xtask:Cargo.toml",
+    ],
+)
+
+crate.annotation(
+    crate = "protoc-gen-prost",
+    gen_binaries = ["protoc-gen-prost"],
+)
+
+crate.annotation(
+    crate = "protoc-gen-tonic",
+    gen_binaries = ["protoc-gen-tonic"],
+)
+
+use_repo(crate, "crates")
+
+register_toolchains("//:prost_toolchain")

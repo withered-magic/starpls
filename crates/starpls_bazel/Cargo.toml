@@ -9,6 +9,10 @@ edition = "2021"
 anyhow = "1.0.79"
 bytes = "1.5.0"
 prost = "0.12.3"
+prost-types = "0.12.3"
+protoc-gen-prost = "0.2.3"
+protoc-gen-tonic = "0.3.0"
+tonic = "0.11.0"
 
 [build-dependencies]
 prost-build = "0.12.3"

@@ -1,0 +1,14 @@
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "starpls_lexer",
+    srcs = glob(["src/**/*.rs"]),
+)
+
+rust_test(
+    name = "starpls_lexer_test",
+    crate = ":starpls_lexer",
+    deps = ["@crates//:expect-test"],
+)

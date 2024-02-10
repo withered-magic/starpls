@@ -1,0 +1,19 @@
+load("@rules_rust//rust:defs.bzl", "rust_library")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "starpls_ide",
+    srcs = glob(["src/**/*.rs"]),
+    aliases = {
+        "@crates//:salsa": "salsa",
+    },
+    deps = [
+        "//crates/starpls_bazel",
+        "//crates/starpls_common",
+        "//crates/starpls_hir",
+        "//crates/starpls_syntax",
+        "@crates//:dashmap",
+        "@crates//:salsa",
+    ],
+)

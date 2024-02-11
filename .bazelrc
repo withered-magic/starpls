@@ -1,3 +1,5 @@
+common --enable_bzlmod
+
 # honor the setting of `skipLibCheck` in the tsconfig.json file
 build --@aspect_rules_ts//ts:skipLibCheck=honor_tsconfig
 fetch --@aspect_rules_ts//ts:skipLibCheck=honor_tsconfig

@@ -1,4 +1,4 @@
-load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -26,11 +26,11 @@ rust_library(
     ],
 )
 
-# rust_test(
-#     name = "starpls_hir_test",
-#     aliases = {
-#         "@crates//:salsa": "salsa",
-#     },
-#     crate = ":starpls_hir",
-#     deps = ["@crates//:expect-test"],
-# )
+rust_test(
+    name = "starpls_hir_test",
+    aliases = {
+        "@crates//:salsa": "salsa",
+    },
+    crate = ":starpls_hir",
+    deps = ["@crates//:expect-test"],
+)

@@ -1,4 +1,4 @@
-use std::{io, path::PathBuf};
+use std::io;
 
 use starpls_syntax::{
     line_index as syntax_line_index, parse_module, LineIndex, Module, ParseTree, SyntaxNode,

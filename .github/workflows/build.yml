@@ -19,10 +19,13 @@ jobs:
         cp bazel/remote-cache.bazelrc .bazelrc
         echo "build --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >> .bazelrc
         mkdir -p editors/code/dist
+        echo "CARGO_BAZEL_GENERATOR_URL=https://github.com/bazelbuild/rules_rust/releases/download/0.38.0/cargo-bazel-x86_64-unknown-linux-gnu" >> $GITHUB_ENV
+        echo "CARGO_BAZEL_GENERATOR_SHA256=e2747e48cd407005a961ece325c20b60b8a330220ba53082dae712a818c30a1c" >> $GITHUB_ENV
       env:
         BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
     - name: Build
       run: |
+        echo $CARGO_BAZEL_GENERATOR_URL
         bazel build //...
         bazel run //editors/code
     - name: Run tests

@@ -1,4 +1,4 @@
-load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -8,5 +8,20 @@ rust_library(
     deps = [
         "//crates/starpls_lexer",
         "@crates//:drop_bomb",
+    ],
+)
+
+filegroup(
+    name = "test_data",
+    srcs = glob(["test_data/**"]),
+)
+
+rust_test(
+    name = "starpls_parser_test",
+    crate = ":starpls_parser",
+    data = [":test_data"],
+    deps = [
+        "//vendor/runfiles",
+        "@crates//:expect-test",
     ],
 )

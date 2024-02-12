@@ -1,5 +1,5 @@
 {
-  "checksum": "ddbd78c4e01fc5b8a56e57abe727141b512758f4f6e04a1f4628b6675325ea46",
+  "checksum": "90ea312c45f33cf26e20b948e3d4ee8f869237b90516b3668f557de1672e1291",
   "crates": {
     "addr2line 0.21.0": {
       "name": "addr2line",
@@ -6583,6 +6583,31 @@
       },
       "license": "MIT OR Apache-2.0"
     },
+    "runfiles 0.38.0": {
+      "name": "runfiles",
+      "version": "0.38.0",
+      "repository": null,
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "runfiles",
+            "crate_root": "src/lib.rs",
+            "srcs": [
+              "**/*.rs"
+            ]
+          }
+        }
+      ],
+      "library_target_name": "runfiles",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "edition": "2021",
+        "version": "0.38.0"
+      },
+      "license": null
+    },
     "rustc-demangle 0.1.23": {
       "name": "rustc-demangle",
       "version": "0.1.23",
@@ -10705,6 +10730,7 @@
     "protoc-gen-tonic 0.3.0"
   ],
   "workspace_members": {
+    "runfiles 0.38.0": "vendor/runfiles",
     "starpls 0.1.0": "crates/starpls",
     "starpls_bazel 0.1.0": "crates/starpls_bazel",
     "starpls_common 0.1.0": "crates/starpls_common",

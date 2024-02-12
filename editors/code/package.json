@@ -5,7 +5,9 @@
   "publisher": "withered-magic",
   "main": "./dist/main",
   "scripts": {
-    "build": "bazelisk run //editors/code",
+    "build": "npm run build-lsp && npm run build-ext",
+    "build-ext": "bazelisk run //editors/code",
+    "build-lsp": "bazelisk build //crates/starpls",
     "test": "bazelisk test //editors/code/...",
     "watch": "ibazel run //editors/code"
   },

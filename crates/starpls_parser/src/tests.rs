@@ -1,7 +1,8 @@
 use crate::{parse, StrStep, StrWithTokens};
 use expect_test::{expect_file, ExpectFile};
+use runfiles::find_runfiles_dir;
 use std::{
-    env,
+    env, error,
     fmt::Write,
     fs,
     path::{Path, PathBuf},
@@ -58,24 +59,34 @@ struct TestCase {
     expect_file: PathBuf,
 }
 
-fn collect_test_cases(dir: &'static str) -> Result<Vec<TestCase>, Box<dyn std::error::Error>> {
+fn collect_test_cases(dir: &'static str) -> Result<Vec<TestCase>, Box<dyn error::Error>> {
     let mut test_cases = Vec::new();
 
     // Check for a test filter.
     let filter = env::var("TEST_FILTER").ok();
 
+    // let crate_root = find_runfiles_dir()?.join("starpls/crates/starpls_parser");
+    let root = find_runfiles_dir()
+        .map(|dir| dir.join("starpls/crates/starpls_parser"))
+        .unwrap_or_else(|_| {
+            PathBuf::from(
+                env::var("CARGO_MANIFEST_DIR")
+                    .unwrap_or_else(|_| env!("CARGO_MANIFEST_DIR").to_string()),
+            )
+        });
+
     // Determine the test data directory.
-    let crate_root =
-        env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| env!("CARGO_MANIFEST_DIR").to_string());
-    let crate_root = Path::new(&crate_root);
-    let test_data_dir = crate_root.join(dir);
+    let test_data_dir = root.join(dir);
 
     for entry in fs::read_dir(test_data_dir)? {
         let entry = entry?;
         let entry_path = entry.path();
 
         // Skip non-Starlark files.
-        if entry_path.extension().unwrap_or_default() != "star" || !entry.file_type()?.is_file() {
+        if entry_path.extension().unwrap_or_default() != "star" || {
+            let file_type = entry.file_type()?;
+            !(file_type.is_file() || file_type.is_symlink())
+        } {
             continue;
         }
 
@@ -83,7 +94,9 @@ fn collect_test_cases(dir: &'static str) -> Result<Vec<TestCase>, Box<dyn std::e
         let stripped = entry_path.with_extension("");
         let test_name = match stripped.file_name().and_then(|name| name.to_str()) {
             Some(test_name) => test_name,
-            None => continue,
+            None => {
+                continue;
+            }
         };
         match filter {
             Some(ref filter) => {

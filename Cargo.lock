@@ -1211,6 +1211,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "runfiles"
+version = "0.38.0"
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1465,6 +1469,7 @@ version = "0.1.0"
 dependencies = [
  "drop_bomb",
  "expect-test",
+ "runfiles",
  "starpls_lexer",
 ]
 

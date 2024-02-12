@@ -1,0 +1,19 @@
+load(
+    "@rules_rust//rust:defs.bzl",
+    "rust_library",
+)
+load("//vendor/runfiles/private:runfiles_utils.bzl", "workspace_name")
+
+workspace_name(
+    name = "workspace_name.env",
+)
+
+rust_library(
+    name = "runfiles",
+    srcs = ["src/lib.rs"],
+    edition = "2021",
+    rustc_env_files = [
+        ":workspace_name.env",
+    ],
+    visibility = ["//visibility:public"],
+)

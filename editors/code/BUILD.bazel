@@ -1,5 +1,5 @@
 load("@aspect_bazel_lib//lib:copy_to_directory.bzl", "copy_to_directory")
-load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_files")
+load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_file", "write_source_files")
 load("@aspect_rules_swc//swc:defs.bzl", "swc")
 load("@aspect_rules_ts//ts:defs.bzl", "ts_project")
 load("@bazel_skylib//lib:partial.bzl", "partial")
@@ -35,7 +35,16 @@ copy_to_directory(
 
 write_source_files(
     name = "code",
+    diff_test = False,
     files = {
         "dist": ":swc_copy",
     },
+)
+
+write_source_file(
+    name = "copy_starpls",
+    diff_test = False,
+    executable = True,
+    in_file = "//crates/starpls",
+    out_file = "bin/starpls",
 )

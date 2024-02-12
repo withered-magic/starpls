@@ -5,10 +5,11 @@
 `starpls` currently requires a nightly build of Rust, due to usage of `trait_upcasting` as specified by [RFC3324](https://rust-lang.github.io/rfcs/3324-dyn-upcasting.html).
 
 ### Prerequisites
-Make sure you have `protoc` installed, as it's used to compile `builtin.proto`.
+- `pnpm`, for managing Node dependencies
+- `protoc`, for compiling `builtin.proto`
 
 Steps to get up and running:
-1. `cargo build`
+1. Run `pnpm install` in `editors/code`.
 2. Open VSCode, `Run and Debug > Run Extension (Debug Build)`.
 3. In the extension development host, open a `.star` file and enjoy syntax highlighting and error messages!
 

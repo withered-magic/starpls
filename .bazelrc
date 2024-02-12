@@ -6,3 +6,5 @@ query --@aspect_rules_ts//ts:skipLibCheck=honor_tsconfig
 build --experimental_convenience_symlinks=ignore
 
 build --@rules_rust//rust/toolchain/channel=nightly
+
+build --incompatible_strict_action_env

@@ -8,14 +8,9 @@
 Make sure you have `protoc` installed, as it's used to compile `builtin.proto`.
 
 Steps to get up and running:
-1. `rustup override set nightly`
-2. `cargo build`
-3. Open VSCode, `Run and Debug > Run Extension (Debug Build)`.
-4. In the extension development host, open a `.star` file and enjoy syntax highlighting and error messages!
-
-Additionally, you may want to enable auto-completion and other features for Bazel builtins. This can be done with the following steps.
-1. Build the Bazel builtins proto. This can be done by cloning the [Bazel repository](https://github.com/bazelbuild/bazel) and then building the builtins proto with `bazel build //src/main/java/com/google/devtools/build/lib:gen_api_proto`.
-2. Copy the Bazel builtins proto to your working copy of the `starpls` repo. Specifically, copy it to `<starpls repository root>/editors/code/builtin.pb`, as this is where the development setup expects the proto to be by default.
+1. `cargo build`
+2. Open VSCode, `Run and Debug > Run Extension (Debug Build)`.
+3. In the extension development host, open a `.star` file and enjoy syntax highlighting and error messages!
 
 ## Roadmap
 - Parsing

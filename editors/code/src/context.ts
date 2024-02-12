@@ -56,14 +56,7 @@ export class Context {
     const serverPath = await this.ensureServerInstalled();
 
     // Set up language client/server options.
-    const executable: Executable = {
-      command: serverPath,
-      options: {
-        env: {
-          'BAZEL_LSP_BUILTIN_PROTO': path.join(this.extensionContext.extensionPath, 'builtin.pb'),
-        },
-      },
-    };
+    const executable: Executable = { command: serverPath };
     const serverOptions: ServerOptions = { debug: executable, run: executable };
     const clientOptions: LanguageClientOptions = {
       documentSelector: [{ scheme: 'file', language: 'starlark' }],

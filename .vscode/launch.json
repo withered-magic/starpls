@@ -13,7 +13,7 @@
       ],
       "preLaunchTask": "${defaultBuildTask}",
       "env": {
-        "__STARPLS_SERVER_DEBUG": "${workspaceFolder}/target/debug/starpls"
+        "__STARPLS_SERVER_DEBUG": "${workspaceFolder}/editors/code/bin/starpls"
       }
     }
   ]

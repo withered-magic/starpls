@@ -65,6 +65,10 @@ pub const BUILTINS_VALUES_DENY_LIST: &[&str] = &[
 
 pub fn load_builtins(path: impl AsRef<Path>) -> anyhow::Result<Builtins> {
     let data = fs::read(path)?;
+    decode_builtins(&data)
+}
+
+pub fn decode_builtins(data: &[u8]) -> anyhow::Result<Builtins> {
     let builtins = Builtins::decode(&data[..])?;
     Ok(builtins)
 }

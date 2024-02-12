@@ -7,7 +7,7 @@ use crate::{
 };
 use lsp_server::{Connection, ReqQueue};
 use parking_lot::RwLock;
-use starpls_bazel::{load_builtins, Builtins};
+use starpls_bazel::{decode_builtins, Builtins};
 use starpls_ide::{Analysis, AnalysisSnapshot, Change};
 use std::{sync::Arc, time::Duration};
 
@@ -115,15 +115,7 @@ impl Server {
 }
 
 fn load_bazel_builtins() -> anyhow::Result<Builtins> {
-    let path = match std::env::var("BAZEL_LSP_BUILTIN_PROTO") {
-        Ok(path) => path,
-        Err(_) => {
-            eprintln!("server: no path specified for the Bazel builtin proto");
-            return Ok(Default::default());
-        }
-    };
-
-    eprintln!("server: loading Bazel builtins from {}", path);
-    let builtins = load_builtins(path)?;
+    let data = include_bytes!("builtin/builtin.pb");
+    let builtins = decode_builtins(&data[..])?;
     Ok(builtins)
 }

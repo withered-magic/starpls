@@ -65,6 +65,10 @@ impl crate::Db for TestDatabase {
         self.gcx.with_tcx(self, |tcx| tcx.infer_param(file, param))
     }
 
+    fn resolve_load_stmt(&self, _file: File, _load_stmt: crate::def::LoadStmt) -> Option<File> {
+        None
+    }
+
     fn set_builtin_defs(&mut self, _dialect: Dialect, _builtins: Builtins) {}
 
     fn get_builtin_defs(&self, _dialect: &Dialect) -> BuiltinDefs {

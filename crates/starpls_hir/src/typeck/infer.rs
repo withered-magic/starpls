@@ -942,7 +942,9 @@ impl TyCtxt<'_> {
                                 "Cannot load the current file",
                             );
                             return self.unknown_ty();
-                        } else if self
+                        }
+
+                        if self
                             .cx
                             .load_resolution_stack
                             .iter()
@@ -1017,7 +1019,7 @@ impl TyCtxt<'_> {
         ty
     }
 
-    fn resolve_load_stmt(&mut self, file: File, load_stmt: LoadStmt) -> Option<File> {
+    pub fn resolve_load_stmt(&mut self, file: File, load_stmt: LoadStmt) -> Option<File> {
         let id = FileLoadStmt::new(file, load_stmt);
 
         if let Some(loaded_file) = self.cx.resolved_load_stmts.get(&id) {

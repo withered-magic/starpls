@@ -350,7 +350,7 @@ impl Param {
 }
 
 #[salsa::tracked]
-pub(crate) struct LoadStmt {
+pub struct LoadStmt {
     #[return_ref]
     pub(crate) module: Box<str>,
     pub(crate) ptr: SyntaxNodePtr,

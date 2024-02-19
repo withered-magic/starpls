@@ -78,7 +78,14 @@ struct NameRefContext {
 }
 
 enum StringContext {
-    LoadModule { file_id: FileId, text: ast::String },
+    LoadModule {
+        file_id: FileId,
+        text: ast::String,
+    },
+    LoadItem {
+        file_id: FileId,
+        load_stmt: ast::LoadStmt,
+    },
 }
 
 struct CompletionContext {
@@ -173,6 +180,23 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
                 });
             }
         }
+        CompletionAnalysis::String(StringContext::LoadItem { file_id, load_stmt }) => {
+            let sema = Semantics::new(db);
+            let file = db.get_file(*file_id)?;
+            let loaded_file = sema.resolve_load_stmt(file, load_stmt)?;
+            for (name, decl) in Resolver::exports_for_file(db, loaded_file) {
+                items.push(CompletionItem {
+                    label: name.to_string(),
+                    kind: match decl {
+                        Declaration::Function { .. } => CompletionItemKind::Function,
+                        Declaration::Variable { .. } => CompletionItemKind::Variable,
+                        _ => continue,
+                    },
+                    mode: None,
+                    relevance: CompletionRelevance::VariableOrKeyword,
+                })
+            }
+        }
         _ => {}
     }
     Some(items)
@@ -224,6 +248,9 @@ fn maybe_str_context(file_id: FileId, root: &SyntaxNode, pos: TextSize) -> Optio
 
     if ast::LoadModule::can_cast(parent.kind()) {
         Some(StringContext::LoadModule { file_id, text })
+    } else if ast::LoadItem::can_cast(parent.kind()) {
+        let load_stmt = ast::LoadStmt::cast(parent.parent()?)?;
+        Some(StringContext::LoadItem { file_id, load_stmt })
     } else {
         None
     }

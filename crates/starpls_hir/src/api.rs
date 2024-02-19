@@ -59,6 +59,16 @@ impl<'a> Semantics<'a> {
         let param = source_map(self.db, file).param_map.get(&ptr)?;
         Some(self.db.infer_param(file, *param).into())
     }
+
+    pub fn resolve_load_stmt(&self, file: File, load_stmt: &ast::LoadStmt) -> Option<File> {
+        let ptr = AstPtr::new(&ast::Statement::Load(load_stmt.clone()));
+        let stmt = source_map(self.db, file).stmt_map.get(&ptr)?;
+        let load_stmt = match module(self.db, file)[*stmt] {
+            Stmt::Load { load_stmt, .. } => load_stmt,
+            _ => return None,
+        };
+        self.db.resolve_load_stmt(file, load_stmt)
+    }
 }
 
 pub struct Type {

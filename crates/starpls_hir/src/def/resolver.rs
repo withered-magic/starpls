@@ -63,6 +63,28 @@ impl<'a> Resolver<'a> {
         })
     }
 
+    pub fn exports_for_file(db: &'a dyn Db, file: File) -> HashMap<Name, Declaration> {
+        let mut exports = HashMap::new();
+        let resolver = Self::new_for_module(db, file);
+        for scope in resolver.scopes() {
+            for (name, decls) in scope
+                .declarations
+                .iter()
+                .filter(|(name, _)| !name.as_str().starts_with('_'))
+            {
+                if let Entry::Vacant(entry) = exports.entry(name.clone()) {
+                    entry.insert(match decls.first().cloned() {
+                        Some(
+                            decl @ (Declaration::Variable { .. } | Declaration::Function { .. }),
+                        ) => decl,
+                        _ => continue,
+                    });
+                }
+            }
+        }
+        exports
+    }
+
     pub fn resolve_name_in_builtins(&self, name: &Name) -> Option<Vec<Declaration>> {
         intrinsic_functions(self.db)
             .functions(self.db)

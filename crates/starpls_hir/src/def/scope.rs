@@ -1,6 +1,7 @@
 use crate::{
     def::{
-        CompClause, Declaration, Expr, ExprId, Function, LoadItem, Param, ParamId, Stmt, StmtId,
+        CompClause, Declaration, Expr, ExprId, Function, FunctionId, LoadItem, Param, ParamId,
+        Stmt, StmtId,
     },
     lower, Db, Module, ModuleInfo, ModuleSourceMap, Name,
 };
@@ -66,7 +67,7 @@ struct DeferredScope {
 }
 
 struct FunctionData {
-    func: Function,
+    func: FunctionId,
     params: Box<[ParamId]>,
     stmts: Box<[StmtId]>,
 }
@@ -198,14 +199,14 @@ impl ScopeCollector<'_> {
                 *current = self.scopes.alloc_scope(*current);
                 self.scopes.add_decl(
                     *current,
-                    func.name(self.db).clone(),
+                    func.0.name(self.db).clone(),
                     Declaration::Function {
                         id: stmt,
                         func: *func,
                     },
                 );
                 deferred.push_back(FunctionData {
-                    params: func.params(self.db).clone(),
+                    params: func.0.params(self.db).clone(),
                     stmts: stmts.clone(),
                     func: *func,
                 });

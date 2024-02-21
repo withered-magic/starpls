@@ -1,7 +1,7 @@
 use crate::{
     def::{
         scope::{module_scopes, Scope, ScopeHirId, ScopeId, Scopes},
-        Declaration, ExprId, Function, ModuleSourceMap,
+        Declaration, ExprId, Function, FunctionId, ModuleSourceMap,
     },
     source_map,
     typeck::{builtins::builtin_globals, intrinsics::intrinsic_functions},
@@ -23,7 +23,7 @@ pub struct Resolver<'a> {
 
 pub(crate) enum Export {
     Variable { expr: ExprId },
-    Function { func: Function },
+    Function { func: FunctionId },
 }
 
 impl<'a> Resolver<'a> {

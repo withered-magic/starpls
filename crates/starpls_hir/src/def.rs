@@ -249,7 +249,7 @@ impl Expr {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Stmt {
     Def {
-        func: Function,
+        func: FunctionId,
         stmts: Box<[StmtId]>,
     },
     If {
@@ -391,13 +391,31 @@ pub enum Literal {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Declaration {
-    Function { id: StmtId, func: Function },
-    IntrinsicFunction { func: IntrinsicFunction },
-    BuiltinFunction { func: BuiltinFunction },
-    BuiltinVariable { type_ref: TypeRef },
-    Variable { id: ExprId, source: Option<ExprId> },
-    Parameter { id: ParamId, func: Option<Function> },
-    LoadItem { id: LoadItemId, load_stmt: LoadStmt },
+    Function {
+        id: StmtId,
+        func: FunctionId,
+    },
+    IntrinsicFunction {
+        func: IntrinsicFunction,
+    },
+    BuiltinFunction {
+        func: BuiltinFunction,
+    },
+    BuiltinVariable {
+        type_ref: TypeRef,
+    },
+    Variable {
+        id: ExprId,
+        source: Option<ExprId>,
+    },
+    Parameter {
+        id: ParamId,
+        func: Option<FunctionId>,
+    },
+    LoadItem {
+        id: LoadItemId,
+        load_stmt: LoadStmt,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -437,6 +455,9 @@ impl Name {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FunctionId(pub(crate) Function);
+
 #[salsa::tracked]
 pub(crate) struct Function {
     pub(crate) file: File,
@@ -448,7 +469,7 @@ pub(crate) struct Function {
 }
 
 impl Function {
-    pub fn ty(&self) -> Ty {
+    pub(crate) fn ty(&self) -> Ty {
         TyKind::Function(*self).intern()
     }
 }

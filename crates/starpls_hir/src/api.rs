@@ -25,7 +25,7 @@ impl<'a> Semantics<'a> {
         let ptr = AstPtr::new(&ast::Statement::cast(stmt.syntax().clone())?);
         let stmt = source_map(self.db, file).stmt_map.get(&ptr)?;
         match &module(self.db, file)[*stmt] {
-            Stmt::Def { func, .. } => Some((*func).into()),
+            Stmt::Def { func, .. } => Some(func.0.into()),
             _ => None,
         }
     }

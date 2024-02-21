@@ -1,8 +1,8 @@
 use crate::{
     def::{
-        Argument, CompClause, DictEntry, Expr, ExprId, ExprPtr, Function, Literal, LoadItem,
-        LoadItemId, LoadItemPtr, LoadStmt, Module, ModuleSourceMap, Name, Param, ParamId, ParamPtr,
-        Stmt, StmtId, StmtPtr,
+        Argument, CompClause, DictEntry, Expr, ExprId, ExprPtr, Function, FunctionId, Literal,
+        LoadItem, LoadItemId, LoadItemPtr, LoadStmt, Module, ModuleSourceMap, Name, Param, ParamId,
+        ParamPtr, Stmt, StmtId, StmtPtr,
     },
     typeck::FunctionTypeRef,
     Db, TypeRef,
@@ -101,14 +101,14 @@ impl<'a> LoweringContext<'a> {
                 );
                 let stmts = self.lower_suite_opt(node.suite());
                 Stmt::Def {
-                    func: Function::new(
+                    func: FunctionId(Function::new(
                         self.db,
                         self.file,
                         name,
                         spec.map(|spec| spec.1),
                         doc,
                         params,
-                    ),
+                    )),
                     stmts,
                 }
             }

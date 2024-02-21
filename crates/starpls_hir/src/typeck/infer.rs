@@ -111,7 +111,7 @@ impl TyCtxt<'_> {
                                     })
                                     .unwrap_or_else(|| self.unknown_ty())
                             }),
-                        Declaration::Function { func, .. } => func.ty(),
+                        Declaration::Function { func, .. } => func.0.ty(),
                         Declaration::IntrinsicFunction { func } => {
                             TyKind::IntrinsicFunction(func, Substitution::new_identity(0)).intern()
                         }
@@ -993,7 +993,7 @@ impl TyCtxt<'_> {
                                 Some(Export::Variable { expr }) => {
                                     tcx.infer_expr(loaded_file, expr)
                                 }
-                                Some(Export::Function { func }) => func.ty(),
+                                Some(Export::Function { func }) => func.0.ty(),
                                 None => {
                                     tcx.add_diagnostic_for_range(
                                         file,

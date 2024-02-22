@@ -107,6 +107,7 @@ impl<'a> LoweringContext<'a> {
                         name,
                         spec.map(|spec| spec.1),
                         doc,
+                        ptr.syntax_node_ptr(),
                         params,
                     ),
                     stmts,

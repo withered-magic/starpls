@@ -1439,6 +1439,7 @@ name = "starpls_ide"
 version = "0.1.0"
 dependencies = [
  "dashmap",
+ "rustc-hash",
  "salsa-2022",
  "starpls_bazel",
  "starpls_common",

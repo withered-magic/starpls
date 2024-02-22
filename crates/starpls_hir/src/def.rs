@@ -1,9 +1,6 @@
 use std::{collections::HashSet, ops::Index};
 
-use crate::{
-    typeck::{builtins::BuiltinFunction, intrinsics::IntrinsicFunction, TypeRef},
-    Db, Ty, TyKind,
-};
+use crate::{typeck::TypeRef, Db, Ty, TyKind};
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
@@ -13,9 +10,9 @@ use starpls_syntax::{
     TextRange,
 };
 
-pub mod lower;
-pub mod resolver;
-pub mod scope;
+mod lower;
+pub(crate) mod resolver;
+pub(crate) mod scope;
 
 #[cfg(test)]
 mod tests;
@@ -247,7 +244,7 @@ impl Expr {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Stmt {
+pub(crate) enum Stmt {
     Def {
         func: Function,
         stmts: Box<[StmtId]>,
@@ -285,7 +282,7 @@ pub enum Stmt {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Argument {
+pub(crate) enum Argument {
     Simple { expr: ExprId },
     Keyword { name: Name, expr: ExprId },
     UnpackedList { expr: ExprId },
@@ -389,17 +386,6 @@ pub enum Literal {
     None,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Declaration {
-    Function { id: StmtId, func: Function },
-    IntrinsicFunction { func: IntrinsicFunction },
-    BuiltinFunction { func: BuiltinFunction },
-    BuiltinVariable { type_ref: TypeRef },
-    Variable { id: ExprId, source: Option<ExprId> },
-    Parameter { id: ParamId, func: Option<Function> },
-    LoadItem { id: LoadItemId, load_stmt: LoadStmt },
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Name(SmolStr);
 
@@ -443,6 +429,7 @@ pub(crate) struct Function {
     pub(crate) name: Name,
     pub(crate) ret_type_ref: Option<TypeRef>,
     pub(crate) doc: Option<Box<str>>,
+    pub(crate) ptr: SyntaxNodePtr,
     #[return_ref]
     pub(crate) params: Box<[ParamId]>,
 }

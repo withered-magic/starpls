@@ -1,15 +1,15 @@
 //! Partially replicates the "completions" API in the LSP specification.
 
 use crate::FilePosition;
+use rustc_hash::FxHashMap;
 use starpls_common::{parse, FileId};
-use starpls_hir::{Db, Declaration, Name, Param, Resolver, Semantics, Type};
+use starpls_hir::{Db, Name, Param, ScopeDef, Semantics, Type};
 use starpls_syntax::{
     ast::{self, AstNode, AstToken},
     parse_module,
     SyntaxKind::*,
     SyntaxNode, TextRange, TextSize,
 };
-use std::collections::HashMap;
 
 const COMPLETION_MARKER: &'static str = "__STARPLS_COMPLETION_MARKER";
 
@@ -69,7 +69,7 @@ enum NameContext {
 }
 
 struct NameRefContext {
-    names: HashMap<Name, Declaration>,
+    names: FxHashMap<Name, ScopeDef>,
     params: Vec<Param>,
     is_in_def: bool,
     is_in_for: bool,
@@ -119,10 +119,8 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
                     items.push(CompletionItem {
                         label: name.to_string(),
                         kind: match decl {
-                            Declaration::Function { .. }
-                            | Declaration::IntrinsicFunction { .. }
-                            | Declaration::BuiltinFunction { .. } => CompletionItemKind::Function,
-                            Declaration::Variable { .. } | Declaration::Parameter { .. } => {
+                            ScopeDef::Function(_) => CompletionItemKind::Function,
+                            ScopeDef::Variable(_) | ScopeDef::Parameter(_) => {
                                 CompletionItemKind::Variable
                             }
                             _ => CompletionItemKind::Variable,
@@ -184,12 +182,20 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
             let sema = Semantics::new(db);
             let file = db.get_file(*file_id)?;
             let loaded_file = sema.resolve_load_stmt(file, load_stmt)?;
-            for (name, decl) in Resolver::exports_for_file(db, loaded_file) {
+            let scope = sema.scope_for_module(loaded_file);
+            for (name, decl) in scope
+                .names()
+                .filter(|(name, _)| !name.as_str().starts_with('_'))
+            {
                 items.push(CompletionItem {
                     label: name.to_string(),
                     kind: match decl {
-                        Declaration::Function { .. } => CompletionItemKind::Function,
-                        Declaration::Variable { .. } => CompletionItemKind::Variable,
+                        ScopeDef::Function(it) if it.is_user_defined() => {
+                            CompletionItemKind::Function
+                        }
+                        ScopeDef::Variable(it) if it.is_user_defined() => {
+                            CompletionItemKind::Variable
+                        }
                         _ => continue,
                     },
                     mode: None,
@@ -299,7 +305,7 @@ impl CompletionContext {
                 .map(|ty| ty.params(db))
                 .unwrap_or_else(|| vec![]);
 
-            let resolver = Resolver::new_for_offset(db, file, pos);
+            let scope = sema.scope_for_offset(file, pos);
 
             let (is_in_def, is_in_for, is_loop_variable) =
                 parent.ancestors().map(|node| node.kind()).fold(
@@ -318,7 +324,7 @@ impl CompletionContext {
                 .map(|node| matches!(node.kind(), MODULE | SUITE))
                 .unwrap_or(true);
             CompletionAnalysis::NameRef(NameRefContext {
-                names: resolver.names(),
+                names: scope.names().collect(),
                 params,
                 is_in_def,
                 is_in_for,

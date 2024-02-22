@@ -7,10 +7,7 @@ use starpls_common::{parse, Dialect, File, Parse};
 
 pub use crate::{
     api::*,
-    def::{
-        resolver::Resolver, scope::module_scopes, Declaration, ExprId, LoadStmt, Module, Name,
-        ParamId,
-    },
+    def::{ExprId, LoadStmt, Module, Name, ParamId},
     display::{DisplayWithDb, DisplayWithDbWrapper},
     typeck::{builtins::BuiltinDefs, Cancelled, GlobalCtxt, Ty, TyCtxt},
 };

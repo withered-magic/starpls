@@ -1,5 +1,5 @@
 {
-  "checksum": "90ea312c45f33cf26e20b948e3d4ee8f869237b90516b3668f557de1672e1291",
+  "checksum": "775112d1c3652590cfb7b3c7081acbe01f961c7467ee9590ba51bfb9c93c1bc7",
   "crates": {
     "addr2line 0.21.0": {
       "name": "addr2line",
@@ -7791,6 +7791,10 @@
             {
               "id": "dashmap 5.5.3",
               "target": "dashmap"
+            },
+            {
+              "id": "rustc-hash 1.1.0",
+              "target": "rustc_hash"
             },
             {
               "id": "salsa-2022 0.1.0",

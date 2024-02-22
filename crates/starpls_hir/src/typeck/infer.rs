@@ -1,6 +1,7 @@
 use crate::{
     def::{
         resolver::{Export, Resolver},
+        scope::{LoadItemDef, ParameterDef, ScopeDef, VariableDef},
         Argument, Expr, ExprId, Literal, LoadItem, LoadItemId, LoadStmt, Param, ParamId, Stmt,
     },
     display::DisplayWithDb,
@@ -12,7 +13,7 @@ use crate::{
         resolve_type_ref, resolve_type_ref_opt, FileExprId, FileParamId, Substitution, Tuple, Ty,
         TyCtxt, TyKind, TypeRef, TypecheckCancelled,
     },
-    Declaration, Name,
+    Name,
 };
 use smallvec::SmallVec;
 use starpls_common::{line_index, parse, Diagnostic, Dialect, File, FileRange, Severity};
@@ -95,10 +96,10 @@ impl TyCtxt<'_> {
                     .resolve_name(name)
                     .and_then(|decls| decls.into_iter().last())
                     .map(|decl| match decl {
-                        Declaration::Variable { id, source } => self
+                        ScopeDef::Variable(VariableDef { expr, source }) => self
                             .cx
                             .type_of_expr
-                            .get(&FileExprId::new(file, id))
+                            .get(&FileExprId::new(file, expr))
                             .cloned()
                             .unwrap_or_else(|| {
                                 source
@@ -106,25 +107,24 @@ impl TyCtxt<'_> {
                                         self.infer_source_expr_assign(file, source);
                                         self.cx
                                             .type_of_expr
-                                            .get(&FileExprId::new(file, id))
+                                            .get(&FileExprId::new(file, expr))
                                             .cloned()
                                     })
                                     .unwrap_or_else(|| self.unknown_ty())
                             }),
-                        Declaration::Function { func, .. } => func.ty(),
-                        Declaration::IntrinsicFunction { func } => {
+                        ScopeDef::Function(func) => func.ty(),
+                        ScopeDef::IntrinsicFunction(func) => {
                             TyKind::IntrinsicFunction(func, Substitution::new_identity(0)).intern()
                         }
-                        Declaration::BuiltinFunction { func } => {
-                            TyKind::BuiltinFunction(func).intern()
+                        ScopeDef::BuiltinFunction(func) => TyKind::BuiltinFunction(func).intern(),
+                        ScopeDef::BuiltinVariable(type_ref) => resolve_type_ref(db, &type_ref).0,
+                        ScopeDef::Parameter(ParameterDef { param, .. }) => {
+                            self.infer_param(file, param)
                         }
-                        Declaration::BuiltinVariable { type_ref } => {
-                            resolve_type_ref(db, &type_ref).0
-                        }
-                        Declaration::Parameter { id, .. } => self.infer_param(file, id),
-                        Declaration::LoadItem { id, load_stmt } => {
-                            self.infer_load_item(file, load_stmt, id)
-                        }
+                        ScopeDef::LoadItem(LoadItemDef {
+                            load_item,
+                            load_stmt,
+                        }) => self.infer_load_item(file, load_stmt, load_item),
                     })
                     .unwrap_or_else(|| {
                         self.add_expr_diagnostic(
@@ -990,10 +990,8 @@ impl TyCtxt<'_> {
                                 loaded_file,
                                 &Name::from_str(name),
                             ) {
-                                Some(Export::Variable { expr }) => {
-                                    tcx.infer_expr(loaded_file, expr)
-                                }
-                                Some(Export::Function { func }) => func.ty(),
+                                Some(Export::Variable(expr)) => tcx.infer_expr(loaded_file, expr),
+                                Some(Export::Function(func)) => func.ty(),
                                 None => {
                                     tcx.add_diagnostic_for_range(
                                         file,

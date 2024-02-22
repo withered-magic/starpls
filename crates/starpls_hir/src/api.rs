@@ -1,16 +1,27 @@
 use crate::{
-    def::{Function as HirDefFunction, Stmt},
+    def::{
+        resolver::Resolver,
+        scope::{self, module_scopes},
+        Function as HirDefFunction, LoadItemId, Stmt,
+    },
     module, source_map,
     typeck::{
         builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref, Substitution,
         Ty, TypeRef,
     },
-    Db, DisplayWithDb, Name, TyKind,
+    Db, DisplayWithDb, ExprId, Name, ParamId, TyKind,
 };
-use starpls_common::File;
-use starpls_syntax::ast::{self, AstNode, AstPtr};
+use starpls_common::{Diagnostic, Diagnostics, File};
+use starpls_syntax::{
+    ast::{self, AstNode, AstPtr, SyntaxNodePtr},
+    TextSize,
+};
 
 pub use crate::typeck::{Field, Param};
+
+pub fn diagnostics_for_file(db: &dyn Db, file: File) -> impl Iterator<Item = Diagnostic> {
+    module_scopes::accumulated::<Diagnostics>(db, file).into_iter()
+}
 
 pub struct Semantics<'a> {
     db: &'a dyn Db,
@@ -68,6 +79,103 @@ impl<'a> Semantics<'a> {
             _ => return None,
         };
         self.db.resolve_load_stmt(file, load_stmt)
+    }
+
+    pub fn scope_for_module(&self, file: File) -> SemanticsScope {
+        let resolver = Resolver::new_for_module(self.db, file);
+        SemanticsScope { resolver }
+    }
+
+    pub fn scope_for_expr(&self, file: File, expr: &ast::Expression) -> Option<SemanticsScope> {
+        let ptr = AstPtr::new(expr);
+        let expr = source_map(self.db, file).expr_map.get(&ptr)?;
+        let resolver = Resolver::new_for_expr(self.db, file, *expr);
+        Some(SemanticsScope { resolver })
+    }
+
+    pub fn scope_for_offset(&self, file: File, offset: TextSize) -> SemanticsScope {
+        let resolver = Resolver::new_for_offset(self.db, file, offset);
+        SemanticsScope { resolver }
+    }
+}
+
+pub struct Variable {
+    id: Option<ExprId>,
+}
+
+impl Variable {
+    pub fn is_user_defined(&self) -> bool {
+        self.id.is_some()
+    }
+}
+
+pub struct Parameter {
+    id: ParamId,
+}
+
+pub struct LoadItem {
+    id: LoadItemId,
+}
+
+pub enum ScopeDef {
+    Function(Function),
+    Variable(Variable),
+    Parameter(Parameter),
+    LoadItem(LoadItem),
+}
+
+impl ScopeDef {
+    pub fn syntax_node_ptr(&self, db: &dyn Db, file: File) -> Option<SyntaxNodePtr> {
+        let source_map = source_map(db, file);
+        match self {
+            ScopeDef::Function(Function(FunctionInner::HirDef(func))) => Some(func.ptr(db)),
+            ScopeDef::Variable(Variable { id: Some(id) }) => source_map
+                .expr_map_back
+                .get(id)
+                .map(|ptr| ptr.syntax_node_ptr()),
+            ScopeDef::Parameter(Parameter { id }) => source_map
+                .param_map_back
+                .get(id)
+                .map(|ptr| ptr.syntax_node_ptr()),
+            ScopeDef::LoadItem(LoadItem { id }) => source_map
+                .load_item_map_back
+                .get(id)
+                .map(|ptr| ptr.syntax_node_ptr()),
+            _ => None,
+        }
+    }
+}
+
+impl From<scope::ScopeDef> for ScopeDef {
+    fn from(value: scope::ScopeDef) -> Self {
+        match value {
+            scope::ScopeDef::Function(it) => ScopeDef::Function(it.into()),
+            scope::ScopeDef::IntrinsicFunction(it) => ScopeDef::Function(it.into()),
+            scope::ScopeDef::BuiltinFunction(it) => ScopeDef::Function(it.into()),
+            scope::ScopeDef::Variable(it) => ScopeDef::Variable(Variable { id: Some(it.expr) }),
+            scope::ScopeDef::BuiltinVariable(_) => ScopeDef::Variable(Variable { id: None }),
+            scope::ScopeDef::Parameter(it) => ScopeDef::Parameter(Parameter { id: it.param }),
+            scope::ScopeDef::LoadItem(it) => ScopeDef::LoadItem(LoadItem { id: it.load_item }),
+        }
+    }
+}
+
+pub struct SemanticsScope<'a> {
+    resolver: Resolver<'a>,
+}
+
+impl SemanticsScope<'_> {
+    pub fn names(&self) -> impl Iterator<Item = (Name, ScopeDef)> {
+        self.resolver
+            .names()
+            .into_iter()
+            .map(|(name, def)| (name, def.into()))
+    }
+
+    pub fn resolve_name(&self, name: &Name) -> Option<Vec<ScopeDef>> {
+        self.resolver
+            .resolve_name(&name)
+            .map(|defs| defs.into_iter().map(|def| def.into()).collect())
     }
 }
 
@@ -160,6 +268,10 @@ impl Function {
             FunctionInner::HirDef(func) => func.doc(db).map(|doc| doc.to_string()),
             _ => None,
         }
+    }
+
+    pub fn is_user_defined(&self) -> bool {
+        matches!(self.0, FunctionInner::HirDef(_))
     }
 }
 

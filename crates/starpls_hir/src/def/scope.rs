@@ -1,8 +1,8 @@
 use crate::{
-    def::{
-        CompClause, Declaration, Expr, ExprId, Function, LoadItem, Param, ParamId, Stmt, StmtId,
-    },
-    lower, Db, Module, ModuleInfo, ModuleSourceMap, Name,
+    def::{CompClause, Expr, ExprId, Function, LoadItem, LoadItemId, Param, ParamId, Stmt, StmtId},
+    lower,
+    typeck::{builtins::BuiltinFunction, intrinsics::IntrinsicFunction, TypeRef},
+    Db, LoadStmt, Module, ModuleInfo, ModuleSourceMap, Name,
 };
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
@@ -12,7 +12,7 @@ use std::collections::{hash_map::Entry, VecDeque};
 pub(crate) type ScopeId = Id<Scope>;
 
 #[salsa::tracked]
-pub struct ModuleScopes {
+pub(crate) struct ModuleScopes {
     #[return_ref]
     pub(crate) scopes: Scopes,
 }
@@ -24,19 +24,48 @@ pub(crate) fn module_scopes_query(db: &dyn Db, info: ModuleInfo) -> ModuleScopes
 }
 
 #[salsa::tracked]
-pub fn module_scopes(db: &dyn Db, file: File) -> ModuleScopes {
+pub(crate) fn module_scopes(db: &dyn Db, file: File) -> ModuleScopes {
     let info = lower(db, file);
     module_scopes_query(db, info)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Scope {
-    pub(crate) declarations: FxHashMap<Name, Vec<Declaration>>,
+pub(crate) enum ScopeDef {
+    Function(Function),
+    IntrinsicFunction(IntrinsicFunction),
+    BuiltinFunction(BuiltinFunction),
+    Variable(VariableDef),
+    BuiltinVariable(TypeRef),
+    Parameter(ParameterDef),
+    LoadItem(LoadItemDef),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct VariableDef {
+    pub(crate) expr: ExprId,
+    pub(crate) source: Option<ExprId>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ParameterDef {
+    pub(crate) param: ParamId,
+    pub(crate) func: Option<Function>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct LoadItemDef {
+    pub(crate) load_item: LoadItemId,
+    pub(crate) load_stmt: LoadStmt,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Scope {
+    pub(crate) declarations: FxHashMap<Name, Vec<ScopeDef>>,
     pub(crate) parent: Option<ScopeId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum ScopeHirId {
+pub(crate) enum ScopeHirId {
     Module,
     Expr(ExprId),
     Stmt(StmtId),
@@ -55,7 +84,7 @@ impl From<StmtId> for ScopeHirId {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Scopes {
+pub(crate) struct Scopes {
     pub(crate) scopes: Arena<Scope>,
     pub(crate) scopes_by_hir_id: FxHashMap<ScopeHirId, ScopeId>,
 }
@@ -94,13 +123,13 @@ impl Scopes {
         })
     }
 
-    fn add_decl(&mut self, scope: ScopeId, name: Name, decl: Declaration) {
+    fn add_decl(&mut self, scope: ScopeId, name: Name, def: ScopeDef) {
         match self.scopes[scope].declarations.entry(name) {
             Entry::Occupied(mut entry) => {
-                entry.get_mut().push(decl);
+                entry.get_mut().push(def);
             }
             Entry::Vacant(entry) => {
-                entry.insert(vec![decl]);
+                entry.insert(vec![def]);
             }
         }
     }
@@ -148,10 +177,10 @@ impl ScopeCollector<'_> {
                         self.scopes.add_decl(
                             scope,
                             name.clone(),
-                            Declaration::Parameter {
-                                id: param,
+                            ScopeDef::Parameter(ParameterDef {
+                                param,
                                 func: Some(data.func),
-                            },
+                            }),
                         );
                     }
                 }
@@ -199,10 +228,7 @@ impl ScopeCollector<'_> {
                 self.scopes.add_decl(
                     *current,
                     func.name(self.db).clone(),
-                    Declaration::Function {
-                        id: stmt,
-                        func: *func,
-                    },
+                    ScopeDef::Function(*func),
                 );
                 deferred.push_back(FunctionData {
                     params: func.params(self.db).clone(),
@@ -249,10 +275,10 @@ impl ScopeCollector<'_> {
                     self.scopes.add_decl(
                         *current,
                         Name::from_str(name),
-                        Declaration::LoadItem {
-                            id: *item,
+                        ScopeDef::LoadItem(LoadItemDef {
+                            load_item: *item,
                             load_stmt: *load_stmt,
-                        },
+                        }),
                     )
                 }
             }
@@ -277,10 +303,10 @@ impl ScopeCollector<'_> {
                     self.scopes.add_decl(
                         current,
                         name.clone(),
-                        Declaration::Variable {
-                            id: expr,
+                        ScopeDef::Variable(VariableDef {
+                            expr,
                             source: Some(source),
-                        },
+                        }),
                     );
                     self.scopes.scopes_by_hir_id.insert(expr.into(), current);
                 }
@@ -333,10 +359,7 @@ impl ScopeCollector<'_> {
                                 self.scopes.add_decl(
                                     scope,
                                     name.clone(),
-                                    Declaration::Parameter {
-                                        id: param,
-                                        func: None,
-                                    },
+                                    ScopeDef::Parameter(ParameterDef { param, func: None }),
                                 );
                             }
                         }

@@ -1,17 +1,26 @@
 # Starpls
 `starpls` is a language server for [Starlark](https://github.com/bazelbuild/starlark), the configuration language used by Bazel and Buck2.
 
-## Development
-`starpls` currently requires a nightly build of Rust, due to usage of `trait_upcasting` as specified by [RFC3324](https://rust-lang.github.io/rfcs/3324-dyn-upcasting.html).
+## Installation
+Make sure you have at least the [0.9.0](https://github.com/bazelbuild/vscode-bazel/releases/tag/0.9.0) version of the [vscode-bazel](https://github.com/bazelbuild/vscode-bazel) extension installed, as it adds support for launching a language server.
 
-### Prerequisites
-- `pnpm`, for managing Node dependencies
-- `protoc`, for compiling `builtin.proto`
+You can build `starpls` with Bazel:
 
-Steps to get up and running:
-1. Run `pnpm install` in `editors/code`.
-2. Open VSCode, `Run and Debug > Run Extension (Debug Build)`.
-3. In the extension development host, open a `.star` file and enjoy syntax highlighting and error messages!
+```
+bazel run -c opt //editors/code:copy_starpls
+```
+
+This builds the executable and copies it to `<repository_root>/editors/code/bin/starpls`. From there, you can add it to the `$PATH` or copy it to a different directory. Once done, add the following to your VSCode configuration and reload VSCode for it to take effect:
+
+```json
+{
+  "bazel.lsp.enabled": true,
+  "bazel.lsp.command": "starpls",
+  "bazel.lsp.args": []
+}
+```
+
+Note: If you don't put `starpls` directly on the `$PATH`, then for `bazel.lsp.command` you'll have to specify the absolute path to the `starpls` executable instead.
 
 ## Roadmap
 - Parsing
@@ -43,6 +52,18 @@ Steps to get up and running:
         - [ ] Relative paths
         - [ ] Bazel workspace
     - [ ] Third-party Starlark libraries
+
+## Development
+`starpls` currently requires a nightly build of Rust, due to usage of `trait_upcasting` as specified by [RFC3324](https://rust-lang.github.io/rfcs/3324-dyn-upcasting.html).
+
+### Prerequisites
+- `pnpm`, for managing Node dependencies
+- `protoc`, for compiling `builtin.proto`
+
+Steps to get up and running:
+1. Run `pnpm install` in `editors/code`.
+2. Open VSCode, `Run and Debug > Run Extension (Debug Build)`.
+3. In the extension development host, open a `.star` file and enjoy syntax highlighting and error messages!
 
 ## Disclaimer
 This project is still heavily WIP, so expect a decent amount of bugs and crashes if you decide to try it out! Additionally, I've elected to focus on implementing the core Starlark specification first before introducing Bazel- or Buck2-specific features.

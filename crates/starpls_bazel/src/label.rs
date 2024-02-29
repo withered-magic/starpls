@@ -24,16 +24,19 @@ pub struct Label<'a> {
 impl<'a> Label<'a> {
     pub fn parse(input: &'a str) -> ParseResult<Self> {
         Parser {
-            input,
             chars: input.chars(),
             pos: 0,
-            is_relative: false,
-            repo_start: 0,
-            repo_end: 0,
-            target_start: 0,
-            target_end: 0,
-            package_start: 0,
-            package_end: 0,
+            label: Label {
+                source: input,
+                kind: RepoKind::Current,
+                is_relative: false,
+                repo_start: 0,
+                repo_end: 0,
+                package_start: 0,
+                package_end: 0,
+                target_start: 0,
+                target_end: 0,
+            },
         }
         .parse()
     }
@@ -87,21 +90,14 @@ impl fmt::Display for ParseError {
 pub type ParseResult<T> = Result<T, ParseError>;
 
 struct Parser<'a, 'b> {
-    input: &'a str,
     chars: Chars<'b>,
     pos: u32,
-    is_relative: bool,
-    repo_start: u32,
-    repo_end: u32,
-    package_start: u32,
-    package_end: u32,
-    target_start: u32,
-    target_end: u32,
+    label: Label<'a>,
 }
 
 impl<'a, 'b> Parser<'a, 'b> {
     fn parse(mut self) -> ParseResult<Label<'a>> {
-        let repo_kind = self.parse_repo()?;
+        self.label.kind = self.parse_repo()?;
         let mut has_leading_slashes = false;
         match self.first() {
             Some('/') => {
@@ -111,10 +107,10 @@ impl<'a, 'b> Parser<'a, 'b> {
                 }
                 has_leading_slashes = true;
             }
-            None if self.repo_end > self.repo_start => {
-                self.target_start = self.repo_start;
-                self.target_end = self.repo_end;
-                return Ok(self.finish(repo_kind));
+            None if self.label.repo_end > self.label.repo_start => {
+                self.label.target_start = self.label.repo_start;
+                self.label.target_end = self.label.repo_end;
+                return Ok(self.finish());
             }
             None => return Err(ParseError::EmptyTarget),
             _ => {}
@@ -126,21 +122,21 @@ impl<'a, 'b> Parser<'a, 'b> {
         } else if self.pos == 0 {
         } else {
             self.parse_package()?;
-            return if self.package_start == self.package_end {
+            return if self.label.package_start == self.label.package_end {
                 Err(ParseError::EmptyPackage)
             } else {
-                self.target_start = self.package_start;
-                self.target_end = self.package_end;
-                Ok(self.finish(repo_kind))
+                self.label.target_start = self.label.package_start;
+                self.label.target_end = self.label.package_end;
+                Ok(self.finish())
             };
         }
 
-        if self.package_start == self.package_end {
-            self.is_relative = !has_leading_slashes;
+        if self.label.package_start == self.label.package_end {
+            self.label.is_relative = !has_leading_slashes;
         }
 
         self.parse_target()?;
-        Ok(self.finish(repo_kind))
+        Ok(self.finish())
     }
 
     fn parse_repo(&mut self) -> ParseResult<RepoKind> {
@@ -160,20 +156,20 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     fn parse_repo_name(&mut self) -> ParseResult<()> {
-        self.repo_start = self.pos;
+        self.label.repo_start = self.pos;
         while let Some(c) = self.first() {
             match c {
                 'A'..='Z' | 'a'..='z' | '0'..='9' | '_' | '.' | '-' => {
                     self.bump();
                 }
-                '~' if self.pos > self.repo_start => {
+                '~' if self.pos > self.label.repo_start => {
                     self.bump();
                 }
                 '/' => break,
                 _ => return Err(ParseError::InvalidRepo),
             }
         }
-        self.repo_end = self.pos;
+        self.label.repo_end = self.pos;
         Ok(())
     }
 
@@ -185,8 +181,8 @@ impl<'a, 'b> Parser<'a, 'b> {
         if has_target_only_chars {
             return Err(ParseError::InvalidPackage);
         }
-        self.package_start = start;
-        self.package_end = end;
+        self.label.package_start = start;
+        self.label.package_end = end;
         Ok(())
     }
 
@@ -198,8 +194,8 @@ impl<'a, 'b> Parser<'a, 'b> {
         if start == end {
             return Err(ParseError::EmptyTarget);
         }
-        self.target_start = start;
-        self.target_end = end;
+        self.label.target_start = start;
+        self.label.target_end = end;
         Ok(())
     }
 
@@ -232,18 +228,8 @@ impl<'a, 'b> Parser<'a, 'b> {
         self.chars.clone().next()
     }
 
-    fn finish(self, kind: RepoKind) -> Label<'a> {
-        Label {
-            source: self.input,
-            kind,
-            is_relative: self.is_relative,
-            repo_start: self.repo_start,
-            repo_end: self.repo_end,
-            target_start: self.target_start,
-            target_end: self.target_end,
-            package_start: self.package_start,
-            package_end: self.package_end,
-        }
+    fn finish(self) -> Label<'a> {
+        self.label
     }
 }
 

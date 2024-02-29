@@ -9,6 +9,8 @@ build --@rules_rust//rust/toolchain/channel=nightly
 
 build --incompatible_strict_action_env
 
+test --test_output=errors
+
 build --bes_results_url=https://starpls.buildbuddy.io/invocation/
 build --bes_backend=grpcs://starpls.buildbuddy.io
 build --remote_cache=grpcs://starpls.buildbuddy.io

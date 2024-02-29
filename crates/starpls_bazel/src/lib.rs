@@ -2,7 +2,12 @@ use prost::Message;
 use std::fs;
 use std::path::Path;
 
-pub use builtin::Builtins;
+pub use crate::{
+    builtin::Builtins,
+    label::{Label, ParseError},
+};
+
+pub mod label;
 
 #[cfg(bazel)]
 pub mod builtin {

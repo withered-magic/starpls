@@ -1,6 +1,7 @@
 use prost::Message;
-use std::fs;
+use std::io;
 use std::path::Path;
+use std::{fs, path::PathBuf};
 
 pub use crate::{
     builtin::Builtins,
@@ -76,4 +77,25 @@ pub fn load_builtins(path: impl AsRef<Path>) -> anyhow::Result<Builtins> {
 pub fn decode_builtins(data: &[u8]) -> anyhow::Result<Builtins> {
     let builtins = Builtins::decode(&data[..])?;
     Ok(builtins)
+}
+
+pub fn resolve_workspace_root(from: impl AsRef<Path>) -> io::Result<Option<PathBuf>> {
+    for ancestor in from
+        .as_ref()
+        .ancestors()
+        .filter(|ancestor| ancestor.is_dir())
+    {
+        for entry in fs::read_dir(ancestor)? {
+            if let Some("WORKSPACE" | "WORKSPACE.bazel" | "MODULE.bazel") = entry
+                .ok()
+                .map(|entry| entry.file_name())
+                .as_ref()
+                .and_then(|file_name| file_name.to_str())
+            {
+                return Ok(Some(ancestor.to_path_buf()));
+            }
+        }
+    }
+
+    Ok(None)
 }

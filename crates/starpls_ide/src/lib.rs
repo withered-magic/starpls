@@ -74,7 +74,7 @@ impl starpls_common::Db for Database {
     }
 
     fn load_file(&self, path: &str, dialect: Dialect, from: FileId) -> io::Result<File> {
-        let (file_id, contents) = self.loader.load_file(path, from)?;
+        let (file_id, contents) = self.loader.load_file(path, dialect, from)?;
         Ok(match self.files.entry(file_id) {
             Entry::Occupied(entry) => *entry.get(),
             Entry::Vacant(entry) => *entry.insert(File::new(
@@ -250,7 +250,12 @@ pub struct FilePosition {
 }
 
 pub trait FileLoader: Debug + Send + Sync + 'static {
-    fn load_file(&self, path: &str, from: FileId) -> io::Result<(FileId, Option<String>)>;
+    fn load_file(
+        &self,
+        path: &str,
+        dialect: Dialect,
+        from: FileId,
+    ) -> io::Result<(FileId, Option<String>)>;
 
     fn list_load_candidates(
         &self,

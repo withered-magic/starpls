@@ -1,3 +1,4 @@
+use std::error;
 use std::fmt;
 use std::str::Chars;
 
@@ -80,6 +81,14 @@ impl PartialEq for PartialParse<'_> {
 
 impl Eq for PartialParse<'_> {}
 
+impl fmt::Display for PartialParse<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.err.fmt(f)
+    }
+}
+
+impl error::Error for PartialParse<'_> {}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ParseError {
     InvalidRepo,
@@ -89,9 +98,9 @@ pub enum ParseError {
     EmptyTarget,
 }
 
-impl fmt::Display for PartialParse<'_> {
+impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self.err {
+        f.write_str(match self {
             ParseError::InvalidRepo => "invalid repo",
             ParseError::InvalidPackage => "invalid package",
             ParseError::InvalidTarget => "invalid target",
@@ -100,6 +109,8 @@ impl fmt::Display for PartialParse<'_> {
         })
     }
 }
+
+impl error::Error for ParseError {}
 
 pub type ParseResult<'a> = Result<Label<'a>, PartialParse<'a>>;
 

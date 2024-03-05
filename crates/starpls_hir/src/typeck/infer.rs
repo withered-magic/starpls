@@ -922,14 +922,6 @@ impl TyCtxt<'_> {
             ptr.syntax_node_ptr().text_range()
         };
 
-        // TODO(withered-magic): Next step is to support resolving Bazel source files.
-        if file.dialect(db) != Dialect::Standard {
-            self.cx
-                .type_of_load_item
-                .insert(FileLoadItemId::new(file, load_item), self.unknown_ty());
-            return self.unknown_ty();
-        }
-
         let ty = match &module(db, file).load_items[load_item] {
             LoadItem::Direct { name } | LoadItem::Aliased { name, .. } => {
                 self.resolve_load_stmt(file, load_stmt)

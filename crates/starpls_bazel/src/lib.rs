@@ -79,20 +79,31 @@ pub fn decode_builtins(data: &[u8]) -> anyhow::Result<Builtins> {
     Ok(builtins)
 }
 
-pub fn resolve_workspace_root(from: impl AsRef<Path>) -> io::Result<Option<PathBuf>> {
+pub fn resolve_workspace(from: impl AsRef<Path>) -> io::Result<Option<(PathBuf, PathBuf)>> {
     for ancestor in from
         .as_ref()
         .ancestors()
         .filter(|ancestor| ancestor.is_dir())
     {
+        let mut package: Option<PathBuf> = None;
+
         for entry in fs::read_dir(ancestor)? {
-            if let Some("WORKSPACE" | "WORKSPACE.bazel" | "MODULE.bazel") = entry
+            match entry
                 .ok()
                 .map(|entry| entry.file_name())
                 .as_ref()
                 .and_then(|file_name| file_name.to_str())
             {
-                return Ok(Some(ancestor.to_path_buf()));
+                Some("WORKSPACE" | "WORKSPACE.bazel" | "MODULE.bazel") => {
+                    return Ok(Some((
+                        ancestor.to_path_buf(),
+                        package.unwrap_or_else(|| ancestor.to_path_buf()),
+                    )));
+                }
+                Some("BUILD" | "BUILD.bazel") => {
+                    package.get_or_insert(ancestor.to_path_buf());
+                }
+                _ => {}
             }
         }
     }

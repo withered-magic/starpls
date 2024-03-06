@@ -201,7 +201,7 @@ impl FileLoader for DefaultFileLoader {
             Dialect::Bazel => {
                 // Find the Bazel workspace root.
                 let from_path = self.interner.lookup_by_file_id(from);
-                let root = match starpls_bazel::resolve_workspace_root(&from_path)? {
+                let (root, package) = match starpls_bazel::resolve_workspace(&from_path)? {
                     Some(root) => root,
                     None => {
                         return Err(io::Error::new(
@@ -217,7 +217,7 @@ impl FileLoader for DefaultFileLoader {
                     Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.err)),
                 };
 
-                // TODO: Handle labels with apparent or canonical repos.
+                // Handle labels with apparent or canonical repos.
                 if label.kind() != RepoKind::Current {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -225,15 +225,17 @@ impl FileLoader for DefaultFileLoader {
                     ));
                 }
 
+                // Only .bzl files can be loaded.
                 if !label.target().ends_with(".bzl") {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
-                        "cannot load from a non BZL file",
+                        "cannot load a non BZL file",
                     ));
                 }
 
+                // Loading targets using a relative label causes them to be resolved from the closest package to the importing file.
                 if label.is_relative() {
-                    from_path
+                    package
                 } else {
                     root.join(label.package())
                 }

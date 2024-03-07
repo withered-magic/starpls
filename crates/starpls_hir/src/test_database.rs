@@ -2,7 +2,7 @@ use crate::{def::ExprId, BuiltinDefs, Dialect, GlobalCtxt, ParamId, Ty};
 use dashmap::DashMap;
 use starpls_bazel::Builtins;
 use starpls_common::{File, FileId, LoadItemCandidate};
-use std::sync::Arc;
+use std::{io, sync::Arc};
 
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, crate::Jar)]
@@ -39,8 +39,13 @@ impl starpls_common::Db for TestDatabase {
         }
     }
 
-    fn load_file(&self, _path: &str, _dialect: Dialect, _from: FileId) -> std::io::Result<File> {
-        Ok(File::new(self, FileId(0), Dialect::Standard, String::new()))
+    fn load_file(&self, _path: &str, _dialect: Dialect, _from: FileId) -> io::Result<Option<File>> {
+        Ok(Some(File::new(
+            self,
+            FileId(0),
+            Dialect::Standard,
+            String::new(),
+        )))
     }
 
     fn get_file(&self, file_id: FileId) -> Option<File> {

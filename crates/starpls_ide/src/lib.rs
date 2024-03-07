@@ -6,7 +6,7 @@ use starpls_bazel::Builtins;
 use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate};
 use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, LoadStmt, ParamId, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 use std::io;
 use std::sync::Arc;
 
@@ -73,9 +73,12 @@ impl starpls_common::Db for Database {
         }
     }
 
-    fn load_file(&self, path: &str, dialect: Dialect, from: FileId) -> io::Result<File> {
-        let (file_id, contents) = self.loader.load_file(path, from)?;
-        Ok(match self.files.entry(file_id) {
+    fn load_file(&self, path: &str, dialect: Dialect, from: FileId) -> io::Result<Option<File>> {
+        let (file_id, contents) = match self.loader.load_file(path, dialect, from)? {
+            Some(res) => res,
+            None => return Ok(None),
+        };
+        Ok(Some(match self.files.entry(file_id) {
             Entry::Occupied(entry) => *entry.get(),
             Entry::Vacant(entry) => *entry.insert(File::new(
                 self,
@@ -83,7 +86,7 @@ impl starpls_common::Db for Database {
                 dialect,
                 contents.unwrap_or_default(),
             )),
-        })
+        }))
     }
 
     fn get_file(&self, file_id: FileId) -> Option<File> {
@@ -250,7 +253,12 @@ pub struct FilePosition {
 }
 
 pub trait FileLoader: Debug + Send + Sync + 'static {
-    fn load_file(&self, path: &str, from: FileId) -> io::Result<(FileId, Option<String>)>;
+    fn load_file(
+        &self,
+        path: &str,
+        dialect: Dialect,
+        from: FileId,
+    ) -> io::Result<Option<(FileId, Option<String>)>>;
 
     fn list_load_candidates(
         &self,

@@ -52,7 +52,7 @@ pub trait Db: salsa::DbWithJar<Jar> {
     fn update_file(&mut self, file_id: FileId, contents: String);
 
     /// Loads a file from the filesystem.
-    fn load_file(&self, path: &str, dialect: Dialect, from: FileId) -> io::Result<File>;
+    fn load_file(&self, path: &str, dialect: Dialect, from: FileId) -> io::Result<Option<File>>;
 
     /// Returns the `File` identified by the given `FileId`.
     fn get_file(&self, file_id: FileId) -> Option<File>;

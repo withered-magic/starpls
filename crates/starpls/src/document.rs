@@ -1,6 +1,7 @@
 use indexmap::IndexSet;
 use parking_lot::RwLock;
 use rustc_hash::FxHasher;
+use starpls_bazel::{self, label::RepoKind, Label};
 use starpls_common::{Dialect, FileId, LoadItemCandidate, LoadItemCandidateKind};
 use starpls_ide::FileLoader;
 use std::{
@@ -182,22 +183,73 @@ impl DefaultFileLoader {
 }
 
 impl FileLoader for DefaultFileLoader {
-    fn load_file(&self, path: &str, from: FileId) -> io::Result<(FileId, Option<String>)> {
-        // Find the importing file's directory.
-        let mut from_path = self.interner.lookup_by_file_id(from);
-        assert!(from_path.pop());
+    fn load_file(
+        &self,
+        path: &str,
+        dialect: Dialect,
+        from: FileId,
+    ) -> io::Result<Option<(FileId, Option<String>)>> {
+        let path = match dialect {
+            Dialect::Standard => {
+                // Find the importing file's directory.
+                let mut from_path = self.interner.lookup_by_file_id(from);
+                assert!(from_path.pop());
 
-        // Resolve the given path relative to the importing file's directory.
-        let path = from_path.join(path).canonicalize()?;
+                // Resolve the given path relative to the importing file's directory.
+                from_path.join(path).canonicalize()?
+            }
+            Dialect::Bazel => {
+                // Find the Bazel workspace root.
+                let from_path = self.interner.lookup_by_file_id(from);
+                let (root, package) = match starpls_bazel::resolve_workspace(&from_path)? {
+                    Some(root) => root,
+                    None => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "not in a Bazel workspace",
+                        ))
+                    }
+                };
 
-        // If we've already interned this file, then simply return the file id.
-        if let Some(file_id) = self.interner.lookup_by_path_buf(&path) {
-            return Ok((file_id, None));
-        }
+                // Parse the load path as a Bazel label.
+                let label = match Label::parse(path) {
+                    Ok(label) => label,
+                    Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.err)),
+                };
 
-        let contents = fs::read_to_string(&path)?;
-        let file_id = self.interner.intern_path(path);
-        Ok((file_id, Some(contents)))
+                // TODO(withered-magic): Handle labels with apparent or canonical repos.
+                if label.kind() != RepoKind::Current {
+                    return Ok(None);
+                }
+
+                // Only .bzl files can be loaded.
+                if !label.target().ends_with(".bzl") {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "cannot load a non-bzl file",
+                    ));
+                }
+
+                // Loading targets using a relative label causes them to be resolved from the closest package to the importing file.
+                if label.is_relative() {
+                    package
+                } else {
+                    root.join(label.package())
+                }
+                .join(label.target())
+            }
+        };
+
+        Ok(Some({
+            // If we've already interned this file, then simply return the file id.
+            if let Some(file_id) = self.interner.lookup_by_path_buf(&path) {
+                (file_id, None)
+            } else {
+                let contents = fs::read_to_string(&path)?;
+                let file_id = self.interner.intern_path(path);
+                (file_id, Some(contents))
+            }
+        }))
     }
 
     fn list_load_candidates(

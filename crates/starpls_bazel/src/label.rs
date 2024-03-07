@@ -1,3 +1,4 @@
+use std::error;
 use std::fmt;
 use std::str::Chars;
 
@@ -22,7 +23,7 @@ pub struct Label<'a> {
 }
 
 impl<'a> Label<'a> {
-    pub fn parse(input: &'a str) -> ParseResult<Self> {
+    pub fn parse(input: &'a str) -> ParseResult {
         Parser {
             chars: input.chars(),
             pos: 0,
@@ -66,6 +67,28 @@ impl<'a> Label<'a> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct PartialParse<'a> {
+    pub partial: Label<'a>,
+    pub err: ParseError,
+}
+
+impl PartialEq for PartialParse<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.err == other.err
+    }
+}
+
+impl Eq for PartialParse<'_> {}
+
+impl fmt::Display for PartialParse<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.err.fmt(f)
+    }
+}
+
+impl error::Error for PartialParse<'_> {}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ParseError {
     InvalidRepo,
@@ -87,7 +110,9 @@ impl fmt::Display for ParseError {
     }
 }
 
-pub type ParseResult<T> = Result<T, ParseError>;
+impl error::Error for ParseError {}
+
+pub type ParseResult<'a> = Result<Label<'a>, PartialParse<'a>>;
 
 struct Parser<'a, 'b> {
     chars: Chars<'b>,
@@ -96,7 +121,17 @@ struct Parser<'a, 'b> {
 }
 
 impl<'a, 'b> Parser<'a, 'b> {
-    fn parse(mut self) -> ParseResult<Label<'a>> {
+    fn parse(mut self) -> ParseResult<'a> {
+        match self.parse_full() {
+            Ok(_) => Ok(self.label),
+            Err(err) => Err(PartialParse {
+                partial: self.label,
+                err,
+            }),
+        }
+    }
+
+    fn parse_full(&mut self) -> Result<(), ParseError> {
         self.label.kind = self.parse_repo()?;
         let mut has_leading_slashes = false;
         match self.first() {
@@ -110,7 +145,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             None if self.label.repo_end > self.label.repo_start => {
                 self.label.target_start = self.label.repo_start;
                 self.label.target_end = self.label.repo_end;
-                return Ok(self.finish());
+                return Ok(());
             }
             None => return Err(ParseError::EmptyTarget),
             _ => {}
@@ -127,7 +162,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             } else {
                 self.label.target_start = self.label.package_start;
                 self.label.target_end = self.label.package_end;
-                Ok(self.finish())
+                Ok(())
             };
         }
 
@@ -136,10 +171,10 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
 
         self.parse_target()?;
-        Ok(self.finish())
+        Ok(())
     }
 
-    fn parse_repo(&mut self) -> ParseResult<RepoKind> {
+    fn parse_repo(&mut self) -> Result<RepoKind, ParseError> {
         Ok(if let Some('@') = self.first() {
             self.bump();
             let kind = if let Some('@') = self.first() {
@@ -155,7 +190,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         })
     }
 
-    fn parse_repo_name(&mut self) -> ParseResult<()> {
+    fn parse_repo_name(&mut self) -> Result<(), ParseError> {
         self.label.repo_start = self.pos;
         while let Some(c) = self.first() {
             match c {
@@ -173,7 +208,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(())
     }
 
-    fn parse_package(&mut self) -> ParseResult<()> {
+    fn parse_package(&mut self) -> Result<(), ParseError> {
         let (start, end, has_target_only_chars) = match self.parse_package_or_target(true) {
             Ok(res) => res,
             Err(_) => return Err(ParseError::InvalidPackage),
@@ -186,7 +221,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(())
     }
 
-    fn parse_target(&mut self) -> ParseResult<()> {
+    fn parse_target(&mut self) -> Result<(), ParseError> {
         let (start, end, _) = match self.parse_package_or_target(false) {
             Ok(res) => res,
             Err(_) => return Err(ParseError::InvalidTarget),
@@ -227,10 +262,6 @@ impl<'a, 'b> Parser<'a, 'b> {
     fn first(&mut self) -> Option<char> {
         self.chars.clone().next()
     }
-
-    fn finish(self) -> Label<'a> {
-        self.label
-    }
 }
 
 #[cfg(test)]
@@ -254,7 +285,10 @@ mod tests {
     }
 
     fn check_err(input: &str, err: ParseError) {
-        assert_eq!(Label::parse(input).expect_err("expected failed parse"), err)
+        assert_eq!(
+            Label::parse(input).expect_err("expected failed parse").err,
+            err
+        )
     }
 
     #[test]

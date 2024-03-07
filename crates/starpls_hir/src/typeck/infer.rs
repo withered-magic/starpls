@@ -1021,12 +1021,17 @@ impl TyCtxt<'_> {
             .db
             .load_file(&module, file.dialect(self.db), file.id(self.db))
         {
-            Ok(loaded_file) => Some(loaded_file),
-            Err(_err) => {
+            Ok(Some(loaded_file)) => Some(loaded_file),
+            Ok(None) => return None,
+            Err(err) => {
                 self.add_diagnostic_for_range(
                     file,
                     load_stmt.ptr(self.db).text_range(),
-                    format!("Could not resolve module \"{}\"", load_stmt.module(self.db)),
+                    format!(
+                        "Could not resolve module \"{}\": {}",
+                        load_stmt.module(self.db),
+                        err
+                    ),
                 );
                 None
             }

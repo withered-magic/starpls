@@ -188,7 +188,7 @@ impl FileLoader for DefaultFileLoader {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> io::Result<(FileId, Option<String>)> {
+    ) -> io::Result<Option<(FileId, Option<String>)>> {
         let path = match dialect {
             Dialect::Standard => {
                 // Find the importing file's directory.
@@ -217,19 +217,16 @@ impl FileLoader for DefaultFileLoader {
                     Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.err)),
                 };
 
-                // Handle labels with apparent or canonical repos.
+                // TODO(withered-magic): Handle labels with apparent or canonical repos.
                 if label.kind() != RepoKind::Current {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "apparent and canonical labels not yet supported",
-                    ));
+                    return Ok(None);
                 }
 
                 // Only .bzl files can be loaded.
                 if !label.target().ends_with(".bzl") {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
-                        "cannot load a non BZL file",
+                        "cannot load a non-bzl file",
                     ));
                 }
 
@@ -243,14 +240,16 @@ impl FileLoader for DefaultFileLoader {
             }
         };
 
-        // If we've already interned this file, then simply return the file id.
-        if let Some(file_id) = self.interner.lookup_by_path_buf(&path) {
-            return Ok((file_id, None));
-        }
-
-        let contents = fs::read_to_string(&path)?;
-        let file_id = self.interner.intern_path(path);
-        Ok((file_id, Some(contents)))
+        Ok(Some({
+            // If we've already interned this file, then simply return the file id.
+            if let Some(file_id) = self.interner.lookup_by_path_buf(&path) {
+                (file_id, None)
+            } else {
+                let contents = fs::read_to_string(&path)?;
+                let file_id = self.interner.intern_path(path);
+                (file_id, Some(contents))
+            }
+        }))
     }
 
     fn list_load_candidates(

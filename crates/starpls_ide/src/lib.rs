@@ -98,7 +98,11 @@ impl starpls_common::Db for Database {
         path: &str,
         from: FileId,
     ) -> io::Result<Option<Vec<LoadItemCandidate>>> {
-        self.loader.list_load_candidates(path, from)
+        let dialect = match self.get_file(from) {
+            Some(file) => file.dialect(self),
+            None => return Ok(None),
+        };
+        self.loader.list_load_candidates(path, dialect, from)
     }
 }
 
@@ -263,6 +267,7 @@ pub trait FileLoader: Debug + Send + Sync + 'static {
     fn list_load_candidates(
         &self,
         path: &str,
+        dialect: Dialect,
         from: FileId,
     ) -> io::Result<Option<Vec<LoadItemCandidate>>>;
 }

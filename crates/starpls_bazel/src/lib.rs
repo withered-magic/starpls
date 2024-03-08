@@ -80,13 +80,12 @@ pub fn decode_builtins(data: &[u8]) -> anyhow::Result<Builtins> {
 }
 
 pub fn resolve_workspace(from: impl AsRef<Path>) -> io::Result<Option<(PathBuf, PathBuf)>> {
+    let mut package: Option<PathBuf> = None;
     for ancestor in from
         .as_ref()
         .ancestors()
         .filter(|ancestor| ancestor.is_dir())
     {
-        let mut package: Option<PathBuf> = None;
-
         for entry in fs::read_dir(ancestor)? {
             match entry
                 .ok()

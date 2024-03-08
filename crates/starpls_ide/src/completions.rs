@@ -96,8 +96,12 @@ struct CompletionContext {
     analysis: CompletionAnalysis,
 }
 
-pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<CompletionItem>> {
-    let ctx = CompletionContext::new(db, pos)?;
+pub(crate) fn completions(
+    db: &dyn Db,
+    pos: FilePosition,
+    trigger_character: Option<String>,
+) -> Option<Vec<CompletionItem>> {
+    let ctx = CompletionContext::new(db, pos, trigger_character)?;
     let mut items = Vec::new();
 
     match &ctx.analysis {
@@ -271,7 +275,11 @@ fn maybe_str_context(file_id: FileId, root: &SyntaxNode, pos: TextSize) -> Optio
 }
 
 impl CompletionContext {
-    fn new(db: &dyn Db, FilePosition { file_id, pos }: FilePosition) -> Option<Self> {
+    fn new(
+        db: &dyn Db,
+        FilePosition { file_id, pos }: FilePosition,
+        trigger_character: Option<String>,
+    ) -> Option<Self> {
         // Reparse the file with a dummy identifier inserted at the current offset.
         let sema = Semantics::new(db);
         let file = db.get_file(file_id)?;
@@ -281,6 +289,13 @@ impl CompletionContext {
             return Some(CompletionContext {
                 analysis: CompletionAnalysis::String(cx),
             });
+        }
+
+        if matches!(
+            trigger_character.as_ref().map(|c| c.as_str()),
+            Some("/" | ":")
+        ) {
+            return None;
         }
 
         let mut text = parse.syntax(db).text().to_string();

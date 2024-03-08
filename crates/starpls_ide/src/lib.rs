@@ -202,8 +202,12 @@ pub struct AnalysisSnapshot {
 }
 
 impl AnalysisSnapshot {
-    pub fn completion(&self, pos: FilePosition) -> Cancellable<Option<Vec<CompletionItem>>> {
-        self.query(|db| completion::completion(db, pos))
+    pub fn completion(
+        &self,
+        pos: FilePosition,
+        trigger_character: Option<String>,
+    ) -> Cancellable<Option<Vec<CompletionItem>>> {
+        self.query(|db| completion::completion(db, pos, trigger_character))
     }
 
     pub fn diagnostics(&self, file_id: FileId) -> Cancellable<Vec<Diagnostic>> {

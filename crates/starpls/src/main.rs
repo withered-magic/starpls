@@ -16,6 +16,8 @@ mod server;
 mod task_pool;
 mod utils;
 
+const TRIGGER_CHARACTERS: &[char] = &['.', '"', '\'', '/', ':'];
+
 fn main() -> anyhow::Result<()> {
     eprintln!("server: starpls, v0.1.0");
 
@@ -26,7 +28,7 @@ fn main() -> anyhow::Result<()> {
     // only of `TextDocumentSyncKind.Full`.
     let server_capabilities = serde_json::to_value(&ServerCapabilities {
         completion_provider: Some(CompletionOptions {
-            trigger_characters: Some(vec![".".to_string(), "\"".to_string(), "'".to_string()]),
+            trigger_characters: Some(make_trigger_characters()),
             ..Default::default()
         }),
         definition_provider: Some(OneOf::Left(true)),
@@ -45,4 +47,8 @@ fn main() -> anyhow::Result<()> {
     io_threads.join()?;
 
     Ok(())
+}
+
+fn make_trigger_characters() -> Vec<String> {
+    TRIGGER_CHARACTERS.iter().map(|c| c.to_string()).collect()
 }

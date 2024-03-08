@@ -56,7 +56,7 @@ impl starpls_common::Db for TestDatabase {
         &self,
         _path: &str,
         _from: FileId,
-    ) -> std::io::Result<Option<Vec<LoadItemCandidate>>> {
+    ) -> io::Result<Option<Vec<LoadItemCandidate>>> {
         unimplemented!()
     }
 }

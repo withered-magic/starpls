@@ -20,6 +20,7 @@ pub struct Label<'a> {
     package_end: u32,
     target_start: u32,
     target_end: u32,
+    has_leading_slashes: bool,
 }
 
 impl<'a> Label<'a> {
@@ -37,6 +38,7 @@ impl<'a> Label<'a> {
                 package_end: 0,
                 target_start: 0,
                 target_end: 0,
+                has_leading_slashes: false,
             },
         }
         .parse()
@@ -64,6 +66,16 @@ impl<'a> Label<'a> {
 
     pub fn slice(&self, start: u32, end: u32) -> &str {
         &self.source[start as usize..end as usize]
+    }
+
+    pub fn has_leading_slashes(&self) -> bool {
+        self.has_leading_slashes
+    }
+
+    pub fn has_target_shorthand(&self) -> bool {
+        self.package_end != self.package_start
+            && self.package_start == self.target_start
+            && self.package_end == self.target_end
     }
 }
 
@@ -133,14 +145,13 @@ impl<'a, 'b> Parser<'a, 'b> {
 
     fn parse_full(&mut self) -> Result<(), ParseError> {
         self.label.kind = self.parse_repo()?;
-        let mut has_leading_slashes = false;
         match self.first() {
             Some('/') => {
                 self.bump();
                 if self.bump() != Some('/') {
                     return Err(ParseError::InvalidRepo);
                 }
-                has_leading_slashes = true;
+                self.label.has_leading_slashes = true;
             }
             None if self.label.repo_end > self.label.repo_start => {
                 self.label.target_start = self.label.repo_start;
@@ -167,7 +178,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
 
         if self.label.package_start == self.label.package_end {
-            self.label.is_relative = !has_leading_slashes;
+            self.label.is_relative = !self.label.has_leading_slashes;
         }
 
         self.parse_target()?;

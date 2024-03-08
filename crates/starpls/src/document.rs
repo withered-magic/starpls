@@ -1,7 +1,11 @@
 use indexmap::IndexSet;
 use parking_lot::RwLock;
 use rustc_hash::FxHasher;
-use starpls_bazel::{self, label::RepoKind, Label};
+use starpls_bazel::{
+    self,
+    label::{PartialParse, RepoKind},
+    Label, ParseError,
+};
 use starpls_common::{Dialect, FileId, LoadItemCandidate, LoadItemCandidateKind};
 use starpls_ide::FileLoader;
 use std::{
@@ -9,7 +13,7 @@ use std::{
     fs,
     hash::BuildHasherDefault,
     io, mem,
-    path::{PathBuf, MAIN_SEPARATOR},
+    path::{Path, PathBuf, MAIN_SEPARATOR},
     sync::Arc,
 };
 
@@ -255,37 +259,151 @@ impl FileLoader for DefaultFileLoader {
     fn list_load_candidates(
         &self,
         path: &str,
+        dialect: Dialect,
         from: FileId,
     ) -> io::Result<Option<Vec<LoadItemCandidate>>> {
-        let from_dir = self.dirname(from);
-        let has_trailing_slash = path.ends_with(MAIN_SEPARATOR);
-        let mut path = from_dir.join(path);
+        match dialect {
+            Dialect::Standard => {
+                let from_dir = self.dirname(from);
+                let has_trailing_slash = path.ends_with(MAIN_SEPARATOR);
+                let mut path = from_dir.join(path);
 
-        if !has_trailing_slash {
-            if !path.pop() {
-                return Ok(None);
+                if !has_trailing_slash {
+                    if !path.pop() {
+                        return Ok(None);
+                    }
+                }
+
+                let path = path.canonicalize()?;
+                let mut candidates = vec![];
+                let readdir = fs::read_dir(path)?;
+
+                for entry in readdir {
+                    let entry = entry?;
+                    let file_type = entry.file_type()?;
+                    if file_type.is_file() {
+                        if let Some(name) = entry.file_name().to_str() {
+                            if name.ends_with(".star") || name.ends_with(".sky") {
+                                candidates.push(LoadItemCandidate {
+                                    kind: LoadItemCandidateKind::File,
+                                    path: name.to_string(),
+                                })
+                            }
+                        }
+                    }
+                }
+
+                Ok(Some(candidates))
             }
-        }
+            Dialect::Bazel => {
+                // Determine the loading file's workspace root and package.
+                let (root, package) = match starpls_bazel::resolve_workspace(
+                    self.interner.lookup_by_file_id(from),
+                )? {
+                    Some(res) => res,
+                    None => return Ok(None),
+                };
 
-        let path = path.canonicalize()?;
-        let mut candidates = vec![];
-        let readdir = fs::read_dir(path)?;
+                let (label, err) = match Label::parse(path) {
+                    Ok(label) => (label, None),
+                    Err(PartialParse { partial, err }) => (partial, Some(err)),
+                };
 
-        for entry in readdir {
-            let entry = entry?;
-            let file_type = entry.file_type()?;
-            if file_type.is_file() {
-                if let Some(name) = entry.file_name().to_str() {
-                    if name.ends_with(".star") || name.ends_with(".sky") {
-                        candidates.push(LoadItemCandidate {
-                            kind: LoadItemCandidateKind::File,
-                            path: name.to_string(),
+                if label.kind() != RepoKind::Current
+                    || (!label.has_leading_slashes() && !label.is_relative())
+                {
+                    return Ok(None);
+                }
+
+                match err {
+                    Some(ParseError::EmptyPackage) => {
+                        // An empty package usually indicates that the user is about to
+                        // starting typing the package name.
+                        read_dir_packages(root).map(Some)
+                    }
+                    Some(ParseError::EmptyTarget) => {
+                        // Same logic as above, but for the target.
+                        read_dir_targets(if label.is_relative() {
+                            package
+                        } else {
+                            root.join(label.package())
                         })
+                        .map(Some)
+                    }
+                    Some(_) => {
+                        // Don't offer completions for any other parsing errors.
+                        Ok(None)
+                    }
+                    None => {
+                        // TODO(withered-magic): Handle targets like in `//foo:bar/baz.bzl`.
+                        if label.is_relative() {
+                            // If the label is relative, check for target candidates in the current package.
+                            read_dir_targets(package).map(Some)
+                        } else if !label.target().is_empty() && !label.has_target_shorthand() {
+                            // Check for target candidates in the label's package.
+                            read_dir_targets(root.join(label.package())).map(Some)
+                        } else {
+                            // Otherwise, find package candidates.
+                            let mut dir = root.join(label.package());
+                            if !label.package().ends_with('/') && !dir.pop() {
+                                Ok(None)
+                            } else {
+                                read_dir_packages(dir).map(Some)
+                            }
+                        }
                     }
                 }
             }
         }
-
-        Ok(Some(candidates))
     }
+}
+
+fn read_dir_packages(path: impl AsRef<Path>) -> io::Result<Vec<LoadItemCandidate>> {
+    Ok(fs::read_dir(path)?
+        .flat_map(|entry| entry)
+        .filter_map(|entry| {
+            entry
+                .file_type()
+                .map(|file_type| (file_type, entry.file_name()))
+                .ok()
+        })
+        .filter_map(|(file_type, file_name)| {
+            file_name.to_str().and_then(|file_name| {
+                Some(LoadItemCandidate {
+                    kind: if file_type.is_dir() {
+                        LoadItemCandidateKind::Directory
+                    } else {
+                        return None;
+                    },
+                    path: file_name.to_string(),
+                })
+            })
+        })
+        .collect())
+}
+
+fn read_dir_targets(path: impl AsRef<Path>) -> io::Result<Vec<LoadItemCandidate>> {
+    Ok(fs::read_dir(path)?
+        .flat_map(|entry| entry)
+        .filter_map(|entry| {
+            entry
+                .file_type()
+                .map(|file_type| (file_type, entry.file_name()))
+                .ok()
+        })
+        .filter_map(|(file_type, file_name)| {
+            file_name.to_str().and_then(|file_name| {
+                Some(LoadItemCandidate {
+                    kind: if file_type.is_dir() {
+                        LoadItemCandidateKind::Directory
+                    } else if file_name.ends_with(".bzl") {
+                        LoadItemCandidateKind::File
+                    } else {
+                        return None;
+                    },
+                    path: file_name.to_string(),
+                })
+            })
+        })
+        .collect())
 }

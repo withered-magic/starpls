@@ -2,7 +2,7 @@
 
 use crate::FilePosition;
 use rustc_hash::FxHashMap;
-use starpls_common::{parse, FileId};
+use starpls_common::{parse, FileId, LoadItemCandidateKind};
 use starpls_hir::{Db, Name, Param, ScopeDef, Semantics, Type};
 use starpls_syntax::{
     ast::{self, AstNode, AstToken},
@@ -17,6 +17,7 @@ const BUILTIN_TYPE_NAMES: &[&str] = &[
     "NoneType", "bool", "int", "float", "string", "bytes", "list", "tuple", "dict", "range",
 ];
 
+#[derive(Debug)]
 pub struct CompletionItem {
     pub label: String,
     pub kind: CompletionItemKind,
@@ -30,16 +31,19 @@ impl CompletionItem {
     }
 }
 
+#[derive(Debug)]
 pub struct TextEdit {
     pub range: TextRange,
     pub new_text: String,
 }
 
+#[derive(Debug)]
 pub enum CompletionMode {
     InsertText(String),
     TextEdit(TextEdit),
 }
 
+#[derive(Debug)]
 pub enum CompletionItemKind {
     Function,
     Variable,
@@ -92,8 +96,12 @@ struct CompletionContext {
     analysis: CompletionAnalysis,
 }
 
-pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<CompletionItem>> {
-    let ctx = CompletionContext::new(db, pos)?;
+pub(crate) fn completions(
+    db: &dyn Db,
+    pos: FilePosition,
+    trigger_character: Option<String>,
+) -> Option<Vec<CompletionItem>> {
+    let ctx = CompletionContext::new(db, pos, trigger_character)?;
     let mut items = Vec::new();
 
     match &ctx.analysis {
@@ -162,11 +170,15 @@ pub(crate) fn completions(db: &dyn Db, pos: FilePosition) -> Option<Vec<Completi
             let (value, offset) = text.value_and_offset()?;
             let token_start = text.syntax().text_range().start() + TextSize::from(offset);
             for candidate in db.list_load_candidates(&value, *file_id).ok()?? {
-                let start =
-                    TextSize::from(value.rfind('/').map(|start| start + 1).unwrap_or(0) as u32);
+                let start = TextSize::from(
+                    value.rfind(&['/', ':']).map(|start| start + 1).unwrap_or(0) as u32,
+                );
                 items.push(CompletionItem {
                     label: candidate.path.clone(),
-                    kind: CompletionItemKind::File,
+                    kind: match candidate.kind {
+                        LoadItemCandidateKind::Directory => CompletionItemKind::Folder,
+                        LoadItemCandidateKind::File => CompletionItemKind::File,
+                    },
                     mode: Some(CompletionMode::TextEdit(TextEdit {
                         range: TextRange::new(
                             start + token_start,
@@ -263,7 +275,11 @@ fn maybe_str_context(file_id: FileId, root: &SyntaxNode, pos: TextSize) -> Optio
 }
 
 impl CompletionContext {
-    fn new(db: &dyn Db, FilePosition { file_id, pos }: FilePosition) -> Option<Self> {
+    fn new(
+        db: &dyn Db,
+        FilePosition { file_id, pos }: FilePosition,
+        trigger_character: Option<String>,
+    ) -> Option<Self> {
         // Reparse the file with a dummy identifier inserted at the current offset.
         let sema = Semantics::new(db);
         let file = db.get_file(file_id)?;
@@ -273,6 +289,13 @@ impl CompletionContext {
             return Some(CompletionContext {
                 analysis: CompletionAnalysis::String(cx),
             });
+        }
+
+        if matches!(
+            trigger_character.as_ref().map(|c| c.as_str()),
+            Some("/" | ":")
+        ) {
+            return None;
         }
 
         let mut text = parse.syntax(db).text().to_string();

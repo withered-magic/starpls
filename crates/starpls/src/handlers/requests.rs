@@ -116,7 +116,10 @@ pub(crate) fn completion(
     Ok(Some(
         snapshot
             .analysis_snapshot
-            .completion(FilePosition { file_id, pos })?
+            .completion(
+                FilePosition { file_id, pos },
+                params.context.and_then(|cx| cx.trigger_character),
+            )?
             .unwrap_or_else(|| Vec::new())
             .into_iter()
             .map(|item| {

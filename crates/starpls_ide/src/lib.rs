@@ -98,7 +98,11 @@ impl starpls_common::Db for Database {
         path: &str,
         from: FileId,
     ) -> io::Result<Option<Vec<LoadItemCandidate>>> {
-        self.loader.list_load_candidates(path, from)
+        let dialect = match self.get_file(from) {
+            Some(file) => file.dialect(self),
+            None => return Ok(None),
+        };
+        self.loader.list_load_candidates(path, dialect, from)
     }
 }
 
@@ -198,8 +202,12 @@ pub struct AnalysisSnapshot {
 }
 
 impl AnalysisSnapshot {
-    pub fn completion(&self, pos: FilePosition) -> Cancellable<Option<Vec<CompletionItem>>> {
-        self.query(|db| completion::completion(db, pos))
+    pub fn completion(
+        &self,
+        pos: FilePosition,
+        trigger_character: Option<String>,
+    ) -> Cancellable<Option<Vec<CompletionItem>>> {
+        self.query(|db| completion::completion(db, pos, trigger_character))
     }
 
     pub fn diagnostics(&self, file_id: FileId) -> Cancellable<Vec<Diagnostic>> {
@@ -263,6 +271,7 @@ pub trait FileLoader: Debug + Send + Sync + 'static {
     fn list_load_candidates(
         &self,
         path: &str,
+        dialect: Dialect,
         from: FileId,
     ) -> io::Result<Option<Vec<LoadItemCandidate>>>;
 }

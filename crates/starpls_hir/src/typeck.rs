@@ -276,28 +276,43 @@ impl Ty {
         fields.zip(types)
     }
 
-    pub(crate) fn params<'a>(&'a self, db: &'a dyn Db) -> Option<impl Iterator<Item = Param> + 'a> {
+    pub(crate) fn params<'a>(
+        &'a self,
+        db: &'a dyn Db,
+    ) -> Option<impl Iterator<Item = (Param, Ty)> + 'a> {
         Some(match self.kind() {
-            TyKind::Function(func) => Params::Simple((0..func.params(db).len()).map(|index| {
-                Param(ParamInner::Param {
-                    parent: *func,
-                    index,
-                })
-            })),
-            TyKind::IntrinsicFunction(func, _) => {
-                Params::Intrinsic((0..func.params(db).len()).map(|index| {
-                    Param(ParamInner::IntrinsicParam {
+            TyKind::Function(func) => {
+                Params::Simple(func.params(db).iter().enumerate().map(|(index, param)| {
+                    let file = func.file(db);
+                    let ty = db.infer_param(file, *param);
+                    let param = Param(ParamInner::Param {
                         parent: *func,
                         index,
-                    })
+                    });
+                    (param, ty)
+                }))
+            }
+            TyKind::IntrinsicFunction(func, subst) => {
+                Params::Intrinsic(func.params(db).iter().enumerate().map(|(index, param)| {
+                    let ty = param
+                        .ty()
+                        .unwrap_or_else(|| TyKind::Unknown.intern())
+                        .substitute(&subst.args);
+                    let param = Param(ParamInner::IntrinsicParam {
+                        parent: *func,
+                        index,
+                    });
+                    (param, ty)
                 }))
             }
             TyKind::BuiltinFunction(func) => {
-                Params::Builtin((0..func.params(db).len()).map(|index| {
-                    Param(ParamInner::BuiltinParam {
+                Params::Builtin(func.params(db).iter().enumerate().map(|(index, param)| {
+                    let ty = resolve_type_ref_opt(db, param.type_ref());
+                    let param = Param(ParamInner::BuiltinParam {
                         parent: *func,
                         index,
-                    })
+                    });
+                    (param, ty)
                 }))
             }
             _ => return None,
@@ -315,9 +330,6 @@ impl Ty {
     fn substitute(&self, args: &[Ty]) -> Ty {
         match self.kind() {
             TyKind::List(ty) => TyKind::List(ty.substitute(args)).intern(),
-            // TyKind::Tuple(tup) => {
-            //     TyKind::Tuple(tys.iter().map(|ty| ty.substitute(args)).collect()).intern()
-            // }
             TyKind::Tuple(tup) => match tup {
                 Tuple::Simple(tys) => TyKind::Tuple(Tuple::Simple(
                     tys.iter().map(|ty| ty.substitute(args)).collect(),
@@ -404,6 +416,46 @@ impl Param {
         .unwrap_or_else(|| TyKind::Unknown.intern())
         .into()
     }
+
+    pub fn is_args_list(&self, db: &dyn Db) -> bool {
+        match self.0 {
+            ParamInner::Param { parent, index } => {
+                let module = module(db, parent.file(db));
+                matches!(
+                    module[parent.params(db)[index]],
+                    HirDefParam::ArgsList { .. }
+                )
+            }
+            ParamInner::IntrinsicParam { parent, index } => matches!(
+                parent.params(db)[index],
+                IntrinsicFunctionParam::ArgsList { .. }
+            ),
+            ParamInner::BuiltinParam { parent, index } => matches!(
+                parent.params(db)[index],
+                BuiltinFunctionParam::ArgsList { .. }
+            ),
+        }
+    }
+
+    pub fn is_kwargs_dict(&self, db: &dyn Db) -> bool {
+        match self.0 {
+            ParamInner::Param { parent, index } => {
+                let module = module(db, parent.file(db));
+                matches!(
+                    module[parent.params(db)[index]],
+                    HirDefParam::KwargsDict { .. }
+                )
+            }
+            ParamInner::IntrinsicParam { parent, index } => matches!(
+                parent.params(db)[index],
+                IntrinsicFunctionParam::KwargsDict { .. }
+            ),
+            ParamInner::BuiltinParam { parent, index } => matches!(
+                parent.params(db)[index],
+                BuiltinFunctionParam::KwargsDict { .. }
+            ),
+        }
+    }
 }
 
 enum Params<I1, I2, I3> {
@@ -414,11 +466,11 @@ enum Params<I1, I2, I3> {
 
 impl<I1, I2, I3> Iterator for Params<I1, I2, I3>
 where
-    I1: Iterator<Item = Param>,
-    I2: Iterator<Item = Param>,
-    I3: Iterator<Item = Param>,
+    I1: Iterator<Item = (Param, Ty)>,
+    I2: Iterator<Item = (Param, Ty)>,
+    I3: Iterator<Item = (Param, Ty)>,
 {
-    type Item = Param;
+    type Item = (Param, Ty);
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {

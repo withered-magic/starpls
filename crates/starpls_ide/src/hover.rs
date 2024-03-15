@@ -141,7 +141,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
                 .and_then(|args| args.syntax().parent())
                 .and_then(|parent| ast::CallExpr::cast(parent))?;
             let func = sema.resolve_call_expr(file, &call)?;
-            let (name, param) = func.params(db).into_iter().find_map(|param| {
+            let (name, param) = func.params(db).into_iter().find_map(|(param, _)| {
                 let name = param.name(db)?;
                 if name.as_str() == name_text {
                     Some((name, param))

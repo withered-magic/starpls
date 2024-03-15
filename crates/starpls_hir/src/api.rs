@@ -207,9 +207,9 @@ impl Type {
         matches!(self.ty.kind(), TyKind::Function(_))
     }
 
-    pub fn params(&self, db: &dyn Db) -> Vec<Param> {
+    pub fn params(&self, db: &dyn Db) -> Vec<(Param, Type)> {
         match self.ty.params(db) {
-            Some(params) => params.collect(),
+            Some(params) => params.map(|(param, ty)| (param, ty.into())).collect(),
             None => Vec::new(),
         }
     }
@@ -259,7 +259,7 @@ impl Function {
         }
     }
 
-    pub fn params(&self, db: &dyn Db) -> Vec<Param> {
+    pub fn params(&self, db: &dyn Db) -> Vec<(Param, Type)> {
         self.ty(db).params(db)
     }
 

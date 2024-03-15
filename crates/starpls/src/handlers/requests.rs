@@ -163,12 +163,10 @@ pub(crate) fn hover(
     params: lsp_types::HoverParams,
 ) -> anyhow::Result<Option<lsp_types::Hover>> {
     let path = path_buf_from_url(&params.text_document_position_params.text_document.uri)?;
-
     let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
         Some(file_id) => file_id,
         None => return Ok(None),
     };
-
     let pos = match convert::text_size_from_lsp_position(
         snapshot,
         file_id,
@@ -194,5 +192,35 @@ pub(crate) fn signature_help(
     snapshot: &ServerSnapshot,
     params: lsp_types::SignatureHelpParams,
 ) -> anyhow::Result<Option<lsp_types::SignatureHelp>> {
-    Ok(None)
+    let path = path_buf_from_url(&params.text_document_position_params.text_document.uri)?;
+    let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
+        Some(file_id) => file_id,
+        None => return Ok(None),
+    };
+    let pos = match convert::text_size_from_lsp_position(
+        snapshot,
+        file_id,
+        params.text_document_position_params.position,
+    )? {
+        Some(pos) => pos,
+        None => return Ok(None),
+    };
+
+    Ok(snapshot
+        .analysis_snapshot
+        .signature_help(FilePosition { file_id, pos })?
+        .map(|help| lsp_types::SignatureHelp {
+            signatures: help
+                .signatures
+                .into_iter()
+                .map(|sig| lsp_types::SignatureInformation {
+                    label: sig.label,
+                    documentation: None,
+                    parameters: None,
+                    active_parameter: None,
+                })
+                .collect(),
+            active_signature: None,
+            active_parameter: None,
+        }))
 }

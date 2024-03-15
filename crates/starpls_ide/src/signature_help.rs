@@ -1,6 +1,6 @@
 use crate::{util::pick_best_token, Database, FilePosition};
 use starpls_common::{parse, Db as _};
-use starpls_hir::Semantics;
+use starpls_hir::{DisplayWithDb, Semantics};
 use starpls_syntax::{
     ast::{self, AstNode, Direction},
     T,
@@ -14,7 +14,7 @@ pub struct SignatureHelp {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SignatureInfo {
     pub label: String,
-    pub documentation: String,
+    pub documentation: Option<String>,
     pub parameters: Option<Vec<ParameterInfo>>,
 }
 
@@ -33,22 +33,31 @@ pub(crate) fn signature_help(
     let parse = parse(db, file);
     let token = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
         T![ident] => 2,
-        T!['('] | T![')'] | T!['['] | T![']'] | T!['{'] | T!['}'] => 0,
+        T!['('] | T![')'] | T![,] => 0,
         kind if kind.is_trivia_token() => 0,
         _ => 1,
     })?;
 
     // Find the argument node containing the current token.
-    let arg = token.parent_ancestors().find_map(ast::Argument::cast)?;
-    let expr = ast::CallExpr::cast(arg.syntax().parent()?.parent()?)?;
-    let active_arg = arg
-        .syntax()
-        .siblings(Direction::Prev)
-        .skip(1)
-        .filter_map(ast::Argument::cast)
-        .count();
+    let expr = token.parent_ancestors().find_map(ast::CallExpr::cast)?;
+    let func = sema.resolve_call_expr(file, &expr)?;
 
-    let active_param = sema.resolve_call_expr_active_param(file, &expr, active_arg);
+    func.ty(db).display(db);
 
-    None
+    // let active_arg = arg
+    //     .syntax()
+    //     .siblings(Direction::Prev)
+    //     .skip(1)
+    //     .filter_map(ast::Argument::cast)
+    //     .count();
+
+    // let active_param = sema.resolve_call_expr_active_param(file, &expr, active_arg);
+
+    Some(SignatureHelp {
+        signatures: vec![SignatureInfo {
+            label: format!("{}", func.ty(db).display(db)),
+            documentation: None,
+            parameters: None,
+        }],
+    })
 }

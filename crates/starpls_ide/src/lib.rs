@@ -1,6 +1,7 @@
 use crate::{completion::CompletionItem, hover::Hover};
 use dashmap::{mapref::entry::Entry, DashMap};
 use salsa::ParallelDatabase;
+use signature_help::SignatureHelp;
 use starpls_bazel::Builtins;
 use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate};
 use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, LoadStmt, ParamId, Ty};
@@ -246,6 +247,10 @@ impl AnalysisSnapshot {
 
     pub fn show_syntax_tree(&self, file_id: FileId) -> Cancellable<Option<String>> {
         self.query(|db| handlers::show_syntax_tree::show_syntax_tree(db, file_id))
+    }
+
+    pub fn signature_help(&self, pos: FilePosition) -> Cancellable<Option<SignatureHelp>> {
+        self.query(|db| handlers::signature_help::signature_help(db, pos))
     }
 
     /// Helper method to handle Salsa cancellations.

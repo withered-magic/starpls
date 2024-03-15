@@ -1,6 +1,6 @@
 use lsp_server::Connection;
 use lsp_types::{
-    CompletionOptions, HoverProviderCapability, OneOf, ServerCapabilities,
+    CompletionOptions, HoverProviderCapability, OneOf, ServerCapabilities, SignatureHelpOptions,
     TextDocumentSyncCapability, TextDocumentSyncKind,
 };
 
@@ -16,7 +16,9 @@ mod server;
 mod task_pool;
 mod utils;
 
-const TRIGGER_CHARACTERS: &[char] = &['.', '"', '\'', '/', ':'];
+const COMPLETION_TRIGGER_CHARACTERS: &[char] = &['.', '"', '\'', '/', ':'];
+
+const SIGNATURE_HELP_TRIGGER_CHARACTERS: &[char] = &['(', ',', ')'];
 
 fn main() -> anyhow::Result<()> {
     eprintln!("server: starpls, v0.1.0");
@@ -28,11 +30,15 @@ fn main() -> anyhow::Result<()> {
     // only of `TextDocumentSyncKind.Full`.
     let server_capabilities = serde_json::to_value(&ServerCapabilities {
         completion_provider: Some(CompletionOptions {
-            trigger_characters: Some(make_trigger_characters()),
+            trigger_characters: Some(make_trigger_characters(COMPLETION_TRIGGER_CHARACTERS)),
             ..Default::default()
         }),
         definition_provider: Some(OneOf::Left(true)),
         hover_provider: Some(HoverProviderCapability::Simple(true)),
+        signature_help_provider: Some(SignatureHelpOptions {
+            trigger_characters: Some(make_trigger_characters(SIGNATURE_HELP_TRIGGER_CHARACTERS)),
+            ..Default::default()
+        }),
         text_document_sync: Some(TextDocumentSyncCapability::Kind(
             TextDocumentSyncKind::INCREMENTAL,
         )),
@@ -49,6 +55,6 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn make_trigger_characters() -> Vec<String> {
-    TRIGGER_CHARACTERS.iter().map(|c| c.to_string()).collect()
+fn make_trigger_characters(chars: &[char]) -> Vec<String> {
+    chars.iter().map(|c| c.to_string()).collect()
 }

@@ -15,8 +15,7 @@ use crate::{
     },
     Name,
 };
-use smallvec::SmallVec;
-use starpls_common::{line_index, parse, Diagnostic, Dialect, File, FileRange, Severity};
+use starpls_common::{line_index, parse, Diagnostic, File, FileRange, Severity};
 use starpls_syntax::{
     ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, UnaryOp},
     TextRange,
@@ -275,33 +274,30 @@ impl TyCtxt<'_> {
             Expr::Call { callee, args } => {
                 let mut saw_keyword_arg = false;
                 let callee_ty = self.infer_expr(file, *callee);
-                let args_with_ty: SmallVec<[(Argument, Ty); 5]> =
-                    args.iter()
-                        .cloned()
-                        .map(|arg| {
-                            let arg_ty = match &arg {
-                                Argument::Simple { expr } => {
-                                    if saw_keyword_arg {
-                                        self.add_expr_diagnostic(
-                                        file,
-                                        *expr,
-                                        String::from(
-                                            "Positional argument cannot follow keyword arguments",
-                                        ),
-                                    );
-                                    }
-                                    self.infer_expr(file, *expr)
-                                }
-                                Argument::Keyword { expr, .. } => {
-                                    saw_keyword_arg = true;
-                                    self.infer_expr(file, *expr)
-                                }
-                                Argument::UnpackedList { expr }
-                                | Argument::UnpackedDict { expr } => self.infer_expr(file, *expr),
-                            };
-                            (arg, arg_ty)
-                        })
-                        .collect();
+                let arg_tys: Vec<_> = args
+                    .iter()
+                    .map(|arg| match arg {
+                        Argument::Simple { expr } => {
+                            if saw_keyword_arg {
+                                self.add_expr_diagnostic(
+                                    file,
+                                    *expr,
+                                    String::from(
+                                        "Positional argument cannot follow keyword arguments",
+                                    ),
+                                );
+                            }
+                            self.infer_expr(file, *expr)
+                        }
+                        Argument::Keyword { expr, .. } => {
+                            saw_keyword_arg = true;
+                            self.infer_expr(file, *expr)
+                        }
+                        Argument::UnpackedList { expr } | Argument::UnpackedDict { expr } => {
+                            self.infer_expr(file, *expr)
+                        }
+                    })
+                    .collect();
 
                 match callee_ty.kind() {
                     TyKind::Function(func) => {
@@ -312,7 +308,7 @@ impl TyCtxt<'_> {
                             .map(|param| module[param].clone())
                             .collect::<Vec<_>>()[..]
                             .into();
-                        let errors = slots.assign_args(&args_with_ty);
+                        let errors = slots.assign_args(&args, None).0;
 
                         for error in errors {
                             self.add_expr_diagnostic(file, error.expr, error.message);
@@ -338,8 +334,9 @@ impl TyCtxt<'_> {
                                         }
                                     }
                                 }
-                                SlotProvider::Single(expr, ty) => {
-                                    if !assign_tys(db, &ty, &param_ty) {
+                                SlotProvider::Single(expr, index) => {
+                                    let ty = &arg_tys[index];
+                                    if !assign_tys(db, ty, &param_ty) {
                                         self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                 }
@@ -379,7 +376,7 @@ impl TyCtxt<'_> {
                     TyKind::IntrinsicFunction(func, subst) => {
                         let params = func.params(db);
                         let mut slots: Slots = params[..].into();
-                        let errors = slots.assign_args(&args_with_ty);
+                        let errors = slots.assign_args(&args, None).0;
 
                         for error in errors {
                             self.add_expr_diagnostic(file, error.expr, error.message);
@@ -408,8 +405,9 @@ impl TyCtxt<'_> {
                                         );
                                     }
                                 }
-                                SlotProvider::Single(expr, ty) => {
-                                    if !assign_tys(db, &ty, &param_ty) {
+                                SlotProvider::Single(expr, index) => {
+                                    let ty = &arg_tys[index];
+                                    if !assign_tys(db, ty, &param_ty) {
                                         self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                 }
@@ -432,7 +430,7 @@ impl TyCtxt<'_> {
                     TyKind::BuiltinFunction(func) => {
                         let params = func.params(db);
                         let mut slots: Slots = params[..].into();
-                        let errors = slots.assign_args(&args_with_ty);
+                        let errors = slots.assign_args(&args, None).0;
 
                         for error in errors {
                             self.add_expr_diagnostic(file, error.expr, error.message);
@@ -452,8 +450,9 @@ impl TyCtxt<'_> {
                                         }
                                     }
                                 }
-                                SlotProvider::Single(expr, ty) => {
-                                    if !assign_tys(db, &ty, &param_ty) {
+                                SlotProvider::Single(expr, index) => {
+                                    let ty = &arg_tys[index];
+                                    if !assign_tys(db, ty, &param_ty) {
                                         self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                 }
@@ -1049,6 +1048,37 @@ impl TyCtxt<'_> {
         let res = f(self);
         self.cx.load_resolution_stack.pop();
         res
+    }
+
+    pub fn resolve_call_expr_active_param(
+        &mut self,
+        file: File,
+        expr: ExprId,
+        active_arg: usize,
+    ) -> Option<usize> {
+        let db = self.db;
+        match &module(db, file)[expr] {
+            Expr::Call { callee, args } => {
+                let callee_ty = self.infer_expr(file, *callee);
+                let mut slots: Slots = match callee_ty.kind() {
+                    TyKind::Function(func) => {
+                        let module = module(db, func.file(db));
+                        let params = func.params(db).iter().copied();
+                        params
+                            .clone()
+                            .map(|param| module[param].clone())
+                            .collect::<Vec<_>>()[..]
+                            .into()
+                    }
+                    TyKind::IntrinsicFunction(func, _) => func.params(db)[..].into(),
+                    TyKind::BuiltinFunction(func) => func.params(db)[..].into(),
+                    _ => return None,
+                };
+
+                slots.assign_args(&args, Some(active_arg)).1
+            }
+            _ => return None,
+        }
     }
 
     fn types(&self) -> &IntrinsicTypes {

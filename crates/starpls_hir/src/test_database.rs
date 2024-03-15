@@ -74,6 +74,15 @@ impl crate::Db for TestDatabase {
         None
     }
 
+    fn resolve_call_expr_active_param(
+        &self,
+        _file: File,
+        _expr: ExprId,
+        _active_arg: usize,
+    ) -> Option<usize> {
+        None
+    }
+
     fn set_builtin_defs(&mut self, _dialect: Dialect, _builtins: Builtins) {}
 
     fn get_builtin_defs(&self, _dialect: &Dialect) -> BuiltinDefs {

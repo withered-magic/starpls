@@ -1,12 +1,11 @@
-use crate::{handlers::*, hover::Hover};
-use completions::CompletionItem;
+use crate::{completion::CompletionItem, hover::Hover};
 use dashmap::{mapref::entry::Entry, DashMap};
 use salsa::ParallelDatabase;
 use starpls_bazel::Builtins;
 use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate};
 use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, LoadStmt, ParamId, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
-use std::fmt::{self, Debug};
+use std::fmt::Debug;
 use std::io;
 use std::sync::Arc;
 
@@ -15,8 +14,9 @@ pub use starpls_hir::Cancelled;
 mod handlers;
 mod util;
 
-pub mod completions;
+pub mod completion;
 pub mod hover;
+pub mod signature_help;
 
 pub type Cancellable<T> = Result<T, Cancelled>;
 
@@ -120,6 +120,17 @@ impl starpls_hir::Db for Database {
             .with_tcx(self, |tcx| tcx.resolve_load_stmt(file, load_stmt))
     }
 
+    fn resolve_call_expr_active_param(
+        &self,
+        file: File,
+        expr: ExprId,
+        active_arg: usize,
+    ) -> Option<usize> {
+        self.gcx.with_tcx(self, |tcx| {
+            tcx.resolve_call_expr_active_param(file, expr, active_arg)
+        })
+    }
+
     fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins) {
         let defs = match self.builtin_defs.entry(dialect) {
             Entry::Occupied(entry) => *entry.get(),
@@ -207,34 +218,34 @@ impl AnalysisSnapshot {
         pos: FilePosition,
         trigger_character: Option<String>,
     ) -> Cancellable<Option<Vec<CompletionItem>>> {
-        self.query(|db| completion::completion(db, pos, trigger_character))
+        self.query(|db| handlers::completion::completion(db, pos, trigger_character))
     }
 
     pub fn diagnostics(&self, file_id: FileId) -> Cancellable<Vec<Diagnostic>> {
-        self.query(|db| diagnostics::diagnostics(db, file_id))
+        self.query(|db| handlers::diagnostics::diagnostics(db, file_id))
     }
 
     pub fn goto_definition(&self, pos: FilePosition) -> Cancellable<Option<Vec<Location>>> {
         self.query(|db| {
-            let res = goto_definition::goto_definition(db, pos);
+            let res = handlers::goto_definition::goto_definition(db, pos);
             res
         })
     }
 
     pub fn hover(&self, pos: FilePosition) -> Cancellable<Option<Hover>> {
-        self.query(|db| hover::hover(db, pos))
+        self.query(|db| handlers::hover::hover(db, pos))
     }
 
     pub fn line_index<'a>(&'a self, file_id: FileId) -> Cancellable<Option<&'a LineIndex>> {
-        self.query(move |db| line_index::line_index(db, file_id))
+        self.query(move |db| handlers::line_index::line_index(db, file_id))
     }
 
     pub fn show_hir(&self, file_id: FileId) -> Cancellable<Option<String>> {
-        self.query(|db| show_hir::show_hir(db, file_id))
+        self.query(|db| handlers::show_hir::show_hir(db, file_id))
     }
 
     pub fn show_syntax_tree(&self, file_id: FileId) -> Cancellable<Option<String>> {
-        self.query(|db| show_syntax_tree::show_syntax_tree(db, file_id))
+        self.query(|db| handlers::show_syntax_tree::show_syntax_tree(db, file_id))
     }
 
     /// Helper method to handle Salsa cancellations.

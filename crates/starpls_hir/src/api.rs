@@ -97,6 +97,18 @@ impl<'a> Semantics<'a> {
         let resolver = Resolver::new_for_offset(self.db, file, offset);
         SemanticsScope { resolver }
     }
+
+    pub fn resolve_call_expr_active_param(
+        &self,
+        file: File,
+        expr: &ast::CallExpr,
+        active_arg: usize,
+    ) -> Option<usize> {
+        let ptr = AstPtr::new(&ast::Expression::Call(expr.clone()));
+        let expr = source_map(self.db, file).expr_map.get(&ptr)?;
+        self.db
+            .resolve_call_expr_active_param(file, *expr, active_arg)
+    }
 }
 
 pub struct Variable {

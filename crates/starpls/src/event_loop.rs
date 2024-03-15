@@ -165,6 +165,7 @@ impl Server {
             .on::<lsp_types::request::GotoDefinition>(requests::goto_definition)
             .on::<lsp_types::request::Completion>(requests::completion)
             .on::<lsp_types::request::HoverRequest>(requests::hover)
+            .on::<lsp_types::request::SignatureHelpRequest>(requests::signature_help)
             .finish();
     }
 

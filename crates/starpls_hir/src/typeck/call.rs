@@ -4,7 +4,7 @@
 use crate::{
     def::{Argument, Param},
     typeck::{builtins::BuiltinFunctionParam, intrinsics::IntrinsicFunctionParam},
-    ExprId, Name, Ty,
+    ExprId, Name,
 };
 use smallvec::{smallvec, SmallVec};
 
@@ -16,18 +16,23 @@ pub(crate) struct ArgError {
 pub(crate) struct Slots(SmallVec<[Slot; 5]>);
 
 impl Slots {
-    pub(crate) fn assign_args(&mut self, args_with_ty: &[(Argument, Ty)]) -> Vec<ArgError> {
+    pub(crate) fn assign_args(
+        &mut self,
+        args_with_ty: &[Argument],
+        active_arg: Option<usize>,
+    ) -> (Vec<ArgError>, Option<usize>) {
         let mut errors = Vec::new();
+        let mut active_slot = None;
 
         // Assign positional arguments first, i.e. `Argument::Simple` and `Argument::UnpackedList`, which
         // is treated as an unbounded list of "simple" arguments.
-        'outer: for (arg, arg_ty) in args_with_ty {
+        'outer: for (arg_index, arg) in args_with_ty.iter().enumerate() {
             match arg {
                 Argument::Simple { expr } => {
                     // Look for a positional/keyword parameter with no provider, or for a
                     // "*args" parameter.
-                    let provider = SlotProvider::Single(*expr, arg_ty.clone());
-                    for slot in self.0.iter_mut() {
+                    let provider = SlotProvider::Single(*expr, arg_index);
+                    for (slot_index, slot) in self.0.iter_mut().enumerate() {
                         match slot {
                             Slot::Positional {
                                 provider: provider2 @ SlotProvider::Missing,
@@ -37,6 +42,9 @@ impl Slots {
                                 positional: true,
                                 ..
                             } => {
+                                if Some(arg_index) == active_arg {
+                                    active_slot.get_or_insert(slot_index);
+                                }
                                 *provider2 = provider;
                                 continue 'outer;
                             }
@@ -44,6 +52,9 @@ impl Slots {
                                 providers,
                                 bare: false,
                             } => {
+                                if Some(arg_index) == active_arg {
+                                    active_slot.get_or_insert(slot_index);
+                                }
                                 providers.push(provider);
                                 continue 'outer;
                             }
@@ -68,13 +79,13 @@ impl Slots {
                                 provider: provider @ SlotProvider::Missing,
                                 positional: true,
                                 ..
-                            } => *provider = SlotProvider::ArgsList(*expr, arg_ty.clone()),
+                            } => *provider = SlotProvider::ArgsList(*expr, arg_index),
                             Slot::ArgsList {
                                 providers,
                                 bare: false,
                                 ..
                             } => {
-                                providers.push(SlotProvider::ArgsList(*expr, arg_ty.clone()));
+                                providers.push(SlotProvider::ArgsList(*expr, arg_index));
                             }
                             _ => {}
                         }
@@ -85,7 +96,7 @@ impl Slots {
         }
 
         // Keyword arguments are assigned next, i.e. `Argument::Keyword` and `Argument::UnpackedDict`.
-        'outer: for (arg, arg_ty) in args_with_ty {
+        'outer: for (arg_index, arg) in args_with_ty.iter().enumerate() {
             match arg {
                 Argument::Keyword {
                     name: ref arg_name,
@@ -93,8 +104,8 @@ impl Slots {
                 } => {
                     // Look for either a keyword parameter matching this argument's
                     // name, or for the "**kwargs" parameter.
-                    let provider = SlotProvider::Single(*expr, arg_ty.clone());
-                    for slot in self.0.iter_mut() {
+                    let provider = SlotProvider::Single(*expr, arg_index);
+                    for (slot_index, slot) in self.0.iter_mut().enumerate() {
                         match slot {
                             Slot::Keyword {
                                 name,
@@ -102,10 +113,16 @@ impl Slots {
                                     provider2 @ (SlotProvider::Missing | SlotProvider::KwargsDict(_, _)),
                                 ..
                             } if arg_name == name => {
+                                if Some(arg_index) == active_arg {
+                                    active_slot.get_or_insert(slot_index);
+                                }
                                 *provider2 = provider;
                                 continue 'outer;
                             }
                             Slot::KwargsDict { providers } => {
+                                if Some(arg_index) == active_arg {
+                                    active_slot.get_or_insert(slot_index);
+                                }
                                 providers.push(provider);
                                 continue 'outer;
                             }
@@ -124,10 +141,10 @@ impl Slots {
                     for slot in self.0.iter_mut() {
                         match slot {
                             Slot::Keyword { provider, .. } => {
-                                *provider = SlotProvider::KwargsDict(*expr, arg_ty.clone())
+                                *provider = SlotProvider::KwargsDict(*expr, arg_index)
                             }
                             Slot::KwargsDict { providers } => {
-                                providers.push(SlotProvider::KwargsDict(*expr, arg_ty.clone()))
+                                providers.push(SlotProvider::KwargsDict(*expr, arg_index))
                             }
                             _ => {}
                         }
@@ -137,7 +154,7 @@ impl Slots {
             }
         }
 
-        errors
+        (errors, active_slot)
     }
 
     pub(crate) fn into_inner(self) -> SmallVec<[Slot; 5]> {
@@ -170,9 +187,9 @@ pub(crate) enum Slot {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum SlotProvider {
     Missing,
-    Single(ExprId, Ty),
-    ArgsList(ExprId, Ty),
-    KwargsDict(ExprId, Ty),
+    Single(ExprId, usize),
+    ArgsList(ExprId, usize),
+    KwargsDict(ExprId, usize),
 }
 
 impl From<&[Param]> for Slots {

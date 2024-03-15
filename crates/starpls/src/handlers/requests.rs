@@ -1,6 +1,6 @@
 use anyhow::Ok;
 use starpls_ide::{
-    completions::{
+    completion::{
         CompletionItemKind,
         CompletionMode::{InsertText, TextEdit},
     },
@@ -188,4 +188,11 @@ pub(crate) fn hover(
             }),
             range: None,
         }))
+}
+
+pub(crate) fn signature_help(
+    snapshot: &ServerSnapshot,
+    params: lsp_types::SignatureHelpParams,
+) -> anyhow::Result<Option<lsp_types::SignatureHelp>> {
+    Ok(None)
 }

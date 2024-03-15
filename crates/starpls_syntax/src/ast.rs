@@ -9,8 +9,11 @@ use std::{
     str::Chars,
 };
 
-pub use rowan::ast::{AstNode, AstPtr};
-use rowan::Direction;
+pub use rowan::{
+    ast::{AstNode, AstPtr},
+    Direction,
+};
+
 pub type SyntaxNodePtr = rowan::ast::SyntaxNodePtr<StarlarkLanguage>;
 
 /// A trait that allows converting between untyped `SyntaxToken`s and typed AST tokens.

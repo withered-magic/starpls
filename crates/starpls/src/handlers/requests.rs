@@ -216,8 +216,16 @@ pub(crate) fn signature_help(
                 .map(|sig| lsp_types::SignatureInformation {
                     label: sig.label,
                     documentation: None,
-                    parameters: None,
-                    active_parameter: None,
+                    parameters: sig.parameters.map(|params| {
+                        params
+                            .into_iter()
+                            .map(|param| lsp_types::ParameterInformation {
+                                label: lsp_types::ParameterLabel::Simple(param.label),
+                                documentation: None,
+                            })
+                            .collect()
+                    }),
+                    active_parameter: sig.active_parameter.map(|i| i as u32),
                 })
                 .collect(),
             active_signature: None,

@@ -1,6 +1,6 @@
 use crate::{
     typeck::{Binders, Substitution, Tuple as TupleVariants, Ty, TyKind},
-    Db, Name,
+    Db, DisplayWithDb, Name,
 };
 use rustc_hash::FxHashMap;
 use smallvec::smallvec;

@@ -16,6 +16,7 @@ pub struct SignatureInfo {
     pub label: String,
     pub documentation: Option<String>,
     pub parameters: Option<Vec<ParameterInfo>>,
+    pub active_parameter: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -32,7 +33,6 @@ pub(crate) fn signature_help(
     let file = db.get_file(file_id)?;
     let parse = parse(db, file);
     let token = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
-        T![ident] => 2,
         T!['('] | T![')'] | T![,] => 0,
         kind if kind.is_trivia_token() => 0,
         _ => 1,
@@ -42,22 +42,43 @@ pub(crate) fn signature_help(
     let expr = token.parent_ancestors().find_map(ast::CallExpr::cast)?;
     let func = sema.resolve_call_expr(file, &expr)?;
 
-    func.ty(db).display(db);
+    let label = format!("{}", func.ty(db).display(db));
+    let start = label.find('(')? + 1;
+    let end = label.find(") -> ")?;
+    let param_labels = label[start..end].split(", ").map(|s| s.to_string());
+    let parent = token.parent()?;
 
-    // let active_arg = arg
-    //     .syntax()
-    //     .siblings(Direction::Prev)
-    //     .skip(1)
-    //     .filter_map(ast::Argument::cast)
-    //     .count();
-
-    // let active_param = sema.resolve_call_expr_active_param(file, &expr, active_arg);
+    let active_parameter = if ast::CallExpr::can_cast(parent.kind()) {
+        expr.arguments()
+            .map(|args| args.arguments().count())
+            .unwrap_or(0)
+    } else {
+        let syntax = match token.parent_ancestors().find_map(ast::Argument::cast) {
+            Some(arg) => arg.syntax().clone(),
+            _ => parent,
+        };
+        let active_arg = syntax
+            .siblings(Direction::Prev)
+            .skip(1)
+            .filter_map(ast::Argument::cast)
+            .count();
+        sema.resolve_call_expr_active_param(file, &expr, active_arg)
+            .unwrap_or(99)
+    };
 
     Some(SignatureHelp {
         signatures: vec![SignatureInfo {
             label: format!("{}", func.ty(db).display(db)),
             documentation: None,
-            parameters: None,
+            parameters: Some(
+                param_labels
+                    .map(|label| ParameterInfo {
+                        label,
+                        documentation: None,
+                    })
+                    .collect(),
+            ),
+            active_parameter: Some(active_parameter),
         }],
     })
 }

@@ -61,6 +61,13 @@ pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
 
     fn resolve_load_stmt(&self, file: File, load_stmt: LoadStmt) -> Option<File>;
 
+    fn resolve_call_expr_active_param(
+        &self,
+        file: File,
+        expr: ExprId,
+        active_arg: usize,
+    ) -> Option<usize>;
+
     fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins);
 
     fn get_builtin_defs(&self, dialect: &Dialect) -> BuiltinDefs;

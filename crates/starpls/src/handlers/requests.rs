@@ -1,6 +1,6 @@
 use anyhow::Ok;
 use starpls_ide::{
-    completions::{
+    completion::{
         CompletionItemKind,
         CompletionMode::{InsertText, TextEdit},
     },
@@ -163,12 +163,10 @@ pub(crate) fn hover(
     params: lsp_types::HoverParams,
 ) -> anyhow::Result<Option<lsp_types::Hover>> {
     let path = path_buf_from_url(&params.text_document_position_params.text_document.uri)?;
-
     let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
         Some(file_id) => file_id,
         None => return Ok(None),
     };
-
     let pos = match convert::text_size_from_lsp_position(
         snapshot,
         file_id,
@@ -187,5 +185,54 @@ pub(crate) fn hover(
                 value: hover.contents.value,
             }),
             range: None,
+        }))
+}
+
+pub(crate) fn signature_help(
+    snapshot: &ServerSnapshot,
+    params: lsp_types::SignatureHelpParams,
+) -> anyhow::Result<Option<lsp_types::SignatureHelp>> {
+    let path = path_buf_from_url(&params.text_document_position_params.text_document.uri)?;
+    let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
+        Some(file_id) => file_id,
+        None => return Ok(None),
+    };
+    let pos = match convert::text_size_from_lsp_position(
+        snapshot,
+        file_id,
+        params.text_document_position_params.position,
+    )? {
+        Some(pos) => pos,
+        None => return Ok(None),
+    };
+
+    Ok(snapshot
+        .analysis_snapshot
+        .signature_help(FilePosition { file_id, pos })?
+        .map(|help| lsp_types::SignatureHelp {
+            signatures: help
+                .signatures
+                .into_iter()
+                .map(|sig| lsp_types::SignatureInformation {
+                    label: sig.label,
+                    documentation: sig
+                        .documentation
+                        .map(|doc| lsp_types::Documentation::String(doc)),
+                    parameters: sig.parameters.map(|params| {
+                        params
+                            .into_iter()
+                            .map(|param| lsp_types::ParameterInformation {
+                                label: lsp_types::ParameterLabel::Simple(param.label),
+                                documentation: param
+                                    .documentation
+                                    .map(|doc| lsp_types::Documentation::String(doc)),
+                            })
+                            .collect()
+                    }),
+                    active_parameter: sig.active_parameter.map(|i| i as u32),
+                })
+                .collect(),
+            active_signature: None,
+            active_parameter: None,
         }))
 }

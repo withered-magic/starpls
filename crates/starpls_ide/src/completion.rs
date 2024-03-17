@@ -325,7 +325,7 @@ impl CompletionContext {
                 .and_then(|parent| ast::CallExpr::cast(parent))
                 .and_then(|expr| expr.callee())
                 .and_then(|expr| sema.type_of_expr(file, &expr))
-                .map(|ty| ty.params(db))
+                .map(|ty| ty.params(db).into_iter().map(|(param, _)| param).collect())
                 .unwrap_or_else(|| vec![]);
 
             let scope = sema.scope_for_offset(file, pos);

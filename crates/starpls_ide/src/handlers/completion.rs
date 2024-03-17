@@ -1,5 +1,5 @@
 use crate::{
-    completions::{self, CompletionItem},
+    completion::{self, CompletionItem},
     Database, FilePosition,
 };
 
@@ -8,5 +8,5 @@ pub(crate) fn completion(
     pos: FilePosition,
     trigger_character: Option<String>,
 ) -> Option<Vec<CompletionItem>> {
-    completions::completions(db, pos, trigger_character)
+    completion::completions(db, pos, trigger_character)
 }

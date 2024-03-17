@@ -97,6 +97,18 @@ impl<'a> Semantics<'a> {
         let resolver = Resolver::new_for_offset(self.db, file, offset);
         SemanticsScope { resolver }
     }
+
+    pub fn resolve_call_expr_active_param(
+        &self,
+        file: File,
+        expr: &ast::CallExpr,
+        active_arg: usize,
+    ) -> Option<usize> {
+        let ptr = AstPtr::new(&ast::Expression::Call(expr.clone()));
+        let expr = source_map(self.db, file).expr_map.get(&ptr)?;
+        self.db
+            .resolve_call_expr_active_param(file, *expr, active_arg)
+    }
 }
 
 pub struct Variable {
@@ -195,9 +207,9 @@ impl Type {
         matches!(self.ty.kind(), TyKind::Function(_))
     }
 
-    pub fn params(&self, db: &dyn Db) -> Vec<Param> {
+    pub fn params(&self, db: &dyn Db) -> Vec<(Param, Type)> {
         match self.ty.params(db) {
-            Some(params) => params.collect(),
+            Some(params) => params.map(|(param, ty)| (param, ty.into())).collect(),
             None => Vec::new(),
         }
     }
@@ -247,7 +259,7 @@ impl Function {
         }
     }
 
-    pub fn params(&self, db: &dyn Db) -> Vec<Param> {
+    pub fn params(&self, db: &dyn Db) -> Vec<(Param, Type)> {
         self.ty(db).params(db)
     }
 
@@ -261,6 +273,14 @@ impl Function {
             FunctionInner::BuiltinFunction(func) => TyKind::BuiltinFunction(func).intern(),
         }
         .into()
+    }
+
+    pub fn ret_ty(&self, db: &dyn Db) -> Type {
+        self.ty(db)
+            .ty
+            .ret_ty(db)
+            .expect("expected return type")
+            .into()
     }
 
     pub fn doc(&self, db: &dyn Db) -> Option<String> {

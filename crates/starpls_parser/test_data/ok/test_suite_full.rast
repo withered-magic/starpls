@@ -21,23 +21,23 @@ MODULE
       CALL_EXPR
         NAME_REF
           IDENT "print"
-        OPEN_PAREN "("
         ARGUMENTS
+          OPEN_PAREN "("
           SIMPLE_ARGUMENT
             NAME_REF
               IDENT "x"
-        CLOSE_PAREN ")"
+          CLOSE_PAREN ")"
       SEMI ";"
       WHITESPACE " "
       CALL_EXPR
         NAME_REF
           IDENT "print"
-        OPEN_PAREN "("
         ARGUMENTS
+          OPEN_PAREN "("
           SIMPLE_ARGUMENT
             NAME_REF
               IDENT "y"
-        CLOSE_PAREN ")"
+          CLOSE_PAREN ")"
       NEWLINE "\n"
   DEF_STMT
     DEF "def"
@@ -62,21 +62,21 @@ MODULE
       CALL_EXPR
         NAME_REF
           IDENT "print"
-        OPEN_PAREN "("
         ARGUMENTS
+          OPEN_PAREN "("
           SIMPLE_ARGUMENT
             NAME_REF
               IDENT "x"
-        CLOSE_PAREN ")"
+          CLOSE_PAREN ")"
       NEWLINE "\n"
       WHITESPACE "    "
       CALL_EXPR
         NAME_REF
           IDENT "print"
-        OPEN_PAREN "("
         ARGUMENTS
+          OPEN_PAREN "("
           SIMPLE_ARGUMENT
             NAME_REF
               IDENT "y"
-        CLOSE_PAREN ")"
+          CLOSE_PAREN ")"
       DEDENT ""

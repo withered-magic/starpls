@@ -18,7 +18,7 @@ pub(crate) struct Slots(SmallVec<[Slot; 5]>);
 impl Slots {
     pub(crate) fn assign_args(
         &mut self,
-        args_with_ty: &[Argument],
+        args: &[Argument],
         active_arg: Option<usize>,
     ) -> (Vec<ArgError>, Option<usize>) {
         let mut errors = Vec::new();
@@ -26,7 +26,7 @@ impl Slots {
 
         // Assign positional arguments first, i.e. `Argument::Simple` and `Argument::UnpackedList`, which
         // is treated as an unbounded list of "simple" arguments.
-        'outer: for (arg_index, arg) in args_with_ty.iter().enumerate() {
+        'outer: for (arg_index, arg) in args.iter().enumerate() {
             match arg {
                 Argument::Simple { expr } => {
                     // Look for a positional/keyword parameter with no provider, or for a
@@ -96,7 +96,7 @@ impl Slots {
         }
 
         // Keyword arguments are assigned next, i.e. `Argument::Keyword` and `Argument::UnpackedDict`.
-        'outer: for (arg_index, arg) in args_with_ty.iter().enumerate() {
+        'outer: for (arg_index, arg) in args.iter().enumerate() {
             match arg {
                 Argument::Keyword {
                     name: ref arg_name,
@@ -151,6 +151,26 @@ impl Slots {
                     }
                 }
                 _ => {}
+            }
+        }
+
+        // Do a quick check for a "fake" active argument, which is always assumed to be positional.
+        if active_arg == Some(args.len()) {
+            for (slot_index, slot) in self.0.iter_mut().enumerate() {
+                match slot {
+                    Slot::Positional {
+                        provider: SlotProvider::Missing,
+                    }
+                    | Slot::Keyword {
+                        provider: SlotProvider::Missing,
+                        positional: true,
+                        ..
+                    }
+                    | Slot::ArgsList { bare: false, .. } => {
+                        active_slot.get_or_insert(slot_index);
+                    }
+                    _ => {}
+                }
             }
         }
 

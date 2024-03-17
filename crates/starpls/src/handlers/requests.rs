@@ -215,13 +215,17 @@ pub(crate) fn signature_help(
                 .into_iter()
                 .map(|sig| lsp_types::SignatureInformation {
                     label: sig.label,
-                    documentation: None,
+                    documentation: sig
+                        .documentation
+                        .map(|doc| lsp_types::Documentation::String(doc)),
                     parameters: sig.parameters.map(|params| {
                         params
                             .into_iter()
                             .map(|param| lsp_types::ParameterInformation {
                                 label: lsp_types::ParameterLabel::Simple(param.label),
-                                documentation: None,
+                                documentation: param
+                                    .documentation
+                                    .map(|doc| lsp_types::Documentation::String(doc)),
                             })
                             .collect()
                     }),

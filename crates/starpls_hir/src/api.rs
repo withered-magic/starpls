@@ -275,6 +275,14 @@ impl Function {
         .into()
     }
 
+    pub fn ret_ty(&self, db: &dyn Db) -> Type {
+        self.ty(db)
+            .ty
+            .ret_ty(db)
+            .expect("expected return type")
+            .into()
+    }
+
     pub fn doc(&self, db: &dyn Db) -> Option<String> {
         match self.0 {
             FunctionInner::HirDef(func) => func.doc(db).map(|doc| doc.to_string()),

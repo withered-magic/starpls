@@ -319,6 +319,15 @@ impl Ty {
         })
     }
 
+    pub(crate) fn ret_ty(&self, db: &dyn Db) -> Option<Ty> {
+        Some(match self.kind() {
+            TyKind::Function(func) => resolve_type_ref_opt(db, func.ret_type_ref(db)),
+            TyKind::IntrinsicFunction(func, subst) => func.ret_ty(db).substitute(&subst.args),
+            TyKind::BuiltinFunction(func) => resolve_type_ref(db, &func.ret_type_ref(db)).0,
+            _ => return None,
+        })
+    }
+
     fn is_any(&self) -> bool {
         self.kind() == &TyKind::Any
     }

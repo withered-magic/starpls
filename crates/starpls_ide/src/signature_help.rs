@@ -7,6 +7,8 @@ use starpls_syntax::{
 };
 use std::fmt::Write;
 
+const DEFAULT_ACTIVE_PARAMETER_INDEX: usize = 100;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SignatureHelp {
     pub signatures: Vec<SignatureInfo>,
@@ -77,37 +79,46 @@ pub(crate) fn signature_help(
         label.push_str(&param_label);
     }
 
-    label.push_str(") -> None");
+    label.push_str(") -> ");
+    let _ = write!(&mut label, "{}", func.ret_ty(db).display(db));
 
-    let parent = token.parent()?;
-    let active_parameter = if ast::CallExpr::can_cast(parent.kind()) {
-        expr.arguments()
-            .map(|args| args.arguments().count())
-            .unwrap_or(0)
+    // Check if token's direct parent is an `Arguments` node. If so, that means we are at a ',', '(', or ')'.
+    // The active parameter index is equal to the number of commas that we see to the left (including ourselves).
+    // If the number of commas is greater than the number of arguments in the CallExpr, then
+    // the active parameter is considered fake.
+    let active_arg = if ast::Arguments::can_cast(token.parent()?.kind()) {
+        token
+            .siblings_with_tokens(Direction::Prev)
+            .filter_map(|el| el.into_token())
+            .filter(|token| token.kind() == T![,])
+            .count()
     } else {
-        let syntax = match token.parent_ancestors().find_map(ast::Argument::cast) {
-            Some(arg) => arg.syntax().clone(),
-            _ => parent,
-        };
-        let active_arg = syntax
+        // Otherwise, check if there is a parent `Argument` node. If so, the active parameter index
+        // is equal to the number of `Argument`s to the left of us. The active parameter is never fake
+        // in this scenario.
+        let arg = token.parent_ancestors().find_map(ast::Argument::cast)?;
+        arg.syntax()
             .siblings(Direction::Prev)
             .skip(1)
             .filter_map(ast::Argument::cast)
-            .count();
-        sema.resolve_call_expr_active_param(file, &expr, active_arg)
-            .unwrap_or(99)
+            .count()
     };
+
+    let active_parameter = sema
+        .resolve_call_expr_active_param(file, &expr, active_arg)
+        .unwrap_or(DEFAULT_ACTIVE_PARAMETER_INDEX); // active_parameter defaults to 0, so we just add a crazy high value here to avoid a false positive
 
     Some(SignatureHelp {
         signatures: vec![SignatureInfo {
             label,
-            documentation: None,
+            documentation: func.doc(db),
             parameters: Some(
-                param_labels
+                params
                     .into_iter()
-                    .map(|label| ParameterInfo {
+                    .zip(param_labels.into_iter())
+                    .map(|((param, _), label)| ParameterInfo {
                         label,
-                        documentation: None,
+                        documentation: param.doc(db),
                     })
                     .collect(),
             ),

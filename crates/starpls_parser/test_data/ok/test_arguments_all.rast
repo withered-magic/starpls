@@ -2,8 +2,8 @@ MODULE
   CALL_EXPR
     NAME_REF
       IDENT "f"
-    OPEN_PAREN "("
     ARGUMENTS
+      OPEN_PAREN "("
       SIMPLE_ARGUMENT
         NAME_REF
           IDENT "x"
@@ -27,4 +27,4 @@ MODULE
         STAR_STAR "**"
         NAME_REF
           IDENT "kwargs"
-    CLOSE_PAREN ")"
+      CLOSE_PAREN ")"

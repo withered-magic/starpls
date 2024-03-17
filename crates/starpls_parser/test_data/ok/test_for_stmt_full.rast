@@ -15,12 +15,12 @@ MODULE
     CALL_EXPR
       NAME_REF
         IDENT "enumerate"
-      OPEN_PAREN "("
       ARGUMENTS
+        OPEN_PAREN "("
         SIMPLE_ARGUMENT
           NAME_REF
             IDENT "values"
-      CLOSE_PAREN ")"
+        CLOSE_PAREN ")"
     COLON ":"
     SUITE
       NEWLINE "\n"
@@ -28,8 +28,8 @@ MODULE
       CALL_EXPR
         NAME_REF
           IDENT "print"
-        OPEN_PAREN "("
         ARGUMENTS
+          OPEN_PAREN "("
           SIMPLE_ARGUMENT
             NAME_REF
               IDENT "i"
@@ -38,5 +38,5 @@ MODULE
           SIMPLE_ARGUMENT
             NAME_REF
               IDENT "value"
-        CLOSE_PAREN ")"
+          CLOSE_PAREN ")"
       DEDENT ""

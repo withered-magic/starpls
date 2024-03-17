@@ -148,12 +148,15 @@ pub(crate) fn primary_expr(p: &mut Parser) -> Option<CompletedMarker> {
 
 /// Grammar: `CallSuffix  = '(' [Arguments [',']] ')' .`
 fn call_expr(p: &mut Parser, m: Marker) -> CompletedMarker {
+    let arguments_marker = p.start();
     p.bump(T!['(']);
     if ARGUMENT_START.contains(p.current()) {
         arguments(p);
     }
     // If we aren't at the closing paren, recover to the next newline.
-    if !p.eat(T![')']) {
+    let is_closed = p.eat(T![')']);
+    arguments_marker.complete(p, ARGUMENTS);
+    if !is_closed {
         p.error_recover_until("\"(\" was not closed", STMT_RECOVERY);
     }
     m.complete(p, CALL_EXPR)

@@ -398,7 +398,7 @@ impl Name {
         Self::new(SmolStr::new_inline("[missing name]"))
     }
 
-    pub(crate) fn is_missing(&self) -> bool {
+    pub fn is_missing(&self) -> bool {
         &self.0 == "[missing name]"
     }
 

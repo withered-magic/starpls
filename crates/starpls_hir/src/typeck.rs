@@ -383,7 +383,18 @@ impl Param {
                 Some(module[parent.params(db)[index]].name().clone())
             }
             ParamInner::IntrinsicParam { parent, index } => {
-                parent.params(db)[index].name().cloned()
+                let param = &parent.params(db)[index];
+
+                param.name().cloned().or_else(|| {
+                    Some(match param {
+                        IntrinsicFunctionParam::Positional { .. } => {
+                            Name::from_str(&format!("x{index}"))
+                        }
+                        IntrinsicFunctionParam::ArgsList { .. } => Name::new_inline("args"),
+                        IntrinsicFunctionParam::KwargsDict => Name::new_inline("kwargs"),
+                        _ => unreachable!(),
+                    })
+                })
             }
             ParamInner::BuiltinParam { parent, index } => match &parent.params(db)[index] {
                 BuiltinFunctionParam::Simple { name, .. } => Some(name.clone()),

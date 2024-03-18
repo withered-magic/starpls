@@ -56,10 +56,13 @@ pub(crate) fn signature_help(
             } else if param.is_kwargs_dict(db) {
                 s.push_str("**");
             }
-            if let Some(name) = param.name(db) {
-                s.push_str(name.as_str());
-                s.push_str(": ");
-                let _ = write!(&mut s, "{}", ty.display(db));
+            match param.name(db) {
+                Some(name) if !name.is_missing() => {
+                    s.push_str(name.as_str());
+                    s.push_str(": ");
+                    let _ = write!(&mut s, "{}", ty.display(db));
+                }
+                _ => {}
             }
             s
         })

@@ -258,6 +258,7 @@ pub(crate) fn intrinsic_functions(db: &dyn Db) -> IntrinsicFunctions {
     // TODO(withered-magic): The tuple returned here can be of any size,
     // might have to introduce a separate type.
     add_function("tuple", vec![positional(Any)], Any);
+    add_function("type", vec![positional(Any)], String);
     add_function(
         "zip",
         vec![ArgsList { ty: Any.intern() }],

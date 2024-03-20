@@ -215,17 +215,13 @@ pub(crate) fn signature_help(
                 .into_iter()
                 .map(|sig| lsp_types::SignatureInformation {
                     label: sig.label,
-                    documentation: sig
-                        .documentation
-                        .map(|doc| lsp_types::Documentation::String(doc)),
+                    documentation: sig.documentation.map(to_markup_doc),
                     parameters: sig.parameters.map(|params| {
                         params
                             .into_iter()
                             .map(|param| lsp_types::ParameterInformation {
                                 label: lsp_types::ParameterLabel::Simple(param.label),
-                                documentation: param
-                                    .documentation
-                                    .map(|doc| lsp_types::Documentation::String(doc)),
+                                documentation: param.documentation.map(to_markup_doc),
                             })
                             .collect()
                     }),
@@ -235,4 +231,11 @@ pub(crate) fn signature_help(
             active_signature: None,
             active_parameter: None,
         }))
+}
+
+fn to_markup_doc(doc: String) -> lsp_types::Documentation {
+    lsp_types::Documentation::MarkupContent(lsp_types::MarkupContent {
+        kind: lsp_types::MarkupKind::Markdown,
+        value: doc,
+    })
 }

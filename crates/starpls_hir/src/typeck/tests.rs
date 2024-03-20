@@ -62,7 +62,10 @@ fn check_infer(input: &str, expect: Expect) {
     let diagnostics = db.gcx.with_tcx(&db, |tcx| tcx.diagnostics_for_file(file));
     if !diagnostics.is_empty() {
         res.push('\n');
-        for diagnostic in diagnostics.iter() {
+        for diagnostic in diagnostics
+            .into_iter()
+            .sorted_by(|lhs, rhs| lhs.range.range.start().cmp(&rhs.range.range.start()))
+        {
             writeln!(
                 res,
                 "{:?}..{:?} {}",
@@ -301,4 +304,120 @@ bar(y)
             255..256 Argument of type "int | string | float | None" cannot be assigned to parameter of type "int | string | None"
         "#]],
     )
+}
+
+#[test]
+fn test_call_full() {
+    check_infer(
+        r#"
+def foo(a, b, *args, d, **kwargs):
+    pass
+
+foo(1, 2, 3, 4, d=5, e=6)
+"#,
+        expect![[r#"
+            46..49 "foo": def foo(a: Unknown, b: Unknown, *args: tuple[Unknown, ...], d: Unknown, **kwargs: dict[string, Unknown]) -> Unknown
+            50..51 "1": int
+            53..54 "2": int
+            56..57 "3": int
+            59..60 "4": int
+            64..65 "5": int
+            69..70 "6": int
+            46..71 "foo(1, 2, 3, 4, d=5, e=6)": Unknown
+        "#]],
+    );
+}
+
+#[test]
+fn test_call_varargs_kwargs() {
+    check_infer(
+        r#"
+def foo(*args, **kwargs):
+    pass
+
+foo(1, 2, a=3, b=4)
+"#,
+        expect![[r#"
+            37..40 "foo": def foo(*args: tuple[Unknown, ...], **kwargs: dict[string, Unknown]) -> Unknown
+            41..42 "1": int
+            44..45 "2": int
+            49..50 "3": int
+            54..55 "4": int
+            37..56 "foo(1, 2, a=3, b=4)": Unknown
+        "#]],
+    );
+}
+
+#[test]
+fn test_call_unexpected_argument() {
+    check_infer(
+        r#"
+def foo(bar):
+    pass
+
+foo(1)
+foo(baz=1)
+    "#,
+        expect![[r#"
+            25..28 "foo": def foo(bar: Unknown) -> Unknown
+            29..30 "1": int
+            25..31 "foo(1)": Unknown
+            32..35 "foo": def foo(bar: Unknown) -> Unknown
+            40..41 "1": int
+            32..42 "foo(baz=1)": Unknown
+
+            32..42 Argument missing for parameter(s) "bar"
+            40..41 Unexpected keyword argument "baz"
+        "#]],
+    );
+}
+
+#[test]
+fn test_call_keyword_only() {
+    check_infer(
+        r#"
+def foo(*, bar):
+    pass
+
+foo(1)
+foo(2, bar=3)
+foo(bar=4)
+"#,
+        expect![[r#"
+            28..31 "foo": def foo(*, bar: Unknown) -> Unknown
+            32..33 "1": int
+            28..34 "foo(1)": Unknown
+            35..38 "foo": def foo(*, bar: Unknown) -> Unknown
+            39..40 "2": int
+            46..47 "3": int
+            35..48 "foo(2, bar=3)": Unknown
+            49..52 "foo": def foo(*, bar: Unknown) -> Unknown
+            57..58 "4": int
+            49..59 "foo(bar=4)": Unknown
+
+            28..34 Argument missing for parameter(s) "bar"
+            32..33 Unexpected positional argument
+            39..40 Unexpected positional argument
+        "#]],
+    );
+}
+
+#[test]
+fn test_call_redundant_kwargs() {
+    check_infer(
+        r#"
+def foo(bar):
+    pass
+
+foo(bar=1, bar=2)
+"#,
+        expect![[r#"
+            25..28 "foo": def foo(bar: Unknown) -> Unknown
+            33..34 "1": int
+            40..41 "2": int
+            25..42 "foo(bar=1, bar=2)": Unknown
+
+            40..41 Unexpected keyword argument "bar"
+        "#]],
+    );
 }

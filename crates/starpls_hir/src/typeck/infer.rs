@@ -10,8 +10,8 @@ use crate::{
         assign_tys,
         call::{Slot, SlotProvider, Slots},
         intrinsics::{IntrinsicFunctionParam, IntrinsicTypes},
-        resolve_type_ref, resolve_type_ref_opt, FileExprId, FileParamId, Substitution, Tuple, Ty,
-        TyCtxt, TyKind, TypeRef, TypecheckCancelled,
+        resolve_type_ref, resolve_type_ref_opt, FileExprId, FileParamId, Protocol, Substitution,
+        Tuple, Ty, TyCtxt, TyKind, TypeRef, TypecheckCancelled,
     },
     Name,
 };
@@ -584,11 +584,14 @@ impl TyCtxt<'_> {
             // TODO(withered-magic): Handle string interoplation with "%".
             BinaryOp::Arith(op) => match (lhs_kind, rhs_kind, op) {
                 (TyKind::String, TyKind::String, ArithOp::Add | ArithOp::Mod) => self.string_ty(),
-                (TyKind::List(target), TyKind::List(source), ArithOp::Add)
-                    if assign_tys(db, source, target) =>
-                {
-                    lhs
-                }
+                (TyKind::Bytes, TyKind::Bytes, ArithOp::Add) => self.bytes_ty(),
+                (
+                    TyKind::List(target)
+                    | TyKind::Protocol(Protocol::Sequence(target) | Protocol::Iterable(target)),
+                    TyKind::List(source)
+                    | TyKind::Protocol(Protocol::Sequence(source) | Protocol::Iterable(source)),
+                    ArithOp::Add,
+                ) if assign_tys(db, source, target) => lhs,
                 (TyKind::Int, TyKind::Int, _) => self.int_ty(),
                 (TyKind::Float, TyKind::Int, _)
                 | (TyKind::Int, TyKind::Float, _)

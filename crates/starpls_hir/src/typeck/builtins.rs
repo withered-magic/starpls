@@ -1,7 +1,7 @@
 use crate::{Db, Name, Ty, TyKind, TypeRef};
 use rustc_hash::FxHashMap;
 use starpls_bazel::{
-    builtin::Callable, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
+    builtin::Callable, env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
 };
 use starpls_common::Dialect;
 
@@ -106,8 +106,9 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
     let mut functions = FxHashMap::default();
     let mut variables = FxHashMap::default();
     let builtins = defs.builtins(db);
+    let bzl_builtins = env::make_bzl_builtins();
 
-    for value in builtins.global.iter() {
+    for value in bzl_builtins.global.iter().chain(builtins.global.iter()) {
         // Skip deny-listed globals, which are handled directly by the
         // language server.
         if value.name.is_empty() || BUILTINS_VALUES_DENY_LIST.contains(&value.name.as_str()) {

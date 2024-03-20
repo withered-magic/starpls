@@ -8,6 +8,7 @@ pub use crate::{
     label::{Label, ParseError},
 };
 
+pub mod env;
 pub mod label;
 
 #[cfg(bazel)]

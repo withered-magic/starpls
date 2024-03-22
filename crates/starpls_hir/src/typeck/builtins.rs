@@ -58,6 +58,7 @@ pub enum BuiltinFunctionParam {
         is_mandatory: bool,
     },
     ArgsList {
+        name: Name,
         type_ref: TypeRef,
         doc: String,
     },
@@ -106,9 +107,15 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
     let mut functions = FxHashMap::default();
     let mut variables = FxHashMap::default();
     let builtins = defs.builtins(db);
-    let bzl_builtins = env::make_bzl_builtins();
 
-    for value in bzl_builtins.global.iter().chain(builtins.global.iter()) {
+    for value in env::make_bzl_builtins()
+        .global
+        .iter()
+        .chain(env::make_build_builtins().global.iter())
+        .chain(env::make_module_bazel_builtins().global.iter())
+        .chain(env::make_workspace_builtins().global.iter())
+        .chain(builtins.global.iter())
+    {
         // Skip deny-listed globals, which are handled directly by the
         // language server.
         if value.name.is_empty() || BUILTINS_VALUES_DENY_LIST.contains(&value.name.as_str()) {
@@ -179,12 +186,12 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
 
 fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> BuiltinFunction {
     let mut params = Vec::new();
-
     for param in callable.param.iter() {
         // We need to apply a few normalization steps to parameter types.
         params.push(if param.is_star_arg {
             BuiltinFunctionParam::ArgsList {
-                type_ref: normalize_type_ref(&param.r#type),
+                name: Name::from_str(&param.name),
+                type_ref: maybe_strip_iterable(normalize_type_ref(&param.r#type)),
                 doc: normalize_doc_text(&param.doc),
             }
         } else if param.is_star_star_arg {
@@ -248,6 +255,16 @@ fn normalize_doc(text: &str, is_type: bool) -> String {
     }
 
     s.to_string()
+}
+
+fn maybe_strip_iterable(type_ref: TypeRef) -> TypeRef {
+    match type_ref {
+        TypeRef::Name(name, Some(args)) if args.len() == 1 => match name.as_str() {
+            "Iterable" | "Sequence" | "List" => args[0].clone(),
+            _ => TypeRef::Name(name, Some(args)),
+        },
+        _ => type_ref,
+    }
 }
 
 fn normalize_type_ref(text: &str) -> TypeRef {

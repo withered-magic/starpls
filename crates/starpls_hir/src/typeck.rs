@@ -397,7 +397,8 @@ impl Param {
                 })
             }
             ParamInner::BuiltinParam { parent, index } => match &parent.params(db)[index] {
-                BuiltinFunctionParam::Simple { name, .. } => Some(name.clone()),
+                BuiltinFunctionParam::Simple { name, .. }
+                | BuiltinFunctionParam::ArgsList { name, .. } => Some(name.clone()),
                 _ => None,
             },
         }
@@ -771,7 +772,12 @@ impl DisplayWithDb for TyKind {
                                 f.write_str(&default_value)?;
                             }
                         }
-                        BuiltinFunctionParam::ArgsList { .. } => f.write_str("*args")?,
+                        BuiltinFunctionParam::ArgsList { name, type_ref, .. } => {
+                            f.write_char('*')?;
+                            f.write_str(name.as_str())?;
+                            f.write_str(": ")?;
+                            type_ref.fmt(f)?;
+                        }
                         BuiltinFunctionParam::KwargsDict { .. } => f.write_str("**kwargs")?,
                     }
                 }

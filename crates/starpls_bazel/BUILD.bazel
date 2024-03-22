@@ -19,11 +19,19 @@ rust_library(
     name = "starpls_bazel",
     srcs = glob(["src/**/*.rs"]),
     rustc_flags = ["--cfg=bazel"],
+    compile_data = [
+        ":data/build.builtins.json",
+        ":data/bzl.builtins.json",
+        ":data/module-bazel.builtins.json",
+        ":data/workspace.builtins.json",
+    ],
     deps = [
         ":builtin_proto_rust",
         "@crates//:anyhow",
         "@crates//:bytes",
         "@crates//:prost",
+        "@crates//:serde",
+        "@crates//:serde_json",
     ],
 )
 

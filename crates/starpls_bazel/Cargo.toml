@@ -9,6 +9,8 @@ edition = "2021"
 anyhow = "1.0.79"
 bytes = "1.5.0"
 prost = "0.12.3"
+serde = { name = "1.0.197", features = ["derive"] }
+serde_json = "1.0.114"
 
 [dev-dependencies]
 prost-types = "0.12.3"

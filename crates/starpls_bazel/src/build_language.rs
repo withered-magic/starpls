@@ -1,7 +1,7 @@
 use prost::Message;
 
 use crate::{
-    build::{attribute::Discriminator, AttributeDefinition, BuildLanguage, RuleDefinition},
+    build::{attribute::Discriminator, BuildLanguage, RuleDefinition},
     builtin::{Callable, Param, Value},
     Builtins,
 };
@@ -25,10 +25,18 @@ pub fn decode_rules(build_language_output: &[u8]) -> anyhow::Result<Builtins> {
                         callable: Some(Callable {
                             param: attribute
                                 .into_iter()
-                                .map(|AttributeDefinition { name, r#type, .. }| Param {
-                                    name,
-                                    r#type: attribute_type_string_from_i32(r#type),
-                                    ..Default::default()
+                                .filter(|attr| !attr.name.starts_with(&['$', ':']))
+                                .map(|attr| {
+                                    let doc = attr.documentation().to_string();
+                                    let r#type =
+                                        attribute_type_string_from_discriminator(attr.r#type());
+                                    Param {
+                                        name: attr.name,
+                                        r#type,
+                                        doc,
+                                        is_mandatory: false,
+                                        ..Default::default()
+                                    }
                                 })
                                 .collect(),
                             return_type: "None".to_string(),
@@ -42,35 +50,24 @@ pub fn decode_rules(build_language_output: &[u8]) -> anyhow::Result<Builtins> {
     })
 }
 
-pub fn attribute_type_string_from_i32(value: i32) -> String {
+pub fn attribute_type_string_from_discriminator(value: Discriminator) -> String {
     use Discriminator::*;
 
-    let discriminator = match Discriminator::try_from(value).ok() {
-        Some(discriminator) => discriminator,
-        None => return "".to_string(),
-    };
-
-    match discriminator {
-        Integer => "int",
+    match value {
+        Integer | Tristate => "int",
         String | License => "string",
         Label => "Label",
-        StringList => "List of strings",
-        LabelList => "List ofLabels",
+        StringList | DistributionSet => "List of strings",
+        LabelList => "List of Labels",
         Boolean => "boolean",
         IntegerList => "List of ints",
-        Output
-        | OutputList
-        | DistributionSet
-        | StringDict
-        | FilesetEntryList
-        | LabelListDict
-        | StringListDict
-        | Tristate
-        | Unknown
-        | LabelDictUnary
-        | SelectorList
-        | LabelKeyedStringDict
-        | DeprecatedStringDictUnary => "Unknown",
+        LabelListDict => "Dict of Labels",
+        StringDict => "Dict of strings",
+        // TODO(withered-magic): Handle StringListDict.
+        StringListDict => "Unknown",
+        // TODO(withered-magic): Handle LabelKeyedStringDict.
+        LabelKeyedStringDict => "Unknown",
+        _ => "Unknown",
     }
     .to_string()
 }

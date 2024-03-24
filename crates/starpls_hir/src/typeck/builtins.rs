@@ -95,6 +95,8 @@ impl BuiltinFunctionParam {
 pub struct BuiltinDefs {
     #[return_ref]
     pub builtins: Builtins,
+    #[return_ref]
+    pub rules: Builtins,
 }
 
 pub(crate) fn builtin_globals(db: &dyn Db, dialect: Dialect) -> BuiltinGlobals {
@@ -107,6 +109,7 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
     let mut functions = FxHashMap::default();
     let mut variables = FxHashMap::default();
     let builtins = defs.builtins(db);
+    let rules = defs.rules(db);
 
     for value in env::make_bzl_builtins()
         .global
@@ -115,6 +118,7 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
         .chain(env::make_module_bazel_builtins().global.iter())
         .chain(env::make_workspace_builtins().global.iter())
         .chain(builtins.global.iter())
+        .chain(rules.global.iter())
     {
         // Skip deny-listed globals, which are handled directly by the
         // language server.
@@ -290,6 +294,16 @@ fn normalize_type_ref(text: &str) -> TypeRef {
                     type_ref_with_single_arg("Sequence", element)
                 }
                 (Some("List" | "list"), element) => type_ref_with_single_arg("list", element),
+                (Some("Dict" | "dict"), element) => TypeRef::Name(
+                    Name::from_str("dict"),
+                    Some(
+                        vec![
+                            TypeRef::from_str_opt("string"),
+                            element.map_or(TypeRef::Unknown, |element| normalize_type_ref(element)),
+                        ]
+                        .into_boxed_slice(),
+                    ),
+                ),
                 (Some("String"), _) => TypeRef::from_str_opt("string"),
                 (Some("Boolean" | "boolean"), _) => TypeRef::from_str_opt("bool"),
                 (Some("label"), _) => TypeRef::from_str_opt("Label"),

@@ -23,8 +23,13 @@ pub mod builtin {
     include!(concat!(env!("OUT_DIR"), "/builtin.rs"));
 }
 
+#[cfg(bazel)]
+pub mod build {
+    pub use build_proto::blaze_query::*;
+}
+
 #[cfg(not(bazel))]
-mod build {
+pub mod build {
     include!(concat!(env!("OUT_DIR"), "/blaze_query.rs"));
 }
 

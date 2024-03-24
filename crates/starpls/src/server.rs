@@ -7,7 +7,7 @@ use crate::{
 };
 use lsp_server::{Connection, ReqQueue};
 use parking_lot::RwLock;
-use starpls_bazel::{client::BazelCLI, decode_builtins, Builtins};
+use starpls_bazel::{build_language::decode_rules, client::BazelCLI, decode_builtins, Builtins};
 use starpls_ide::{Analysis, AnalysisSnapshot, Change};
 use std::{sync::Arc, time::Duration};
 
@@ -46,11 +46,23 @@ impl Server {
             }
         };
 
+        // Additionally, load builtin rules.
+        let rules = match load_bazel_build_language() {
+            Ok(builtins) => builtins,
+            Err(err) => {
+                eprintln!(
+                    "server: failed to run \"bazel info build-language\": {}",
+                    err
+                );
+                Default::default()
+            }
+        };
+
         let path_interner = Arc::new(PathInterner::default());
         let loader = DefaultFileLoader::new(path_interner.clone());
 
         let mut analysis = Analysis::new(Arc::new(loader));
-        analysis.set_builtin_defs(builtins);
+        analysis.set_builtin_defs(builtins, rules);
 
         Ok(Server {
             connection,
@@ -127,6 +139,7 @@ impl Server {
         self.connection.sender.send(message).unwrap();
     }
 
+    #[allow(unused)]
     pub(crate) fn fetch_bazel_external_repos(&mut self) {
         self.fetch_bazel_external_repos_requested = true;
         self.task_pool_handle.spawn_with_sender(|sender| {
@@ -152,7 +165,8 @@ fn load_bazel_builtins() -> anyhow::Result<Builtins> {
     Ok(builtins)
 }
 
-fn load_bazel_build_language() -> anyhow::Result<Vec<u8>> {
+fn load_bazel_build_language() -> anyhow::Result<Builtins> {
     let client = BazelCLI::default();
-    client.build_language()
+    let build_language_output = client.build_language()?;
+    decode_rules(&build_language_output)
 }

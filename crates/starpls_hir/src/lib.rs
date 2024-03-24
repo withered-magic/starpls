@@ -68,7 +68,7 @@ pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
         active_arg: usize,
     ) -> Option<usize>;
 
-    fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins);
+    fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins, rules: Builtins);
 
     fn get_builtin_defs(&self, dialect: &Dialect) -> BuiltinDefs;
 }

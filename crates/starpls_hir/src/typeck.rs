@@ -982,7 +982,22 @@ impl<'a> TypeRefResolver<'a> {
                 "string" => types.string.clone(),
                 "bytes" => types.bytes.clone(),
                 "list" => self.resolve_single_arg_type_constructor(args, TyKind::List),
-                "dict" => TyKind::Dict(types.any.clone(), types.any.clone(), None).intern(),
+                "dict" => {
+                    args.as_ref()
+                        .and_then(|args| {
+                            let mut args = args.iter();
+                            match (args.next(), args.next()) {
+                                (Some(key_ty), Some(value_ty)) => Some(TyKind::Dict(
+                                    self.resolve_type_ref_inner(key_ty),
+                                    self.resolve_type_ref_inner(value_ty),
+                                    None,
+                                )),
+                                _ => None,
+                            }
+                        })
+                        .unwrap_or_else(|| TyKind::Dict(types.any.clone(), types.any.clone(), None))
+                }
+                .intern(),
                 "range" => types.range.clone(),
                 "Iterable" | "iterable" => {
                     self.resolve_single_arg_protocol(args, Protocol::Iterable)

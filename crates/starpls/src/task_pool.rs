@@ -29,6 +29,7 @@ impl<T> TaskPool<T> {
         })
     }
 
+    #[allow(unused)]
     fn spawn_with_sender<F>(&self, f: F)
     where
         T: Send + 'static,
@@ -59,6 +60,7 @@ impl<T> TaskPoolHandle<T> {
         self.pool.spawn(f)
     }
 
+    #[allow(unused)]
     pub(crate) fn spawn_with_sender<F>(&self, f: F)
     where
         T: Send + 'static,

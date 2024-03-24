@@ -8,7 +8,8 @@ use crate::{
 };
 use crossbeam_channel::select;
 use lsp_server::Connection;
-use lsp_types::{request, InitializeParams, WorkDoneProgressCreateParams};
+use lsp_types::{InitializeParams, WorkDoneProgressCreateParams};
+use starpls_bazel::Builtins;
 use starpls_common::FileId;
 
 #[macro_export]
@@ -27,7 +28,7 @@ macro_rules! match_notification {
 #[derive(Debug)]
 pub(crate) enum FetchBazelExternalReposProgress {
     Begin,
-    End(anyhow::Result<Vec<u8>>),
+    End(anyhow::Result<Builtins>),
 }
 
 #[derive(Debug)]
@@ -60,9 +61,6 @@ pub fn process_connection(
 
 impl Server {
     fn run(mut self) -> anyhow::Result<()> {
-        // Fetch Bazel external repos.
-        self.fetch_bazel_external_repos();
-
         while let Some(event) = self.next_event() {
             if let Event::Message(lsp_server::Message::Request(ref req)) = event {
                 if self.connection.handle_shutdown(req)? {

@@ -8,6 +8,7 @@ pub use crate::{
     label::{Label, ParseError},
 };
 
+pub mod build_language;
 pub mod client;
 pub mod env;
 pub mod label;
@@ -20,6 +21,11 @@ pub mod builtin {
 #[cfg(not(bazel))]
 pub mod builtin {
     include!(concat!(env!("OUT_DIR"), "/builtin.rs"));
+}
+
+#[cfg(not(bazel))]
+mod build {
+    include!(concat!(env!("OUT_DIR"), "/blaze_query.rs"));
 }
 
 pub const BUILTINS_TYPES_DENY_LIST: &[&str] = &[

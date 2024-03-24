@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{Db, Name, Ty, TyKind, TypeRef};
 use rustc_hash::FxHashMap;
 use starpls_bazel::{
@@ -148,6 +150,7 @@ pub(crate) fn builtin_types(db: &dyn Db, dialect: Dialect) -> BuiltinTypes {
 pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinTypes {
     let mut types = FxHashMap::default();
     let builtins = defs.builtins(db);
+    let rules = defs.rules(db);
 
     for type_ in builtins.r#type.iter() {
         // Skip deny-listed types, which are handled directly by the
@@ -159,10 +162,24 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
         // Collect fields and methods.
         let mut fields = Vec::new();
         let mut methods = Vec::new();
+        let mut seen_methods = HashSet::new();
+
+        // Special handling for the "native" type, which includes all native rules.
+        if type_.name == "native" {
+            for rule in rules.global.iter() {
+                if let Some(callable) = &rule.callable {
+                    seen_methods.insert(rule.name.as_str());
+                    methods.push(builtin_function(db, &rule.name, callable, &rule.doc));
+                }
+            }
+        }
 
         for field in type_.field.iter() {
             if let Some(callable) = &field.callable {
-                methods.push(builtin_function(db, &field.name, callable, &field.doc));
+                // Filter out duplicates.
+                if !seen_methods.contains(&field.name.as_str()) {
+                    methods.push(builtin_function(db, &field.name, callable, &field.doc));
+                }
             } else {
                 fields.push(BuiltinField {
                     name: Name::from_str(&field.name),

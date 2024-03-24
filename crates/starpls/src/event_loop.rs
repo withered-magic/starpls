@@ -93,7 +93,6 @@ impl Server {
                 self.complete_request(resp);
             }
             Event::Task(task) => self.handle_task(task),
-            _ => (),
         };
 
         // Update our diagnostics if a triggering event (e.g. document open/close/change) occured.

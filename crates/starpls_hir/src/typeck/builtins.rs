@@ -1,11 +1,10 @@
-use std::collections::HashSet;
-
 use crate::{Db, Name, Ty, TyKind, TypeRef};
 use rustc_hash::FxHashMap;
 use starpls_bazel::{
     builtin::Callable, env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
 };
 use starpls_common::Dialect;
+use std::collections::HashSet;
 
 #[salsa::tracked]
 pub(crate) struct BuiltinTypes {

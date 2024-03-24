@@ -46,7 +46,9 @@ pub struct ModuleSourceMap {
     pub root: ModulePtr,
     pub expr_map: FxHashMap<ExprPtr, ExprId>,
     pub expr_map_back: FxHashMap<ExprId, ExprPtr>,
+    #[allow(private_interfaces)]
     pub stmt_map: FxHashMap<StmtPtr, StmtId>,
+    #[allow(private_interfaces)]
     pub stmt_map_back: FxHashMap<StmtId, StmtPtr>,
     pub param_map: FxHashMap<ParamPtr, ParamId>,
     pub param_map_back: FxHashMap<ParamId, ParamPtr>,
@@ -149,6 +151,7 @@ pub enum Expr {
     },
     Call {
         callee: ExprId,
+        #[allow(private_interfaces)]
         args: Box<[Argument]>,
     },
     Index {

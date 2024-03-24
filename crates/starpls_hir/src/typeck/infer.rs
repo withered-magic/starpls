@@ -157,12 +157,24 @@ impl TyCtxt<'_> {
                     entries.iter().map(|entry| entry.value),
                     self.unknown_ty(),
                 );
-                TyKind::Dict(key_ty, value_ty).intern()
+
+                // Determine the list of known string keys from the entries.
+                let known_keys = entries
+                    .iter()
+                    .filter_map(|entry| match &curr_module[entry.key] {
+                        Expr::Literal {
+                            literal: Literal::String(s),
+                        } => Some(s.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+
+                TyKind::Dict(key_ty, value_ty, Some(known_keys.into())).intern()
             }
             Expr::DictComp { entry, .. } => {
                 let key_ty = self.infer_expr(file, entry.key);
                 let value_ty = self.infer_expr(file, entry.value);
-                TyKind::Dict(key_ty, value_ty).intern()
+                TyKind::Dict(key_ty, value_ty, None).intern()
             }
             Expr::Literal { literal } => match literal {
                 Literal::Int(_) => self.int_ty(),
@@ -241,7 +253,7 @@ impl TyCtxt<'_> {
                 let (target, value, name) = match lhs_ty.kind() {
                     TyKind::Tuple(Tuple::Variable(ty)) => (&int_ty, ty, "tuple"),
                     TyKind::List(ty) => (&int_ty, ty, "list"),
-                    TyKind::Dict(key_ty, value_ty) => (key_ty, value_ty, "dict"),
+                    TyKind::Dict(key_ty, value_ty, _) => (key_ty, value_ty, "dict"),
                     TyKind::String => (&int_ty, &string_ty, "string"),
                     TyKind::Bytes => (&int_ty, &int_ty, "bytes"),
                     TyKind::Range => (&int_ty, &int_ty, "range"),
@@ -673,7 +685,7 @@ impl TyCtxt<'_> {
 
         let sub_ty = match source_ty.kind() {
             TyKind::List(ty) => ty.clone(),
-            TyKind::Dict(key_ty, _) => key_ty.clone(),
+            TyKind::Dict(key_ty, _, _) => key_ty.clone(),
             TyKind::Tuple(_) | TyKind::Any => self.any_ty(),
             TyKind::Range => self.int_ty(),
             TyKind::StringElems => self.string_ty(),
@@ -877,6 +889,7 @@ impl TyCtxt<'_> {
                     .as_ref()
                     .map(|type_ref| self.lower_param_type_ref(file, param, type_ref))
                     .unwrap_or_else(|| self.unknown_ty()),
+                None,
             )
             .intern(),
         };

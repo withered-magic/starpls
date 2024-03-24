@@ -146,6 +146,7 @@ pub(crate) fn completion(
                         CompletionItemKind::Class => lsp_types::CompletionItemKind::CLASS,
                         CompletionItemKind::File => lsp_types::CompletionItemKind::FILE,
                         CompletionItemKind::Folder => lsp_types::CompletionItemKind::FOLDER,
+                        CompletionItemKind::Constant => lsp_types::CompletionItemKind::CONSTANT,
                     }),
                     sort_text,
                     insert_text,

@@ -262,7 +262,7 @@ impl Ty {
             TyKind::List(ty) => {
                 subst.args.push(ty.clone());
             }
-            TyKind::Dict(key_ty, value_ty) => {
+            TyKind::Dict(key_ty, value_ty, _) => {
                 subst.args.push(key_ty.clone());
                 subst.args.push(value_ty.clone());
             }
@@ -346,14 +346,24 @@ impl Ty {
                 Tuple::Variable(ty) => TyKind::Tuple(Tuple::Variable(ty.substitute(args))),
             }
             .intern(),
-            TyKind::Dict(key_ty, value_ty) => {
-                TyKind::Dict(key_ty.substitute(args), value_ty.substitute(args)).intern()
-            }
+            TyKind::Dict(key_ty, value_ty, known_keys) => TyKind::Dict(
+                key_ty.substitute(args),
+                value_ty.substitute(args),
+                known_keys.clone(),
+            )
+            .intern(),
             TyKind::IntrinsicFunction(data, subst) => {
                 TyKind::IntrinsicFunction(*data, subst.substitute(args)).intern()
             }
             TyKind::BoundVar(index) => args[*index].clone(),
             _ => self.clone(),
+        }
+    }
+
+    pub(crate) fn known_keys(&self) -> Option<&[Box<str>]> {
+        match self.kind() {
+            TyKind::Dict(_, _, known_keys) => known_keys.as_ref().map(|known_keys| &**known_keys),
+            _ => None,
         }
     }
 }
@@ -598,7 +608,7 @@ pub(crate) enum TyKind {
     /// A fixed-size collection of elements.
     Tuple(Tuple),
     /// A mapping of keys to values.
-    Dict(Ty, Ty),
+    Dict(Ty, Ty, Option<Arc<[Box<str>]>>),
     /// An iterable and indexable sequence of numbers. Obtained from
     /// the `range()` function.
     Range,
@@ -659,7 +669,7 @@ impl DisplayWithDb for TyKind {
                 }
                 return f.write_char(']');
             }
-            TyKind::Dict(key_ty, value_ty) => {
+            TyKind::Dict(key_ty, value_ty, _) => {
                 f.write_str("dict[")?;
                 key_ty.fmt(db, f)?;
                 f.write_str(", ")?;
@@ -825,7 +835,7 @@ impl TyKind {
             TyKind::String => intrinsics.string_base_class(db),
             TyKind::Bytes => intrinsics.bytes_base_class(db),
             TyKind::List(_) => intrinsics.list_base_class(db),
-            TyKind::Dict(_, _) => intrinsics.dict_base_class(db),
+            TyKind::Dict(_, _, _) => intrinsics.dict_base_class(db),
             _ => return None,
         })
     }
@@ -972,7 +982,7 @@ impl<'a> TypeRefResolver<'a> {
                 "string" => types.string.clone(),
                 "bytes" => types.bytes.clone(),
                 "list" => self.resolve_single_arg_type_constructor(args, TyKind::List),
-                "dict" => TyKind::Dict(types.any.clone(), types.any.clone()).intern(),
+                "dict" => TyKind::Dict(types.any.clone(), types.any.clone(), None).intern(),
                 "range" => types.range.clone(),
                 "Iterable" | "iterable" => {
                     self.resolve_single_arg_protocol(args, Protocol::Iterable)
@@ -1094,7 +1104,7 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
             }
             _ => false,
         },
-        (TyKind::Dict(key_source, value_source), TyKind::Dict(key_target, value_target)) => {
+        (TyKind::Dict(key_source, value_source, _), TyKind::Dict(key_target, value_target, _)) => {
             assign_tys(db, key_source, key_target) && assign_tys(db, value_source, value_target)
         }
         (TyKind::String, TyKind::BuiltinType(ty)) | (TyKind::BuiltinType(ty), TyKind::String)

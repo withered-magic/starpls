@@ -175,7 +175,7 @@ pub(crate) fn intrinsic_functions(db: &dyn Db) -> IntrinsicFunctions {
             )),
             KwargsDict,
         ],
-        Dict(Any.intern(), Any.intern()),
+        Dict(Any.intern(), Any.intern(), std::option::Option::None),
     );
     add_function("dir", vec![positional(Any)], List(String.intern()));
     add_function(

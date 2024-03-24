@@ -83,9 +83,9 @@ impl crate::Db for TestDatabase {
         None
     }
 
-    fn set_builtin_defs(&mut self, _dialect: Dialect, _builtins: Builtins) {}
+    fn set_builtin_defs(&mut self, _dialect: Dialect, _builtins: Builtins, _rules: Builtins) {}
 
     fn get_builtin_defs(&self, _dialect: &Dialect) -> BuiltinDefs {
-        BuiltinDefs::new(self, Default::default())
+        BuiltinDefs::new(self, Default::default(), Default::default())
     }
 }

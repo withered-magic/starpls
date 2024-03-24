@@ -2,12 +2,12 @@ use crate::{
     debouncer::AnalysisDebouncer,
     diagnostics::DiagnosticsManager,
     document::{DefaultFileLoader, DocumentChangeKind, DocumentManager, PathInterner},
-    event_loop::Task,
+    event_loop::{FetchBazelExternalReposProgress, Task},
     task_pool::{TaskPool, TaskPoolHandle},
 };
 use lsp_server::{Connection, ReqQueue};
 use parking_lot::RwLock;
-use starpls_bazel::{decode_builtins, Builtins};
+use starpls_bazel::{build_language::decode_rules, client::BazelCLI, decode_builtins, Builtins};
 use starpls_ide::{Analysis, AnalysisSnapshot, Change};
 use std::{sync::Arc, time::Duration};
 
@@ -22,6 +22,7 @@ pub(crate) struct Server {
     pub(crate) analysis: Analysis,
     pub(crate) analysis_debouncer: AnalysisDebouncer,
     pub(crate) analysis_requested: bool,
+    pub(crate) fetch_bazel_external_repos_requested: bool,
 }
 
 pub(crate) struct ServerSnapshot {
@@ -45,11 +46,23 @@ impl Server {
             }
         };
 
+        // Additionally, load builtin rules.
+        let rules = match load_bazel_build_language() {
+            Ok(builtins) => builtins,
+            Err(err) => {
+                eprintln!(
+                    "server: failed to run \"bazel info build-language\": {}",
+                    err
+                );
+                Default::default()
+            }
+        };
+
         let path_interner = Arc::new(PathInterner::default());
         let loader = DefaultFileLoader::new(path_interner.clone());
 
         let mut analysis = Analysis::new(Arc::new(loader));
-        analysis.set_builtin_defs(builtins);
+        analysis.set_builtin_defs(builtins, rules);
 
         Ok(Server {
             connection,
@@ -60,6 +73,7 @@ impl Server {
             analysis,
             analysis_debouncer: AnalysisDebouncer::new(DEBOUNCE_INTERVAL, sender),
             analysis_requested: false,
+            fetch_bazel_external_repos_requested: false,
         })
     }
 
@@ -101,6 +115,18 @@ impl Server {
         true
     }
 
+    pub(crate) fn send_request<R: lsp_types::request::Request>(&mut self, params: R::Params) {
+        let req = self
+            .req_queue
+            .outgoing
+            .register(R::METHOD.to_string(), params, ());
+        self.send(req.into());
+    }
+
+    pub(crate) fn complete_request(&mut self, resp: lsp_server::Response) {
+        self.req_queue.outgoing.complete(resp.id);
+    }
+
     pub(crate) fn send_notification<N: lsp_types::notification::Notification>(
         &self,
         params: N::Params,
@@ -112,10 +138,35 @@ impl Server {
     pub(crate) fn send(&self, message: lsp_server::Message) {
         self.connection.sender.send(message).unwrap();
     }
+
+    #[allow(unused)]
+    pub(crate) fn fetch_bazel_external_repos(&mut self) {
+        self.fetch_bazel_external_repos_requested = true;
+        self.task_pool_handle.spawn_with_sender(|sender| {
+            sender
+                .send(Task::FetchBazelExternalRepos(
+                    FetchBazelExternalReposProgress::Begin,
+                ))
+                .unwrap();
+
+            let res = load_bazel_build_language();
+            sender
+                .send(Task::FetchBazelExternalRepos(
+                    FetchBazelExternalReposProgress::End(res),
+                ))
+                .unwrap();
+        });
+    }
 }
 
 fn load_bazel_builtins() -> anyhow::Result<Builtins> {
     let data = include_bytes!("builtin/builtin.pb");
     let builtins = decode_builtins(&data[..])?;
     Ok(builtins)
+}
+
+fn load_bazel_build_language() -> anyhow::Result<Builtins> {
+    let client = BazelCLI::default();
+    let build_language_output = client.build_language()?;
+    decode_rules(&build_language_output)
 }

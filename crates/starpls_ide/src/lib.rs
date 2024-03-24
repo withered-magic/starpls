@@ -132,11 +132,11 @@ impl starpls_hir::Db for Database {
         })
     }
 
-    fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins) {
+    fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins, rules: Builtins) {
         let defs = match self.builtin_defs.entry(dialect) {
             Entry::Occupied(entry) => *entry.get(),
             Entry::Vacant(entry) => {
-                entry.insert(BuiltinDefs::new(self, builtins));
+                entry.insert(BuiltinDefs::new(self, builtins, rules));
                 return;
             }
         };
@@ -147,7 +147,11 @@ impl starpls_hir::Db for Database {
         self.builtin_defs
             .get(dialect)
             .map(|defs| *defs)
-            .unwrap_or(BuiltinDefs::new(self, Builtins::default()))
+            .unwrap_or(BuiltinDefs::new(
+                self,
+                Builtins::default(),
+                Builtins::default(),
+            ))
     }
 }
 
@@ -204,8 +208,8 @@ impl Analysis {
         }
     }
 
-    pub fn set_builtin_defs(&mut self, builtins: Builtins) {
-        self.db.set_builtin_defs(Dialect::Bazel, builtins);
+    pub fn set_builtin_defs(&mut self, builtins: Builtins, rules: Builtins) {
+        self.db.set_builtin_defs(Dialect::Bazel, builtins, rules);
     }
 }
 

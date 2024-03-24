@@ -4,6 +4,7 @@ use starpls_bazel::{
     builtin::Callable, env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
 };
 use starpls_common::Dialect;
+use std::collections::HashSet;
 
 #[salsa::tracked]
 pub(crate) struct BuiltinTypes {
@@ -95,6 +96,8 @@ impl BuiltinFunctionParam {
 pub struct BuiltinDefs {
     #[return_ref]
     pub builtins: Builtins,
+    #[return_ref]
+    pub rules: Builtins,
 }
 
 pub(crate) fn builtin_globals(db: &dyn Db, dialect: Dialect) -> BuiltinGlobals {
@@ -107,6 +110,7 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
     let mut functions = FxHashMap::default();
     let mut variables = FxHashMap::default();
     let builtins = defs.builtins(db);
+    let rules = defs.rules(db);
 
     for value in env::make_bzl_builtins()
         .global
@@ -115,6 +119,7 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
         .chain(env::make_module_bazel_builtins().global.iter())
         .chain(env::make_workspace_builtins().global.iter())
         .chain(builtins.global.iter())
+        .chain(rules.global.iter())
     {
         // Skip deny-listed globals, which are handled directly by the
         // language server.
@@ -144,6 +149,7 @@ pub(crate) fn builtin_types(db: &dyn Db, dialect: Dialect) -> BuiltinTypes {
 pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinTypes {
     let mut types = FxHashMap::default();
     let builtins = defs.builtins(db);
+    let rules = defs.rules(db);
 
     for type_ in builtins.r#type.iter() {
         // Skip deny-listed types, which are handled directly by the
@@ -155,10 +161,24 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
         // Collect fields and methods.
         let mut fields = Vec::new();
         let mut methods = Vec::new();
+        let mut seen_methods = HashSet::new();
+
+        // Special handling for the "native" type, which includes all native rules.
+        if type_.name == "native" {
+            for rule in rules.global.iter() {
+                if let Some(callable) = &rule.callable {
+                    seen_methods.insert(rule.name.as_str());
+                    methods.push(builtin_function(db, &rule.name, callable, &rule.doc));
+                }
+            }
+        }
 
         for field in type_.field.iter() {
             if let Some(callable) = &field.callable {
-                methods.push(builtin_function(db, &field.name, callable, &field.doc));
+                // Filter out duplicates.
+                if !seen_methods.contains(&field.name.as_str()) {
+                    methods.push(builtin_function(db, &field.name, callable, &field.doc));
+                }
             } else {
                 fields.push(BuiltinField {
                     name: Name::from_str(&field.name),
@@ -290,6 +310,16 @@ fn normalize_type_ref(text: &str) -> TypeRef {
                     type_ref_with_single_arg("Sequence", element)
                 }
                 (Some("List" | "list"), element) => type_ref_with_single_arg("list", element),
+                (Some("Dict" | "dict"), element) => TypeRef::Name(
+                    Name::from_str("dict"),
+                    Some(
+                        vec![
+                            TypeRef::from_str_opt("string"),
+                            element.map_or(TypeRef::Unknown, |element| normalize_type_ref(element)),
+                        ]
+                        .into_boxed_slice(),
+                    ),
+                ),
                 (Some("String"), _) => TypeRef::from_str_opt("string"),
                 (Some("Boolean" | "boolean"), _) => TypeRef::from_str_opt("bool"),
                 (Some("label"), _) => TypeRef::from_str_opt("Label"),

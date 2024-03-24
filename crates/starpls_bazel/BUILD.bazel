@@ -15,6 +15,17 @@ rust_prost_library(
     visibility = ["//visibility:public"],
 )
 
+proto_library(
+    name = "build_proto",
+    srcs = ["data/build.proto"],
+)
+
+rust_prost_library(
+    name = "build_proto_rust",
+    proto = ":build_proto",
+    visibility = ["//visibility:public"],
+)
+
 rust_library(
     name = "starpls_bazel",
     srcs = glob(["src/**/*.rs"]),
@@ -26,6 +37,7 @@ rust_library(
         ":data/workspace.builtins.json",
     ],
     deps = [
+        ":build_proto_rust",
         ":builtin_proto_rust",
         "@crates//:anyhow",
         "@crates//:bytes",

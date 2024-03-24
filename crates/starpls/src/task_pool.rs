@@ -28,6 +28,17 @@ impl<T> TaskPool<T> {
             move || sender.send(f()).unwrap()
         })
     }
+
+    fn spawn_with_sender<F>(&self, f: F)
+    where
+        T: Send + 'static,
+        F: FnOnce(Sender<T>) + Send + 'static,
+    {
+        self.inner.spawn({
+            let sender = self.sender.clone();
+            move || f(sender)
+        })
+    }
 }
 
 pub(crate) struct TaskPoolHandle<T> {
@@ -46,5 +57,13 @@ impl<T> TaskPoolHandle<T> {
         F: FnOnce() -> T + Send + 'static,
     {
         self.pool.spawn(f)
+    }
+
+    pub(crate) fn spawn_with_sender<F>(&self, f: F)
+    where
+        T: Send + 'static,
+        F: FnOnce(Sender<T>) + Send + 'static,
+    {
+        self.pool.spawn_with_sender(f)
     }
 }

@@ -8,7 +8,7 @@ use crate::{
 };
 use crossbeam_channel::select;
 use lsp_server::Connection;
-use lsp_types::InitializeParams;
+use lsp_types::{request, InitializeParams, WorkDoneProgressCreateParams};
 use starpls_common::FileId;
 
 #[macro_export]
@@ -25,6 +25,12 @@ macro_rules! match_notification {
 }
 
 #[derive(Debug)]
+pub(crate) enum FetchBazelExternalReposProgress {
+    Begin,
+    End(anyhow::Result<Vec<u8>>),
+}
+
+#[derive(Debug)]
 pub(crate) enum Task {
     AnalysisRequested,
     /// A new set of diagnostics has been processed and is ready for forwarding.
@@ -33,6 +39,8 @@ pub(crate) enum Task {
     ResponseReady(lsp_server::Response),
     /// Retry a previously failed request (e.g. due to Salsa cancellation).
     Retry(lsp_server::Request),
+    /// Fetch Bazel external repositories.
+    FetchBazelExternalRepos(FetchBazelExternalReposProgress),
 }
 
 #[derive(Debug)]
@@ -52,6 +60,9 @@ pub fn process_connection(
 
 impl Server {
     fn run(mut self) -> anyhow::Result<()> {
+        // Fetch Bazel external repos.
+        self.fetch_bazel_external_repos();
+
         while let Some(event) = self.next_event() {
             if let Event::Message(lsp_server::Message::Request(ref req)) = event {
                 if self.connection.handle_shutdown(req)? {
@@ -79,6 +90,9 @@ impl Server {
             }
             Event::Message(lsp_server::Message::Notification(not)) => {
                 self.handle_notification(not)?;
+            }
+            Event::Message(lsp_server::Message::Response(resp)) => {
+                self.complete_request(resp);
             }
             Event::Task(task) => self.handle_task(task),
             _ => (),
@@ -193,6 +207,36 @@ impl Server {
                 self.respond(resp);
             }
             Task::Retry(req) => self.handle_request(req),
+            Task::FetchBazelExternalRepos(progress) => {
+                let token = "Fetching Bazel external repositories".to_string();
+                let work_done = match progress {
+                    FetchBazelExternalReposProgress::Begin => {
+                        self.send_request::<lsp_types::request::WorkDoneProgressCreate>(
+                            WorkDoneProgressCreateParams {
+                                token: lsp_types::NumberOrString::String(token.clone()),
+                            },
+                        );
+
+                        lsp_types::WorkDoneProgress::Begin(lsp_types::WorkDoneProgressBegin {
+                            title: token.clone(),
+                            ..Default::default()
+                        })
+                    }
+                    FetchBazelExternalReposProgress::End(_) => {
+                        self.fetch_bazel_external_repos_requested = false;
+                        lsp_types::WorkDoneProgress::End(lsp_types::WorkDoneProgressEnd {
+                            message: None,
+                        })
+                    }
+                };
+
+                self.send_notification::<lsp_types::notification::Progress>(
+                    lsp_types::ProgressParams {
+                        token: lsp_types::NumberOrString::String(token),
+                        value: lsp_types::ProgressParamsValue::WorkDone(work_done),
+                    },
+                );
+            }
         }
     }
 

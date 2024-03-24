@@ -230,6 +230,10 @@ impl Type {
 
         fields.map(|(name, ty)| (name, ty.into())).collect()
     }
+
+    pub fn known_keys(&self) -> Option<&[Box<str>]> {
+        self.ty.known_keys()
+    }
 }
 
 impl From<Ty> for Type {

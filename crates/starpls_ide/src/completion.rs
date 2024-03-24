@@ -51,6 +51,7 @@ pub enum CompletionItemKind {
     Class,
     File,
     Folder,
+    Constant,
 }
 
 #[repr(u16)]
@@ -90,6 +91,10 @@ enum StringContext {
         file_id: FileId,
         load_stmt: ast::LoadStmt,
     },
+    DictKey {
+        file_id: FileId,
+        lhs: ast::Expression,
+    },
 }
 
 struct CompletionContext {
@@ -104,7 +109,7 @@ pub(crate) fn completions(
     let ctx = CompletionContext::new(db, pos, trigger_character)?;
     let mut items = Vec::new();
 
-    match &ctx.analysis {
+    match ctx.analysis {
         CompletionAnalysis::NameRef(NameRefContext {
             names,
             params,
@@ -137,8 +142,8 @@ pub(crate) fn completions(
                         relevance: CompletionRelevance::VariableOrKeyword,
                     });
                 }
-                if *is_lone_expr {
-                    add_keywords(&mut items, *is_in_def, *is_in_for);
+                if is_lone_expr {
+                    add_keywords(&mut items, is_in_def, is_in_for);
                 }
             }
         }
@@ -169,7 +174,7 @@ pub(crate) fn completions(
         CompletionAnalysis::String(StringContext::LoadModule { file_id, text }) => {
             let (value, offset) = text.value_and_offset()?;
             let token_start = text.syntax().text_range().start() + TextSize::from(offset);
-            for candidate in db.list_load_candidates(&value, *file_id).ok()?? {
+            for candidate in db.list_load_candidates(&value, file_id).ok()?? {
                 let start = TextSize::from(
                     value.rfind(&['/', ':']).map(|start| start + 1).unwrap_or(0) as u32,
                 );
@@ -192,8 +197,8 @@ pub(crate) fn completions(
         }
         CompletionAnalysis::String(StringContext::LoadItem { file_id, load_stmt }) => {
             let sema = Semantics::new(db);
-            let file = db.get_file(*file_id)?;
-            let loaded_file = sema.resolve_load_stmt(file, load_stmt)?;
+            let file = db.get_file(file_id)?;
+            let loaded_file = sema.resolve_load_stmt(file, &load_stmt)?;
             let scope = sema.scope_for_module(loaded_file);
             for (name, decl) in scope
                 .names()
@@ -212,11 +217,26 @@ pub(crate) fn completions(
                     },
                     mode: None,
                     relevance: CompletionRelevance::VariableOrKeyword,
-                })
+                });
+            }
+        }
+        CompletionAnalysis::String(StringContext::DictKey { file_id, lhs }) => {
+            let sema = Semantics::new(db);
+            let file = db.get_file(file_id)?;
+            let ty = sema.type_of_expr(file, &lhs)?;
+
+            for key in ty.known_keys()?.iter() {
+                items.push(CompletionItem {
+                    label: key.to_string(),
+                    kind: CompletionItemKind::Constant,
+                    mode: None,
+                    relevance: CompletionRelevance::VariableOrKeyword,
+                });
             }
         }
         _ => {}
     }
+
     Some(items)
 }
 
@@ -265,13 +285,22 @@ fn maybe_str_context(file_id: FileId, root: &SyntaxNode, pos: TextSize) -> Optio
     let parent = token.parent()?;
 
     if ast::LoadModule::can_cast(parent.kind()) {
-        Some(StringContext::LoadModule { file_id, text })
+        return Some(StringContext::LoadModule { file_id, text });
     } else if ast::LoadItem::can_cast(parent.kind()) {
         let load_stmt = ast::LoadStmt::cast(parent.parent()?)?;
-        Some(StringContext::LoadItem { file_id, load_stmt })
-    } else {
-        None
+        return Some(StringContext::LoadItem { file_id, load_stmt });
+    } else if let Some(expr) = ast::LiteralExpr::cast(parent) {
+        if let Some(index_expr) = ast::IndexExpr::cast(expr.syntax().parent()?) {
+            if index_expr.index() == Some(ast::Expression::Literal(expr)) {
+                return Some(StringContext::DictKey {
+                    file_id,
+                    lhs: index_expr.lhs()?,
+                });
+            }
+        }
     }
+
+    None
 }
 
 impl CompletionContext {

@@ -6,7 +6,7 @@ package(default_visibility = ["//visibility:public"])
 
 proto_library(
     name = "builtin_proto",
-    srcs = ["src/builtin.proto"],
+    srcs = ["data/builtin.proto"],
 )
 
 rust_prost_library(

@@ -116,7 +116,9 @@ impl<'a> LoweringContext<'a> {
             ast::Statement::If(stmt) => {
                 let test = self.lower_expr_opt(stmt.test());
                 let if_stmts = self.lower_suite_opt(stmt.if_suite());
-                let elif_stmt = stmt.elif_stmt().map(|elif_stmt| self.lower_stmt(elif_stmt));
+                let elif_stmt = stmt
+                    .elif_stmt()
+                    .map(|elif_stmt| self.lower_stmt(ast::Statement::If(elif_stmt)));
                 let else_stmts = self.lower_suite_opt(stmt.else_suite());
                 Stmt::If {
                     test,

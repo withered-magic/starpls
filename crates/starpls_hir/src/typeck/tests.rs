@@ -421,3 +421,17 @@ foo(bar=1, bar=2)
         "#]],
     );
 }
+
+// TODO(withered-magic): Support the `struct` function in tests.
+// #[test]
+// fn test_struct() {
+//     check_infer(
+//         r#"
+// foo = struct(a = 1, b = "bar")
+// foo.a
+// foo.b
+// foo.c
+// "#,
+//         expect![],
+//     )
+// }

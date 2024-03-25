@@ -38,7 +38,19 @@ Alternatively, you can build `starpls` with Bazel:
 bazel run -c opt //editors/code:copy_starpls
 ```
 
-This builds the executable and copies it to `<repository_root>/editors/code/bin/starpls`. From there, you can add it to the `$PATH` or copy it to a different directory, remembering to update the extension settings as detailed above. 
+This builds the executable and copies it to `<repository_root>/editors/code/bin/starpls`. From there, you can add it to the `$PATH` or copy it to a different directory, remembering to update the extension settings as detailed above.
+
+## Tips and Tricks
+Make sure to use [PEP 484 type comments](https://peps.python.org/pep-0484/#type-comments) to document your function signatures. This helps a ton with autocomplete for situations like `rule` implementation functions. For example, if you add a type comment as in the following...
+
+```python
+def _impl(ctx):
+    # type: (ctx) -> Unknown
+    ctx.
+    #  ^ and this period was just typed... 
+```
+
+then you'll get autocomplete suggestions for the attributes on `ctx`, like `ctx.actions`, `ctx.attr`, and so on!
 
 ## Roadmap
 - Parsing

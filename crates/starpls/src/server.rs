@@ -53,6 +53,8 @@ impl Server {
 
         // Determine the output base for the purpose of resolving external repositories.
         let bazel_client = Arc::new(BazelCLI::default());
+
+        eprintln!("server: determining workspace output_base");
         let output_base = match bazel_client.output_base() {
             Ok(output_base) => output_base,
             Err(err) => {
@@ -62,6 +64,7 @@ impl Server {
         };
 
         // Additionally, load builtin rules.
+        eprintln!("server: running \"bazel info build-language\"");
         let rules = match load_bazel_build_language(&*bazel_client) {
             Ok(builtins) => builtins,
             Err(err) => {

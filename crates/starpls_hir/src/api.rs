@@ -238,6 +238,7 @@ impl Type {
         Some(match self.ty.kind() {
             TyKind::BuiltinFunction(func) => func.doc(db).clone(),
             TyKind::BuiltinType(type_) => type_.doc(db).clone(),
+            TyKind::Function(func) => return func.doc(db).map(|doc| doc.to_string()),
             TyKind::IntrinsicFunction(func, _) => func.doc(db).clone(),
             _ => return None,
         })

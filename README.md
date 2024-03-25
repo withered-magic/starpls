@@ -4,13 +4,17 @@
 ## Installation
 Make sure you have at least the [0.9.0](https://github.com/bazelbuild/vscode-bazel/releases/tag/0.9.0) version of the [vscode-bazel](https://github.com/bazelbuild/vscode-bazel) extension installed, as it adds support for launching a language server.
 
-You can build `starpls` with Bazel:
+You can grab a release from the [releases page](https://github.com/withered-magic/starpls/releases). Make sure to download the appropriate version for your OS and architecture! After downloading the executable, add it to your `$PATH`.
+
+Alternatively, you can build `starpls` with Bazel:
 
 ```
 bazel run -c opt //editors/code:copy_starpls
 ```
 
-This builds the executable and copies it to `<repository_root>/editors/code/bin/starpls`. From there, you can add it to the `$PATH` or copy it to a different directory. Once done, add the following to your VSCode configuration and reload VSCode for it to take effect:
+This builds the executable and copies it to `<repository_root>/editors/code/bin/starpls`. From there, you can add it to the `$PATH` or copy it to a different directory. 
+
+Once done, add the following to your VSCode configuration and reload VSCode for it to take effect:
 
 ```json
 {

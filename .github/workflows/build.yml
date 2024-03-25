@@ -26,13 +26,13 @@ jobs:
     - name: Run tests
       run: bazel test --build_tests_only //...
 
-    build-windows:
-      runs-on: windows-latest
-      steps:
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-      - uses: actions/checkout@v3
-      - name: Build
-        run: cargo build
-      - name: Run tests
-        run: cargo test
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
+    - uses: actions/checkout@v3
+    - name: Build
+      run: cargo build
+    - name: Run tests
+      run: cargo test

@@ -20,14 +20,6 @@ To fix this, click `Show in Finder`, then right-click on the `starpls-darwin-arm
 
 Either way, at this point you can put the executable somewhere on your `$PATH`.
 
-Alternatively, you can build `starpls` with Bazel:
-
-```
-bazel run -c opt //editors/code:copy_starpls
-```
-
-This builds the executable and copies it to `<repository_root>/editors/code/bin/starpls`. From there, you can add it to the `$PATH` or copy it to a different directory. 
-
 Once done, add the following to your VSCode configuration and reload VSCode for it to take effect:
 
 ```json
@@ -39,6 +31,14 @@ Once done, add the following to your VSCode configuration and reload VSCode for 
 ```
 
 Note: If you don't put `starpls` directly on the `$PATH`, then for `bazel.lsp.command` you'll have to specify the absolute path to the `starpls` executable instead.
+
+Alternatively, you can build `starpls` with Bazel:
+
+```
+bazel run -c opt //editors/code:copy_starpls
+```
+
+This builds the executable and copies it to `<repository_root>/editors/code/bin/starpls`. From there, you can add it to the `$PATH` or copy it to a different directory, remembering to update the extension settings as detailed above. 
 
 ## Roadmap
 - Parsing

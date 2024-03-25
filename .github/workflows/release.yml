@@ -44,7 +44,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          path: release
+          path: artifacts
           pattern: starpls-*
+      - name: Prepare release artifacts
+        run: |
+          mkdir -p release
+          mv artifacts/starpls-linux-amd64/starpls release/starpls-linux-amd64
+          mv artifacts/starpls-darwin-arm64/starpls release/starpls-darwin-arm64
       - name: Show release artifacts
         run: find release

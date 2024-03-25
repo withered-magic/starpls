@@ -1,4 +1,4 @@
-use crate::{Db, Name, Ty, TyKind, TypeRef};
+use crate::{def::Argument, Db, Name, Ty, TyKind, TypeRef};
 use rustc_hash::FxHashMap;
 use starpls_bazel::{
     builtin::Callable, env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
@@ -46,6 +46,28 @@ pub struct BuiltinFunction {
     pub ret_type_ref: TypeRef,
     #[return_ref]
     pub doc: String,
+    is_struct_fn: bool,
+}
+
+impl BuiltinFunction {
+    pub(crate) fn maybe_unique_ret_type<'a, I>(&'a self, db: &'a dyn Db, args: I) -> Option<Ty>
+    where
+        I: Iterator<Item = (&'a Argument, &'a Ty)>,
+    {
+        if !self.is_struct_fn(db) {
+            return None;
+        }
+
+        let fields = args
+            .filter_map(|(arg, ty)| match arg {
+                Argument::Keyword { name, .. } => Some((name.clone(), ty.clone())),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+
+        Some(TyKind::Struct(fields).intern())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -64,6 +86,7 @@ pub enum BuiltinFunctionParam {
         doc: String,
     },
     KwargsDict {
+        name: Name,
         doc: String,
     },
 }
@@ -216,6 +239,7 @@ fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> 
             }
         } else if param.is_star_star_arg {
             BuiltinFunctionParam::KwargsDict {
+                name: Name::from_str(&param.name),
                 doc: normalize_doc_text(&param.doc),
             }
         } else {
@@ -240,6 +264,7 @@ fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> 
         params,
         normalize_type_ref(&callable.return_type),
         normalize_doc_text(&doc),
+        name == "struct",
     )
 }
 

@@ -53,8 +53,6 @@ pub(crate) fn signature_help(
             let mut s = String::new();
             if param.is_args_list(db) {
                 s.push('*');
-            } else if param.is_kwargs_dict(db) {
-                s.push_str("**");
             }
             match param.name(db) {
                 Some(name) if !name.is_missing() => {

@@ -212,13 +212,6 @@ impl TyCtxt<'_> {
                     return self.unknown_ty();
                 }
 
-                // Special handling for Bazel structs, which can have arbitrary fields.
-                if let TyKind::BuiltinType(type_) = receiver_ty.kind() {
-                    if type_.name(db).as_str() == "struct" {
-                        return self.unknown_ty();
-                    }
-                }
-
                 receiver_ty
                     .fields(db)
                     .and_then(|mut fields| {
@@ -231,6 +224,10 @@ impl TyCtxt<'_> {
                         })
                     })
                     .unwrap_or_else(|| {
+                        if matches!(receiver_ty.kind(), TyKind::Struct(_)) {
+                            return self.unknown_ty();
+                        }
+
                         self.add_expr_diagnostic_ty(
                             file,
                             expr,
@@ -497,7 +494,10 @@ impl TyCtxt<'_> {
                             self.add_expr_diagnostic(file, expr, message);
                         }
 
-                        resolve_type_ref(db, &func.ret_type_ref(db)).0
+                        match func.maybe_unique_ret_type(db, args.iter().zip(arg_tys.iter())) {
+                            Some(ty) => ty,
+                            None => resolve_type_ref(db, &func.ret_type_ref(db)).0,
+                        }
                     }
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.unknown_ty(),
                     _ => self.add_expr_diagnostic_ty(

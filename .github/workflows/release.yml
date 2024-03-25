@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  pull_request:
-    branches: ["main"]
 
 jobs:
   build:
@@ -53,3 +51,8 @@ jobs:
           mv artifacts/starpls-darwin-arm64/starpls release/starpls-darwin-arm64
       - name: Show release artifacts
         run: find release
+      - name: Create release
+        run: |
+          gh release create ${{ github.ref_name }} release/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

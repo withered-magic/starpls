@@ -239,6 +239,13 @@ impl Ty {
                 }
             });
             Some(Fields::Union(acc.into_iter()))
+        } else if let TyKind::Struct(fields) = self.kind() {
+            Some(Fields::Struct(fields.iter().map(|(name, ty)| {
+                (
+                    Field(FieldInner::StructField { name: name.clone() }),
+                    ty.clone(),
+                )
+            })))
         } else {
             None
         }
@@ -408,8 +415,8 @@ impl Param {
             }
             ParamInner::BuiltinParam { parent, index } => match &parent.params(db)[index] {
                 BuiltinFunctionParam::Simple { name, .. }
-                | BuiltinFunctionParam::ArgsList { name, .. } => Some(name.clone()),
-                _ => None,
+                | BuiltinFunctionParam::ArgsList { name, .. }
+                | BuiltinFunctionParam::KwargsDict { name, .. } => Some(name.clone()),
             },
         }
     }
@@ -425,7 +432,7 @@ impl Param {
             ParamInner::BuiltinParam { parent, index } => match &parent.params(db)[index] {
                 BuiltinFunctionParam::Simple { doc, .. }
                 | BuiltinFunctionParam::ArgsList { doc, .. }
-                | BuiltinFunctionParam::KwargsDict { doc } => doc.clone(),
+                | BuiltinFunctionParam::KwargsDict { doc, .. } => doc.clone(),
             },
             ParamInner::IntrinsicParam { .. } => return None,
         })
@@ -520,6 +527,7 @@ impl Field {
             FieldInner::BuiltinField { parent, index } => parent.fields(db)[index].name.clone(),
             FieldInner::BuiltinMethod { func } => func.name(db),
             FieldInner::IntrinsicField { parent, index } => parent.fields(db)[index].name.clone(),
+            FieldInner::StructField { ref name, .. } => name.clone(),
         }
     }
 
@@ -527,7 +535,7 @@ impl Field {
         match self.0 {
             FieldInner::BuiltinField { parent, index } => parent.fields(db)[index].doc.clone(),
             FieldInner::BuiltinMethod { func } => func.doc(db).clone(),
-            FieldInner::IntrinsicField { .. } => String::new(),
+            FieldInner::IntrinsicField { .. } | FieldInner::StructField { .. } => String::new(),
         }
     }
 }
@@ -544,19 +552,24 @@ enum FieldInner {
         parent: IntrinsicClass,
         index: usize,
     },
+    StructField {
+        name: Name,
+    },
 }
 
-enum Fields<I1, I2, I3> {
+enum Fields<I1, I2, I3, I4> {
     Intrinsic(I1),
     Builtin(I2),
     Union(I3),
+    Struct(I4),
 }
 
-impl<I1, I2, I3> Iterator for Fields<I1, I2, I3>
+impl<I1, I2, I3, I4> Iterator for Fields<I1, I2, I3, I4>
 where
     I1: Iterator<Item = (Field, Ty)>,
     I2: Iterator<Item = (Field, Ty)>,
     I3: Iterator<Item = (Field, Ty)>,
+    I4: Iterator<Item = (Field, Ty)>,
 {
     type Item = (Field, Ty);
 
@@ -565,6 +578,7 @@ where
             Self::Intrinsic(iter) => iter.next(),
             Self::Builtin(iter) => iter.next(),
             Self::Union(iter) => iter.next(),
+            Self::Struct(iter) => iter.next(),
         }
     }
 }
@@ -629,6 +643,8 @@ pub(crate) enum TyKind {
     Protocol(Protocol),
     /// A union of two or more types.
     Union(SmallVec<[Ty; 2]>),
+    /// A Bazel struct.
+    Struct(Box<[(Name, Ty)]>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -806,6 +822,7 @@ impl DisplayWithDb for TyKind {
             TyKind::Union(tys) => {
                 return delimited(db, f, tys, " | ");
             }
+            TyKind::Struct(_) => "struct",
         };
 
         f.write_str(text)
@@ -1027,6 +1044,7 @@ impl<'a> TypeRefResolver<'a> {
                         .intern(),
                     }
                 }
+                "struct" | "structure" => TyKind::Struct(Vec::new().into_boxed_slice()).intern(),
                 name => match builtin_types.types(self.db).get(name).cloned() {
                     Some(ty) => ty,
                     None => {
@@ -1138,6 +1156,7 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
         // this once we support type guards.
         (_, TyKind::Union(tys)) => tys.iter().any(|target| assign_tys(db, source, target)),
         (TyKind::Union(tys), _) => tys.iter().any(|source| assign_tys(db, source, target)),
+        (TyKind::Struct(_), TyKind::Struct(_)) => true,
         (source, target) => source == target,
     }
 }

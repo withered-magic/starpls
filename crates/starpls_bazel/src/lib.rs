@@ -45,6 +45,7 @@ pub const BUILTINS_TYPES_DENY_LIST: &[&str] = &[
     "list",
     "range",
     "string",
+    "struct",
     "tuple",
     "None",
     "NoneType",

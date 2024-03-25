@@ -2,7 +2,7 @@ use prost::Message;
 use starpls_bazel::{
     build::{attribute::Discriminator, BuildLanguage},
     build_language::decode_rules,
-    client::BazelCLI,
+    client::{BazelCLI, BazelClient as _},
     load_builtins,
 };
 use std::collections::HashSet;

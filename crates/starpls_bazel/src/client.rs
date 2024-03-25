@@ -3,8 +3,9 @@ use std::{
     process::Command,
 };
 
-pub trait BazelClient {
+pub trait BazelClient: Send + Sync + 'static {
     fn build_language(&self) -> anyhow::Result<Vec<u8>>;
+    fn output_base(&self) -> anyhow::Result<PathBuf>;
 }
 
 pub struct BazelCLI {
@@ -18,11 +19,20 @@ impl BazelCLI {
         }
     }
 
-    pub fn build_language(&self) -> anyhow::Result<Vec<u8>> {
-        let output = Command::new(&self.executable)
-            .args(["info", "build-language"])
-            .output()?;
+    fn run_command(&self, args: &[&str]) -> anyhow::Result<Vec<u8>> {
+        let output = Command::new(&self.executable).args(args).output()?;
         Ok(output.stdout)
+    }
+}
+
+impl BazelClient for BazelCLI {
+    fn build_language(&self) -> anyhow::Result<Vec<u8>> {
+        self.run_command(&["info", "build-language"])
+    }
+
+    fn output_base(&self) -> anyhow::Result<PathBuf> {
+        let output = self.run_command(&["info", "output_base"])?;
+        Ok(String::from_utf8(output)?.trim().into())
     }
 }
 

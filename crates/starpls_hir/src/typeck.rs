@@ -535,7 +535,8 @@ impl Field {
         match self.0 {
             FieldInner::BuiltinField { parent, index } => parent.fields(db)[index].doc.clone(),
             FieldInner::BuiltinMethod { func } => func.doc(db).clone(),
-            FieldInner::IntrinsicField { .. } | FieldInner::StructField { .. } => String::new(),
+            FieldInner::IntrinsicField { parent, index } => parent.fields(db)[index].doc.clone(),
+            FieldInner::StructField { .. } => String::new(),
         }
     }
 }
@@ -792,7 +793,11 @@ impl DisplayWithDb for TyKind {
                             ..
                         } => {
                             f.write_str(name.as_str())?;
-                            write!(f, ": {}", type_ref)?;
+                            let type_ref = type_ref.to_string();
+                            if type_ref != "Unknown" {
+                                f.write_str(": ")?;
+                                f.write_str(&type_ref)?;
+                            }
                             if let Some(default_value) = default_value {
                                 f.write_str(" = ")?;
                                 f.write_str(&default_value)?;

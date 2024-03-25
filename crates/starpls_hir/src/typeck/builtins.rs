@@ -6,6 +6,8 @@ use starpls_bazel::{
 use starpls_common::Dialect;
 use std::collections::HashSet;
 
+const DEFAULT_DOC: &str = "See the [Bazel Build Encyclopedia](https://bazel.build/reference/be/overview) for more details.";
+
 #[salsa::tracked]
 pub(crate) struct BuiltinTypes {
     #[return_ref]
@@ -206,7 +208,7 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
                 fields.push(BuiltinField {
                     name: Name::from_str(&field.name),
                     type_ref: normalize_type_ref(&field.r#type),
-                    doc: normalize_doc_text(&field.doc),
+                    doc: format!("### `{}`\n\n{}", field.name, normalize_doc_text(&field.doc)),
                 });
             }
         }
@@ -263,7 +265,15 @@ fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> 
         Name::from_str(name),
         params,
         normalize_type_ref(&callable.return_type),
-        normalize_doc_text(&doc),
+        format!(
+            "### `{}`\n\n{}",
+            name,
+            if doc.is_empty() {
+                DEFAULT_DOC.to_string()
+            } else {
+                normalize_doc_text(&doc)
+            }
+        ),
         name == "struct",
     )
 }

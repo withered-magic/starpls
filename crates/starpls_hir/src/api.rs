@@ -203,6 +203,10 @@ impl Type {
         )
     }
 
+    pub fn is_unknown(&self) -> bool {
+        self.ty.kind() == &TyKind::Unknown
+    }
+
     pub fn is_user_defined_function(&self) -> bool {
         matches!(self.ty.kind(), TyKind::Function(_))
     }
@@ -218,6 +222,7 @@ impl Type {
         Some(match self.ty.kind() {
             TyKind::BuiltinFunction(func) => func.doc(db).clone(),
             TyKind::BuiltinType(type_) => type_.doc(db).clone(),
+            TyKind::IntrinsicFunction(func, _) => func.doc(db).clone(),
             _ => return None,
         })
     }
@@ -290,7 +295,8 @@ impl Function {
     pub fn doc(&self, db: &dyn Db) -> Option<String> {
         match self.0 {
             FunctionInner::HirDef(func) => func.doc(db).map(|doc| doc.to_string()),
-            _ => None,
+            FunctionInner::BuiltinFunction(func) => Some(func.doc(db).clone()),
+            FunctionInner::IntrinsicFunction(func) => Some(func.doc(db).clone()),
         }
     }
 

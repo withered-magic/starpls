@@ -57,8 +57,10 @@ pub(crate) fn signature_help(
             match param.name(db) {
                 Some(name) if !name.is_missing() => {
                     s.push_str(name.as_str());
-                    s.push_str(": ");
-                    let _ = write!(&mut s, "{}", ty.display(db));
+                    if !ty.is_unknown() {
+                        s.push_str(": ");
+                        let _ = write!(&mut s, "{}", ty.display(db));
+                    }
                 }
                 _ => {}
             }

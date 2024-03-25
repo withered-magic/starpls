@@ -303,34 +303,7 @@ fn list_expr_or_comp(p: &mut Parser) -> CompletedMarker {
         // CompClause = 'for' LoopVariables 'in' Test | 'if' Test .
         T![for] | T![if] => {
             kind = LIST_COMP;
-            loop {
-                match p.current() {
-                    T![for] => {
-                        let m = p.start();
-                        p.bump(T![for]);
-                        if !PRIMARY_EXPR_START.contains(p.current()) {
-                            p.error_recover_until("Expected loop variables", STMT_RECOVERY);
-                            m.complete(p, COMP_CLAUSE_FOR);
-                            break;
-                        }
-                        loop_variables(p);
-                        if !p.eat(T![in]) {
-                            p.error_recover_until("Expected \"in\"", STMT_RECOVERY);
-                            m.complete(p, COMP_CLAUSE_FOR);
-                            break;
-                        }
-                        or_expr(p);
-                        m.complete(p, COMP_CLAUSE_FOR);
-                    }
-                    T![if] => {
-                        let m = p.start();
-                        p.bump(T![if]);
-                        or_expr(p);
-                        m.complete(p, COMP_CLAUSE_IF);
-                    }
-                    _ => break,
-                }
-            }
+            comp_clauses(p);
         }
         _ => {
             while p.at(T![,]) && EXPR_START.contains(p.nth(1)) {
@@ -359,34 +332,7 @@ fn dict_expr_or_comp(p: &mut Parser) -> CompletedMarker {
         // CompClause = 'for' LoopVariables 'in' Test | 'if' Test .
         T![for] | T![if] => {
             kind = DICT_COMP;
-            loop {
-                match p.current() {
-                    T![for] => {
-                        let m = p.start();
-                        p.bump(T![for]);
-                        if !PRIMARY_EXPR_START.contains(p.current()) {
-                            p.error_recover_until("Expected loop variables", STMT_RECOVERY);
-                            m.complete(p, COMP_CLAUSE_FOR);
-                            break;
-                        }
-                        loop_variables(p);
-                        if !p.eat(T![in]) {
-                            p.error_recover_until("Expected \"in\"", STMT_RECOVERY);
-                            m.complete(p, COMP_CLAUSE_FOR);
-                            break;
-                        }
-                        test(p);
-                        m.complete(p, COMP_CLAUSE_FOR);
-                    }
-                    T![if] => {
-                        let m = p.start();
-                        p.bump(T![if]);
-                        test(p);
-                        m.complete(p, COMP_CLAUSE_IF);
-                    }
-                    _ => break,
-                }
-            }
+            comp_clauses(p);
         }
         _ => {
             while p.at(T![,]) && EXPR_START.contains(p.nth(1)) {
@@ -400,6 +346,37 @@ fn dict_expr_or_comp(p: &mut Parser) -> CompletedMarker {
         p.error_recover_until("\"{\" was not closed", STMT_RECOVERY);
     }
     m.complete(p, kind)
+}
+
+fn comp_clauses(p: &mut Parser) {
+    loop {
+        match p.current() {
+            T![for] => {
+                let m = p.start();
+                p.bump(T![for]);
+                if !PRIMARY_EXPR_START.contains(p.current()) {
+                    p.error_recover_until("Expected loop variables", STMT_RECOVERY);
+                    m.complete(p, COMP_CLAUSE_FOR);
+                    break;
+                }
+                loop_variables(p);
+                if !p.eat(T![in]) {
+                    p.error_recover_until("Expected \"in\"", STMT_RECOVERY);
+                    m.complete(p, COMP_CLAUSE_FOR);
+                    break;
+                }
+                or_expr(p);
+                m.complete(p, COMP_CLAUSE_FOR);
+            }
+            T![if] => {
+                let m = p.start();
+                p.bump(T![if]);
+                or_expr(p);
+                m.complete(p, COMP_CLAUSE_IF);
+            }
+            _ => break,
+        }
+    }
 }
 
 fn entry(p: &mut Parser) {

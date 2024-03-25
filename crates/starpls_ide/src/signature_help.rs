@@ -111,10 +111,19 @@ pub(crate) fn signature_help(
         .resolve_call_expr_active_param(file, &expr, active_arg)
         .unwrap_or(DEFAULT_ACTIVE_PARAMETER_INDEX); // active_parameter defaults to 0, so we just add a crazy high value here to avoid a false positive
 
+    // TODO(withered-magic): This logic should probably be more sophisticated, but it works well
+    // enough for now.
+    let doc = func.doc(db).map(|doc| {
+        doc.lines()
+            .map(|line| format!("{}  ", line.trim_start()))
+            .collect::<Vec<_>>()
+            .join("\n")
+    });
+
     Some(SignatureHelp {
         signatures: vec![SignatureInfo {
             label,
-            documentation: func.doc(db),
+            documentation: doc,
             parameters: Some(
                 params
                     .into_iter()

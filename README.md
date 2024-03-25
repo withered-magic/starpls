@@ -30,7 +30,7 @@ Once done, add the following to your VSCode configuration and reload VSCode for 
 }
 ```
 
-Note: If you don't put `starpls` directly on the `$PATH`, then for `bazel.lsp.command` you'll have to specify the absolute path to the `starpls` executable instead.
+Note: If you don't put `starpls` directly on the `$PATH`, then for `bazel.lsp.command` you'll have to specify the absolute path to the `starpls` executable instead. Additionally, if your VSCode setup also has any tasks that run Bazel commands on open, those might temporarily block the server from starting up because of the Bazel lock; the server will still spin up once it is able to acquire the lock.
 
 Alternatively, you can build `starpls` with Bazel:
 

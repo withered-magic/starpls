@@ -74,6 +74,13 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
         text.push_str("\n```\n");
 
         if let Some(doc) = ty.doc(db) {
+            // TODO(withered-magic): This logic should probably be more sophisticated, but it works well
+            // enough for now.
+            let doc = doc
+                .lines()
+                .map(|line| format!("{}  ", line.trim_start()))
+                .collect::<Vec<_>>()
+                .join("\n");
             text.push_str(&doc);
             text.push('\n');
         }

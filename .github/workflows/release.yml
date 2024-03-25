@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - name: linux-amd64
+            runs-on: ubuntu-20.04
+          - name: darwin-arm64
+            runs-on: macos-14
+      fail-fast: true
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Prepare for build
+        run: |
+          cp bazel/remote-cache.bazelrc .bazelrc
+          echo "build --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >> .bazelrc
+          mkdir -p editors/code/dist
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+      - name: Build
+        run: bazel build -c opt //crates/starpls
+      - uses: actions/upload-artifact@v4
+        with:
+          name: starpls-${{ matrix.target.name }}
+          path: bazel-bin/crates/starpls/starpls
+
+  release:
+    name: Release
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: starpls-*
+      - name: Prepare release artifacts
+        run: |
+          mkdir -p release
+          mv artifacts/starpls-linux-amd64/starpls release/starpls-linux-amd64
+          mv artifacts/starpls-darwin-arm64/starpls release/starpls-darwin-arm64
+      - name: Show release artifacts
+        run: find release
+      - name: Create release
+        run: |
+          gh release create ${{ github.ref_name }} release/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -70,18 +70,18 @@ then you'll get autocomplete suggestions for the attributes on `ctx`, like `ctx.
 - Type inference
     - [x] Basic type inference
     - [ ] Dataflow analysis
-    - [ ] PEP-484 type comments
-        - [ ] Variables
+    - [x] PEP-484 type comments
+        - [x] Variables
         - [x] Parameters (only basic types currently supported)
-        - [ ] Other constructs where type comments are supported
+        - [x] Other constructs where type comments are supported
 - Third-party integrations
-    - [ ] Bazel builtins (partial, Bazel builtins are supported but still need to handle a number of edge cases)
+    - [x] Bazel builtins (partial, Bazel builtins are supported but still need to handle a number of edge cases)
 - Projects
-    - [ ] Type inference across multiple files
-    - [ ] `load` support
-        - [ ] Relative paths
-        - [ ] Bazel workspace
-    - [ ] Third-party Starlark libraries
+    - [x] Type inference across multiple files
+    - [x] `load` support
+        - [x] Relative paths
+        - [x] Bazel workspace
+    - [x] Bazel external repositories
 
 ## Development
 `starpls` currently requires a nightly build of Rust, due to usage of `trait_upcasting` as specified by [RFC3324](https://rust-lang.github.io/rfcs/3324-dyn-upcasting.html).

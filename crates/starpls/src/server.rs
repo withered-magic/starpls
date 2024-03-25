@@ -7,9 +7,13 @@ use crate::{
 };
 use lsp_server::{Connection, ReqQueue};
 use parking_lot::RwLock;
-use starpls_bazel::{build_language::decode_rules, client::BazelCLI, decode_builtins, Builtins};
+use starpls_bazel::{
+    build_language::decode_rules,
+    client::{BazelCLI, BazelClient},
+    decode_builtins, Builtins,
+};
 use starpls_ide::{Analysis, AnalysisSnapshot, Change};
-use std::{sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 const DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -23,6 +27,7 @@ pub(crate) struct Server {
     pub(crate) analysis_debouncer: AnalysisDebouncer,
     pub(crate) analysis_requested: bool,
     pub(crate) fetch_bazel_external_repos_requested: bool,
+    pub(crate) bazel_client: Arc<dyn BazelClient>,
 }
 
 pub(crate) struct ServerSnapshot {
@@ -46,8 +51,18 @@ impl Server {
             }
         };
 
+        // Determine the output base for the purpose of resolving external repositories.
+        let bazel_client = Arc::new(BazelCLI::default());
+        let output_base = match bazel_client.output_base() {
+            Ok(output_base) => output_base,
+            Err(err) => {
+                eprintln!("server: failed to run \"bazel info output_base\": {}", err);
+                PathBuf::new()
+            }
+        };
+
         // Additionally, load builtin rules.
-        let rules = match load_bazel_build_language() {
+        let rules = match load_bazel_build_language(&*bazel_client) {
             Ok(builtins) => builtins,
             Err(err) => {
                 eprintln!(
@@ -59,7 +74,7 @@ impl Server {
         };
 
         let path_interner = Arc::new(PathInterner::default());
-        let loader = DefaultFileLoader::new(path_interner.clone());
+        let loader = DefaultFileLoader::new(path_interner.clone(), output_base);
 
         let mut analysis = Analysis::new(Arc::new(loader));
         analysis.set_builtin_defs(builtins, rules);
@@ -74,6 +89,7 @@ impl Server {
             analysis_debouncer: AnalysisDebouncer::new(DEBOUNCE_INTERVAL, sender),
             analysis_requested: false,
             fetch_bazel_external_repos_requested: false,
+            bazel_client,
         })
     }
 
@@ -141,15 +157,16 @@ impl Server {
 
     #[allow(unused)]
     pub(crate) fn fetch_bazel_external_repos(&mut self) {
+        let bazel_client = self.bazel_client.clone();
         self.fetch_bazel_external_repos_requested = true;
-        self.task_pool_handle.spawn_with_sender(|sender| {
+        self.task_pool_handle.spawn_with_sender(move |sender| {
             sender
                 .send(Task::FetchBazelExternalRepos(
                     FetchBazelExternalReposProgress::Begin,
                 ))
                 .unwrap();
 
-            let res = load_bazel_build_language();
+            let res = load_bazel_build_language(&*bazel_client);
             sender
                 .send(Task::FetchBazelExternalRepos(
                     FetchBazelExternalReposProgress::End(res),
@@ -165,8 +182,7 @@ fn load_bazel_builtins() -> anyhow::Result<Builtins> {
     Ok(builtins)
 }
 
-fn load_bazel_build_language() -> anyhow::Result<Builtins> {
-    let client = BazelCLI::default();
+fn load_bazel_build_language(client: &dyn BazelClient) -> anyhow::Result<Builtins> {
     let build_language_output = client.build_language()?;
     decode_rules(&build_language_output)
 }

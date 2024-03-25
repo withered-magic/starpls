@@ -1,3 +1,4 @@
+use dashmap::DashMap;
 use indexmap::IndexSet;
 use parking_lot::RwLock;
 use rustc_hash::FxHasher;
@@ -169,11 +170,39 @@ impl PathInterner {
 #[derive(Debug)]
 pub(crate) struct DefaultFileLoader {
     interner: Arc<PathInterner>,
+    output_base: PathBuf,
+    cached_load_results: DashMap<String, PathBuf>,
 }
 
 impl DefaultFileLoader {
-    pub(crate) fn new(interner: Arc<PathInterner>) -> Self {
-        Self { interner }
+    pub(crate) fn new(interner: Arc<PathInterner>, output_base: PathBuf) -> Self {
+        Self {
+            interner,
+            output_base,
+            cached_load_results: Default::default(),
+        }
+    }
+
+    fn make_cache_key(&self, repo_kind: &RepoKind, path: &str, from: FileId) -> String {
+        format!("{:?}-{:?}-{:?}", repo_kind, path, from.0)
+    }
+
+    fn read_cache_result(&self, repo_kind: &RepoKind, path: &str, from: FileId) -> Option<PathBuf> {
+        let key = self.make_cache_key(repo_kind, path, from);
+        self.cached_load_results
+            .get(&key)
+            .map(|path_buf| path_buf.clone())
+    }
+
+    fn record_cache_result(
+        &self,
+        repo_kind: &RepoKind,
+        path: &str,
+        from: FileId,
+        resolved_path: PathBuf,
+    ) {
+        let key = self.make_cache_key(repo_kind, path, from);
+        self.cached_load_results.insert(key, resolved_path);
     }
 }
 
@@ -203,28 +232,11 @@ impl FileLoader for DefaultFileLoader {
                 from_path.join(path).canonicalize()?
             }
             Dialect::Bazel => {
-                // Find the Bazel workspace root.
-                let from_path = self.interner.lookup_by_file_id(from);
-                let (root, package) = match starpls_bazel::resolve_workspace(&from_path)? {
-                    Some(root) => root,
-                    None => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "not in a Bazel workspace",
-                        ))
-                    }
-                };
-
                 // Parse the load path as a Bazel label.
                 let label = match Label::parse(path) {
                     Ok(label) => label,
                     Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.err)),
                 };
-
-                // TODO(withered-magic): Handle labels with apparent or canonical repos.
-                if label.kind() != RepoKind::Current {
-                    return Ok(None);
-                }
 
                 // Only .bzl files can be loaded.
                 if !label.target().ends_with(".bzl") {
@@ -234,13 +246,44 @@ impl FileLoader for DefaultFileLoader {
                     ));
                 }
 
-                // Loading targets using a relative label causes them to be resolved from the closest package to the importing file.
-                if label.is_relative() {
-                    package
-                } else {
-                    root.join(label.package())
+                let repo_kind = label.kind();
+
+                match self.read_cache_result(&repo_kind, path, from) {
+                    Some(path) => path,
+                    None => {
+                        let (root, package) = match &repo_kind {
+                            RepoKind::Apparent => (
+                                { self.output_base.join("external").join(label.repo()) },
+                                PathBuf::new(),
+                            ),
+                            RepoKind::Current => {
+                                // Find the Bazel workspace root.
+                                let from_path = self.interner.lookup_by_file_id(from);
+                                match starpls_bazel::resolve_workspace(&from_path)? {
+                                    Some(root) => root,
+                                    None => {
+                                        return Err(io::Error::new(
+                                            io::ErrorKind::Other,
+                                            "not in a Bazel workspace",
+                                        ))
+                                    }
+                                }
+                            }
+                            _ => return Ok(None),
+                        };
+
+                        // Loading targets using a relative label causes them to be resolved from the closest package to the importing file.
+                        let resolved_path = if label.is_relative() {
+                            package
+                        } else {
+                            root.join(label.package())
+                        }
+                        .join(label.target());
+
+                        self.record_cache_result(&repo_kind, path, from, resolved_path.clone());
+                        resolved_path
+                    }
                 }
-                .join(label.target())
             }
         };
 

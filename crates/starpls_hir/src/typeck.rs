@@ -707,26 +707,25 @@ impl DisplayWithDb for TyKind {
                         f.write_str(", ")?;
                     }
 
-                    let format_type_ref_opt = |f, type_ref: &Option<TypeRef>| match type_ref
-                        .as_ref()
-                        .map(|type_ref| resolve_type_ref(db, &type_ref).0)
-                    {
-                        Some(ty) => ty.fmt(db, f),
-                        None => f.write_str("Unknown"),
-                    };
+                    let format_type_ref = |f, type_ref| resolve_type_ref(db, type_ref).0.fmt(db, f);
 
                     match param {
                         HirDefParam::Simple { name, type_ref, .. } => {
                             f.write_str(name.as_str())?;
-                            f.write_str(": ")?;
-                            format_type_ref_opt(f, type_ref)?;
+                            if let Some(type_ref) = type_ref.as_ref() {
+                                f.write_str(": ")?;
+                                format_type_ref(f, type_ref)?;
+                            }
                         }
                         HirDefParam::ArgsList { name, type_ref, .. } => {
                             f.write_char('*')?;
                             if !name.is_missing() {
                                 f.write_str(name.as_str())?;
                                 f.write_str(": tuple[")?;
-                                format_type_ref_opt(f, type_ref)?;
+                                match type_ref.as_ref() {
+                                    Some(type_ref) => format_type_ref(f, type_ref),
+                                    None => f.write_str("Unknown"),
+                                }?;
                                 f.write_str(", ...]")?;
                             }
                         }
@@ -735,7 +734,10 @@ impl DisplayWithDb for TyKind {
                             if !name.is_missing() {
                                 f.write_str(name.as_str())?;
                                 f.write_str(": dict[string, ")?;
-                                format_type_ref_opt(f, type_ref)?;
+                                match type_ref.as_ref() {
+                                    Some(type_ref) => format_type_ref(f, type_ref),
+                                    None => f.write_str("Unknown"),
+                                }?;
                                 f.write_char(']')?;
                             }
                         }

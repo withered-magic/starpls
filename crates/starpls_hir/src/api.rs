@@ -14,7 +14,7 @@ use crate::{
 use starpls_common::{Diagnostic, Diagnostics, File};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr, SyntaxNodePtr},
-    TextSize,
+    SyntaxNode, TextSize,
 };
 
 pub use crate::typeck::{Field, Param};
@@ -153,6 +153,22 @@ impl ScopeDef {
                 .load_item_map_back
                 .get(id)
                 .map(|ptr| ptr.syntax_node_ptr()),
+            _ => None,
+        }
+    }
+
+    pub fn to_load_item(
+        &self,
+        db: &dyn Db,
+        file: File,
+        root: &SyntaxNode,
+    ) -> Option<ast::LoadItem> {
+        let source_map = source_map(db, file);
+        match self {
+            ScopeDef::LoadItem(LoadItem { id }) => source_map
+                .load_item_map_back
+                .get(id)
+                .and_then(|ptr| ptr.try_to_node(root)),
             _ => None,
         }
     }

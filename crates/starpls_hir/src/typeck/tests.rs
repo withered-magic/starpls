@@ -316,7 +316,7 @@ def foo(a, b, *args, d, **kwargs):
 foo(1, 2, 3, 4, d=5, e=6)
 "#,
         expect![[r#"
-            46..49 "foo": def foo(a: Unknown, b: Unknown, *args: tuple[Unknown, ...], d: Unknown, **kwargs: dict[string, Unknown]) -> Unknown
+            46..49 "foo": def foo(a, b, *args: tuple[Unknown, ...], d, **kwargs: dict[string, Unknown]) -> Unknown
             50..51 "1": int
             53..54 "2": int
             56..57 "3": int
@@ -359,10 +359,10 @@ foo(1)
 foo(baz=1)
     "#,
         expect![[r#"
-            25..28 "foo": def foo(bar: Unknown) -> Unknown
+            25..28 "foo": def foo(bar) -> Unknown
             29..30 "1": int
             25..31 "foo(1)": Unknown
-            32..35 "foo": def foo(bar: Unknown) -> Unknown
+            32..35 "foo": def foo(bar) -> Unknown
             40..41 "1": int
             32..42 "foo(baz=1)": Unknown
 
@@ -384,14 +384,14 @@ foo(2, bar=3)
 foo(bar=4)
 "#,
         expect![[r#"
-            28..31 "foo": def foo(*, bar: Unknown) -> Unknown
+            28..31 "foo": def foo(*, bar) -> Unknown
             32..33 "1": int
             28..34 "foo(1)": Unknown
-            35..38 "foo": def foo(*, bar: Unknown) -> Unknown
+            35..38 "foo": def foo(*, bar) -> Unknown
             39..40 "2": int
             46..47 "3": int
             35..48 "foo(2, bar=3)": Unknown
-            49..52 "foo": def foo(*, bar: Unknown) -> Unknown
+            49..52 "foo": def foo(*, bar) -> Unknown
             57..58 "4": int
             49..59 "foo(bar=4)": Unknown
 
@@ -412,7 +412,7 @@ def foo(bar):
 foo(bar=1, bar=2)
 "#,
         expect![[r#"
-            25..28 "foo": def foo(bar: Unknown) -> Unknown
+            25..28 "foo": def foo(bar) -> Unknown
             33..34 "1": int
             40..41 "2": int
             25..42 "foo(bar=1, bar=2)": Unknown

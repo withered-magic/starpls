@@ -76,6 +76,10 @@ then you'll get autocomplete suggestions for the attributes on `ctx`, like `ctx.
         - [x] Other constructs where type comments are supported
 - Third-party integrations
     - [x] Bazel builtins (partial, Bazel builtins are supported but still need to handle a number of edge cases)
+    - Special handling for various Bazel constructs
+        - [x] `struct`s (autocomplete fields)
+        - [ ] providers (autocomplete and validate fields)
+        - [ ] rules defined with `rule` and `repository_rule` (autocomplete and validate attributes)
 - Projects
     - [x] Type inference across multiple files
     - [x] `load` support

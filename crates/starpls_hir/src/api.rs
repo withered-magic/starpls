@@ -9,7 +9,7 @@ use crate::{
         builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref, ParamInner,
         Substitution, Tuple, Ty, TypeRef,
     },
-    Db, DisplayWithDb, ExprId, Name, TyKind,
+    Db, ExprId, Name, TyKind,
 };
 use starpls_common::{Diagnostic, Diagnostics, File};
 use starpls_syntax::{
@@ -204,7 +204,7 @@ impl SemanticsScope<'_> {
 }
 
 pub struct Type {
-    ty: Ty,
+    pub(crate) ty: Ty,
 }
 
 impl Type {
@@ -236,6 +236,7 @@ impl Type {
             TyKind::BuiltinType(type_) => type_.doc(db).clone(),
             TyKind::Function(func) => return func.doc(db).map(|doc| doc.to_string()),
             TyKind::IntrinsicFunction(func, _) => func.doc(db).clone(),
+            TyKind::Rule(rule) => return rule.doc.as_ref().map(|doc| doc.to_string()),
             _ => return None,
         })
     }
@@ -249,8 +250,13 @@ impl Type {
         fields.map(|(name, ty)| (name, ty.into())).collect()
     }
 
-    pub fn known_keys(&self) -> Option<&[Box<str>]> {
-        self.ty.known_keys()
+    pub fn known_keys(&self) -> Option<Vec<String>> {
+        self.ty.known_keys().map(|known_keys| {
+            known_keys
+                .iter()
+                .map(|(name, _)| name.to_string())
+                .collect()
+        })
     }
 
     pub fn dict_value_ty(&self) -> Option<Type> {
@@ -271,16 +277,6 @@ impl Type {
 impl From<Ty> for Type {
     fn from(ty: Ty) -> Self {
         Self { ty }
-    }
-}
-
-impl DisplayWithDb for Type {
-    fn fmt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.ty.fmt(db, f)
-    }
-
-    fn fmt_alt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.ty.fmt_alt(db, f)
     }
 }
 

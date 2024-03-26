@@ -1,6 +1,5 @@
 use crate::{
     def::{ExprId, Function, LoadItemId, LoadStmt, Param as HirDefParam, ParamId},
-    display::{delimited, DisplayWithDb},
     module, source_map,
     typeck::{
         builtins::{builtin_types, BuiltinFunction, BuiltinFunctionParam, BuiltinType},
@@ -20,7 +19,7 @@ use starpls_common::{Diagnostic, Dialect, File};
 use starpls_intern::{impl_internable, Interned};
 use starpls_syntax::ast::SyntaxNodePtr;
 use std::{
-    fmt::{Display, Write},
+    fmt::Write,
     panic::{self, UnwindSafe},
     sync::Arc,
 };
@@ -210,9 +209,10 @@ impl Ty {
         &'a self,
         db: &'a dyn Db,
     ) -> Option<impl Iterator<Item = (Field, Ty)> + 'a> {
-        if let Some(class) = self.kind().builtin_class(db) {
+        let kind = self.kind();
+        if let Some(class) = kind.builtin_class(db) {
             Some(Fields::Intrinsic(self.intrinsic_class_fields(db, class)))
-        } else if let TyKind::BuiltinType(ty) = self.kind() {
+        } else if let TyKind::BuiltinType(ty) = kind {
             Some(Fields::Builtin(
                 ty.fields(db)
                     .iter()
@@ -230,7 +230,7 @@ impl Ty {
                         )
                     })),
             ))
-        } else if let TyKind::Union(tys) = self.kind() {
+        } else if let TyKind::Union(tys) = kind {
             // TODO(withered-magic): Can probably do better than a Vec here?
             let mut acc = Vec::new();
             tys.iter().for_each(|ty| {
@@ -244,7 +244,7 @@ impl Ty {
                 }
             });
             Some(Fields::Union(acc.into_iter()))
-        } else if let TyKind::Struct(fields) = self.kind() {
+        } else if let TyKind::Struct(fields) = kind {
             Some(Fields::Struct(fields.iter().map(|(name, ty)| {
                 (
                     Field(FieldInner::StructField { name: name.clone() }),
@@ -336,6 +336,19 @@ impl Ty {
                     (param, ty)
                 }))
             }
+            TyKind::Rule(Rule { attrs, .. }) => {
+                Params::Rule(attrs.iter().filter(|(_, ty)| ty.attribute().is_some()).map(
+                    |(name, ty)| {
+                        (
+                            Param(ParamInner::RuleParam {
+                                name: name.clone(),
+                                ty: ty.clone(),
+                            }),
+                            TyKind::Unknown.intern(),
+                        )
+                    },
+                ))
+            }
             _ => return None,
         })
     }
@@ -357,7 +370,7 @@ impl Ty {
         self.kind() == &TyKind::Unknown || self.kind() == &TyKind::Unbound
     }
 
-    fn substitute(&self, args: &[Ty]) -> Ty {
+    pub(crate) fn substitute(&self, args: &[Ty]) -> Ty {
         match self.kind() {
             TyKind::List(ty) => TyKind::List(ty.substitute(args)).intern(),
             TyKind::Tuple(tup) => match tup {
@@ -381,9 +394,16 @@ impl Ty {
         }
     }
 
-    pub(crate) fn known_keys(&self) -> Option<&[Box<str>]> {
+    pub(crate) fn known_keys(&self) -> Option<&[(Box<str>, Ty)]> {
         match self.kind() {
             TyKind::Dict(_, _, known_keys) => known_keys.as_ref().map(|known_keys| &**known_keys),
+            _ => None,
+        }
+    }
+
+    fn attribute(&self) -> Option<&Attribute> {
+        match self.kind() {
+            TyKind::Attribute(attr) => Some(attr),
             _ => None,
         }
     }
@@ -403,6 +423,10 @@ pub(crate) enum ParamInner {
     BuiltinParam {
         parent: BuiltinFunction,
         index: usize,
+    },
+    RuleParam {
+        name: Name,
+        ty: Ty,
     },
 }
 
@@ -433,24 +457,31 @@ impl Param {
                 | BuiltinFunctionParam::ArgsList { name, .. }
                 | BuiltinFunctionParam::KwargsDict { name, .. } => Some(name.clone()),
             },
+            ParamInner::RuleParam { ref name, .. } => Some(name.clone()),
         }
     }
 
     pub fn doc(&self, db: &dyn Db) -> Option<String> {
-        Some(match self.0 {
+        Some(match &self.0 {
             ParamInner::Param { parent, index } => {
-                let parent = parent?;
+                let parent = parent.as_ref()?;
                 let module = module(db, parent.file(db));
-                return module[parent.params(db)[index]]
+                return module[parent.params(db)[*index]]
                     .doc()
                     .map(|doc| doc.to_string());
             }
-            ParamInner::BuiltinParam { parent, index } => match &parent.params(db)[index] {
+            ParamInner::BuiltinParam { parent, index } => match &parent.params(db)[*index] {
                 BuiltinFunctionParam::Simple { doc, .. }
                 | BuiltinFunctionParam::ArgsList { doc, .. }
                 | BuiltinFunctionParam::KwargsDict { doc, .. } => doc.clone(),
             },
             ParamInner::IntrinsicParam { .. } => return None,
+            ParamInner::RuleParam { ty, .. } => {
+                return ty.attribute().and_then(|attr| match &attr.doc {
+                    Some(doc) => Some(doc.to_string()),
+                    None => None,
+                })
+            }
         })
     }
 
@@ -466,6 +497,7 @@ impl Param {
             ParamInner::BuiltinParam { parent, index } => parent.params(db)[index]
                 .type_ref()
                 .map(|type_ref| resolve_type_ref(db, &type_ref).0),
+            ParamInner::RuleParam { .. } => None,
         }
         .unwrap_or_else(|| TyKind::Unknown.intern())
         .into()
@@ -493,6 +525,7 @@ impl Param {
                 parent.params(db)[index],
                 BuiltinFunctionParam::ArgsList { .. }
             ),
+            _ => false,
         }
     }
 
@@ -518,6 +551,7 @@ impl Param {
                 parent.params(db)[index],
                 BuiltinFunctionParam::KwargsDict { .. }
             ),
+            _ => false,
         }
     }
 
@@ -535,17 +569,19 @@ impl Param {
     }
 }
 
-enum Params<I1, I2, I3> {
+enum Params<I1, I2, I3, I4> {
     Simple(I1),
     Intrinsic(I2),
     Builtin(I3),
+    Rule(I4),
 }
 
-impl<I1, I2, I3> Iterator for Params<I1, I2, I3>
+impl<I1, I2, I3, I4> Iterator for Params<I1, I2, I3, I4>
 where
     I1: Iterator<Item = (Param, Ty)>,
     I2: Iterator<Item = (Param, Ty)>,
     I3: Iterator<Item = (Param, Ty)>,
+    I4: Iterator<Item = (Param, Ty)>,
 {
     type Item = (Param, Ty);
 
@@ -554,6 +590,7 @@ where
             Params::Simple(iter) => iter.next(),
             Params::Intrinsic(iter) => iter.next(),
             Params::Builtin(iter) => iter.next(),
+            Params::Rule(iter) => iter.next(),
         }
     }
 }
@@ -623,12 +660,6 @@ where
     }
 }
 
-impl DisplayWithDb for Ty {
-    fn fmt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        self.kind().fmt(db, f)
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum TyKind {
     /// An unbound variable, e.g. a variable without a corresponding
@@ -662,7 +693,7 @@ pub(crate) enum TyKind {
     /// A fixed-size collection of elements.
     Tuple(Tuple),
     /// A mapping of keys to values.
-    Dict(Ty, Ty, Option<Arc<[Box<str>]>>),
+    Dict(Ty, Ty, Option<Arc<[(Box<str>, Ty)]>>),
     /// An iterable and indexable sequence of numbers. Obtained from
     /// the `range()` function.
     Range,
@@ -683,8 +714,15 @@ pub(crate) enum TyKind {
     Protocol(Protocol),
     /// A union of two or more types.
     Union(SmallVec<[Ty; 2]>),
-    /// A Bazel struct.
+    /// A Bazel struct (https://bazel.build/rules/lib/builtins/struct).
+    /// Use this instead of the `struct` type defined in `builtin.pb`.
     Struct(Box<[(Name, Ty)]>),
+    /// A Bazel attribute (https://bazel.build/rules/lib/builtins/Attribute.html).
+    /// Use this instead of the `Attribute` type defined in `builtin.pb`.
+    Attribute(Attribute),
+    /// A Bazel rule (https://bazel.build/rules/lib/builtins/rule).
+    /// The `Ty`s contained in the boxed slice must be `TyKind::Attribute`s.
+    Rule(Rule),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -693,202 +731,32 @@ pub enum Tuple {
     Variable(Ty),
 }
 
-impl DisplayWithDb for TyKind {
-    fn fmt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let text = match self {
-            TyKind::Unbound => "Unbound",
-            TyKind::Unknown => "Unknown",
-            TyKind::Any => "Any",
-            TyKind::None => "None",
-            TyKind::Bool => "bool",
-            TyKind::Int => "int",
-            TyKind::Float => "float",
-            TyKind::String => "string",
-            TyKind::StringElems => "string.elems",
-            TyKind::Bytes => "bytes",
-            TyKind::BytesElems => "bytes.elems",
-            TyKind::List(ty) => {
-                f.write_str("list[")?;
-                ty.fmt(db, f)?;
-                return f.write_char(']');
-            }
-            TyKind::Tuple(tuple) => {
-                f.write_str("tuple[")?;
-                match tuple {
-                    Tuple::Simple(tys) => {
-                        delimited(db, f, &tys, ", ")?;
-                    }
-                    Tuple::Variable(ty) => {
-                        ty.fmt(db, f)?;
-                        f.write_str(", ...")?;
-                    }
-                }
-                return f.write_char(']');
-            }
-            TyKind::Dict(key_ty, value_ty, _) => {
-                f.write_str("dict[")?;
-                key_ty.fmt(db, f)?;
-                f.write_str(", ")?;
-                value_ty.fmt(db, f)?;
-                return f.write_char(']');
-            }
-            TyKind::Range => "range",
-            TyKind::Function(func) => {
-                let module = module(db, func.file(db));
-                write!(f, "def {}(", func.name(db).as_str())?;
-                for (i, param) in func
-                    .params(db)
-                    .iter()
-                    .map(|param| &module[*param])
-                    .enumerate()
-                {
-                    if i > 0 {
-                        f.write_str(", ")?;
-                    }
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum AttributeKind {
+    Bool,
+    Int,
+    IntList,
+    Label,
+    LabelKeyedStringDict,
+    LabelList,
+    Output,
+    OutputList,
+    String,
+    StringList,
+    StringListDict,
+}
 
-                    let format_type_ref = |f, type_ref| resolve_type_ref(db, type_ref).0.fmt(db, f);
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Attribute {
+    pub kind: AttributeKind,
+    pub doc: Option<Box<str>>,
+    pub mandatory: bool,
+}
 
-                    match param {
-                        HirDefParam::Simple { name, type_ref, .. } => {
-                            f.write_str(name.as_str())?;
-                            if let Some(type_ref) = type_ref.as_ref() {
-                                f.write_str(": ")?;
-                                format_type_ref(f, type_ref)?;
-                            }
-                        }
-                        HirDefParam::ArgsList { name, type_ref, .. } => {
-                            f.write_char('*')?;
-                            if !name.is_missing() {
-                                f.write_str(name.as_str())?;
-                                f.write_str(": ")?;
-                                match type_ref.as_ref() {
-                                    Some(type_ref) => format_type_ref(f, type_ref),
-                                    None => f.write_str("Unknown"),
-                                }?;
-                            }
-                        }
-                        HirDefParam::KwargsDict { name, type_ref, .. } => {
-                            f.write_str("**")?;
-                            if !name.is_missing() {
-                                f.write_str(name.as_str())?;
-                                f.write_str(": ")?;
-                                match type_ref.as_ref() {
-                                    Some(type_ref) => format_type_ref(f, type_ref),
-                                    None => f.write_str("Unknown"),
-                                }?;
-                            }
-                        }
-                    }
-                }
-                return write!(
-                    f,
-                    ") -> {}",
-                    func.ret_type_ref(db).unwrap_or(TypeRef::Unknown)
-                );
-            }
-            TyKind::IntrinsicFunction(func, subst) => {
-                write!(f, "def {}(", func.name(db).as_str())?;
-                for (i, param) in func.params(db).iter().enumerate() {
-                    if i > 0 {
-                        f.write_str(", ")?;
-                    }
-                    match param {
-                        IntrinsicFunctionParam::Positional { ty, optional } => {
-                            write!(f, "x{}: ", i)?;
-                            ty.substitute(&subst.args).fmt(db, f)?;
-                            if *optional {
-                                f.write_str(" = None")?;
-                            }
-                        }
-                        IntrinsicFunctionParam::Keyword { name, ty } => {
-                            f.write_str(name.as_str())?;
-                            f.write_str(": ")?;
-                            ty.substitute(&subst.args).fmt(db, f)?;
-                            f.write_str(" = None")?;
-                        }
-                        IntrinsicFunctionParam::ArgsList { ty } => {
-                            f.write_str("*args: ")?;
-                            ty.substitute(&subst.args).fmt(db, f)?;
-                        }
-                        IntrinsicFunctionParam::KwargsDict => {
-                            f.write_str("**kwargs")?;
-                        }
-                    }
-                }
-                f.write_str(") -> ")?;
-                return func.ret_ty(db).substitute(&subst.args).fmt(db, f);
-            }
-            TyKind::BuiltinFunction(func) => {
-                write!(f, "def {}(", func.name(db).as_str())?;
-                for (i, param) in func.params(db).iter().enumerate() {
-                    if i > 0 {
-                        f.write_str(", ")?;
-                    }
-                    match param {
-                        BuiltinFunctionParam::Simple {
-                            name,
-                            type_ref,
-                            default_value,
-                            ..
-                        } => {
-                            f.write_str(name.as_str())?;
-                            if !type_ref.is_unknown() {
-                                f.write_str(": ")?;
-                                type_ref.fmt(f)?;
-                            }
-                            if let Some(default_value) = default_value {
-                                f.write_str(" = ")?;
-                                f.write_str(&default_value)?;
-                            }
-                        }
-                        BuiltinFunctionParam::ArgsList { name, type_ref, .. } => {
-                            f.write_char('*')?;
-                            f.write_str(name.as_str())?;
-                            if !type_ref.is_unknown() {
-                                f.write_str(": ")?;
-                                type_ref.fmt(f)?;
-                            }
-                        }
-                        BuiltinFunctionParam::KwargsDict { name, type_ref, .. } => {
-                            f.write_str("**")?;
-                            f.write_str(name.as_str())?;
-                            if !type_ref.is_unknown() {
-                                f.write_str(": ")?;
-                                type_ref.fmt(f)?;
-                            }
-                        }
-                    }
-                }
-                f.write_str(") -> ")?;
-                return func.ret_type_ref(db).fmt(f);
-            }
-            TyKind::BuiltinType(type_) => return f.write_str(type_.name(db).as_str()),
-            TyKind::BoundVar(index) => return write!(f, "'{}", index),
-            TyKind::Protocol(proto) => {
-                let (name, ty) = match proto {
-                    Protocol::Iterable(ty) => ("Iterable", ty),
-                    Protocol::Sequence(ty) => ("Sequence", ty),
-                };
-                return write!(f, "{}[{}]", name, ty.display(db).alt());
-            }
-            TyKind::Union(tys) => {
-                return delimited(db, f, tys, " | ");
-            }
-            TyKind::Struct(_) => "struct",
-        };
-
-        f.write_str(text)
-    }
-
-    fn fmt_alt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TyKind::Function(_) => f.write_str("function"),
-            TyKind::IntrinsicFunction(_, _) | TyKind::BuiltinFunction(_) => {
-                f.write_str("builtin_function_or_method")
-            }
-            _ => self.fmt(db, f),
-        }
-    }
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Rule {
+    pub attrs: Box<[(Name, Ty)]>,
+    pub doc: Option<Box<str>>,
 }
 
 impl_internable!(TyKind);
@@ -928,7 +796,7 @@ impl Binders {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub(crate) struct Substitution {
-    args: SmallVec<[Ty; 2]>,
+    pub(crate) args: SmallVec<[Ty; 2]>,
 }
 
 impl Substitution {
@@ -1209,6 +1077,7 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
         (_, TyKind::Union(tys)) => tys.iter().any(|target| assign_tys(db, source, target)),
         (TyKind::Union(tys), _) => tys.iter().any(|source| assign_tys(db, source, target)),
         (TyKind::Struct(_), TyKind::Struct(_)) => true,
+        (TyKind::Attribute(_), TyKind::Attribute(_)) => true,
         (source, target) => source == target,
     }
 }

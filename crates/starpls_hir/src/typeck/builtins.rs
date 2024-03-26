@@ -1,9 +1,15 @@
-use crate::{def::Argument, Db, Name, Ty, TyKind, TypeRef};
+use crate::{
+    def::Argument,
+    source_map,
+    typeck::{Attribute, AttributeKind, Rule as TyRule},
+    Db, ExprId, Name, Ty, TyKind, TypeRef,
+};
 use rustc_hash::FxHashMap;
 use starpls_bazel::{
     builtin::Callable, env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
 };
-use starpls_common::Dialect;
+use starpls_common::{parse, Dialect, File};
+use starpls_syntax::ast;
 use std::collections::HashSet;
 
 const DEFAULT_DOC: &str = "See the [Bazel Build Encyclopedia](https://bazel.build/reference/be/overview) for more details.";
@@ -40,6 +46,46 @@ pub struct BuiltinGlobals {
     pub variables: FxHashMap<String, TypeRef>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BuiltinFunctionFlag {
+    Struct,
+    Rule,
+    RepositoryRule,
+    AttrBool,
+    AttrInt,
+    AttrIntList,
+    AttrLabel,
+    AttrLabelKeyedStringDict,
+    AttrLabelList,
+    AttrOutput,
+    AttrOutputList,
+    AttrString,
+    AttrStringList,
+    AttrStringListDict,
+    Standard,
+}
+
+impl BuiltinFunctionFlag {
+    pub fn is_attr(&self) -> bool {
+        use BuiltinFunctionFlag::*;
+
+        match self {
+            AttrBool
+            | AttrInt
+            | AttrIntList
+            | AttrLabel
+            | AttrLabelKeyedStringDict
+            | AttrLabelList
+            | AttrOutput
+            | AttrOutputList
+            | AttrString
+            | AttrStringList
+            | AttrStringListDict => true,
+            _ => false,
+        }
+    }
+}
+
 #[salsa::tracked]
 pub struct BuiltinFunction {
     pub name: Name,
@@ -48,28 +94,125 @@ pub struct BuiltinFunction {
     pub ret_type_ref: TypeRef,
     #[return_ref]
     pub doc: String,
-    is_struct_fn: bool,
+    flag: BuiltinFunctionFlag,
 }
 
 impl BuiltinFunction {
-    pub(crate) fn maybe_unique_ret_type<'a, I>(&'a self, db: &'a dyn Db, args: I) -> Option<Ty>
+    pub(crate) fn maybe_unique_ret_type<'a, I>(
+        &'a self,
+        db: &'a dyn Db,
+        file: File,
+        args: I,
+    ) -> Option<Ty>
     where
         I: Iterator<Item = (&'a Argument, &'a Ty)>,
     {
-        if !self.is_struct_fn(db) {
-            return None;
+        use BuiltinFunctionFlag::*;
+
+        match self.flag(db) {
+            Struct => {
+                let fields = args
+                    .filter_map(|(arg, ty)| match arg {
+                        Argument::Keyword { name, .. } => Some((name.clone(), ty.clone())),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice();
+                Some(TyKind::Struct(fields).intern())
+            }
+            Rule => {
+                let mut attrs = None;
+                let mut doc = None;
+                for (arg, ty) in args {
+                    match arg {
+                        Argument::Keyword { name, expr } if name.as_str() == "doc" => {
+                            doc = extract_string_literal(db, file, *expr);
+                        }
+                        Argument::Keyword { name, .. } if name.as_str() == "attrs" => {
+                            if let TyKind::Dict(_, _, Some(known_keys)) = ty.kind() {
+                                attrs = Some(
+                                    known_keys
+                                        .iter()
+                                        .map(|(name, ty)| (Name::from_str(name), ty.clone()))
+                                        .collect::<Vec<_>>()
+                                        .into_boxed_slice(),
+                                )
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
+                Some(
+                    TyKind::Rule(TyRule {
+                        attrs: attrs.unwrap_or_else(|| Vec::new().into_boxed_slice()),
+                        doc,
+                    })
+                    .intern(),
+                )
+            }
+            flag if flag.is_attr() => {
+                let mut doc: Option<Box<str>> = None;
+                let mut mandatory = false;
+                for (arg, _) in args {
+                    match arg {
+                        Argument::Keyword { name, expr } if name.as_str() == "doc" => {
+                            doc = extract_string_literal(db, file, *expr);
+                        }
+                        Argument::Keyword { name, expr } if name.as_str() == "mandatory" => {
+                            mandatory = extract_bool_literal(db, file, *expr).unwrap_or(false);
+                        }
+                        _ => {}
+                    }
+                }
+                Some(
+                    TyKind::Attribute(Attribute {
+                        kind: match flag {
+                            AttrBool => AttributeKind::Bool,
+                            AttrInt => AttributeKind::Int,
+                            AttrIntList => AttributeKind::IntList,
+                            AttrLabel => AttributeKind::Label,
+                            AttrLabelKeyedStringDict => AttributeKind::LabelKeyedStringDict,
+                            AttrLabelList => AttributeKind::LabelList,
+                            AttrOutput => AttributeKind::Output,
+                            AttrOutputList => AttributeKind::OutputList,
+                            AttrString => AttributeKind::String,
+                            AttrStringList => AttributeKind::StringList,
+                            AttrStringListDict => AttributeKind::StringListDict,
+                            _ => unreachable!(),
+                        },
+                        doc,
+                        mandatory,
+                    })
+                    .intern(),
+                )
+            }
+            _ => None,
         }
-
-        let fields = args
-            .filter_map(|(arg, ty)| match arg {
-                Argument::Keyword { name, .. } => Some((name.clone(), ty.clone())),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-
-        Some(TyKind::Struct(fields).intern())
     }
+}
+
+fn expr_as_literal(db: &dyn Db, file: File, expr: ExprId) -> Option<ast::LiteralExpr> {
+    let root = parse(db, file).syntax(db);
+    source_map(db, file)
+        .expr_map_back
+        .get(&expr)
+        .and_then(|ptr| ptr.clone().cast::<ast::LiteralExpr>())
+        .and_then(|ptr| ptr.try_to_node(&root))
+}
+
+fn extract_string_literal(db: &dyn Db, file: File, expr: ExprId) -> Option<Box<str>> {
+    expr_as_literal(db, file, expr).and_then(|expr| match expr.kind() {
+        ast::LiteralKind::String(s) => s.value(),
+        _ => None,
+    })
+}
+
+fn extract_bool_literal(db: &dyn Db, file: File, expr: ExprId) -> Option<bool> {
+    expr_as_literal(db, file, expr).and_then(|expr| match expr.kind() {
+        ast::LiteralKind::Bool(b) => Some(b),
+        _ => None,
+    })
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -156,7 +299,7 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
         if let Some(callable) = &value.callable {
             functions.insert(
                 value.name.clone(),
-                builtin_function(db, &value.name, callable, &value.doc),
+                builtin_function(db, &value.name, callable, &value.doc, None),
             );
         } else {
             variables.insert(value.name.clone(), normalize_type_ref(&value.r#type));
@@ -194,7 +337,13 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
             for rule in rules.global.iter() {
                 if let Some(callable) = &rule.callable {
                     seen_methods.insert(rule.name.as_str());
-                    methods.push(builtin_function(db, &rule.name, callable, &rule.doc));
+                    methods.push(builtin_function(
+                        db,
+                        &rule.name,
+                        callable,
+                        &rule.doc,
+                        Some(&type_.name),
+                    ));
                 }
             }
         }
@@ -203,7 +352,13 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
             if let Some(callable) = &field.callable {
                 // Filter out duplicates.
                 if !seen_methods.contains(&field.name.as_str()) {
-                    methods.push(builtin_function(db, &field.name, callable, &field.doc));
+                    methods.push(builtin_function(
+                        db,
+                        &field.name,
+                        callable,
+                        &field.doc,
+                        Some(&type_.name),
+                    ));
                 }
             } else {
                 fields.push(BuiltinField {
@@ -230,7 +385,15 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
     BuiltinTypes::new(db, types)
 }
 
-fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> BuiltinFunction {
+fn builtin_function(
+    db: &dyn Db,
+    name: &str,
+    callable: &Callable,
+    doc: &str,
+    parent_name: Option<&str>,
+) -> BuiltinFunction {
+    use BuiltinFunctionFlag::*;
+
     let mut params = Vec::new();
 
     for param in callable.param.iter() {
@@ -265,6 +428,7 @@ fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> 
         });
     }
 
+    let is_attr_field = parent_name == Some("attr");
     BuiltinFunction::new(
         db,
         Name::from_str(name),
@@ -275,7 +439,23 @@ fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> 
         } else {
             normalize_doc_text(&doc)
         },
-        name == "struct",
+        match name {
+            "struct" => Struct,
+            "rule" => Rule,
+            "repository_rule" => RepositoryRule,
+            "bool" if is_attr_field => AttrBool,
+            "int" if is_attr_field => AttrInt,
+            "int_list" if is_attr_field => AttrIntList,
+            "label" if is_attr_field => AttrLabel,
+            "label_keyed_string_dict" if is_attr_field => AttrLabelKeyedStringDict,
+            "label_list" if is_attr_field => AttrLabelList,
+            "output" if is_attr_field => AttrOutput,
+            "output_list" if is_attr_field => AttrOutputList,
+            "string" if is_attr_field => AttrString,
+            "string_list" if is_attr_field => AttrStringList,
+            "string_list_dict" if is_attr_field => AttrStringListDict,
+            _ => Standard,
+        },
     )
 }
 

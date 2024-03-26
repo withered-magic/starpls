@@ -164,7 +164,7 @@ impl TyCtxt<'_> {
                     .filter_map(|entry| match &curr_module[entry.key] {
                         Expr::Literal {
                             literal: Literal::String(s),
-                        } => Some(s.clone()),
+                        } => Some((s.clone(), self.infer_expr(file, entry.value))),
                         _ => None,
                     })
                     .collect::<Vec<_>>();
@@ -526,11 +526,13 @@ impl TyCtxt<'_> {
                             self.add_expr_diagnostic(file, expr, message);
                         }
 
-                        match func.maybe_unique_ret_type(db, args.iter().zip(arg_tys.iter())) {
+                        match func.maybe_unique_ret_type(db, file, args.iter().zip(arg_tys.iter()))
+                        {
                             Some(ty) => ty,
                             None => resolve_type_ref(db, &func.ret_type_ref(db)).0,
                         }
                     }
+                    TyKind::Rule(_) => self.none_ty(),
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.unknown_ty(),
                     _ => self.add_expr_diagnostic_ty(
                         file,
@@ -856,9 +858,15 @@ impl TyCtxt<'_> {
         first
             .map(|first| self.infer_expr(file, first))
             .and_then(|first_ty| {
+                let first_ty_kind = first_ty.kind();
                 exprs
                     .map(|expr| self.infer_expr(file, expr))
-                    .all(|ty| ty == first_ty)
+                    .all(|ty| match (ty.kind(), first_ty_kind) {
+                        // TODO(withered-magic): Special handling for attributes, which should always be considered
+                        // the same type.
+                        (TyKind::Attribute(_), TyKind::Attribute(_)) => true,
+                        _ => ty == first_ty,
+                    })
                     .then_some(first_ty)
             })
             .unwrap_or(default)

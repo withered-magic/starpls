@@ -358,6 +358,7 @@ impl Ty {
             TyKind::Function(func) => resolve_type_ref_opt(db, func.ret_type_ref(db)),
             TyKind::IntrinsicFunction(func, subst) => func.ret_ty(db).substitute(&subst.args),
             TyKind::BuiltinFunction(func) => resolve_type_ref(db, &func.ret_type_ref(db)).0,
+            TyKind::Rule(_) => TyKind::None.intern(),
             _ => return None,
         })
     }
@@ -497,7 +498,10 @@ impl Param {
             ParamInner::BuiltinParam { parent, index } => parent.params(db)[index]
                 .type_ref()
                 .map(|type_ref| resolve_type_ref(db, &type_ref).0),
-            ParamInner::RuleParam { .. } => None,
+            ParamInner::RuleParam { ref ty, .. } => match ty.kind() {
+                TyKind::Attribute(attr) => Some(attr.expected_ty()),
+                _ => None,
+            },
         }
         .unwrap_or_else(|| TyKind::Unknown.intern())
         .into()
@@ -751,6 +755,30 @@ pub struct Attribute {
     pub kind: AttributeKind,
     pub doc: Option<Box<str>>,
     pub mandatory: bool,
+}
+
+impl Attribute {
+    pub fn expected_ty(&self) -> Ty {
+        match self.kind {
+            AttributeKind::Bool => TyKind::Bool,
+            AttributeKind::Int => TyKind::Int,
+            AttributeKind::IntList => TyKind::List(TyKind::Int.intern()),
+            // AttributeKind::Label => TyKind::,
+            // AttributeKind::LabelKeyedStringDict => todo!(),
+            // AttributeKind::LabelList => todo!(),
+            // AttributeKind::Output => todo!(),
+            // AttributeKind::OutputList => todo!(),
+            AttributeKind::String => TyKind::String,
+            AttributeKind::StringList => TyKind::List(TyKind::String.intern()),
+            AttributeKind::StringListDict => TyKind::Dict(
+                TyKind::String.intern(),
+                TyKind::List(TyKind::String.intern()).intern(),
+                None,
+            ),
+            _ => TyKind::Unknown,
+        }
+        .intern()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

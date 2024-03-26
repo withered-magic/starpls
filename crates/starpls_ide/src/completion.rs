@@ -138,7 +138,7 @@ pub(crate) fn completions(
                     items.push(CompletionItem {
                         label: name.to_string(),
                         kind: match decl {
-                            ScopeDef::Function(_) => CompletionItemKind::Function,
+                            ScopeDef::Callable(_) => CompletionItemKind::Function,
                             ScopeDef::Variable(_) | ScopeDef::Parameter(_) => {
                                 CompletionItemKind::Variable
                             }
@@ -214,7 +214,7 @@ pub(crate) fn completions(
                 items.push(CompletionItem {
                     label: name.to_string(),
                     kind: match decl {
-                        ScopeDef::Function(it) if it.is_user_defined() => {
+                        ScopeDef::Callable(it) if it.is_user_defined() => {
                             CompletionItemKind::Function
                         }
                         ScopeDef::Variable(it) if it.is_user_defined() => {

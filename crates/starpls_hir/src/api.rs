@@ -1,15 +1,15 @@
 use crate::{
     def::{
         resolver::Resolver,
-        scope::{self, module_scopes},
+        scope::{self, module_scopes, ParameterDef},
         Function as HirDefFunction, LoadItemId, Stmt,
     },
     module, source_map,
     typeck::{
-        builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref, Substitution,
-        Ty, TypeRef,
+        builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref, ParamInner,
+        Substitution, Tuple, Ty, TypeRef,
     },
-    Db, DisplayWithDb, ExprId, Name, ParamId, TyKind,
+    Db, DisplayWithDb, ExprId, Name, TyKind,
 };
 use starpls_common::{Diagnostic, Diagnostics, File};
 use starpls_syntax::{
@@ -121,10 +121,6 @@ impl Variable {
     }
 }
 
-pub struct Parameter {
-    id: ParamId,
-}
-
 pub struct LoadItem {
     id: LoadItemId,
 }
@@ -132,7 +128,7 @@ pub struct LoadItem {
 pub enum ScopeDef {
     Function(Function),
     Variable(Variable),
-    Parameter(Parameter),
+    Parameter(Param),
     LoadItem(LoadItem),
 }
 
@@ -145,10 +141,7 @@ impl ScopeDef {
                 .expr_map_back
                 .get(id)
                 .map(|ptr| ptr.syntax_node_ptr()),
-            ScopeDef::Parameter(Parameter { id }) => source_map
-                .param_map_back
-                .get(id)
-                .map(|ptr| ptr.syntax_node_ptr()),
+            ScopeDef::Parameter(param) => param.syntax_node_ptr(db),
             ScopeDef::LoadItem(LoadItem { id }) => source_map
                 .load_item_map_back
                 .get(id)
@@ -182,7 +175,10 @@ impl From<scope::ScopeDef> for ScopeDef {
             scope::ScopeDef::BuiltinFunction(it) => ScopeDef::Function(it.into()),
             scope::ScopeDef::Variable(it) => ScopeDef::Variable(Variable { id: Some(it.expr) }),
             scope::ScopeDef::BuiltinVariable(_) => ScopeDef::Variable(Variable { id: None }),
-            scope::ScopeDef::Parameter(it) => ScopeDef::Parameter(Parameter { id: it.param }),
+            scope::ScopeDef::Parameter(ParameterDef {
+                func: parent,
+                index,
+            }) => ScopeDef::Parameter(Param(ParamInner::Param { parent, index })),
             scope::ScopeDef::LoadItem(it) => ScopeDef::LoadItem(LoadItem { id: it.load_item }),
         }
     }
@@ -255,6 +251,20 @@ impl Type {
 
     pub fn known_keys(&self) -> Option<&[Box<str>]> {
         self.ty.known_keys()
+    }
+
+    pub fn dict_value_ty(&self) -> Option<Type> {
+        match self.ty.kind() {
+            TyKind::Dict(_, value_ty, _) => Some(value_ty.clone().into()),
+            _ => None,
+        }
+    }
+
+    pub fn variable_tuple_element_ty(&self) -> Option<Type> {
+        match self.ty.kind() {
+            TyKind::Tuple(Tuple::Variable(ty)) => Some(ty.clone().into()),
+            _ => None,
+        }
     }
 }
 

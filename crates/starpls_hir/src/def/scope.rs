@@ -48,7 +48,7 @@ pub(crate) struct VariableDef {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ParameterDef {
-    pub(crate) param: ParamId,
+    pub(crate) index: usize,
     pub(crate) func: Option<Function>,
 }
 
@@ -169,7 +169,7 @@ impl ScopeCollector<'_> {
         // Compute deferred scopes. This mainly applies to function definitions.
         while let Some(DeferredScope { parent, data }) = self.deferred.pop_front() {
             let scope = self.scopes.alloc_scope(parent);
-            for param in data.params.into_iter().copied() {
+            for (index, param) in data.params.into_iter().copied().enumerate() {
                 match &self.module.params[param] {
                     Param::Simple { name, .. }
                     | Param::ArgsList { name, .. }
@@ -178,7 +178,7 @@ impl ScopeCollector<'_> {
                             scope,
                             name.clone(),
                             ScopeDef::Parameter(ParameterDef {
-                                param,
+                                index,
                                 func: Some(data.func),
                             }),
                         );
@@ -351,7 +351,7 @@ impl ScopeCollector<'_> {
                 }
                 Expr::Lambda { params, body } => {
                     let scope = self.scopes.alloc_scope(current);
-                    for param in params.into_iter().copied() {
+                    for (index, param) in params.into_iter().copied().enumerate() {
                         match &self.module.params[param] {
                             Param::Simple { name, .. }
                             | Param::ArgsList { name, .. }
@@ -359,7 +359,7 @@ impl ScopeCollector<'_> {
                                 self.scopes.add_decl(
                                     scope,
                                     name.clone(),
-                                    ScopeDef::Parameter(ParameterDef { param, func: None }),
+                                    ScopeDef::Parameter(ParameterDef { index, func: None }),
                                 );
                             }
                         }

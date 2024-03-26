@@ -34,7 +34,7 @@
                 "params": [
                     {
                         "name": "platform_labels",
-                        "type": "sequence of strings",
+                        "type": "sequence of Labels",
                         "doc": "The labels of the platforms to register.",
                         "default_value": "",
                         "is_mandatory": false,
@@ -52,7 +52,7 @@
                 "params": [
                     {
                         "name": "toolchain_labels",
-                        "type": "sequence of strings",
+                        "type": "sequence of Labels",
                         "doc": "The labels of the toolchains to register. Labels can include <code>:all</code>, in which case, all toolchain-providing targets in the package will be registered in lexicographical order by name.",
                         "default_value": "",
                         "is_mandatory": false,

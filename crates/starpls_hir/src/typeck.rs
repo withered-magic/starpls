@@ -1,7 +1,7 @@
 use crate::{
     def::{ExprId, Function, LoadItemId, LoadStmt, Param as HirDefParam, ParamId},
     display::{delimited, DisplayWithDb},
-    module,
+    module, source_map,
     typeck::{
         builtins::{builtin_types, BuiltinFunction, BuiltinFunctionParam, BuiltinType},
         intrinsics::{
@@ -18,6 +18,7 @@ use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 use starpls_common::{Diagnostic, Dialect, File};
 use starpls_intern::{impl_internable, Interned};
+use starpls_syntax::ast::SyntaxNodePtr;
 use std::{
     fmt::{Display, Write},
     panic::{self, UnwindSafe},
@@ -154,6 +155,10 @@ impl TypeRef {
         } else {
             Self::Name(Name::from_str(name), None)
         }
+    }
+
+    pub(crate) fn is_unknown(&self) -> bool {
+        self == &Self::Unknown
     }
 }
 
@@ -293,7 +298,7 @@ impl Ty {
                     let file = func.file(db);
                     let ty = db.infer_param(file, *param);
                     let param = Param(ParamInner::Param {
-                        parent: *func,
+                        parent: Some(*func),
                         index,
                     });
                     (param, ty)
@@ -315,6 +320,15 @@ impl Ty {
             TyKind::BuiltinFunction(func) => {
                 Params::Builtin(func.params(db).iter().enumerate().map(|(index, param)| {
                     let ty = resolve_type_ref_opt(db, param.type_ref());
+                    let ty = match param {
+                        BuiltinFunctionParam::Simple { .. } => ty,
+                        BuiltinFunctionParam::ArgsList { .. } => {
+                            TyKind::Tuple(Tuple::Variable(ty)).intern()
+                        }
+                        BuiltinFunctionParam::KwargsDict { .. } => {
+                            TyKind::Dict(TyKind::String.intern(), ty, None).intern()
+                        }
+                    };
                     let param = Param(ParamInner::BuiltinParam {
                         parent: *func,
                         index,
@@ -375,11 +389,11 @@ impl Ty {
     }
 }
 
-pub struct Param(ParamInner);
+pub struct Param(pub(crate) ParamInner);
 
-enum ParamInner {
+pub(crate) enum ParamInner {
     Param {
-        parent: Function,
+        parent: Option<Function>,
         index: usize,
     },
     IntrinsicParam {
@@ -396,6 +410,7 @@ impl Param {
     pub fn name(&self, db: &dyn Db) -> Option<Name> {
         match self.0 {
             ParamInner::Param { parent, index } => {
+                let parent = parent?;
                 let module = module(db, parent.file(db));
                 Some(module[parent.params(db)[index]].name().clone())
             }
@@ -424,6 +439,7 @@ impl Param {
     pub fn doc(&self, db: &dyn Db) -> Option<String> {
         Some(match self.0 {
             ParamInner::Param { parent, index } => {
+                let parent = parent?;
                 let module = module(db, parent.file(db));
                 return module[parent.params(db)[index]]
                     .doc()
@@ -440,12 +456,12 @@ impl Param {
 
     pub fn ty(&self, db: &dyn Db) -> Type {
         match self.0 {
-            ParamInner::Param { parent, index } => {
+            ParamInner::Param { parent, index } => parent.and_then(|parent| {
                 let module = module(db, parent.file(db));
                 module[parent.params(db)[index]]
                     .type_ref()
                     .map(|type_ref| resolve_type_ref(db, &type_ref).0)
-            }
+            }),
             ParamInner::IntrinsicParam { parent, index } => parent.params(db)[index].ty(),
             ParamInner::BuiltinParam { parent, index } => parent.params(db)[index]
                 .type_ref()
@@ -457,7 +473,12 @@ impl Param {
 
     pub fn is_args_list(&self, db: &dyn Db) -> bool {
         match self.0 {
+            // TODO(withered-magic): Handle lambda parameters.
             ParamInner::Param { parent, index } => {
+                let parent = match parent {
+                    Some(parent) => parent,
+                    None => return false,
+                };
                 let module = module(db, parent.file(db));
                 matches!(
                     module[parent.params(db)[index]],
@@ -477,7 +498,12 @@ impl Param {
 
     pub fn is_kwargs_dict(&self, db: &dyn Db) -> bool {
         match self.0 {
+            // TODO(withered-magic): Handle lambda parameters.
             ParamInner::Param { parent, index } => {
+                let parent = match parent {
+                    Some(parent) => parent,
+                    None => return false,
+                };
                 let module = module(db, parent.file(db));
                 matches!(
                     module[parent.params(db)[index]],
@@ -492,6 +518,19 @@ impl Param {
                 parent.params(db)[index],
                 BuiltinFunctionParam::KwargsDict { .. }
             ),
+        }
+    }
+
+    pub fn syntax_node_ptr(&self, db: &dyn Db) -> Option<SyntaxNodePtr> {
+        match self.0 {
+            ParamInner::Param { parent, index } => parent.and_then(|parent| {
+                source_map(db, parent.file(db))
+                    .param_map_back
+                    .get(&parent.params(db)[index])
+                    .map(|ptr| ptr.syntax_node_ptr())
+            }),
+
+            _ => None,
         }
     }
 }
@@ -721,24 +760,22 @@ impl DisplayWithDb for TyKind {
                             f.write_char('*')?;
                             if !name.is_missing() {
                                 f.write_str(name.as_str())?;
-                                f.write_str(": tuple[")?;
+                                f.write_str(": ")?;
                                 match type_ref.as_ref() {
                                     Some(type_ref) => format_type_ref(f, type_ref),
                                     None => f.write_str("Unknown"),
                                 }?;
-                                f.write_str(", ...]")?;
                             }
                         }
                         HirDefParam::KwargsDict { name, type_ref, .. } => {
                             f.write_str("**")?;
                             if !name.is_missing() {
                                 f.write_str(name.as_str())?;
-                                f.write_str(": dict[string, ")?;
+                                f.write_str(": ")?;
                                 match type_ref.as_ref() {
                                     Some(type_ref) => format_type_ref(f, type_ref),
                                     None => f.write_str("Unknown"),
                                 }?;
-                                f.write_char(']')?;
                             }
                         }
                     }
@@ -795,10 +832,9 @@ impl DisplayWithDb for TyKind {
                             ..
                         } => {
                             f.write_str(name.as_str())?;
-                            let type_ref = type_ref.to_string();
-                            if type_ref != "Unknown" {
+                            if !type_ref.is_unknown() {
                                 f.write_str(": ")?;
-                                f.write_str(&type_ref)?;
+                                type_ref.fmt(f)?;
                             }
                             if let Some(default_value) = default_value {
                                 f.write_str(" = ")?;
@@ -808,10 +844,19 @@ impl DisplayWithDb for TyKind {
                         BuiltinFunctionParam::ArgsList { name, type_ref, .. } => {
                             f.write_char('*')?;
                             f.write_str(name.as_str())?;
-                            f.write_str(": ")?;
-                            type_ref.fmt(f)?;
+                            if !type_ref.is_unknown() {
+                                f.write_str(": ")?;
+                                type_ref.fmt(f)?;
+                            }
                         }
-                        BuiltinFunctionParam::KwargsDict { .. } => f.write_str("**kwargs")?,
+                        BuiltinFunctionParam::KwargsDict { name, type_ref, .. } => {
+                            f.write_str("**")?;
+                            f.write_str(name.as_str())?;
+                            if !type_ref.is_unknown() {
+                                f.write_str(": ")?;
+                                type_ref.fmt(f)?;
+                            }
+                        }
                     }
                 }
                 f.write_str(") -> ")?;

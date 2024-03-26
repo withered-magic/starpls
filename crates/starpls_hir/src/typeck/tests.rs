@@ -316,7 +316,7 @@ def foo(a, b, *args, d, **kwargs):
 foo(1, 2, 3, 4, d=5, e=6)
 "#,
         expect![[r#"
-            46..49 "foo": def foo(a, b, *args: tuple[Unknown, ...], d, **kwargs: dict[string, Unknown]) -> Unknown
+            46..49 "foo": def foo(a, b, *args: Unknown, d, **kwargs: Unknown) -> Unknown
             50..51 "1": int
             53..54 "2": int
             56..57 "3": int
@@ -338,7 +338,7 @@ def foo(*args, **kwargs):
 foo(1, 2, a=3, b=4)
 "#,
         expect![[r#"
-            37..40 "foo": def foo(*args: tuple[Unknown, ...], **kwargs: dict[string, Unknown]) -> Unknown
+            37..40 "foo": def foo(*args: Unknown, **kwargs: Unknown) -> Unknown
             41..42 "1": int
             44..45 "2": int
             49..50 "3": int
@@ -418,6 +418,51 @@ foo(bar=1, bar=2)
             25..42 "foo(bar=1, bar=2)": Unknown
 
             40..41 Unexpected keyword argument "bar"
+        "#]],
+    );
+}
+
+#[test]
+fn test_call_expr_arg_order() {
+    check_infer(
+        r#"
+def foo(x, y):
+    pass
+
+args = []
+kwargs = {}
+foo(y=1, 2)
+foo(**kwargs, 2)
+foo(y=1, *args)
+foo(**kwargs, *args)
+"#,
+        expect![[r#"
+            26..30 "args": list[Unknown]
+            33..35 "[]": list[Unknown]
+            36..42 "kwargs": dict[Any, Unknown]
+            45..47 "{}": dict[Any, Unknown]
+            48..51 "foo": def foo(x, y) -> Unknown
+            54..55 "1": int
+            57..58 "2": int
+            48..59 "foo(y=1, 2)": Unknown
+            60..63 "foo": def foo(x, y) -> Unknown
+            66..72 "kwargs": dict[Any, Unknown]
+            74..75 "2": int
+            60..76 "foo(**kwargs, 2)": Unknown
+            77..80 "foo": def foo(x, y) -> Unknown
+            83..84 "1": int
+            87..91 "args": list[Unknown]
+            77..92 "foo(y=1, *args)": Unknown
+            93..96 "foo": def foo(x, y) -> Unknown
+            99..105 "kwargs": dict[Any, Unknown]
+            108..112 "args": list[Unknown]
+            93..113 "foo(**kwargs, *args)": Unknown
+
+            57..58 Positional argument cannot follow keyword arguments
+            74..75 Positional argument cannot follow keyword argument unpacking
+            83..84 Unexpected keyword argument "y"
+            87..91 Unpacked iterable argument cannot follow keyword arguments
+            108..112 Unpacked iterable argument cannot follow keyword argument unpacking
         "#]],
     );
 }

@@ -698,19 +698,6 @@ is converted to uppercase; all other characters are converted to lowercase.
 ```python
 "hello, world!".capitalize()		# "Hello, world!"
 ```
-
-<a id='string·count'></a>
-### string·count
-
-`S.count(sub[, start[, end]])` returns the number of occurrences of
-`sub` within the string S, or, if the optional substring indices
-`start` and `end` are provided, within the designated substring of S.
-They are interpreted according to Starlark's [indexing conventions](#indexing).
-
-```python
-"hello, world!".count("o")              # 2
-"hello, world!".count("o", 7, 12)       # 1  (in "world")
-```
 "#,
                 vec![],
                 String,

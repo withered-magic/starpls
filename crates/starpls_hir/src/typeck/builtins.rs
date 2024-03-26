@@ -89,6 +89,7 @@ pub enum BuiltinFunctionParam {
     },
     KwargsDict {
         name: Name,
+        type_ref: TypeRef,
         doc: String,
     },
 }
@@ -97,8 +98,8 @@ impl BuiltinFunctionParam {
     pub(crate) fn type_ref(&self) -> Option<TypeRef> {
         Some(match self {
             BuiltinFunctionParam::Simple { type_ref, .. }
-            | BuiltinFunctionParam::ArgsList { type_ref, .. } => type_ref.clone(),
-            BuiltinFunctionParam::KwargsDict { .. } => return None,
+            | BuiltinFunctionParam::ArgsList { type_ref, .. }
+            | BuiltinFunctionParam::KwargsDict { type_ref, .. } => type_ref.clone(),
         })
     }
 
@@ -208,7 +209,7 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
                 fields.push(BuiltinField {
                     name: Name::from_str(&field.name),
                     type_ref: normalize_type_ref(&field.r#type),
-                    doc: format!("### `{}`\n\n{}", field.name, normalize_doc_text(&field.doc)),
+                    doc: normalize_doc_text(&field.doc),
                 });
             }
         }
@@ -231,22 +232,26 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
 
 fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> BuiltinFunction {
     let mut params = Vec::new();
+
     for param in callable.param.iter() {
+        let name = Name::from_str(param.name.trim_start_matches('*'));
+
         // We need to apply a few normalization steps to parameter types.
         params.push(if param.is_star_arg {
             BuiltinFunctionParam::ArgsList {
                 name: Name::from_str(&param.name),
-                type_ref: maybe_strip_iterable(normalize_type_ref(&param.r#type)),
+                type_ref: maybe_strip_iterable_or_dict(normalize_type_ref(&param.r#type)),
                 doc: normalize_doc_text(&param.doc),
             }
         } else if param.is_star_star_arg {
             BuiltinFunctionParam::KwargsDict {
-                name: Name::from_str(&param.name),
+                name,
+                type_ref: maybe_strip_iterable_or_dict(normalize_type_ref(&param.r#type)),
                 doc: normalize_doc_text(&param.doc),
             }
         } else {
             BuiltinFunctionParam::Simple {
-                name: Name::from_str(&param.name),
+                name,
                 type_ref: normalize_type_ref(&param.r#type),
                 doc: normalize_doc_text(&param.doc),
                 default_value: if !param.default_value.is_empty() {
@@ -265,15 +270,11 @@ fn builtin_function(db: &dyn Db, name: &str, callable: &Callable, doc: &str) -> 
         Name::from_str(name),
         params,
         normalize_type_ref(&callable.return_type),
-        format!(
-            "### `{}`\n\n{}",
-            name,
-            if doc.is_empty() {
-                DEFAULT_DOC.to_string()
-            } else {
-                normalize_doc_text(&doc)
-            }
-        ),
+        if doc.is_empty() {
+            DEFAULT_DOC.to_string()
+        } else {
+            normalize_doc_text(&doc)
+        },
         name == "struct",
     )
 }
@@ -312,10 +313,11 @@ fn normalize_doc(text: &str, is_type: bool) -> String {
     s.to_string()
 }
 
-fn maybe_strip_iterable(type_ref: TypeRef) -> TypeRef {
+fn maybe_strip_iterable_or_dict(type_ref: TypeRef) -> TypeRef {
     match type_ref {
-        TypeRef::Name(name, Some(args)) if args.len() == 1 => match name.as_str() {
-            "Iterable" | "Sequence" | "List" => args[0].clone(),
+        TypeRef::Name(name, Some(args)) => match (args.len(), name.as_str()) {
+            (1, "Iterable" | "Sequence" | "list") => args[0].clone(),
+            (2, "dict") => args[1].clone(),
             _ => TypeRef::Name(name, Some(args)),
         },
         _ => type_ref,
@@ -346,7 +348,7 @@ fn normalize_type_ref(text: &str) -> TypeRef {
                 }
                 (Some("List" | "list"), element) => type_ref_with_single_arg("list", element),
                 (Some("Dict" | "dict"), element) => TypeRef::Name(
-                    Name::from_str("dict"),
+                    Name::new_inline("dict"),
                     Some(
                         vec![
                             TypeRef::from_str_opt("string"),

@@ -422,6 +422,51 @@ foo(bar=1, bar=2)
     );
 }
 
+#[test]
+fn test_call_expr_arg_order() {
+    check_infer(
+        r#"
+def foo(x, y):
+    pass
+
+args = []
+kwargs = {}
+foo(y=1, 2)
+foo(**kwargs, 2)
+foo(y=1, *args)
+foo(**kwargs, *args)
+"#,
+        expect![[r#"
+            26..30 "args": list[Unknown]
+            33..35 "[]": list[Unknown]
+            36..42 "kwargs": dict[Any, Unknown]
+            45..47 "{}": dict[Any, Unknown]
+            48..51 "foo": def foo(x, y) -> Unknown
+            54..55 "1": int
+            57..58 "2": int
+            48..59 "foo(y=1, 2)": Unknown
+            60..63 "foo": def foo(x, y) -> Unknown
+            66..72 "kwargs": dict[Any, Unknown]
+            74..75 "2": int
+            60..76 "foo(**kwargs, 2)": Unknown
+            77..80 "foo": def foo(x, y) -> Unknown
+            83..84 "1": int
+            87..91 "args": list[Unknown]
+            77..92 "foo(y=1, *args)": Unknown
+            93..96 "foo": def foo(x, y) -> Unknown
+            99..105 "kwargs": dict[Any, Unknown]
+            108..112 "args": list[Unknown]
+            93..113 "foo(**kwargs, *args)": Unknown
+
+            57..58 Positional argument cannot follow keyword arguments
+            74..75 Positional argument cannot follow keyword argument unpacking
+            83..84 Unexpected keyword argument "y"
+            87..91 Unpacked iterable argument cannot follow keyword arguments
+            108..112 Unpacked iterable argument cannot follow keyword argument unpacking
+        "#]],
+    );
+}
+
 // TODO(withered-magic): Support the `struct` function in tests.
 // #[test]
 // fn test_struct() {

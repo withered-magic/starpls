@@ -281,13 +281,14 @@ impl TyCtxt<'_> {
                 }
             }
             Expr::Call { callee, args } => {
-                let mut saw_keyword_arg = false;
+                let mut saw_keyword = false;
+                let mut saw_unpacked_dict = false;
                 let callee_ty = self.infer_expr(file, *callee);
                 let arg_tys: Vec<_> = args
                     .iter()
                     .map(|arg| match arg {
                         Argument::Simple { expr } => {
-                            if saw_keyword_arg {
+                            if saw_keyword {
                                 self.add_expr_diagnostic(
                                     file,
                                     *expr,
@@ -296,15 +297,46 @@ impl TyCtxt<'_> {
                                     ),
                                 );
                             }
+                            if saw_unpacked_dict {
+                                self.add_expr_diagnostic(
+                                    file,
+                                    *expr,
+                                    String::from(
+                                        "Positional argument cannot follow keyword argument unpacking",
+                                    ),
+                                );
+                            }
                             self.infer_expr(file, *expr)
                         }
                         Argument::Keyword { expr, .. } => {
-                            saw_keyword_arg = true;
+                            saw_keyword = true;
                             self.infer_expr(file, *expr)
                         }
-                        Argument::UnpackedList { expr } | Argument::UnpackedDict { expr } => {
+                        Argument::UnpackedList { expr } => {
+                            if saw_keyword {
+                                self.add_expr_diagnostic(
+                                    file,
+                                    *expr,
+                                    String::from(
+                                        "Unpacked iterable argument cannot follow keyword arguments",
+                                    ),
+                                );
+                            }
+                            if saw_unpacked_dict {
+                                self.add_expr_diagnostic(
+                                    file,
+                                    *expr,
+                                    String::from(
+                                        "Unpacked iterable argument cannot follow keyword argument unpacking",
+                                    ),
+                                );
+                            }
                             self.infer_expr(file, *expr)
                         }
+                        Argument::UnpackedDict { expr } => {
+                            saw_unpacked_dict = true;
+                            self.infer_expr(file, *expr)
+                        },
                     })
                     .collect();
 
@@ -1075,6 +1107,27 @@ impl TyCtxt<'_> {
         let db = self.db;
         match &module(db, file)[expr] {
             Expr::Call { callee, args } => {
+                // Determine args that are in invalid positions.
+                let mut saw_keyword = false;
+                let mut saw_unpacked_dict = false;
+                for (index, arg) in args.iter().enumerate() {
+                    match arg {
+                        Argument::Simple { .. } | Argument::UnpackedList { .. } => {
+                            if saw_keyword || saw_unpacked_dict && index == active_arg {
+                                return None;
+                            }
+                        }
+                        Argument::Keyword { .. } => saw_keyword = true,
+                        Argument::UnpackedDict { .. } => saw_unpacked_dict = true,
+                    }
+                }
+
+                if active_arg == args.len() {
+                    if saw_keyword || saw_unpacked_dict {
+                        return None;
+                    }
+                }
+
                 let callee_ty = self.infer_expr(file, *callee);
                 let mut slots: Slots = match callee_ty.kind() {
                     TyKind::Function(func) => {

@@ -316,7 +316,7 @@ def foo(a, b, *args, d, **kwargs):
 foo(1, 2, 3, 4, d=5, e=6)
 "#,
         expect![[r#"
-            46..49 "foo": def foo(a, b, *args: tuple[Unknown, ...], d, **kwargs: dict[string, Unknown]) -> Unknown
+            46..49 "foo": def foo(a, b, *args: Unknown, d, **kwargs: Unknown) -> Unknown
             50..51 "1": int
             53..54 "2": int
             56..57 "3": int
@@ -338,7 +338,7 @@ def foo(*args, **kwargs):
 foo(1, 2, a=3, b=4)
 "#,
         expect![[r#"
-            37..40 "foo": def foo(*args: tuple[Unknown, ...], **kwargs: dict[string, Unknown]) -> Unknown
+            37..40 "foo": def foo(*args: Unknown, **kwargs: Unknown) -> Unknown
             41..42 "1": int
             44..45 "2": int
             49..50 "3": int

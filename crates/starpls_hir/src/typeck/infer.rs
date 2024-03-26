@@ -117,9 +117,9 @@ impl TyCtxt<'_> {
                         }
                         ScopeDef::BuiltinFunction(func) => TyKind::BuiltinFunction(func).intern(),
                         ScopeDef::BuiltinVariable(type_ref) => resolve_type_ref(db, &type_ref).0,
-                        ScopeDef::Parameter(ParameterDef { param, .. }) => {
-                            self.infer_param(file, param)
-                        }
+                        ScopeDef::Parameter(ParameterDef { func, index }) => func
+                            .map(|func| self.infer_param(file, func.params(db)[index]))
+                            .unwrap_or_else(|| self.unknown_ty()),
                         ScopeDef::LoadItem(LoadItemDef {
                             load_item,
                             load_stmt,

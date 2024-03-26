@@ -1,4 +1,7 @@
-use crate::{util::pick_best_token, Database, FilePosition};
+use crate::{
+    util::{deindent_doc, pick_best_token},
+    Database, FilePosition,
+};
 use starpls_common::{parse, Db as _};
 use starpls_hir::{DisplayWithDb, Semantics};
 use starpls_syntax::{
@@ -53,17 +56,36 @@ pub(crate) fn signature_help(
             let mut s = String::new();
             if param.is_args_list(db) {
                 s.push('*');
+            } else if param.is_kwargs_dict(db) {
+                s.push_str("**");
             }
+
             match param.name(db) {
-                Some(name) if !name.is_missing() => {
+                Some(name) if !name.is_missing() && !name.as_str().is_empty() => {
                     s.push_str(name.as_str());
-                    if !ty.is_unknown() {
-                        s.push_str(": ");
-                        let _ = write!(&mut s, "{}", ty.display(db));
+
+                    let ty = if param.is_args_list(db) {
+                        ty.variable_tuple_element_ty()
+                    } else if param.is_kwargs_dict(db) {
+                        ty.dict_value_ty()
+                    } else {
+                        if !ty.is_unknown() {
+                            let _ = write!(&mut s, ": {}", ty.display(db));
+                        }
+                        return s;
+                    };
+
+                    s.push_str(": ");
+                    match ty {
+                        Some(ty) => {
+                            let _ = write!(&mut s, "{}", ty.display(db));
+                        }
+                        None => s.push_str("Unknown"),
                     }
                 }
                 _ => {}
             }
+
             s
         })
         .collect();
@@ -111,19 +133,10 @@ pub(crate) fn signature_help(
         .resolve_call_expr_active_param(file, &expr, active_arg)
         .unwrap_or(DEFAULT_ACTIVE_PARAMETER_INDEX); // active_parameter defaults to 0, so we just add a crazy high value here to avoid a false positive
 
-    // TODO(withered-magic): This logic should probably be more sophisticated, but it works well
-    // enough for now.
-    let doc = func.doc(db).map(|doc| {
-        doc.lines()
-            .map(|line| format!("{}  ", line.trim_start()))
-            .collect::<Vec<_>>()
-            .join("\n")
-    });
-
     Some(SignatureHelp {
         signatures: vec![SignatureInfo {
             label,
-            documentation: doc,
+            documentation: func.doc(db).map(|doc| deindent_doc(&doc)),
             parameters: Some(
                 params
                     .into_iter()

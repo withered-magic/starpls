@@ -1,4 +1,7 @@
-use crate::{util::pick_best_token, Database, FilePosition};
+use crate::{
+    util::{deindent_doc, pick_best_token},
+    Database, FilePosition,
+};
 use starpls_common::{parse, Db as _};
 use starpls_hir::{DisplayWithDb, Semantics};
 use starpls_syntax::{
@@ -74,14 +77,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
         text.push_str("\n```\n");
 
         if let Some(doc) = ty.doc(db) {
-            // TODO(withered-magic): This logic should probably be more sophisticated, but it works well
-            // enough for now.
-            let doc = doc
-                .lines()
-                .map(|line| format!("{}  ", line.trim_start()))
-                .collect::<Vec<_>>()
-                .join("\n");
-            text.push_str(&doc);
+            text.push_str(&deindent_doc(&doc));
             text.push('\n');
         }
 
@@ -125,8 +121,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             let mut text = String::from("```python\n(function) ");
             write!(text, "{}\n```\n", func.ty(db).display(db)).ok()?;
             if let Some(doc) = func.doc(db) {
-                // TODO(withered-magic): Preserve indentation.
-                text.push_str(doc.trim());
+                text.push_str(&deindent_doc(&doc));
                 text.push('\n');
             }
             return Some(text.into());

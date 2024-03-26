@@ -118,7 +118,12 @@ pub(crate) fn completions(
             is_in_for,
             is_loop_variable,
         }) => {
-            for name in params.iter().filter_map(|param| param.name(db)) {
+            // Add completions for parameter names (excluding arg list and kwarg dict parameters).
+            for name in params
+                .iter()
+                .filter(|param| !param.is_args_list(db) && !param.is_kwargs_dict(db))
+                .filter_map(|param| param.name(db))
+            {
                 items.push(CompletionItem {
                     label: format!("{}=", name.as_str()),
                     kind: CompletionItemKind::Variable,
@@ -126,6 +131,7 @@ pub(crate) fn completions(
                     relevance: CompletionRelevance::Parameter,
                 });
             }
+
             if !is_loop_variable {
                 add_globals(&mut items);
                 for (name, decl) in names {
@@ -142,6 +148,7 @@ pub(crate) fn completions(
                         relevance: CompletionRelevance::VariableOrKeyword,
                     });
                 }
+
                 if is_lone_expr {
                     add_keywords(&mut items, is_in_def, is_in_for);
                 }

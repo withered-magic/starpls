@@ -315,7 +315,7 @@ impl<'a> LoweringContext<'a> {
             let prefix = format!("{}:", name);
             doc.as_ref().and_then(|doc| {
                 doc.lines().find_map(|line| {
-                    let line = line.trim();
+                    let line = line.trim().trim_start_matches('*');
                     if line.starts_with(&prefix) {
                         Some(line[prefix.len()..].to_string().into_boxed_str())
                     } else {

@@ -1074,7 +1074,8 @@ impl TyCtxt<'_> {
 
                         // Add the current file to the load resolution stack.
                         self.push_load_resolution(file, load_stmt, |tcx| {
-                            tcx.infer_all_load_items(loaded_file);
+                            // TODO(withered-magic): This is potentially super slow.
+                            // tcx.infer_all_load_items(loaded_file);
 
                             match Resolver::resolve_export_in_file(
                                 db,

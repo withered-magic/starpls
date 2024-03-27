@@ -430,6 +430,10 @@ impl Ty {
         }
     }
 
+    fn is_attribute(&self) -> bool {
+        matches!(self.kind(), TyKind::Attribute(_))
+    }
+
     fn as_attribute(&self) -> &Attribute {
         match self.kind() {
             TyKind::Attribute(attr) => attr,
@@ -774,8 +778,8 @@ pub enum AttributeKind {
     Output,
     OutputList,
     String,
-    StringList,
     StringDict,
+    StringList,
     StringListDict,
 }
 

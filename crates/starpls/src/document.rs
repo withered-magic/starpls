@@ -98,16 +98,15 @@ impl DocumentManager {
     }
 
     pub(crate) fn close(&mut self, path: &PathBuf) {
-        self.has_closed_or_opened_documents = true;
-
-        let file_id = self.path_interner.intern_path(path.clone());
-        if let Some(document) = self.documents.get_mut(&file_id) {
-            document.source = DocumentSource::Disk;
-        };
+        if let Some(file_id) = self.path_interner.lookup_by_path_buf(&path) {
+            self.has_closed_or_opened_documents = true;
+            if let Some(document) = self.documents.get_mut(&file_id) {
+                document.source = DocumentSource::Disk;
+            };
+        }
     }
 
-    pub(crate) fn modify(&mut self, path: PathBuf, contents: String, version: Option<i32>) {
-        let file_id = self.path_interner.intern_path(path);
+    pub(crate) fn modify(&mut self, file_id: FileId, contents: String, version: Option<i32>) {
         if let Some(document) = self.documents.get_mut(&file_id) {
             document.contents = contents;
             document.source = version.into();
@@ -147,7 +146,7 @@ pub(crate) struct PathInterner {
 
 impl PathInterner {
     pub(crate) fn intern_path(&self, path: PathBuf) -> FileId {
-        let index = self.map.write().insert_full(path).0;
+        let index = self.map.write().insert_full(path.clone()).0;
         FileId(index as u32)
     }
 

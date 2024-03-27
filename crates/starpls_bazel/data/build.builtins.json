@@ -2,13 +2,13 @@
     "builtins": [
         {
             "name": "package",
-            "doc": "This function declares metadata that applies to every rule in the package. It is used at most once within a package (BUILD file).\n\nFor the counterpart that declares metadata applying to every rule in the whole repository, use the <code>repo()</code> function in the <code>REPO.bazel</code> file at the root of your repo. The <code>repo()</code> function takes exactly the same arguments as <code>package()</code>.\n\nThe package() function should be called right after all the load() statements at the top of the file, before any rule.",
+            "doc": "This function declares metadata that applies to every rule in the package. It is used at most once within a package (BUILD file).\n\nFor the counterpart that declares metadata applying to every rule in the whole repository, use the `repo()` function in the `REPO.bazel` file at the root of your repo. The `repo()` function takes exactly the same arguments as `package()`.\n\nThe package() function should be called right after all the load() statements at the top of the file, before any rule.",
             "callable": {
                 "params": [
                     {
                         "name": "default_applicable_licenses",
                         "type": "List of Labels",
-                        "doc": "Alias for <code>default_package_metadata</code>.",
+                        "doc": "Alias for `default_package_metadata`.",
                         "default_value": "[]",
                         "is_mandatory": false,
                         "is_star_arg": false,
@@ -17,7 +17,7 @@
                     {
                         "name": "default_visibility",
                         "type": "List of Labels",
-                        "doc": "The default visibility of the rules in this package.\n\nEvery rule in this package has the visibility specified in this attribute, unless otherwise specified in the <code>visibility</code> attribute of the rule. For detailed information about the syntax of this attribute, see the documentation of visibility. The package default visibility does not apply to exports_files, which is public by default.",
+                        "doc": "The default visibility of the rules in this package.\n\nEvery rule in this package has the visibility specified in this attribute, unless otherwise specified in the `visibility` attribute of the rule. For detailed information about the syntax of this attribute, see the documentation of visibility. The package default visibility does not apply to exports_files, which is public by default.",
                         "default_value": "[]",
                         "is_mandatory": false,
                         "is_star_arg": false,
@@ -26,7 +26,7 @@
                     {
                         "name": "default_deprecation",
                         "type": "string",
-                        "doc": "Sets the default <code>deprecation</code> message for all rules in this package.",
+                        "doc": "Sets the default `deprecation` message for all rules in this package.",
                         "default_value": "\"\"",
                         "is_mandatory": false,
                         "is_star_arg": false,
@@ -44,7 +44,7 @@
                     {
                         "name": "default_testonly",
                         "type": "boolean",
-                        "doc": "Sets the default <code>testonly</code> property for all rules in this package.\n\nIn packages under <code>javatests</code> the default value is <code>True</code>.",
+                        "doc": "Sets the default `testonly` property for all rules in this package.\n\nIn packages under `javatests` the default value is `True`.",
                         "default_value": "False",
                         "is_mandatory": false,
                         "is_star_arg": false,

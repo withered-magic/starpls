@@ -2,13 +2,13 @@
     "builtins": [
         {
             "name": "module_extension",
-            "doc": "Creates a new module extension. Store it in a global value, so that it can be exported and used in a MODULE.bazel file with <code>use_extension</code>.",
+            "doc": "Creates a new module extension. Store it in a global value, so that it can be exported and used in a MODULE.bazel file with `use_extension`.",
             "callable": {
                 "params": [
                     {
                         "name": "implementation",
                         "type": "Unknown",
-                        "doc": "The function that implements this module extension. Must take a single parameter, <code>module_ctx</code>. The function is called once at the beginning of a build to determine the set of available repos.",
+                        "doc": "The function that implements this module extension. Must take a single parameter, `module_ctx`. The function is called once at the beginning of a build to determine the set of available repos.",
                         "default_value": "",
                         "is_mandatory": true,
                         "is_star_arg": false,
@@ -17,7 +17,7 @@
                     {
                         "name": "tag_classes",
                         "type": "Unknown",
-                        "doc": "A dictionary to declare all the tag classes used by the extension. It maps from the name of the tag class to a <code>tag_class</code> object.",
+                        "doc": "A dictionary to declare all the tag classes used by the extension. It maps from the name of the tag class to a `tag_class` object.",
                         "default_value": "{}",
                         "is_mandatory": false,
                         "is_star_arg": false,
@@ -65,13 +65,13 @@
         },
         {
             "name": "repository_rule",
-            "doc": "Creates a new repository rule. Store it in a global value, so that it can be loaded and called from a <code>module extension</code> implementation function, or used by <code>use_repo_rule</code>.",
+            "doc": "Creates a new repository rule. Store it in a global value, so that it can be loaded and called from a `module extension` implementation function, or used by `use_repo_rule`.",
             "callable": {
                 "params": [
                     {
                         "name": "implementation",
                         "type": "Unknown",
-                        "doc": "The function that implements this rule. Must have a single parameter, <code>repository_ctx</code>. The function is called during the loading phase for each instance of the rule.",
+                        "doc": "The function that implements this rule. Must have a single parameter, `repository_ctx`. The function is called during the loading phase for each instance of the rule.",
                         "default_value": "",
                         "is_mandatory": true,
                         "is_star_arg": false,
@@ -98,7 +98,7 @@
                     {
                         "name": "environ",
                         "type": "sequence of strings",
-                        "doc": "Deprecated. This parameter has been deprecated. Migrate to <code>repository_ctx.getenv</code> instead. Provides a list of environment variable that this repository rule depends on. If an environment variable in that list change, the repository will be refetched.",
+                        "doc": "Deprecated. This parameter has been deprecated. Migrate to `repository_ctx.getenv` instead. Provides a list of environment variable that this repository rule depends on. If an environment variable in that list change, the repository will be refetched.",
                         "default_value": "[]",
                         "is_mandatory": false,
                         "is_star_arg": false,
@@ -116,7 +116,7 @@
                     {
                         "name": "remotable",
                         "type": "boolean",
-                        "doc": "Experimental. This parameter is experimental and may change at any time. Please do not depend on it. It may be enabled on an experimental basis by setting <code>---experimental_repo_remote_exec</code>. Compatible with remote execution",
+                        "doc": "Experimental. This parameter is experimental and may change at any time. Please do not depend on it. It may be enabled on an experimental basis by setting `---experimental_repo_remote_exec`. Compatible with remote execution",
                         "default_value": "False",
                         "is_mandatory": false,
                         "is_star_arg": false,
@@ -137,7 +137,7 @@
         },
         {
             "name": "tag_class",
-            "doc": "Creates a new <code>tag_class</code> object, which defines an attribute schema for a class of tags, which are data objects usable by a module extension.",
+            "doc": "Creates a new `tag_class` object, which defines an attribute schema for a class of tags, which are data objects usable by a module extension.",
             "callable": {
                 "params": [
                     {

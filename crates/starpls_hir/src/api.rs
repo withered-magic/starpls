@@ -204,6 +204,7 @@ impl SemanticsScope<'_> {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Type {
     pub(crate) ty: Ty,
 }

@@ -166,8 +166,8 @@ impl BuiltinFunction {
                     }
                 }
                 Some(
-                    TyKind::Attribute(Attribute {
-                        kind: match flag {
+                    TyKind::Attribute(Attribute::new_from_source(
+                        match flag {
                             AttrBool => AttributeKind::Bool,
                             AttrInt => AttributeKind::Int,
                             AttrIntList => AttributeKind::IntList,
@@ -183,7 +183,7 @@ impl BuiltinFunction {
                         },
                         doc,
                         mandatory,
-                    })
+                    ))
                     .intern(),
                 )
             }

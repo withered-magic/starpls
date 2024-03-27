@@ -532,7 +532,51 @@ impl TyCtxt<'_> {
                             None => resolve_type_ref(db, &func.ret_type_ref(db)).0,
                         }
                     }
-                    TyKind::Rule(_) => self.none_ty(),
+                    TyKind::Rule(rule) => {
+                        let mut slots: Slots = rule.into();
+                        slots.assign_args(&args, None);
+
+                        let mut missing_attrs = Vec::new();
+
+                        // Validate argument types.
+                        for ((name, attr), slot) in rule.attrs().zip(slots.into_inner()) {
+                            let expected_ty = attr.expected_ty();
+                            match slot {
+                                Slot::Keyword { provider, .. } => match provider {
+                                    SlotProvider::Single(_, index) => {
+                                        let ty = &arg_tys[index];
+                                        if !assign_tys(db, ty, &expected_ty) {
+                                            self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), expected_ty.display(self.db).alt()));
+                                        }
+                                    }
+                                    SlotProvider::Missing => {
+                                        if attr.mandatory(db) {
+                                            missing_attrs.push(name);
+                                        }
+                                    }
+                                    _ => {}
+                                },
+                                _ => unreachable!(),
+                            }
+                        }
+
+                        // Emit diagnostic for missing parameters.
+                        if !missing_attrs.is_empty() {
+                            let mut message = String::from("Argument missing for attribute(s) ");
+                            for (i, name) in missing_attrs.iter().enumerate() {
+                                if i > 0 {
+                                    message.push_str(", ");
+                                }
+                                message.push('"');
+                                message.push_str(name.as_str());
+                                message.push('"');
+                            }
+
+                            self.add_expr_diagnostic(file, expr, message);
+                        }
+
+                        self.none_ty()
+                    }
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.unknown_ty(),
                     _ => self.add_expr_diagnostic_ty(
                         file,
@@ -1149,6 +1193,7 @@ impl TyCtxt<'_> {
                     }
                     TyKind::IntrinsicFunction(func, _) => func.params(db)[..].into(),
                     TyKind::BuiltinFunction(func) => func.params(db)[..].into(),
+                    TyKind::Rule(rule) => rule.into(),
                     _ => return None,
                 };
 

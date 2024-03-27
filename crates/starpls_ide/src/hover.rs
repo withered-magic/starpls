@@ -143,10 +143,10 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
                 .and_then(|args| args.syntax().parent())
                 .and_then(|parent| ast::CallExpr::cast(parent))?;
             let func = sema.resolve_call_expr(file, &call)?;
-            let (name, param) = func.params(db).into_iter().find_map(|(param, _)| {
+            let (name, param, ty) = func.params(db).into_iter().find_map(|(param, ty)| {
                 let name = param.name(db)?;
                 if name.as_str() == name_text {
-                    Some((name, param))
+                    Some((name, param, ty))
                 } else {
                     None
                 }
@@ -155,7 +155,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             let mut text = format!(
                 "```python\n(parameter) {}: {}\n```\n",
                 name.as_str(),
-                param.ty(db).display(db)
+                ty.display(db),
             );
 
             if let Some(doc) = param.doc(db) {

@@ -3,7 +3,7 @@
 //! but with a couple of modifications for handling "*args" and "**kwargs" arguments.
 use crate::{
     def::{Argument, Param},
-    typeck::{builtins::BuiltinFunctionParam, intrinsics::IntrinsicFunctionParam},
+    typeck::{builtins::BuiltinFunctionParam, intrinsics::IntrinsicFunctionParam, Rule},
     ExprId, Name,
 };
 use smallvec::{smallvec, SmallVec};
@@ -13,7 +13,10 @@ pub(crate) struct ArgError {
     pub(crate) message: String,
 }
 
-pub(crate) struct Slots(SmallVec<[Slot; 5]>);
+pub(crate) struct Slots {
+    slots: SmallVec<[Slot; 5]>,
+    disable_errors: bool,
+}
 
 impl Slots {
     pub(crate) fn assign_args(
@@ -32,7 +35,7 @@ impl Slots {
                     // Look for a positional/keyword parameter with no provider, or for a
                     // "*args" parameter.
                     let provider = SlotProvider::Single(*expr, arg_index);
-                    for (slot_index, slot) in self.0.iter_mut().enumerate() {
+                    for (slot_index, slot) in self.slots.iter_mut().enumerate() {
                         match slot {
                             Slot::Positional {
                                 provider: provider2 @ SlotProvider::Missing,
@@ -62,15 +65,17 @@ impl Slots {
                         }
                     }
 
-                    errors.push(ArgError {
-                        expr: *expr,
-                        message: "Unexpected positional argument".to_string(),
-                    });
+                    if !self.disable_errors {
+                        errors.push(ArgError {
+                            expr: *expr,
+                            message: "Unexpected positional argument".to_string(),
+                        });
+                    }
                 }
                 Argument::UnpackedList { expr } => {
                     // Mark all unfilled positional slots as well as the "*args" slot as being
                     // provided by this argument.
-                    for slot in self.0.iter_mut() {
+                    for slot in self.slots.iter_mut() {
                         match slot {
                             Slot::Positional {
                                 provider: provider @ SlotProvider::Missing,
@@ -105,7 +110,7 @@ impl Slots {
                     // Look for either a keyword parameter matching this argument's
                     // name, or for the "**kwargs" parameter.
                     let provider = SlotProvider::Single(*expr, arg_index);
-                    for (slot_index, slot) in self.0.iter_mut().enumerate() {
+                    for (slot_index, slot) in self.slots.iter_mut().enumerate() {
                         match slot {
                             Slot::Keyword {
                                 name,
@@ -130,15 +135,20 @@ impl Slots {
                         }
                     }
 
-                    errors.push(ArgError {
-                        expr: *expr,
-                        message: format!("Unexpected keyword argument \"{}\"", arg_name.as_str()),
-                    });
+                    if !self.disable_errors {
+                        errors.push(ArgError {
+                            expr: *expr,
+                            message: format!(
+                                "Unexpected keyword argument \"{}\"",
+                                arg_name.as_str()
+                            ),
+                        });
+                    }
                 }
                 Argument::UnpackedDict { expr } => {
                     // Mark all keyword slots as well as the "**kwargs" slot as being provided by
                     // this argument.
-                    for slot in self.0.iter_mut() {
+                    for slot in self.slots.iter_mut() {
                         match slot {
                             Slot::Keyword { provider, .. } => {
                                 *provider = SlotProvider::KwargsDict(*expr, arg_index)
@@ -156,7 +166,7 @@ impl Slots {
 
         // Do a quick check for a "fake" active argument, which is always assumed to be positional.
         if active_arg == Some(args.len()) {
-            for (slot_index, slot) in self.0.iter_mut().enumerate() {
+            for (slot_index, slot) in self.slots.iter_mut().enumerate() {
                 match slot {
                     Slot::Positional {
                         provider: SlotProvider::Missing,
@@ -178,7 +188,7 @@ impl Slots {
     }
 
     pub(crate) fn into_inner(self) -> SmallVec<[Slot; 5]> {
-        self.0
+        self.slots
     }
 }
 
@@ -250,7 +260,10 @@ impl From<&[Param]> for Slots {
             }
         }
 
-        Self(slots)
+        Self {
+            slots,
+            disable_errors: false,
+        }
     }
 }
 
@@ -301,7 +314,10 @@ impl From<&[IntrinsicFunctionParam]> for Slots {
             }
         }
 
-        Self(slots)
+        Self {
+            slots,
+            disable_errors: false,
+        }
     }
 }
 
@@ -342,6 +358,26 @@ impl From<&[BuiltinFunctionParam]> for Slots {
             }
         }
 
-        Self(slots)
+        Self {
+            slots,
+            disable_errors: false,
+        }
+    }
+}
+
+impl From<&Rule> for Slots {
+    fn from(rule: &Rule) -> Self {
+        Self {
+            slots: rule
+                .attrs
+                .iter()
+                .map(|(name, _)| Slot::Keyword {
+                    name: name.clone(),
+                    provider: SlotProvider::Missing,
+                    positional: false,
+                })
+                .collect(),
+            disable_errors: false,
+        }
     }
 }

@@ -8,7 +8,7 @@ use crate::{
             IntrinsicFunctionParam, Intrinsics,
         },
     },
-    Db, Name, Type,
+    Db, Name,
 };
 use crossbeam::atomic::AtomicCell;
 use itertools::Itertools;
@@ -336,19 +336,15 @@ impl Ty {
                     (param, ty)
                 }))
             }
-            TyKind::Rule(Rule { attrs, .. }) => {
-                Params::Rule(attrs.iter().filter(|(_, ty)| ty.attribute().is_some()).map(
-                    |(name, ty)| {
-                        (
-                            Param(ParamInner::RuleParam {
-                                name: name.clone(),
-                                ty: ty.clone(),
-                            }),
-                            TyKind::Unknown.intern(),
-                        )
-                    },
-                ))
-            }
+            TyKind::Rule(Rule { attrs, .. }) => Params::Rule(attrs.iter().map(|(name, ty)| {
+                (
+                    Param(ParamInner::RuleParam {
+                        name: name.clone(),
+                        ty: ty.clone(),
+                    }),
+                    ty.attribute().expected_ty(),
+                )
+            })),
             _ => return None,
         })
     }
@@ -402,10 +398,10 @@ impl Ty {
         }
     }
 
-    fn attribute(&self) -> Option<&Attribute> {
+    fn attribute(&self) -> &Attribute {
         match self.kind() {
-            TyKind::Attribute(attr) => Some(attr),
-            _ => None,
+            TyKind::Attribute(attr) => attr,
+            _ => panic!("attribute() called on invalid TyKind"),
         }
     }
 }
@@ -477,34 +473,11 @@ impl Param {
                 | BuiltinFunctionParam::KwargsDict { doc, .. } => doc.clone(),
             },
             ParamInner::IntrinsicParam { .. } => return None,
-            ParamInner::RuleParam { ty, .. } => {
-                return ty.attribute().and_then(|attr| match &attr.doc {
-                    Some(doc) => Some(doc.to_string()),
-                    None => None,
-                })
-            }
-        })
-    }
-
-    pub fn ty(&self, db: &dyn Db) -> Type {
-        match self.0 {
-            ParamInner::Param { parent, index } => parent.and_then(|parent| {
-                let module = module(db, parent.file(db));
-                module[parent.params(db)[index]]
-                    .type_ref()
-                    .map(|type_ref| resolve_type_ref(db, &type_ref).0)
-            }),
-            ParamInner::IntrinsicParam { parent, index } => parent.params(db)[index].ty(),
-            ParamInner::BuiltinParam { parent, index } => parent.params(db)[index]
-                .type_ref()
-                .map(|type_ref| resolve_type_ref(db, &type_ref).0),
-            ParamInner::RuleParam { ref ty, .. } => match ty.kind() {
-                TyKind::Attribute(attr) => Some(attr.expected_ty()),
-                _ => None,
+            ParamInner::RuleParam { ty, .. } => match ty.attribute().doc(db) {
+                Some(doc) => doc.to_string(),
+                None => return None,
             },
-        }
-        .unwrap_or_else(|| TyKind::Unknown.intern())
-        .into()
+        })
     }
 
     pub fn is_args_list(&self, db: &dyn Db) -> bool {
@@ -753,21 +726,47 @@ pub enum AttributeKind {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Attribute {
     pub kind: AttributeKind,
-    pub doc: Option<Box<str>>,
-    pub mandatory: bool,
+    info: AttributeInfo,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum AttributeInfo {
+    /// An attribute defined by the user.
+    Source {
+        doc: Option<Box<str>>,
+        mandatory: bool,
+    },
+    /// An attribute built into rules.
+    Builtin(usize),
 }
 
 impl Attribute {
+    pub fn new_from_source(kind: AttributeKind, doc: Option<Box<str>>, mandatory: bool) -> Self {
+        Self {
+            kind,
+            info: AttributeInfo::Source { doc, mandatory },
+        }
+    }
+
+    pub fn new_from_builtin(kind: AttributeKind, index: usize) -> Self {
+        Self {
+            kind,
+            info: AttributeInfo::Builtin(index),
+        }
+    }
+
     pub fn expected_ty(&self) -> Ty {
         match self.kind {
             AttributeKind::Bool => TyKind::Bool,
             AttributeKind::Int => TyKind::Int,
             AttributeKind::IntList => TyKind::List(TyKind::Int.intern()),
-            // AttributeKind::Label => TyKind::,
-            // AttributeKind::LabelKeyedStringDict => todo!(),
-            // AttributeKind::LabelList => todo!(),
-            // AttributeKind::Output => todo!(),
-            // AttributeKind::OutputList => todo!(),
+            AttributeKind::Label => TyKind::String,
+            AttributeKind::LabelKeyedStringDict => {
+                TyKind::Dict(TyKind::String.intern(), TyKind::String.intern(), None)
+            }
+            AttributeKind::LabelList => TyKind::List(TyKind::String.intern()),
+            AttributeKind::Output => TyKind::String,
+            AttributeKind::OutputList => TyKind::List(TyKind::String.intern()),
             AttributeKind::String => TyKind::String,
             AttributeKind::StringList => TyKind::List(TyKind::String.intern()),
             AttributeKind::StringListDict => TyKind::Dict(
@@ -775,16 +774,35 @@ impl Attribute {
                 TyKind::List(TyKind::String.intern()).intern(),
                 None,
             ),
-            _ => TyKind::Unknown,
         }
         .intern()
+    }
+
+    pub fn doc(&self, _db: &dyn Db) -> Option<&str> {
+        match &self.info {
+            AttributeInfo::Source { doc, .. } => doc.as_deref(),
+            AttributeInfo::Builtin(_) => None,
+        }
+    }
+
+    pub fn mandatory(&self, _db: &dyn Db) -> bool {
+        match &self.info {
+            AttributeInfo::Source { mandatory, .. } => *mandatory,
+            AttributeInfo::Builtin(_) => false,
+        }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Rule {
-    pub attrs: Box<[(Name, Ty)]>,
+    attrs: Box<[(Name, Ty)]>,
     pub doc: Option<Box<str>>,
+}
+
+impl Rule {
+    pub fn attrs(&self) -> impl Iterator<Item = (&Name, &Attribute)> {
+        self.attrs.iter().map(|(name, ty)| (name, ty.attribute()))
+    }
 }
 
 impl_internable!(TyKind);

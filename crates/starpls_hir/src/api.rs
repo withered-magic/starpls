@@ -9,7 +9,7 @@ use crate::{
         builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref, ParamInner,
         Substitution, Tuple, Ty, TypeRef,
     },
-    Db, DisplayWithDb, ExprId, Name, TyKind,
+    Db, ExprId, Name, TyKind,
 };
 use starpls_common::{Diagnostic, Diagnostics, File};
 use starpls_syntax::{
@@ -32,7 +32,7 @@ impl<'a> Semantics<'a> {
         Self { db }
     }
 
-    pub fn function_for_def(&self, file: File, stmt: ast::DefStmt) -> Option<Function> {
+    pub fn callable_for_def(&self, file: File, stmt: ast::DefStmt) -> Option<Callable> {
         let ptr = AstPtr::new(&ast::Statement::cast(stmt.syntax().clone())?);
         let stmt = source_map(self.db, file).stmt_map.get(&ptr)?;
         match &module(self.db, file)[*stmt] {
@@ -49,12 +49,13 @@ impl<'a> Semantics<'a> {
         )
     }
 
-    pub fn resolve_call_expr(&self, file: File, expr: &ast::CallExpr) -> Option<Function> {
+    pub fn resolve_call_expr(&self, file: File, expr: &ast::CallExpr) -> Option<Callable> {
         let ty = self.type_of_expr(file, &expr.callee()?)?;
         Some(match ty.ty.kind() {
             TyKind::Function(func) => (*func).into(),
             TyKind::IntrinsicFunction(func, _) => (*func).into(),
             TyKind::BuiltinFunction(func) => (*func).into(),
+            TyKind::Rule(_) => Callable(CallableInner::Rule(ty.ty.clone())),
             _ => return None,
         })
     }
@@ -126,7 +127,7 @@ pub struct LoadItem {
 }
 
 pub enum ScopeDef {
-    Function(Function),
+    Callable(Callable),
     Variable(Variable),
     Parameter(Param),
     LoadItem(LoadItem),
@@ -136,7 +137,7 @@ impl ScopeDef {
     pub fn syntax_node_ptr(&self, db: &dyn Db, file: File) -> Option<SyntaxNodePtr> {
         let source_map = source_map(db, file);
         match self {
-            ScopeDef::Function(Function(FunctionInner::HirDef(func))) => Some(func.ptr(db)),
+            ScopeDef::Callable(Callable(CallableInner::HirDef(func))) => Some(func.ptr(db)),
             ScopeDef::Variable(Variable { id: Some(id) }) => source_map
                 .expr_map_back
                 .get(id)
@@ -170,9 +171,9 @@ impl ScopeDef {
 impl From<scope::ScopeDef> for ScopeDef {
     fn from(value: scope::ScopeDef) -> Self {
         match value {
-            scope::ScopeDef::Function(it) => ScopeDef::Function(it.into()),
-            scope::ScopeDef::IntrinsicFunction(it) => ScopeDef::Function(it.into()),
-            scope::ScopeDef::BuiltinFunction(it) => ScopeDef::Function(it.into()),
+            scope::ScopeDef::Function(it) => ScopeDef::Callable(it.into()),
+            scope::ScopeDef::IntrinsicFunction(it) => ScopeDef::Callable(it.into()),
+            scope::ScopeDef::BuiltinFunction(it) => ScopeDef::Callable(it.into()),
             scope::ScopeDef::Variable(it) => ScopeDef::Variable(Variable { id: Some(it.expr) }),
             scope::ScopeDef::BuiltinVariable(_) => ScopeDef::Variable(Variable { id: None }),
             scope::ScopeDef::Parameter(ParameterDef {
@@ -203,8 +204,9 @@ impl SemanticsScope<'_> {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Type {
-    ty: Ty,
+    pub(crate) ty: Ty,
 }
 
 impl Type {
@@ -236,6 +238,7 @@ impl Type {
             TyKind::BuiltinType(type_) => type_.doc(db).clone(),
             TyKind::Function(func) => return func.doc(db).map(|doc| doc.to_string()),
             TyKind::IntrinsicFunction(func, _) => func.doc(db).clone(),
+            TyKind::Rule(rule) => return rule.doc.as_ref().map(Box::to_string),
             _ => return None,
         })
     }
@@ -249,8 +252,13 @@ impl Type {
         fields.map(|(name, ty)| (name, ty.into())).collect()
     }
 
-    pub fn known_keys(&self) -> Option<&[Box<str>]> {
-        self.ty.known_keys()
+    pub fn known_keys(&self) -> Option<Vec<String>> {
+        self.ty.known_keys().map(|known_keys| {
+            known_keys
+                .iter()
+                .map(|(name, _)| name.to_string())
+                .collect()
+        })
     }
 
     pub fn dict_value_ty(&self) -> Option<Type> {
@@ -274,24 +282,15 @@ impl From<Ty> for Type {
     }
 }
 
-impl DisplayWithDb for Type {
-    fn fmt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.ty.fmt(db, f)
-    }
+pub struct Callable(CallableInner);
 
-    fn fmt_alt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.ty.fmt_alt(db, f)
-    }
-}
-
-pub struct Function(FunctionInner);
-
-impl Function {
+impl Callable {
     pub fn name(&self, db: &dyn Db) -> Name {
         match self.0 {
-            FunctionInner::HirDef(func) => func.name(db),
-            FunctionInner::IntrinsicFunction(func) => func.name(db),
-            FunctionInner::BuiltinFunction(func) => func.name(db),
+            CallableInner::HirDef(func) => func.name(db),
+            CallableInner::IntrinsicFunction(func) => func.name(db),
+            CallableInner::BuiltinFunction(func) => func.name(db),
+            CallableInner::Rule(_) => Name::new_inline("rule"),
         }
     }
 
@@ -301,12 +300,13 @@ impl Function {
 
     pub fn ty(&self, db: &dyn Db) -> Type {
         match self.0 {
-            FunctionInner::HirDef(func) => TyKind::Function(func).intern(),
-            FunctionInner::IntrinsicFunction(func) => {
+            CallableInner::HirDef(func) => TyKind::Function(func).intern(),
+            CallableInner::IntrinsicFunction(func) => {
                 TyKind::IntrinsicFunction(func, Substitution::new_identity(func.num_vars(db)))
                     .intern()
             }
-            FunctionInner::BuiltinFunction(func) => TyKind::BuiltinFunction(func).intern(),
+            CallableInner::BuiltinFunction(func) => TyKind::BuiltinFunction(func).intern(),
+            CallableInner::Rule(ref ty) => ty.clone().into(),
         }
         .into()
     }
@@ -321,37 +321,42 @@ impl Function {
 
     pub fn doc(&self, db: &dyn Db) -> Option<String> {
         match self.0 {
-            FunctionInner::HirDef(func) => func.doc(db).map(|doc| doc.to_string()),
-            FunctionInner::BuiltinFunction(func) => Some(func.doc(db).clone()),
-            FunctionInner::IntrinsicFunction(func) => Some(func.doc(db).clone()),
+            CallableInner::HirDef(func) => func.doc(db).map(|doc| doc.to_string()),
+            CallableInner::BuiltinFunction(func) => Some(func.doc(db).clone()),
+            CallableInner::IntrinsicFunction(func) => Some(func.doc(db).clone()),
+            CallableInner::Rule(ref ty) => match ty.kind() {
+                TyKind::Rule(rule) => rule.doc.as_ref().map(Box::to_string),
+                _ => None,
+            },
         }
     }
 
     pub fn is_user_defined(&self) -> bool {
-        matches!(self.0, FunctionInner::HirDef(_))
+        matches!(self.0, CallableInner::HirDef(_))
     }
 }
 
-impl From<HirDefFunction> for Function {
+impl From<HirDefFunction> for Callable {
     fn from(func: HirDefFunction) -> Self {
-        Self(FunctionInner::HirDef(func))
+        Self(CallableInner::HirDef(func))
     }
 }
 
-impl From<IntrinsicFunction> for Function {
+impl From<IntrinsicFunction> for Callable {
     fn from(func: IntrinsicFunction) -> Self {
-        Self(FunctionInner::IntrinsicFunction(func))
+        Self(CallableInner::IntrinsicFunction(func))
     }
 }
 
-impl From<BuiltinFunction> for Function {
+impl From<BuiltinFunction> for Callable {
     fn from(func: BuiltinFunction) -> Self {
-        Self(FunctionInner::BuiltinFunction(func))
+        Self(CallableInner::BuiltinFunction(func))
     }
 }
 
-enum FunctionInner {
+enum CallableInner {
     HirDef(HirDefFunction),
     IntrinsicFunction(IntrinsicFunction),
     BuiltinFunction(BuiltinFunction),
+    Rule(Ty),
 }

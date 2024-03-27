@@ -8,6 +8,7 @@ pub use crate::{
     label::{Label, ParseError},
 };
 
+pub mod attr;
 pub mod build_language;
 pub mod client;
 pub mod env;
@@ -34,6 +35,7 @@ pub mod build {
 }
 
 pub const BUILTINS_TYPES_DENY_LIST: &[&str] = &[
+    "Attribute",
     "bool",
     "bytes",
     "builtin_function_or_method",

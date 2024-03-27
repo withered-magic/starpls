@@ -29,13 +29,14 @@ rust_prost_library(
 rust_library(
     name = "starpls_bazel",
     srcs = glob(["src/**/*.rs"]),
-    rustc_flags = ["--cfg=bazel"],
     compile_data = [
         ":data/build.builtins.json",
         ":data/bzl.builtins.json",
+        ":data/commonAttributes.json",
         ":data/module-bazel.builtins.json",
         ":data/workspace.builtins.json",
     ],
+    rustc_flags = ["--cfg=bazel"],
     deps = [
         ":build_proto_rust",
         ":builtin_proto_rust",

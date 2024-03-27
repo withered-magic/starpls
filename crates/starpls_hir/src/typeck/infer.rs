@@ -164,7 +164,7 @@ impl TyCtxt<'_> {
                     .filter_map(|entry| match &curr_module[entry.key] {
                         Expr::Literal {
                             literal: Literal::String(s),
-                        } => Some(s.clone()),
+                        } => Some((s.clone(), self.infer_expr(file, entry.value))),
                         _ => None,
                     })
                     .collect::<Vec<_>>();
@@ -526,10 +526,56 @@ impl TyCtxt<'_> {
                             self.add_expr_diagnostic(file, expr, message);
                         }
 
-                        match func.maybe_unique_ret_type(db, args.iter().zip(arg_tys.iter())) {
+                        match func.maybe_unique_ret_type(db, file, args.iter().zip(arg_tys.iter()))
+                        {
                             Some(ty) => ty,
                             None => resolve_type_ref(db, &func.ret_type_ref(db)).0,
                         }
+                    }
+                    TyKind::Rule(rule) => {
+                        let mut slots = Slots::from_rule(db, rule);
+                        slots.assign_args(&args, None);
+
+                        let mut missing_attrs = Vec::new();
+
+                        // Validate argument types.
+                        for ((name, attr), slot) in rule.attrs(db).zip(slots.into_inner()) {
+                            let expected_ty = attr.expected_ty();
+                            match slot {
+                                Slot::Keyword { provider, .. } => match provider {
+                                    SlotProvider::Single(_, index) => {
+                                        let ty = &arg_tys[index];
+                                        if !assign_tys(db, ty, &expected_ty) {
+                                            self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), expected_ty.display(self.db).alt()));
+                                        }
+                                    }
+                                    SlotProvider::Missing => {
+                                        if attr.mandatory {
+                                            missing_attrs.push(name);
+                                        }
+                                    }
+                                    _ => {}
+                                },
+                                _ => {}
+                            }
+                        }
+
+                        // Emit diagnostic for missing parameters.
+                        if !missing_attrs.is_empty() {
+                            let mut message = String::from("Argument missing for attribute(s) ");
+                            for (i, name) in missing_attrs.iter().enumerate() {
+                                if i > 0 {
+                                    message.push_str(", ");
+                                }
+                                message.push('"');
+                                message.push_str(name.as_str());
+                                message.push('"');
+                            }
+
+                            self.add_expr_diagnostic(file, expr, message);
+                        }
+
+                        self.none_ty()
                     }
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.unknown_ty(),
                     _ => self.add_expr_diagnostic_ty(
@@ -856,9 +902,15 @@ impl TyCtxt<'_> {
         first
             .map(|first| self.infer_expr(file, first))
             .and_then(|first_ty| {
+                let first_ty_kind = first_ty.kind();
                 exprs
                     .map(|expr| self.infer_expr(file, expr))
-                    .all(|ty| ty == first_ty)
+                    .all(|ty| match (ty.kind(), first_ty_kind) {
+                        // TODO(withered-magic): Special handling for attributes, which should always be considered
+                        // the same type.
+                        (TyKind::Attribute(_), TyKind::Attribute(_)) => true,
+                        _ => ty == first_ty,
+                    })
                     .then_some(first_ty)
             })
             .unwrap_or(default)
@@ -1141,6 +1193,7 @@ impl TyCtxt<'_> {
                     }
                     TyKind::IntrinsicFunction(func, _) => func.params(db)[..].into(),
                     TyKind::BuiltinFunction(func) => func.params(db)[..].into(),
+                    TyKind::Rule(rule) => Slots::from_rule(db, rule),
                     _ => return None,
                 };
 

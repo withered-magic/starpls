@@ -138,7 +138,7 @@ pub(crate) fn completions(
                     items.push(CompletionItem {
                         label: name.to_string(),
                         kind: match decl {
-                            ScopeDef::Function(_) => CompletionItemKind::Function,
+                            ScopeDef::Callable(_) => CompletionItemKind::Function,
                             ScopeDef::Variable(_) | ScopeDef::Parameter(_) => {
                                 CompletionItemKind::Variable
                             }
@@ -214,7 +214,7 @@ pub(crate) fn completions(
                 items.push(CompletionItem {
                     label: name.to_string(),
                     kind: match decl {
-                        ScopeDef::Function(it) if it.is_user_defined() => {
+                        ScopeDef::Callable(it) if it.is_user_defined() => {
                             CompletionItemKind::Function
                         }
                         ScopeDef::Variable(it) if it.is_user_defined() => {
@@ -351,17 +351,46 @@ impl CompletionContext {
 
         let analysis = if let Some(name_ref) = ast::NameRef::cast(parent.clone()) {
             // TODO(withered-magic): There's probably a better way to traverse up the tree.
-            let params = name_ref
+            let args = name_ref
                 .syntax()
                 .parent()
                 .and_then(|parent| ast::SimpleArgument::cast(parent))
                 .and_then(|arg| arg.syntax().parent())
-                .and_then(|parent| ast::Arguments::cast(parent))
+                .and_then(|parent| ast::Arguments::cast(parent));
+
+            let keyword_args = args
+                .as_ref()
+                .map(|args| {
+                    args.arguments()
+                        .filter_map(|arg| match arg {
+                            ast::Argument::Keyword(kwarg) => kwarg
+                                .name()
+                                .and_then(|name| name.name())
+                                .map(|name| name.text().to_string()),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_else(|| Vec::new());
+
+            let params = args
                 .and_then(|arg| arg.syntax().parent())
                 .and_then(|parent| ast::CallExpr::cast(parent))
                 .and_then(|expr| expr.callee())
                 .and_then(|expr| sema.type_of_expr(file, &expr))
-                .map(|ty| ty.params(db).into_iter().map(|(param, _)| param).collect())
+                .map(|ty| {
+                    ty.params(db)
+                        .into_iter()
+                        .filter_map(|(param, _)| match param.name(db) {
+                            Some(name)
+                                if keyword_args.iter().all(|kwarg| kwarg != name.as_str()) =>
+                            {
+                                Some(param)
+                            }
+                            _ => None,
+                        })
+                        .collect()
+                })
                 .unwrap_or_else(|| vec![]);
 
             let scope = sema.scope_for_offset(file, pos);

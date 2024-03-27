@@ -339,38 +339,43 @@ impl Ty {
                     (param, ty)
                 }))
             }
-            TyKind::Rule(Rule { attrs, .. }) => Params::Rule(
-                attrs
+            TyKind::Rule(Rule { attrs, .. }) => {
+                let mut build_attrs = common_attributes_query(db)
+                    .build(db)
                     .iter()
-                    .map(|(name, ty)| {
+                    .enumerate()
+                    .map(|(index, (_, attr))| {
                         (
-                            Param(
-                                RuleParam::Keyword {
-                                    name: name.clone(),
-                                    attr: ty.clone(),
-                                }
-                                .into(),
-                            ),
-                            ty.as_attribute().expected_ty(),
+                            Param(RuleParam::BuiltinKeyword(index).into()),
+                            attr.expected_ty(),
                         )
-                    })
-                    .chain(
-                        common_attributes_query(db)
-                            .build(db)
-                            .iter()
-                            .enumerate()
-                            .map(|(index, (_, attr))| {
-                                (
-                                    Param(RuleParam::BuiltinKeyword(index).into()),
-                                    attr.expected_ty(),
-                                )
-                            }),
-                    )
-                    .chain(iter::once((
-                        Param(RuleParam::Kwargs.into()),
-                        TyKind::Dict(TyKind::String.intern(), TyKind::Any.intern(), None).intern(),
-                    ))),
-            ),
+                    });
+
+                // This chaining is done to put the `name` attribute first.
+                Params::Rule(
+                    build_attrs
+                        .next()
+                        .into_iter()
+                        .chain(attrs.iter().map(|(name, ty)| {
+                            (
+                                Param(
+                                    RuleParam::Keyword {
+                                        name: name.clone(),
+                                        attr: ty.clone(),
+                                    }
+                                    .into(),
+                                ),
+                                ty.as_attribute().expected_ty(),
+                            )
+                        }))
+                        .chain(build_attrs)
+                        .chain(iter::once((
+                            Param(RuleParam::Kwargs.into()),
+                            TyKind::Dict(TyKind::String.intern(), TyKind::Any.intern(), None)
+                                .intern(),
+                        ))),
+                )
+            }
 
             _ => return None,
         })
@@ -825,10 +830,17 @@ pub struct Rule {
 
 impl Rule {
     pub fn attrs<'a>(&'a self, db: &'a dyn Db) -> impl Iterator<Item = (&Name, &Attribute)> {
-        self.attrs
-            .iter()
-            .map(|(name, ty)| (name, ty.as_attribute()))
-            .chain(common_attributes_query(db).build_attributes(db))
+        // This chaining is done to put the `name` attribute first.
+        let mut build_attrs = common_attributes_query(db).build_attributes(db);
+        build_attrs
+            .next()
+            .into_iter()
+            .chain(
+                self.attrs
+                    .iter()
+                    .map(|(name, ty)| (name, ty.as_attribute())),
+            )
+            .chain(build_attrs)
     }
 }
 

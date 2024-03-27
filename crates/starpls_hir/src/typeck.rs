@@ -20,6 +20,7 @@ use starpls_intern::{impl_internable, Interned};
 use starpls_syntax::ast::SyntaxNodePtr;
 use std::{
     fmt::Write,
+    iter,
     panic::{self, UnwindSafe},
     sync::Arc,
 };
@@ -336,15 +337,27 @@ impl Ty {
                     (param, ty)
                 }))
             }
-            TyKind::Rule(Rule { attrs, .. }) => Params::Rule(attrs.iter().map(|(name, ty)| {
-                (
-                    Param(ParamInner::RuleParam {
-                        name: name.clone(),
-                        ty: ty.clone(),
-                    }),
-                    ty.attribute().expected_ty(),
-                )
-            })),
+            TyKind::Rule(Rule { attrs, .. }) => Params::Rule(
+                attrs
+                    .iter()
+                    .map(|(name, ty)| {
+                        (
+                            Param(
+                                RuleParam::Keyword {
+                                    name: name.clone(),
+                                    ty: ty.clone(),
+                                }
+                                .into(),
+                            ),
+                            ty.attribute().expected_ty(),
+                        )
+                    })
+                    .chain(iter::once((
+                        Param(RuleParam::Kwargs.into()),
+                        TyKind::Dict(TyKind::String.intern(), TyKind::Any.intern(), None).intern(),
+                    ))),
+            ),
+
             _ => return None,
         })
     }
@@ -421,10 +434,18 @@ pub(crate) enum ParamInner {
         parent: BuiltinFunction,
         index: usize,
     },
-    RuleParam {
-        name: Name,
-        ty: Ty,
-    },
+    RuleParam(RuleParam),
+}
+
+pub(crate) enum RuleParam {
+    Keyword { name: Name, ty: Ty },
+    Kwargs,
+}
+
+impl From<RuleParam> for ParamInner {
+    fn from(value: RuleParam) -> Self {
+        Self::RuleParam(value)
+    }
 }
 
 impl Param {
@@ -454,7 +475,8 @@ impl Param {
                 | BuiltinFunctionParam::ArgsList { name, .. }
                 | BuiltinFunctionParam::KwargsDict { name, .. } => Some(name.clone()),
             },
-            ParamInner::RuleParam { ref name, .. } => Some(name.clone()),
+            ParamInner::RuleParam(RuleParam::Keyword { ref name, .. }) => Some(name.clone()),
+            ParamInner::RuleParam(RuleParam::Kwargs) => Some(Name::new_inline("kwargs")),
         }
     }
 
@@ -473,10 +495,11 @@ impl Param {
                 | BuiltinFunctionParam::KwargsDict { doc, .. } => doc.clone(),
             },
             ParamInner::IntrinsicParam { .. } => return None,
-            ParamInner::RuleParam { ty, .. } => match ty.attribute().doc(db) {
+            ParamInner::RuleParam(RuleParam::Keyword { ty, .. }) => match ty.attribute().doc(db) {
                 Some(doc) => doc.to_string(),
                 None => return None,
             },
+            _ => return None,
         })
     }
 
@@ -528,6 +551,7 @@ impl Param {
                 parent.params(db)[index],
                 BuiltinFunctionParam::KwargsDict { .. }
             ),
+            ParamInner::RuleParam(RuleParam::Kwargs) => true,
             _ => false,
         }
     }

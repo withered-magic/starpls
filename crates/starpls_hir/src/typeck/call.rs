@@ -7,6 +7,7 @@ use crate::{
     ExprId, Name,
 };
 use smallvec::{smallvec, SmallVec};
+use std::iter;
 
 pub(crate) struct ArgError {
     pub(crate) expr: ExprId,
@@ -376,6 +377,9 @@ impl From<&Rule> for Slots {
                     provider: SlotProvider::Missing,
                     positional: false,
                 })
+                .chain(iter::once(Slot::KwargsDict {
+                    providers: smallvec![],
+                }))
                 .collect(),
             disable_errors: false,
         }

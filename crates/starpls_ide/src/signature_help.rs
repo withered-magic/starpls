@@ -95,10 +95,17 @@ pub(crate) fn signature_help(
     let mut label = String::new();
     label.push_str("def ");
     label.push_str(func.name(db).as_str());
-    label.push_str("(*");
+    label.push('(');
 
-    for param_label in param_labels.iter() {
-        label.push_str(", ");
+    let is_rule = func.is_rule();
+    if is_rule {
+        label.push_str("*");
+    }
+
+    for (index, param_label) in param_labels.iter().enumerate() {
+        if index > 0 || is_rule {
+            label.push_str(", ");
+        }
         label.push_str(&param_label);
     }
 

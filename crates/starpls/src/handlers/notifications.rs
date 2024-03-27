@@ -34,7 +34,7 @@ pub(crate) fn did_change_text_document(
             .map(|document| document.contents.clone())
             .expect("lookup contents of non-existent file");
         let contents = apply_document_content_changes(contents, params.content_changes);
-        document_manager.modify(path, contents, Some(params.text_document.version))
+        document_manager.modify(file_id, contents, Some(params.text_document.version))
     }
 
     Ok(())

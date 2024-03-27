@@ -60,6 +60,7 @@ pub enum BuiltinFunctionFlag {
     AttrOutput,
     AttrOutputList,
     AttrString,
+    AttrStringDict,
     AttrStringList,
     AttrStringListDict,
     Standard,
@@ -133,6 +134,7 @@ impl BuiltinFunction {
                                 attrs = Some(
                                     known_keys
                                         .iter()
+                                        .filter(|(_, ty)| ty.is_attribute())
                                         .map(|(name, ty)| (Name::from_str(name), ty.clone()))
                                         .collect::<Vec<_>>()
                                         .into_boxed_slice(),
@@ -452,6 +454,7 @@ fn builtin_function(
             "output" if is_attr_field => AttrOutput,
             "output_list" if is_attr_field => AttrOutputList,
             "string" if is_attr_field => AttrString,
+            "string_dict" if is_attr_field => AttrStringDict,
             "string_list" if is_attr_field => AttrStringList,
             "string_list_dict" if is_attr_field => AttrStringListDict,
             _ => Standard,
@@ -505,8 +508,8 @@ pub(crate) fn common_attributes_query(db: &dyn Db) -> CommonAttributes {
                             attr::AttributeKind::Output => Output,
                             attr::AttributeKind::OutputList => OutputList,
                             attr::AttributeKind::String => String,
-                            attr::AttributeKind::StringList => StringList,
                             attr::AttributeKind::StringDict => StringDict,
+                            attr::AttributeKind::StringList => StringList,
                             attr::AttributeKind::StringListDict => StringListDict,
                         },
                         doc: Some(attr.doc.into_boxed_str()),

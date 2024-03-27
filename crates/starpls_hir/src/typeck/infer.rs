@@ -533,13 +533,13 @@ impl TyCtxt<'_> {
                         }
                     }
                     TyKind::Rule(rule) => {
-                        let mut slots: Slots = rule.into();
+                        let mut slots = Slots::from_rule(db, rule);
                         slots.assign_args(&args, None);
 
                         let mut missing_attrs = Vec::new();
 
                         // Validate argument types.
-                        for ((name, attr), slot) in rule.attrs().zip(slots.into_inner()) {
+                        for ((name, attr), slot) in rule.attrs(db).zip(slots.into_inner()) {
                             let expected_ty = attr.expected_ty();
                             match slot {
                                 Slot::Keyword { provider, .. } => match provider {
@@ -550,13 +550,13 @@ impl TyCtxt<'_> {
                                         }
                                     }
                                     SlotProvider::Missing => {
-                                        if attr.mandatory(db) {
+                                        if attr.mandatory {
                                             missing_attrs.push(name);
                                         }
                                     }
                                     _ => {}
                                 },
-                                _ => unreachable!(),
+                                _ => {}
                             }
                         }
 
@@ -1193,7 +1193,7 @@ impl TyCtxt<'_> {
                     }
                     TyKind::IntrinsicFunction(func, _) => func.params(db)[..].into(),
                     TyKind::BuiltinFunction(func) => func.params(db)[..].into(),
-                    TyKind::Rule(rule) => rule.into(),
+                    TyKind::Rule(rule) => Slots::from_rule(db, rule),
                     _ => return None,
                 };
 

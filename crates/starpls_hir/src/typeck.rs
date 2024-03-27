@@ -25,6 +25,8 @@ use std::{
     sync::Arc,
 };
 
+use self::builtins::common_attributes_query;
+
 mod call;
 mod infer;
 mod lower;
@@ -345,13 +347,25 @@ impl Ty {
                             Param(
                                 RuleParam::Keyword {
                                     name: name.clone(),
-                                    ty: ty.clone(),
+                                    attr: ty.clone(),
                                 }
                                 .into(),
                             ),
-                            ty.attribute().expected_ty(),
+                            ty.as_attribute().expected_ty(),
                         )
                     })
+                    .chain(
+                        common_attributes_query(db)
+                            .build(db)
+                            .iter()
+                            .enumerate()
+                            .map(|(index, (_, attr))| {
+                                (
+                                    Param(RuleParam::BuiltinKeyword(index).into()),
+                                    attr.expected_ty(),
+                                )
+                            }),
+                    )
                     .chain(iter::once((
                         Param(RuleParam::Kwargs.into()),
                         TyKind::Dict(TyKind::String.intern(), TyKind::Any.intern(), None).intern(),
@@ -411,7 +425,7 @@ impl Ty {
         }
     }
 
-    fn attribute(&self) -> &Attribute {
+    fn as_attribute(&self) -> &Attribute {
         match self.kind() {
             TyKind::Attribute(attr) => attr,
             _ => panic!("attribute() called on invalid TyKind"),
@@ -438,7 +452,8 @@ pub(crate) enum ParamInner {
 }
 
 pub(crate) enum RuleParam {
-    Keyword { name: Name, ty: Ty },
+    Keyword { name: Name, attr: Ty },
+    BuiltinKeyword(usize),
     Kwargs,
 }
 
@@ -476,6 +491,9 @@ impl Param {
                 | BuiltinFunctionParam::KwargsDict { name, .. } => Some(name.clone()),
             },
             ParamInner::RuleParam(RuleParam::Keyword { ref name, .. }) => Some(name.clone()),
+            ParamInner::RuleParam(RuleParam::BuiltinKeyword(index)) => {
+                Some(common_attributes_query(db).get(db, index).0.clone())
+            }
             ParamInner::RuleParam(RuleParam::Kwargs) => Some(Name::new_inline("kwargs")),
         }
     }
@@ -495,10 +513,18 @@ impl Param {
                 | BuiltinFunctionParam::KwargsDict { doc, .. } => doc.clone(),
             },
             ParamInner::IntrinsicParam { .. } => return None,
-            ParamInner::RuleParam(RuleParam::Keyword { ty, .. }) => match ty.attribute().doc(db) {
-                Some(doc) => doc.to_string(),
-                None => return None,
-            },
+            ParamInner::RuleParam(RuleParam::Keyword { attr, .. }) => {
+                return attr.as_attribute().doc.as_ref().map(Box::to_string)
+            }
+            ParamInner::RuleParam(RuleParam::BuiltinKeyword(index)) => {
+                return common_attributes_query(db)
+                    .get(db, *index)
+                    .1
+                    .doc
+                    .as_ref()
+                    .map(Box::to_string)
+            }
+
             _ => return None,
         })
     }
@@ -744,38 +770,23 @@ pub enum AttributeKind {
     OutputList,
     String,
     StringList,
+    StringDict,
     StringListDict,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Attribute {
     pub kind: AttributeKind,
-    info: AttributeInfo,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum AttributeInfo {
-    /// An attribute defined by the user.
-    Source {
-        doc: Option<Box<str>>,
-        mandatory: bool,
-    },
-    /// An attribute built into rules.
-    Builtin(usize),
+    pub doc: Option<Box<str>>,
+    pub mandatory: bool,
 }
 
 impl Attribute {
-    pub fn new_from_source(kind: AttributeKind, doc: Option<Box<str>>, mandatory: bool) -> Self {
+    pub fn new(kind: AttributeKind, doc: Option<Box<str>>, mandatory: bool) -> Self {
         Self {
             kind,
-            info: AttributeInfo::Source { doc, mandatory },
-        }
-    }
-
-    pub fn new_from_builtin(kind: AttributeKind, index: usize) -> Self {
-        Self {
-            kind,
-            info: AttributeInfo::Builtin(index),
+            doc,
+            mandatory,
         }
     }
 
@@ -793,6 +804,9 @@ impl Attribute {
             AttributeKind::OutputList => TyKind::List(TyKind::String.intern()),
             AttributeKind::String => TyKind::String,
             AttributeKind::StringList => TyKind::List(TyKind::String.intern()),
+            AttributeKind::StringDict => {
+                TyKind::Dict(TyKind::String.intern(), TyKind::String.intern(), None)
+            }
             AttributeKind::StringListDict => TyKind::Dict(
                 TyKind::String.intern(),
                 TyKind::List(TyKind::String.intern()).intern(),
@@ -800,20 +814,6 @@ impl Attribute {
             ),
         }
         .intern()
-    }
-
-    pub fn doc(&self, _db: &dyn Db) -> Option<&str> {
-        match &self.info {
-            AttributeInfo::Source { doc, .. } => doc.as_deref(),
-            AttributeInfo::Builtin(_) => None,
-        }
-    }
-
-    pub fn mandatory(&self, _db: &dyn Db) -> bool {
-        match &self.info {
-            AttributeInfo::Source { mandatory, .. } => *mandatory,
-            AttributeInfo::Builtin(_) => false,
-        }
     }
 }
 
@@ -824,8 +824,11 @@ pub struct Rule {
 }
 
 impl Rule {
-    pub fn attrs(&self) -> impl Iterator<Item = (&Name, &Attribute)> {
-        self.attrs.iter().map(|(name, ty)| (name, ty.attribute()))
+    pub fn attrs<'a>(&'a self, db: &'a dyn Db) -> impl Iterator<Item = (&Name, &Attribute)> {
+        self.attrs
+            .iter()
+            .map(|(name, ty)| (name, ty.as_attribute()))
+            .chain(common_attributes_query(db).build_attributes(db))
     }
 }
 

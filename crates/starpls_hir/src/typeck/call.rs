@@ -4,7 +4,7 @@
 use crate::{
     def::{Argument, Param},
     typeck::{builtins::BuiltinFunctionParam, intrinsics::IntrinsicFunctionParam, Rule},
-    ExprId, Name,
+    Db, ExprId, Name,
 };
 use smallvec::{smallvec, SmallVec};
 use std::iter;
@@ -191,6 +191,23 @@ impl Slots {
     pub(crate) fn into_inner(self) -> SmallVec<[Slot; 5]> {
         self.slots
     }
+
+    pub(crate) fn from_rule(db: &dyn Db, rule: &Rule) -> Self {
+        Self {
+            slots: rule
+                .attrs(db)
+                .map(|(name, _)| Slot::Keyword {
+                    name: name.clone(),
+                    provider: SlotProvider::Missing,
+                    positional: false,
+                })
+                .chain(iter::once(Slot::KwargsDict {
+                    providers: smallvec![],
+                }))
+                .collect(),
+            disable_errors: false,
+        }
+    }
 }
 
 /// A slot for a formal parameter, as defined in PEP 3102.
@@ -361,26 +378,6 @@ impl From<&[BuiltinFunctionParam]> for Slots {
 
         Self {
             slots,
-            disable_errors: false,
-        }
-    }
-}
-
-impl From<&Rule> for Slots {
-    fn from(rule: &Rule) -> Self {
-        Self {
-            slots: rule
-                .attrs
-                .iter()
-                .map(|(name, _)| Slot::Keyword {
-                    name: name.clone(),
-                    provider: SlotProvider::Missing,
-                    positional: false,
-                })
-                .chain(iter::once(Slot::KwargsDict {
-                    providers: smallvec![],
-                }))
-                .collect(),
             disable_errors: false,
         }
     }

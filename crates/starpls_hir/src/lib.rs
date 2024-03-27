@@ -44,6 +44,8 @@ pub struct Jar(
     typeck::builtins::BuiltinTypes,
     typeck::builtins::builtin_globals_query,
     typeck::builtins::builtin_types_query,
+    typeck::builtins::CommonAttributes,
+    typeck::builtins::common_attributes_query,
     typeck::intrinsics::Intrinsics,
     typeck::intrinsics::IntrinsicClass,
     typeck::intrinsics::IntrinsicFieldTypes,

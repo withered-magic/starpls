@@ -6,7 +6,7 @@ use crate::{
 };
 use rustc_hash::FxHashMap;
 use starpls_bazel::{
-    builtin::Callable, env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
+    attr, builtin::Callable, env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
 };
 use starpls_common::{parse, Dialect, File};
 use starpls_syntax::ast;
@@ -166,7 +166,7 @@ impl BuiltinFunction {
                     }
                 }
                 Some(
-                    TyKind::Attribute(Attribute::new_from_source(
+                    TyKind::Attribute(Attribute::new(
                         match flag {
                             AttrBool => AttributeKind::Bool,
                             AttrInt => AttributeKind::Int,
@@ -459,6 +459,65 @@ fn builtin_function(
     )
 }
 
+#[salsa::tracked]
+pub(crate) struct CommonAttributes {
+    #[return_ref]
+    pub(crate) build: Vec<(Name, Attribute)>,
+}
+
+impl CommonAttributes {
+    pub(crate) fn build_attributes<'a, 'b>(
+        &'a self,
+        db: &'b dyn Db,
+    ) -> impl Iterator<Item = (&'b Name, &'b Attribute)> {
+        self.build(db)
+            .iter()
+            .map(|(ref name, ref attr)| (name, attr))
+    }
+
+    pub(crate) fn get<'a>(&'a self, db: &'a dyn Db, index: usize) -> (&'a Name, &'a Attribute) {
+        let (ref name, ref attr) = self.build(db)[index];
+        (name, attr)
+    }
+}
+
+#[salsa::tracked]
+pub(crate) fn common_attributes_query(db: &dyn Db) -> CommonAttributes {
+    let common = attr::make_common_attributes();
+    CommonAttributes::new(
+        db,
+        common
+            .build
+            .into_iter()
+            .map(|attr| {
+                use AttributeKind::*;
+
+                (
+                    Name::from_str(&attr.name),
+                    Attribute {
+                        kind: match attr.r#type {
+                            attr::AttributeKind::Bool => Bool,
+                            attr::AttributeKind::Int => Int,
+                            attr::AttributeKind::IntList => IntList,
+                            attr::AttributeKind::Label => Label,
+                            attr::AttributeKind::LabelKeyedStringDict => LabelKeyedStringDict,
+                            attr::AttributeKind::LabelList => LabelList,
+                            attr::AttributeKind::Output => Output,
+                            attr::AttributeKind::OutputList => OutputList,
+                            attr::AttributeKind::String => String,
+                            attr::AttributeKind::StringList => StringList,
+                            attr::AttributeKind::StringDict => StringDict,
+                            attr::AttributeKind::StringListDict => StringListDict,
+                        },
+                        doc: Some(attr.doc.into_boxed_str()),
+                        mandatory: attr.is_mandatory,
+                    },
+                )
+            })
+            .collect(),
+    )
+}
+
 /// Normalizes text from the generated Bazel documentation.
 fn normalize_doc_text(text: &str) -> String {
     normalize_doc(text, false)
@@ -527,7 +586,7 @@ fn normalize_type_ref(text: &str) -> TypeRef {
                     type_ref_with_single_arg("Sequence", element)
                 }
                 (Some("List" | "list"), element) => type_ref_with_single_arg("list", element),
-                (Some("Dict" | "dict"), element) => TypeRef::Name(
+                (Some("Dict" | "dict" | "Dictionary"), element) => TypeRef::Name(
                     Name::new_inline("dict"),
                     Some(
                         vec![

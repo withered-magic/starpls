@@ -21,7 +21,7 @@ const COMPLETION_TRIGGER_CHARACTERS: &[char] = &['.', '"', '\'', '/', ':'];
 const SIGNATURE_HELP_TRIGGER_CHARACTERS: &[char] = &['(', ',', ')'];
 
 fn main() -> anyhow::Result<()> {
-    eprintln!("server: starpls, v0.1.0");
+    eprintln!("server: starpls, v0.1.2");
 
     // Create the transport over stdio.
     let (connection, io_threads) = Connection::stdio();

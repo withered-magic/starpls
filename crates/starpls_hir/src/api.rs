@@ -334,6 +334,10 @@ impl Callable {
     pub fn is_user_defined(&self) -> bool {
         matches!(self.0, CallableInner::HirDef(_))
     }
+
+    pub fn is_rule(&self) -> bool {
+        matches!(self.0, CallableInner::Rule(_))
+    }
 }
 
 impl From<HirDefFunction> for Callable {

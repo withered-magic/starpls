@@ -541,7 +541,7 @@ impl TyCtxt<'_> {
                             let expected_ty = attr.expected_ty();
                             match slot {
                                 Slot::Keyword { provider, .. } => match provider {
-                                    SlotProvider::Single(_, index) => {
+                                    SlotProvider::Single(expr, index) => {
                                         let ty = &arg_tys[index];
                                         if !assign_tys(db, ty, &expected_ty) {
                                             self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), expected_ty.display(self.db).alt()));

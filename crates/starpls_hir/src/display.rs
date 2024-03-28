@@ -3,7 +3,7 @@ use crate::{
     module,
     typeck::{
         builtins::BuiltinFunctionParam, intrinsics::IntrinsicFunctionParam, resolve_type_ref,
-        Protocol, Tuple, TyKind, TypeRef,
+        Protocol, RuleKind, Tuple, TyKind, TypeRef,
     },
     Db, Ty, Type,
 };
@@ -262,7 +262,10 @@ impl DisplayWithDb for TyKind {
             }
             TyKind::Struct(_) => "struct",
             TyKind::Attribute(_) => "Attribute",
-            TyKind::Rule(_) => "rule",
+            TyKind::Rule(rule) => match rule.kind {
+                RuleKind::Build => "rule",
+                RuleKind::Repository => "repository_rule",
+            },
         };
 
         f.write_str(text)

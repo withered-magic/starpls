@@ -91,5 +91,14 @@
             "default_value": "//visibility:private",
             "is_mandatory": false
         }
+    ],
+    "repository": [
+        {
+            "name": "name",
+            "type": "string",
+            "doc": "A unique name for the external repository.",
+            "default_value": "",
+            "is_mandatory": true
+        }
     ]
 }

@@ -7,7 +7,7 @@ use starpls_common::{parse, Dialect, File, Parse};
 
 pub use crate::{
     api::*,
-    def::{ExprId, LoadStmt, Module, Name, ParamId},
+    def::{ExprId, LoadItemId, LoadStmt, Module, Name, ParamId},
     display::{DisplayWithDb, DisplayWithDbWrapper},
     typeck::{builtins::BuiltinDefs, Cancelled, GlobalCtxt, Ty, TyCtxt},
 };
@@ -60,6 +60,8 @@ pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
     fn infer_expr(&self, file: File, expr: ExprId) -> Ty;
 
     fn infer_param(&self, file: File, param: ParamId) -> Ty;
+
+    fn infer_load_item(&self, file: File, load_item: LoadItemId) -> Ty;
 
     fn resolve_load_stmt(&self, file: File, load_stmt: LoadStmt) -> Option<File>;
 

@@ -14,7 +14,7 @@ use crate::{
 use starpls_common::{Diagnostic, Diagnostics, File};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr, SyntaxNodePtr},
-    SyntaxNode, TextSize,
+    TextSize,
 };
 
 pub use crate::typeck::{Field, Param};
@@ -72,6 +72,8 @@ impl<'a> Semantics<'a> {
         Some(self.db.infer_param(file, *param).into())
     }
 
+    // pub fn type_of_load_item(&self, file: File, load_item: &ast::LoadItem) -> Option<Type> {}
+
     pub fn resolve_load_stmt(&self, file: File, load_stmt: &ast::LoadStmt) -> Option<File> {
         let ptr = AstPtr::new(&ast::Statement::Load(load_stmt.clone()));
         let stmt = source_map(self.db, file).stmt_map.get(&ptr)?;
@@ -123,6 +125,7 @@ impl Variable {
 }
 
 pub struct LoadItem {
+    file: File,
     id: LoadItemId,
 }
 
@@ -147,26 +150,10 @@ impl ScopeDef {
                 .get(expr)
                 .map(|ptr| ptr.syntax_node_ptr()),
             ScopeDef::Parameter(param) => param.syntax_node_ptr(db),
-            ScopeDef::LoadItem(LoadItem { id }) => source_map
+            ScopeDef::LoadItem(LoadItem { id, .. }) => source_map
                 .load_item_map_back
                 .get(id)
                 .map(|ptr| ptr.syntax_node_ptr()),
-            _ => None,
-        }
-    }
-
-    pub fn to_load_item(
-        &self,
-        db: &dyn Db,
-        file: File,
-        root: &SyntaxNode,
-    ) -> Option<ast::LoadItem> {
-        let source_map = source_map(db, file);
-        match self {
-            ScopeDef::LoadItem(LoadItem { id }) => source_map
-                .load_item_map_back
-                .get(id)
-                .and_then(|ptr| ptr.try_to_node(root)),
             _ => None,
         }
     }
@@ -176,6 +163,7 @@ impl ScopeDef {
             ScopeDef::Variable(Variable {
                 id: Some((file, expr)),
             }) => db.infer_expr(*file, *expr),
+            ScopeDef::LoadItem(LoadItem { file, id }) => db.infer_load_item(*file, *id),
             _ => TyKind::Unknown.intern(),
         }
         .into()
@@ -196,7 +184,10 @@ impl From<scope::ScopeDef> for ScopeDef {
                 func: parent,
                 index,
             }) => ScopeDef::Parameter(Param(ParamInner::Param { parent, index })),
-            scope::ScopeDef::LoadItem(it) => ScopeDef::LoadItem(LoadItem { id: it.load_item }),
+            scope::ScopeDef::LoadItem(it) => ScopeDef::LoadItem(LoadItem {
+                file: it.file,
+                id: it.load_item,
+            }),
         }
     }
 }

@@ -2,7 +2,7 @@ use crate::{
     def::{CompClause, Expr, ExprId, Function, LoadItem, LoadItemId, Param, ParamId, Stmt, StmtId},
     lower,
     typeck::{builtins::BuiltinFunction, intrinsics::IntrinsicFunction, TypeRef},
-    Db, LoadStmt, Module, ModuleInfo, ModuleSourceMap, Name,
+    Db, Module, ModuleInfo, ModuleSourceMap, Name,
 };
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
@@ -55,8 +55,8 @@ pub(crate) struct ParameterDef {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LoadItemDef {
+    pub(crate) file: File,
     pub(crate) load_item: LoadItemId,
-    pub(crate) load_stmt: LoadStmt,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -266,7 +266,7 @@ impl ScopeCollector<'_> {
                 *current = self.scopes.alloc_scope(*current);
                 self.collect_expr(*lhs, *current, Some(*rhs));
             }
-            Stmt::Load { load_stmt, items } => {
+            Stmt::Load { items, .. } => {
                 *current = self.scopes.alloc_scope(*current);
                 for item in items.iter() {
                     let name: &str = match &self.module.load_items[*item] {
@@ -277,8 +277,8 @@ impl ScopeCollector<'_> {
                         *current,
                         Name::from_str(name),
                         ScopeDef::LoadItem(LoadItemDef {
+                            file: self.file,
                             load_item: *item,
-                            load_stmt: *load_stmt,
                         }),
                     )
                 }

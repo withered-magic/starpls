@@ -339,21 +339,24 @@ impl Ty {
                     (param, ty)
                 }))
             }
-            TyKind::Rule(Rule { attrs, .. }) => {
-                let mut build_attrs = common_attributes_query(db)
-                    .build(db)
-                    .iter()
-                    .enumerate()
-                    .map(|(index, (_, attr))| {
-                        (
-                            Param(RuleParam::BuiltinKeyword(index).into()),
-                            attr.expected_ty(),
-                        )
-                    });
+            TyKind::Rule(Rule { attrs, kind, .. }) => {
+                let common = common_attributes_query(db);
+                let mut common_attrs = match kind {
+                    RuleKind::Build => common.build(db),
+                    RuleKind::Repository => common.repository(db),
+                }
+                .iter()
+                .enumerate()
+                .map(|(index, (_, attr))| {
+                    (
+                        Param(RuleParam::BuiltinKeyword(kind.clone(), index).into()),
+                        attr.expected_ty(),
+                    )
+                });
 
                 // This chaining is done to put the `name` attribute first.
                 Params::Rule(
-                    build_attrs
+                    common_attrs
                         .next()
                         .into_iter()
                         .chain(attrs.iter().map(|(name, ty)| {
@@ -368,7 +371,7 @@ impl Ty {
                                 ty.as_attribute().expected_ty(),
                             )
                         }))
-                        .chain(build_attrs)
+                        .chain(common_attrs)
                         .chain(iter::once((
                             Param(RuleParam::Kwargs.into()),
                             TyKind::Dict(TyKind::String.intern(), TyKind::Any.intern(), None)
@@ -462,7 +465,7 @@ pub(crate) enum ParamInner {
 
 pub(crate) enum RuleParam {
     Keyword { name: Name, attr: Ty },
-    BuiltinKeyword(usize),
+    BuiltinKeyword(RuleKind, usize),
     Kwargs,
 }
 
@@ -500,9 +503,12 @@ impl Param {
                 | BuiltinFunctionParam::KwargsDict { name, .. } => Some(name.clone()),
             },
             ParamInner::RuleParam(RuleParam::Keyword { ref name, .. }) => Some(name.clone()),
-            ParamInner::RuleParam(RuleParam::BuiltinKeyword(index)) => {
-                Some(common_attributes_query(db).get(db, index).0.clone())
-            }
+            ParamInner::RuleParam(RuleParam::BuiltinKeyword(ref kind, index)) => Some(
+                common_attributes_query(db)
+                    .get(db, kind.clone(), index)
+                    .0
+                    .clone(),
+            ),
             ParamInner::RuleParam(RuleParam::Kwargs) => Some(Name::new_inline("kwargs")),
         }
     }
@@ -525,9 +531,9 @@ impl Param {
             ParamInner::RuleParam(RuleParam::Keyword { attr, .. }) => {
                 return attr.as_attribute().doc.as_ref().map(Box::to_string)
             }
-            ParamInner::RuleParam(RuleParam::BuiltinKeyword(index)) => {
+            ParamInner::RuleParam(RuleParam::BuiltinKeyword(kind, index)) => {
                 return common_attributes_query(db)
-                    .get(db, *index)
+                    .get(db, kind.clone(), *index)
                     .1
                     .doc
                     .as_ref()
@@ -827,16 +833,30 @@ impl Attribute {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum RuleKind {
+    Build,
+    Repository,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Rule {
-    attrs: Box<[(Name, Ty)]>,
+    pub kind: RuleKind,
     pub doc: Option<Box<str>>,
+    attrs: Box<[(Name, Ty)]>,
 }
 
 impl Rule {
     pub fn attrs<'a>(&'a self, db: &'a dyn Db) -> impl Iterator<Item = (&Name, &Attribute)> {
         // This chaining is done to put the `name` attribute first.
-        let mut build_attrs = common_attributes_query(db).build_attributes(db);
-        build_attrs
+        let common = common_attributes_query(db);
+        let mut common_attrs = match self.kind {
+            RuleKind::Build => common.build(db),
+            RuleKind::Repository => common.repository(db),
+        }
+        .iter()
+        .map(|(ref name, ref attr)| (name, attr));
+
+        common_attrs
             .next()
             .into_iter()
             .chain(
@@ -844,7 +864,7 @@ impl Rule {
                     .iter()
                     .map(|(name, ty)| (name, ty.as_attribute())),
             )
-            .chain(build_attrs)
+            .chain(common_attrs)
     }
 }
 

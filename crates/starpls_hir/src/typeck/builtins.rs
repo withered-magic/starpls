@@ -1,7 +1,7 @@
 use crate::{
     def::Argument,
     source_map,
-    typeck::{Attribute, AttributeKind, Rule as TyRule},
+    typeck::{Attribute, AttributeKind, Rule as TyRule, RuleKind},
     Db, ExprId, Name, Ty, TyKind, TypeRef,
 };
 use rustc_hash::FxHashMap;
@@ -121,7 +121,7 @@ impl BuiltinFunction {
                     .into_boxed_slice();
                 Some(TyKind::Struct(fields).intern())
             }
-            Rule => {
+            flag @ (Rule | RepositoryRule) => {
                 let mut attrs = None;
                 let mut doc = None;
                 for (arg, ty) in args {
@@ -147,6 +147,11 @@ impl BuiltinFunction {
 
                 Some(
                     TyKind::Rule(TyRule {
+                        kind: if flag == Rule {
+                            RuleKind::Build
+                        } else {
+                            RuleKind::Repository
+                        },
                         attrs: attrs.unwrap_or_else(|| Vec::new().into_boxed_slice()),
                         doc,
                     })
@@ -466,31 +471,29 @@ fn builtin_function(
 pub(crate) struct CommonAttributes {
     #[return_ref]
     pub(crate) build: Vec<(Name, Attribute)>,
+    #[return_ref]
+    pub(crate) repository: Vec<(Name, Attribute)>,
 }
 
 impl CommonAttributes {
-    pub(crate) fn build_attributes<'a, 'b>(
+    pub(crate) fn get<'a>(
         &'a self,
-        db: &'b dyn Db,
-    ) -> impl Iterator<Item = (&'b Name, &'b Attribute)> {
-        self.build(db)
-            .iter()
-            .map(|(ref name, ref attr)| (name, attr))
-    }
-
-    pub(crate) fn get<'a>(&'a self, db: &'a dyn Db, index: usize) -> (&'a Name, &'a Attribute) {
-        let (ref name, ref attr) = self.build(db)[index];
+        db: &'a dyn Db,
+        kind: RuleKind,
+        index: usize,
+    ) -> (&'a Name, &'a Attribute) {
+        let (ref name, ref attr) = match kind {
+            RuleKind::Build => self.build(db),
+            RuleKind::Repository => self.repository(db),
+        }[index];
         (name, attr)
     }
 }
 
 #[salsa::tracked]
 pub(crate) fn common_attributes_query(db: &dyn Db) -> CommonAttributes {
-    let common = attr::make_common_attributes();
-    CommonAttributes::new(
-        db,
-        common
-            .build
+    let map_attrs = |attrs: Vec<attr::Attribute>| {
+        attrs
             .into_iter()
             .map(|attr| {
                 use AttributeKind::*;
@@ -517,8 +520,11 @@ pub(crate) fn common_attributes_query(db: &dyn Db) -> CommonAttributes {
                     },
                 )
             })
-            .collect(),
-    )
+            .collect()
+    };
+
+    let common = attr::make_common_attributes();
+    CommonAttributes::new(db, map_attrs(common.build), map_attrs(common.repository))
 }
 
 /// Normalizes text from the generated Bazel documentation.

@@ -358,8 +358,15 @@ pub struct LoadStmt {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LoadItem {
-    Direct { name: Box<str> },
-    Aliased { alias: Name, name: Box<str> },
+    Direct {
+        name: Box<str>,
+        load_stmt: LoadStmt,
+    },
+    Aliased {
+        alias: Name,
+        name: Box<str>,
+        load_stmt: LoadStmt,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

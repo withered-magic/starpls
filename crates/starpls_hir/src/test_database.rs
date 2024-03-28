@@ -1,4 +1,4 @@
-use crate::{def::ExprId, BuiltinDefs, Dialect, GlobalCtxt, ParamId, Ty};
+use crate::{def::ExprId, BuiltinDefs, Dialect, GlobalCtxt, LoadItemId, ParamId, Ty};
 use dashmap::DashMap;
 use starpls_bazel::Builtins;
 use starpls_common::{File, FileId, LoadItemCandidate};
@@ -68,6 +68,11 @@ impl crate::Db for TestDatabase {
 
     fn infer_param(&self, file: File, param: ParamId) -> Ty {
         self.gcx.with_tcx(self, |tcx| tcx.infer_param(file, param))
+    }
+
+    fn infer_load_item(&self, file: File, load_item: LoadItemId) -> Ty {
+        self.gcx
+            .with_tcx(self, |tcx| tcx.infer_load_item(file, load_item))
     }
 
     fn resolve_load_stmt(&self, _file: File, _load_stmt: crate::def::LoadStmt) -> Option<File> {

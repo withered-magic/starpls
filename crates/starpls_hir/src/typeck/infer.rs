@@ -42,7 +42,7 @@ impl TyCtxt<'_> {
             if let Stmt::Load { load_stmt, items } = &module.stmts[stmt] {
                 self.resolve_load_stmt(file, *load_stmt);
                 for load_item in items.iter().copied() {
-                    self.infer_load_item(file, *load_stmt, load_item);
+                    self.infer_load_item(file, load_item);
                 }
             }
         }
@@ -119,10 +119,9 @@ impl TyCtxt<'_> {
                         ScopeDef::Parameter(ParameterDef { func, index }) => func
                             .map(|func| self.infer_param(file, func.params(db)[index]))
                             .unwrap_or_else(|| self.unknown_ty()),
-                        ScopeDef::LoadItem(LoadItemDef {
-                            load_item,
-                            load_stmt,
-                        }) => self.infer_load_item(file, load_stmt, load_item),
+                        ScopeDef::LoadItem(LoadItemDef { load_item, .. }) => {
+                            self.infer_load_item(file, load_item)
+                        }
                     })
                     .unwrap_or_else(|| {
                         self.add_expr_diagnostic(
@@ -996,12 +995,7 @@ impl TyCtxt<'_> {
         ty
     }
 
-    pub(crate) fn infer_load_item(
-        &mut self,
-        file: File,
-        load_stmt: LoadStmt,
-        load_item: LoadItemId,
-    ) -> Ty {
+    pub fn infer_load_item(&mut self, file: File, load_item: LoadItemId) -> Ty {
         if let Some(ty) = self
             .cx
             .type_of_load_item
@@ -1020,8 +1014,11 @@ impl TyCtxt<'_> {
         };
 
         let ty = match &module(db, file).load_items[load_item] {
-            LoadItem::Direct { name } | LoadItem::Aliased { name, .. } => {
-                self.resolve_load_stmt(file, load_stmt)
+            LoadItem::Direct { name, load_stmt }
+            | LoadItem::Aliased {
+                name, load_stmt, ..
+            } => {
+                self.resolve_load_stmt(file, *load_stmt)
                     .map(|loaded_file| {
                         // Check for potential circular imports, including importing the current file.
                         if file == loaded_file {
@@ -1071,7 +1068,7 @@ impl TyCtxt<'_> {
                         }
 
                         // Add the current file to the load resolution stack.
-                        self.push_load_resolution(file, load_stmt, |tcx| {
+                        self.push_load_resolution(file, *load_stmt, |tcx| {
                             // TODO(withered-magic): This is potentially super slow.
                             // tcx.infer_all_load_items(loaded_file);
 

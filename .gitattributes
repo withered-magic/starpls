@@ -1,1 +1,5 @@
 *.pb binary linguist-vendored
+
+# Make sure .star files always have LF line endings, since the parser tests
+# are snapshot tests and therefore depend on the content being the same.
+*.star text eol=lf

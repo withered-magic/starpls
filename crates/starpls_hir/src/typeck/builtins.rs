@@ -4,6 +4,7 @@ use crate::{
     typeck::{Attribute, AttributeKind, Rule as TyRule, RuleKind},
     Db, ExprId, Name, Ty, TyKind, TypeRef,
 };
+use either::Either;
 use rustc_hash::FxHashMap;
 use starpls_bazel::{
     attr, builtin::Callable, env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
@@ -124,24 +125,27 @@ impl BuiltinFunction {
             flag @ (Rule | RepositoryRule) => {
                 let mut attrs = None;
                 let mut doc = None;
+
                 for (arg, ty) in args {
-                    match arg {
-                        Argument::Keyword { name, expr } if name.as_str() == "doc" => {
-                            doc = extract_string_literal(db, file, *expr);
-                        }
-                        Argument::Keyword { name, .. } if name.as_str() == "attrs" => {
-                            if let TyKind::Dict(_, _, Some(known_keys)) = ty.kind() {
-                                attrs = Some(
-                                    known_keys
-                                        .iter()
-                                        .filter(|(_, ty)| ty.is_attribute())
-                                        .map(|(name, ty)| (Name::from_str(name), ty.clone()))
-                                        .collect::<Vec<_>>()
-                                        .into_boxed_slice(),
-                                )
+                    if let Argument::Keyword { name, expr } = arg {
+                        match name.as_str() {
+                            "doc" => {
+                                doc = extract_string_literal(db, file, *expr);
                             }
+                            "attrs" => {
+                                if let TyKind::Dict(_, _, Some(known_keys)) = ty.kind() {
+                                    attrs = Some(
+                                        known_keys
+                                            .iter()
+                                            .filter(|(_, ty)| ty.is_attribute())
+                                            .map(|(name, ty)| (Name::from_str(name), ty.clone()))
+                                            .collect::<Vec<_>>()
+                                            .into_boxed_slice(),
+                                    )
+                                }
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
 
@@ -152,8 +156,8 @@ impl BuiltinFunction {
                         } else {
                             RuleKind::Repository
                         },
-                        attrs: attrs.unwrap_or_else(|| Vec::new().into_boxed_slice()),
                         doc,
+                        attrs: attrs.unwrap_or_else(|| Vec::new().into_boxed_slice()),
                     })
                     .intern(),
                 )
@@ -161,17 +165,27 @@ impl BuiltinFunction {
             flag if flag.is_attr() => {
                 let mut doc: Option<Box<str>> = None;
                 let mut mandatory = false;
+                let mut default_ptr = None;
+
                 for (arg, _) in args {
-                    match arg {
-                        Argument::Keyword { name, expr } if name.as_str() == "doc" => {
-                            doc = extract_string_literal(db, file, *expr);
+                    if let Argument::Keyword { name, expr } = arg {
+                        match name.as_str() {
+                            "doc" => {
+                                doc = extract_string_literal(db, file, *expr);
+                            }
+                            "mandatory" => {
+                                mandatory = extract_bool_literal(db, file, *expr).unwrap_or(false);
+                            }
+                            "default" => {
+                                if let Some(ptr) = source_map(db, file).expr_map_back.get(expr) {
+                                    default_ptr = Some(ptr.syntax_node_ptr());
+                                }
+                            }
+                            _ => {}
                         }
-                        Argument::Keyword { name, expr } if name.as_str() == "mandatory" => {
-                            mandatory = extract_bool_literal(db, file, *expr).unwrap_or(false);
-                        }
-                        _ => {}
                     }
                 }
+
                 Some(
                     TyKind::Attribute(Attribute::new(
                         match flag {
@@ -190,6 +204,7 @@ impl BuiltinFunction {
                         },
                         doc,
                         mandatory,
+                        default_ptr.map(|text_range| Either::Left((file, text_range))),
                     ))
                     .intern(),
                 )
@@ -517,6 +532,7 @@ pub(crate) fn common_attributes_query(db: &dyn Db) -> CommonAttributes {
                         },
                         doc: Some(attr.doc.into_boxed_str()),
                         mandatory: attr.is_mandatory,
+                        default_text_range: Some(Either::Right(attr.default_value)),
                     },
                 )
             })

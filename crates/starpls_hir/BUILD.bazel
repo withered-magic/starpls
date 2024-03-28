@@ -16,6 +16,7 @@ rust_library(
         "//crates/starpls_test_util",
         "@crates//:crossbeam",
         "@crates//:dashmap",
+        "@crates//:either",
         "@crates//:id-arena",
         "@crates//:itertools",
         "@crates//:parking_lot",

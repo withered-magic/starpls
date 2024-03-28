@@ -1,5 +1,5 @@
 {
-  "checksum": "bdaf95fbc44fab0b09c65eea4cd4610b315c91152a17d663c842a10a4a6e012e",
+  "checksum": "e42822ed2db5b4a6db35faa023083d6d0a76baaa124d17c39dfa56cd90ffa077",
   "crates": {
     "addr2line 0.21.0": {
       "name": "addr2line",
@@ -2018,13 +2018,13 @@
       },
       "license": "MIT OR Apache-2.0"
     },
-    "either 1.9.0": {
+    "either 1.10.0": {
       "name": "either",
-      "version": "1.9.0",
+      "version": "1.10.0",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/either/1.9.0/download",
-          "sha256": "a26ae43d7bcc3b814de94796a5e736d4029efb0ee900c12e2d54c993ad1a1e07"
+          "url": "https://static.crates.io/crates/either/1.10.0/download",
+          "sha256": "11157ac094ffbdde99aa67b23417ebdd801842852b500e395a45a9c0aac03e4a"
         }
       },
       "targets": [
@@ -2051,7 +2051,7 @@
           "selects": {}
         },
         "edition": "2018",
-        "version": "1.9.0"
+        "version": "1.10.0"
       },
       "license": "MIT OR Apache-2.0"
     },
@@ -3626,7 +3626,7 @@
         "deps": {
           "common": [
             {
-              "id": "either 1.9.0",
+              "id": "either 1.10.0",
               "target": "either"
             }
           ],
@@ -3671,7 +3671,7 @@
         "deps": {
           "common": [
             {
-              "id": "either 1.9.0",
+              "id": "either 1.10.0",
               "target": "either"
             }
           ],
@@ -3718,7 +3718,7 @@
         "deps": {
           "common": [
             {
-              "id": "either 1.9.0",
+              "id": "either 1.10.0",
               "target": "either"
             }
           ],
@@ -6237,7 +6237,7 @@
         "deps": {
           "common": [
             {
-              "id": "either 1.9.0",
+              "id": "either 1.10.0",
               "target": "either"
             },
             {
@@ -7690,6 +7690,10 @@
             {
               "id": "dashmap 5.5.3",
               "target": "dashmap"
+            },
+            {
+              "id": "either 1.10.0",
+              "target": "either"
             },
             {
               "id": "id-arena 2.2.1",
@@ -9534,7 +9538,7 @@
         "deps": {
           "common": [
             {
-              "id": "either 1.9.0",
+              "id": "either 1.10.0",
               "target": "either"
             },
             {
@@ -11087,6 +11091,7 @@
     "crossbeam-channel 0.5.10",
     "dashmap 5.5.3",
     "drop_bomb 0.1.5",
+    "either 1.10.0",
     "hashbrown 0.14.3",
     "id-arena 2.2.1",
     "indexmap 2.1.0",

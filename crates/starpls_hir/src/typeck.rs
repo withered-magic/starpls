@@ -11,11 +11,12 @@ use crate::{
     Db, Name,
 };
 use crossbeam::atomic::AtomicCell;
+use either::Either;
 use itertools::Itertools;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
-use starpls_common::{Diagnostic, Dialect, File};
+use starpls_common::{parse, Diagnostic, Dialect, File};
 use starpls_intern::{impl_internable, Interned};
 use starpls_syntax::ast::SyntaxNodePtr;
 use std::{
@@ -379,7 +380,6 @@ impl Ty {
                         ))),
                 )
             }
-
             _ => return None,
         })
     }
@@ -609,6 +609,27 @@ impl Param {
             _ => None,
         }
     }
+
+    pub fn default_value(&self, db: &dyn Db) -> Option<String> {
+        let common = common_attributes_query(db);
+        let attr = match &self.0 {
+            ParamInner::RuleParam(RuleParam::Keyword { attr, .. }) => attr.as_attribute(),
+            ParamInner::RuleParam(RuleParam::BuiltinKeyword(kind, index)) => {
+                common.get(db, kind.clone(), *index).1
+            }
+            _ => return None,
+        };
+
+        attr.default_text_range.as_ref().and_then(|e| {
+            Some(match e {
+                Either::Left((file, ptr)) => ptr
+                    .try_to_node(&parse(db, *file).syntax(db))?
+                    .text()
+                    .to_string(),
+                Either::Right(s) => s.clone(),
+            })
+        })
+    }
 }
 
 enum Params<I1, I2, I3, I4> {
@@ -794,14 +815,21 @@ pub struct Attribute {
     pub kind: AttributeKind,
     pub doc: Option<Box<str>>,
     pub mandatory: bool,
+    pub default_text_range: Option<Either<(File, SyntaxNodePtr), String>>,
 }
 
 impl Attribute {
-    pub fn new(kind: AttributeKind, doc: Option<Box<str>>, mandatory: bool) -> Self {
+    pub fn new(
+        kind: AttributeKind,
+        doc: Option<Box<str>>,
+        mandatory: bool,
+        default_text_range: Option<Either<(File, SyntaxNodePtr), String>>,
+    ) -> Self {
         Self {
             kind,
             doc,
             mandatory,
+            default_text_range,
         }
     }
 

@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -13,36 +13,36 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Prepare for build
-      run: |
-        cp bazel/remote-cache.bazelrc .bazelrc
-        echo "build --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >> .bazelrc
-        mkdir -p editors/code/dist
-      env:
-        BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
-    - name: Build
-      run: bazel build //...
-    - name: Run tests
-      run: bazel test --build_tests_only //...
+      - uses: actions/checkout@v3
+      - name: Prepare for build
+        run: |
+          cp bazel/remote-cache.bazelrc .bazelrc
+          echo "build --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >> .bazelrc
+          mkdir -p editors/code/dist
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+      - name: Build
+        run: bazel build //...
+      - name: Run tests
+        run: bazel test --build_tests_only //...
 
   build-windows:
     runs-on: windows-latest
     steps:
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-    - uses: actions/checkout@v3
-    - uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          target/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: ${{ runner.os }}-cargo-
-    - name: Build
-      run: cargo build
-    - name: Run tests
-      run: cargo test
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Build
+        run: cargo build
+      - name: Run tests
+        run: cargo test

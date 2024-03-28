@@ -42,6 +42,7 @@ pub(crate) enum ScopeDef {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct VariableDef {
+    pub(crate) file: File,
     pub(crate) expr: ExprId,
     pub(crate) source: Option<ExprId>,
 }
@@ -304,6 +305,7 @@ impl ScopeCollector<'_> {
                         current,
                         name.clone(),
                         ScopeDef::Variable(VariableDef {
+                            file: self.file,
                             expr,
                             source: Some(source),
                         }),

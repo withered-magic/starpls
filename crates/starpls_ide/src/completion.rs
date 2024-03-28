@@ -139,9 +139,7 @@ pub(crate) fn completions(
                         label: name.to_string(),
                         kind: match decl {
                             ScopeDef::Callable(_) => CompletionItemKind::Function,
-                            ScopeDef::Variable(_) | ScopeDef::Parameter(_) => {
-                                CompletionItemKind::Variable
-                            }
+                            decl if decl.ty(db).is_callable() => CompletionItemKind::Function,
                             _ => CompletionItemKind::Variable,
                         },
                         mode: None,

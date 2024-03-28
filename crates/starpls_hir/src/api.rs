@@ -113,7 +113,7 @@ impl<'a> Semantics<'a> {
 }
 
 pub struct Variable {
-    id: Option<ExprId>,
+    id: Option<(File, ExprId)>,
 }
 
 impl Variable {
@@ -134,13 +134,17 @@ pub enum ScopeDef {
 }
 
 impl ScopeDef {
+    // TODO(withered-magic): All `ScopeDef` variants should probably store the `File` somehow
+    // so we don't have to pass it in as a parameter.
     pub fn syntax_node_ptr(&self, db: &dyn Db, file: File) -> Option<SyntaxNodePtr> {
         let source_map = source_map(db, file);
         match self {
             ScopeDef::Callable(Callable(CallableInner::HirDef(func))) => Some(func.ptr(db)),
-            ScopeDef::Variable(Variable { id: Some(id) }) => source_map
+            ScopeDef::Variable(Variable {
+                id: Some((_, expr)),
+            }) => source_map
                 .expr_map_back
-                .get(id)
+                .get(expr)
                 .map(|ptr| ptr.syntax_node_ptr()),
             ScopeDef::Parameter(param) => param.syntax_node_ptr(db),
             ScopeDef::LoadItem(LoadItem { id }) => source_map
@@ -166,6 +170,16 @@ impl ScopeDef {
             _ => None,
         }
     }
+
+    pub fn ty(&self, db: &dyn Db) -> Type {
+        match self {
+            ScopeDef::Variable(Variable {
+                id: Some((file, expr)),
+            }) => db.infer_expr(*file, *expr),
+            _ => TyKind::Unknown.intern(),
+        }
+        .into()
+    }
 }
 
 impl From<scope::ScopeDef> for ScopeDef {
@@ -174,7 +188,9 @@ impl From<scope::ScopeDef> for ScopeDef {
             scope::ScopeDef::Function(it) => ScopeDef::Callable(it.into()),
             scope::ScopeDef::IntrinsicFunction(it) => ScopeDef::Callable(it.into()),
             scope::ScopeDef::BuiltinFunction(it) => ScopeDef::Callable(it.into()),
-            scope::ScopeDef::Variable(it) => ScopeDef::Variable(Variable { id: Some(it.expr) }),
+            scope::ScopeDef::Variable(it) => ScopeDef::Variable(Variable {
+                id: Some((it.file, it.expr)),
+            }),
             scope::ScopeDef::BuiltinVariable(_) => ScopeDef::Variable(Variable { id: None }),
             scope::ScopeDef::Parameter(ParameterDef {
                 func: parent,
@@ -215,6 +231,10 @@ impl Type {
             self.ty.kind(),
             TyKind::Function(_) | TyKind::BuiltinFunction(_) | TyKind::IntrinsicFunction(_, _)
         )
+    }
+
+    pub fn is_callable(&self) -> bool {
+        self.is_function() || matches!(self.ty.kind(), TyKind::Rule(_))
     }
 
     pub fn is_unknown(&self) -> bool {

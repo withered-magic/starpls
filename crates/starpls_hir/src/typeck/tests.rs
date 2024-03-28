@@ -467,6 +467,34 @@ foo(**kwargs, *args)
     );
 }
 
+#[test]
+fn test_dict_constructor() {
+    check_infer(
+        r#"
+foo = dict(a = 1, b = 2, c = 3)
+bar = dict(d = 4, e = "five", f = 6.)
+baz = dict()
+"#,
+        expect![[r#"
+            1..4 "foo": dict[string, int]
+            7..11 "dict": def dict(x0: Iterable[Iterable[Any]] = None, **kwargs) -> dict[Unknown, Unknown]
+            16..17 "1": int
+            23..24 "2": int
+            30..31 "3": int
+            7..32 "dict(a = 1, b = 2, c = 3)": dict[string, int]
+            33..36 "bar": dict[string, Unknown]
+            39..43 "dict": def dict(x0: Iterable[Iterable[Any]] = None, **kwargs) -> dict[Unknown, Unknown]
+            48..49 "4": int
+            55..61 "\"five\"": string
+            67..69 "6.": float
+            39..70 "dict(d = 4, e = \"five\", f = 6.)": dict[string, Unknown]
+            71..74 "baz": dict[Unknown, Unknown]
+            77..81 "dict": def dict(x0: Iterable[Iterable[Any]] = None, **kwargs) -> dict[Unknown, Unknown]
+            77..83 "dict()": dict[Unknown, Unknown]
+        "#]],
+    )
+}
+
 // TODO(withered-magic): Support the `struct` function in tests.
 // #[test]
 // fn test_struct() {

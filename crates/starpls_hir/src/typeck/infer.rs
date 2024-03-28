@@ -10,8 +10,9 @@ use crate::{
         assign_tys,
         call::{Slot, SlotProvider, Slots},
         intrinsics::{IntrinsicFunctionParam, IntrinsicTypes},
-        resolve_type_ref, resolve_type_ref_opt, FileExprId, FileParamId, Protocol, Substitution,
-        Tuple, Ty, TyCtxt, TyKind, TypeRef, TypecheckCancelled,
+        resolve_type_ref, resolve_type_ref_opt, FileExprId, FileLoadItemId, FileLoadStmt,
+        FileParamId, Protocol, Substitution, Tuple, Ty, TyCtxt, TyKind, TypeRef,
+        TypecheckCancelled,
     },
     Name,
 };
@@ -20,8 +21,6 @@ use starpls_syntax::{
     ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, UnaryOp},
     TextRange,
 };
-
-use super::{FileLoadItemId, FileLoadStmt};
 
 impl TyCtxt<'_> {
     pub fn infer_all_exprs(&mut self, file: File) {
@@ -339,6 +338,7 @@ impl TyCtxt<'_> {
                         },
                     })
                     .collect();
+                let args_with_ty = args.iter().zip(arg_tys.iter());
 
                 match callee_ty.kind() {
                     TyKind::Function(func) => {
@@ -466,7 +466,8 @@ impl TyCtxt<'_> {
                             }
                         }
 
-                        func.ret_ty(db).substitute(&subst.args)
+                        func.maybe_unique_ret_type(db, args_with_ty)
+                            .unwrap_or_else(|| func.ret_ty(db).substitute(&subst.args))
                     }
                     TyKind::BuiltinFunction(func) => {
                         let params = func.params(db);
@@ -526,11 +527,8 @@ impl TyCtxt<'_> {
                             self.add_expr_diagnostic(file, expr, message);
                         }
 
-                        match func.maybe_unique_ret_type(db, file, args.iter().zip(arg_tys.iter()))
-                        {
-                            Some(ty) => ty,
-                            None => resolve_type_ref(db, &func.ret_type_ref(db)).0,
-                        }
+                        func.maybe_unique_ret_type(db, file, args_with_ty)
+                            .unwrap_or_else(|| resolve_type_ref(db, &func.ret_type_ref(db)).0)
                     }
                     TyKind::Rule(rule) => {
                         let mut slots = Slots::from_rule(db, rule);

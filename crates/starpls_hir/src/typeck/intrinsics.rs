@@ -1,5 +1,6 @@
 use crate::{
-    typeck::{Binders, Substitution, Tuple as TupleVariants, Ty, TyKind},
+    def::Argument,
+    typeck::{self, Binders, Substitution, Tuple as TupleVariants, Ty, TyKind},
     Db, Name,
 };
 use rustc_hash::FxHashMap;
@@ -108,6 +109,49 @@ pub(crate) struct IntrinsicFunction {
     #[return_ref]
     pub params: Vec<IntrinsicFunctionParam>,
     pub ret_ty: Ty,
+    is_dict_constructor: bool,
+}
+
+impl IntrinsicFunction {
+    pub(crate) fn maybe_unique_ret_type<'a, I>(&'a self, db: &'a dyn Db, args: I) -> Option<Ty>
+    where
+        I: Iterator<Item = (&'a Argument, &'a Ty)>,
+    {
+        if !self.is_dict_constructor(db) {
+            return None;
+        }
+
+        let known_keys = args
+            .filter_map(|(arg, ty)| match arg {
+                Argument::Keyword { name, .. } => {
+                    Some((name.as_str().to_string().into_boxed_str(), ty.clone()))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        let key_ty = if known_keys.is_empty() {
+            TyKind::Unknown.intern()
+        } else {
+            TyKind::String.intern()
+        };
+
+        // Determine the common type of the dict values.
+        let mut iter = known_keys.iter().map(|(_, ty)| ty);
+        let value_ty = iter
+            .next()
+            .and_then(|first_ty| {
+                iter.all(|ty| match (ty.kind(), first_ty.kind()) {
+                    (TyKind::Attribute(_), TyKind::Attribute(_)) => true,
+                    _ => ty == first_ty,
+                })
+                .then_some(first_ty)
+            })
+            .cloned()
+            .unwrap_or_else(|| TyKind::Unknown.intern());
+
+        Some(TyKind::Dict(key_ty, value_ty, Some(known_keys.into())).intern())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -214,12 +258,16 @@ With no arguments, `dict()` returns a new empty dictionary.
         
 `dict(x)` where x is a dictionary returns a new copy of x."#,
         vec![
-            positional_opt(List(
-                Tuple(TupleVariants::Simple(smallvec![Any.intern(), Any.intern()])).intern(),
-            )),
+            positional_opt(Protocol(typeck::Protocol::Iterable(
+                Protocol(typeck::Protocol::Iterable(Any.intern())).intern(),
+            ))),
             KwargsDict,
         ],
-        Dict(Any.intern(), Any.intern(), std::option::Option::None),
+        Dict(
+            Unknown.intern(),
+            Unknown.intern(),
+            std::option::Option::None,
+        ),
     );
     add_function(
         "dir",
@@ -1709,6 +1757,7 @@ fn function(
         num_vars,
         params,
         ret_ty.intern(),
+        name == "dict",
     )
 }
 

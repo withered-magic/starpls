@@ -34,9 +34,33 @@ jobs:
           name: starpls-${{ matrix.target.name }}
           path: bazel-bin/crates/starpls/starpls
 
+  build-windows:
+    name: Build (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Build
+        run: cargo build -p starpls --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: starpls-windows-amd64
+          path: target/release/starpls.exe
+
   release:
     name: Release
-    needs: [build]
+    needs: [build, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -51,6 +75,7 @@ jobs:
           mkdir -p release
           mv artifacts/starpls-linux-amd64/starpls release/starpls-linux-amd64
           mv artifacts/starpls-darwin-arm64/starpls release/starpls-darwin-arm64
+          mv artifacts/starpls-windows-amd64/starpls.exe release/starpls-windows-amd64.exe
       - name: Show release artifacts
         run: find release
       - name: Create release

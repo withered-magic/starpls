@@ -74,14 +74,14 @@
             "name": "testonly",
             "type": "boolean",
             "doc": "If `True`, only testonly targets (such as tests) can depend on this target.\n\nEquivalently, a rule that is not `testonly` is not allowed to depend on any rule that is `testonly`.\n\nTests (`*_test` rules) and test suites (test_suite rules) are `testonly` by default.\n\nThis attribute is intended to mean that the target should not be contained in binaries that are released to production.\n\nBecause testonly is enforced at build time, not run time, and propagates virally through the dependency tree, it should be applied judiciously. For example, stubs and fakes that are useful for unit tests may also be useful for integration tests involving the same binaries that will be released to production, and therefore should probably not be marked testonly. Conversely, rules that are dangerous to even link in, perhaps because they unconditionally override normal behavior, should definitely be marked testonly.",
-            "default_value": "",
+            "default_value": "False",
             "is_mandatory": false
         },
         {
             "name": "toolchains",
             "type": "List of Labels",
             "doc": "The set of targets whose Make variables this target is allowed to access. These targets are either instances of rules that provide `TemplateVariableInfo` or special targets for toolchain types built into Bazel. These include:\n\n- `@bazel_tools//tools/cpp:current_cc_toolchain`\n\n- `@bazel_tools//tools/jdk:current_java_runtime`\n\nNote that this is distinct from the concept of toolchain resolution that is used by rule implementations for platform-dependent configuration. You cannot use this attribute to determine which specific `cc_toolchain` or `java_toolchain` a target will use.",
-            "default_value": "",
+            "default_value": "[]",
             "is_mandatory": false
         },
         {

@@ -72,6 +72,13 @@ pub(crate) fn signature_help(
                         if !ty.is_unknown() {
                             let _ = write!(&mut s, ": {}", ty.display(db));
                         }
+                        match param.default_value(db) {
+                            Some(default_value) if !default_value.is_empty() => {
+                                s.push_str(" = ");
+                                s.push_str(&default_value);
+                            }
+                            _ => {}
+                        }
                         return s;
                     };
 

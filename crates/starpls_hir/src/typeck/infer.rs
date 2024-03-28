@@ -94,7 +94,7 @@ impl TyCtxt<'_> {
                     .resolve_name(name)
                     .and_then(|decls| decls.into_iter().last())
                     .map(|decl| match decl {
-                        ScopeDef::Variable(VariableDef { expr, source }) => self
+                        ScopeDef::Variable(VariableDef { expr, source, .. }) => self
                             .cx
                             .type_of_expr
                             .get(&FileExprId::new(file, expr))

@@ -43,7 +43,6 @@ pub const BUILTINS_TYPES_DENY_LIST: &[&str] = &[
     "float",
     "function",
     "int",
-    "json",
     "list",
     "range",
     "string",

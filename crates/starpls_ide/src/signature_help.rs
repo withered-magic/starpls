@@ -69,25 +69,22 @@ pub(crate) fn signature_help(
                     } else if param.is_kwargs_dict(db) {
                         ty.dict_value_ty()
                     } else {
-                        if !ty.is_unknown() {
-                            let _ = write!(&mut s, ": {}", ty.display(db));
-                        }
-                        match param.default_value(db) {
-                            Some(default_value) if !default_value.is_empty() => {
-                                s.push_str(" = ");
-                                s.push_str(&default_value);
-                            }
-                            _ => {}
-                        }
-                        return s;
+                        ty.clone().into()
                     };
 
-                    s.push_str(": ");
                     match ty {
-                        Some(ty) => {
-                            let _ = write!(&mut s, "{}", ty.display(db));
+                        Some(ty) if !ty.is_unknown() => {
+                            let _ = write!(&mut s, ": {}", ty.display(db));
                         }
-                        None => s.push_str("Unknown"),
+                        _ => {}
+                    }
+
+                    match param.default_value(db) {
+                        Some(default_value) if !default_value.is_empty() => {
+                            s.push_str(" = ");
+                            s.push_str(&default_value);
+                        }
+                        _ => {}
                     }
                 }
                 _ => {}

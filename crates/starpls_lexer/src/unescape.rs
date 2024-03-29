@@ -91,7 +91,11 @@ fn scan_string_escape(chars: &mut Chars<'_>) -> Result<Option<char>, EscapeError
         't' => '\x09', // horizontal tab
         'v' => '\x0B', // vertical tab
 
-        '\\' => '\\',            // literal backslash
+        '\\' => '\\', // literal backslash
+
+        // both types of quotes can be escaped
+        '"' => '"',
+        '\'' => '\'',
         '\n' => return Ok(None), // escaped newlines are ignored
 
         // octal escapes immediately begin with digits

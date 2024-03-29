@@ -168,6 +168,14 @@ impl ScopeDef {
         }
         .into()
     }
+
+    pub fn is_user_defined(&self) -> bool {
+        match self {
+            ScopeDef::Callable(it) => it.is_user_defined(),
+            ScopeDef::Variable(it) => it.is_user_defined(),
+            _ => true,
+        }
+    }
 }
 
 impl From<scope::ScopeDef> for ScopeDef {

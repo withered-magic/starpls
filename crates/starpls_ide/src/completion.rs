@@ -59,6 +59,7 @@ pub enum CompletionItemKind {
 enum CompletionRelevance {
     Parameter,
     VariableOrKeyword,
+    Builtin,
 }
 
 enum CompletionAnalysis {
@@ -137,13 +138,17 @@ pub(crate) fn completions(
                 for (name, decl) in names {
                     items.push(CompletionItem {
                         label: name.to_string(),
-                        kind: match decl {
+                        kind: match &decl {
                             ScopeDef::Callable(_) => CompletionItemKind::Function,
                             decl if decl.ty(db).is_callable() => CompletionItemKind::Function,
                             _ => CompletionItemKind::Variable,
                         },
                         mode: None,
-                        relevance: CompletionRelevance::VariableOrKeyword,
+                        relevance: if decl.is_user_defined() {
+                            CompletionRelevance::VariableOrKeyword
+                        } else {
+                            CompletionRelevance::Builtin
+                        },
                     });
                 }
 

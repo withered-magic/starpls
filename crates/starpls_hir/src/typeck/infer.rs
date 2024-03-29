@@ -725,7 +725,7 @@ impl TyCtxt<'_> {
                     } else {
                         // Add TypeRef resolution errors.
                         for error in errors.iter() {
-                            self.add_diagnostic_for_range(file, type_ref.1, error);
+                            self.add_diagnostic_for_range(file, Severity::Error, type_ref.1, error);
                         }
                         None
                     }
@@ -918,7 +918,7 @@ impl TyCtxt<'_> {
             Some(ptr) => ptr.syntax_node_ptr().text_range(),
             None => return,
         };
-        self.add_diagnostic_for_range(file, range, message);
+        self.add_diagnostic_for_range(file, Severity::Error, range, message);
     }
 
     fn add_expr_diagnostic_ty<T: Into<String>>(
@@ -934,12 +934,13 @@ impl TyCtxt<'_> {
     fn add_diagnostic_for_range<T: Into<String>>(
         &mut self,
         file: File,
+        severity: Severity,
         range: TextRange,
         message: T,
     ) {
         self.cx.diagnostics.push(Diagnostic {
             message: message.into(),
-            severity: Severity::Error,
+            severity,
             range: FileRange {
                 file_id: file.id(self.db),
                 range,
@@ -988,7 +989,12 @@ impl TyCtxt<'_> {
         // for other places that type comments can appear.
         for error in errors {
             if let Some(ptr) = source_map(self.db, file).param_map_back.get(&param) {
-                self.add_diagnostic_for_range(file, ptr.syntax_node_ptr().text_range(), error);
+                self.add_diagnostic_for_range(
+                    file,
+                    Severity::Error,
+                    ptr.syntax_node_ptr().text_range(),
+                    error,
+                );
             }
         }
 
@@ -1024,6 +1030,7 @@ impl TyCtxt<'_> {
                         if file == loaded_file {
                             self.add_diagnostic_for_range(
                                 file,
+                                Severity::Error,
                                 range(),
                                 "Cannot load the current file",
                             );
@@ -1052,6 +1059,7 @@ impl TyCtxt<'_> {
                                 let (file, load_stmt) = self.cx.load_resolution_stack[i].clone();
                                 self.add_diagnostic_for_range(
                                     file,
+                                    Severity::Error,
                                     load_stmt.ptr(db).text_range(),
                                     message.clone(),
                                 )
@@ -1060,6 +1068,7 @@ impl TyCtxt<'_> {
                             // Also add the current (importing) file.
                             self.add_diagnostic_for_range(
                                 file,
+                                Severity::Error,
                                 load_stmt.ptr(db).text_range(),
                                 message,
                             );
@@ -1082,6 +1091,7 @@ impl TyCtxt<'_> {
                                 None => {
                                     tcx.add_diagnostic_for_range(
                                         file,
+                                        Severity::Warning,
                                         range(),
                                         format!(
                                             "Could not resolve symbol \"{}\" in module \"{}\"",
@@ -1121,6 +1131,7 @@ impl TyCtxt<'_> {
             Err(err) => {
                 self.add_diagnostic_for_range(
                     file,
+                    Severity::Warning,
                     load_stmt.ptr(self.db).text_range(),
                     format!(
                         "Could not resolve module \"{}\": {}",

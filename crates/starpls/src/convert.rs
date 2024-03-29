@@ -67,5 +67,6 @@ pub(crate) fn text_size_from_lsp_position(
 fn lsp_severity_from_native(severity: Severity) -> lsp_types::DiagnosticSeverity {
     match severity {
         Severity::Error => lsp_types::DiagnosticSeverity::ERROR,
+        Severity::Warning => lsp_types::DiagnosticSeverity::WARNING,
     }
 }

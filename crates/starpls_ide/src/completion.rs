@@ -52,6 +52,7 @@ pub enum CompletionItemKind {
     File,
     Folder,
     Constant,
+    Module,
 }
 
 #[repr(u16)]
@@ -140,6 +141,10 @@ pub(crate) fn completions(
                         kind: match decl {
                             ScopeDef::Callable(_) => CompletionItemKind::Function,
                             decl if decl.ty(db).is_callable() => CompletionItemKind::Function,
+                            // All the global values in the Bazel builtins are modules.
+                            ScopeDef::Variable(it) if !it.is_user_defined() => {
+                                CompletionItemKind::Module
+                            }
                             _ => CompletionItemKind::Variable,
                         },
                         mode: None,

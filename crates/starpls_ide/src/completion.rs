@@ -216,12 +216,16 @@ pub(crate) fn completions(
             {
                 items.push(CompletionItem {
                     label: name.to_string(),
-                    kind: match decl {
+                    kind: match &decl {
                         ScopeDef::Callable(it) if it.is_user_defined() => {
                             CompletionItemKind::Function
                         }
                         ScopeDef::Variable(it) if it.is_user_defined() => {
-                            CompletionItemKind::Variable
+                            if decl.ty(db).is_callable() {
+                                CompletionItemKind::Function
+                            } else {
+                                CompletionItemKind::Variable
+                            }
                         }
                         _ => continue,
                     },

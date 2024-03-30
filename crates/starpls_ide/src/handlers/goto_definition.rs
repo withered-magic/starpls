@@ -31,10 +31,10 @@ pub(crate) fn goto_definition(
                 .into_iter()
                 .flat_map(|def| match def {
                     ScopeDef::LoadItem(load_item) => {
-                        let loaded_file = resolve_load_item(db, &sema, file, load_item)?;
+                        let loaded_file = resolve_load_item(db, &sema, file, &load_item)?;
                         let loaded_file_id = loaded_file.id(db);
                         sema.scope_for_module(loaded_file)
-                            .resolve_name(&name)
+                            .resolve_name(&load_item.name(db))
                             .map(|defs| defs.into_iter())
                             .and_then(|mut defs| defs.next())
                             .and_then(|def| def.syntax_node_ptr(db, loaded_file))
@@ -66,7 +66,7 @@ fn resolve_load_item(
     db: &Database,
     sema: &Semantics,
     file: File,
-    load_item: LoadItem,
+    load_item: &LoadItem,
 ) -> Option<File> {
     load_item
         .load_stmt(db)

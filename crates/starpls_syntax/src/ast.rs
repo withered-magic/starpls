@@ -577,7 +577,6 @@ impl BinaryExpr {
             .filter_map(|el| el.into_token())
             .find_map(|token| {
                 let op = match token.kind() {
-                    // TODO(withered-magic): Handle "not in".
                     T![+] => BinaryOp::Arith(ArithOp::Add),
                     T![-] => BinaryOp::Arith(ArithOp::Sub),
                     T![*] => BinaryOp::Arith(ArithOp::Mul),
@@ -598,6 +597,7 @@ impl BinaryExpr {
                     T![and] => BinaryOp::Logic(LogicOp::And),
                     T![or] => BinaryOp::Logic(LogicOp::Or),
                     T![in] => BinaryOp::MemberOp(MemberOp::In),
+                    T![not] => BinaryOp::MemberOp(MemberOp::NotIn),
                     _ => return None,
                 };
                 Some((token, op))

@@ -85,11 +85,30 @@ fn and_expr(p: &mut Parser) -> Option<CompletedMarker> {
 }
 
 fn comparison_expr(p: &mut Parser) -> Option<CompletedMarker> {
-    binary_expr(
-        p,
-        &[T![==], T![!=], T![<], T![>], T![<=], T![>=], T![in]],
-        bitwise_or_expr,
-    )
+    const COMP_TOKENS: &[SyntaxKind] = &[T![==], T![!=], T![<], T![>], T![<=], T![>=], T![in]];
+    let mut m = match bitwise_or_expr(p) {
+        Some(m) => m,
+        None => return None,
+    };
+
+    loop {
+        let is_not_in = if COMP_TOKENS.contains(&p.current()) {
+            false
+        } else if p.at(T![not]) && p.nth_at(1, T![in]) {
+            true
+        } else {
+            break;
+        };
+        let binary_marker = m.precede(p);
+        p.bump_any();
+        if is_not_in {
+            p.bump_any();
+        }
+        bitwise_or_expr(p);
+        m = binary_marker.complete(p, BINARY_EXPR);
+    }
+
+    Some(m)
 }
 
 fn bitwise_or_expr(p: &mut Parser) -> Option<CompletedMarker> {

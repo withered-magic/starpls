@@ -670,7 +670,8 @@ impl TyCtxt<'_> {
         match op {
             // TODO(withered-magic): Handle string interoplation with "%".
             BinaryOp::Arith(op) => match (lhs_kind, rhs_kind, op) {
-                (TyKind::String, TyKind::String, ArithOp::Add | ArithOp::Mod) => self.string_ty(),
+                (TyKind::String, TyKind::String, ArithOp::Add)
+                | (TyKind::String, _, ArithOp::Mod) => self.string_ty(),
                 (TyKind::Bytes, TyKind::Bytes, ArithOp::Add) => self.bytes_ty(),
                 (
                     TyKind::List(target)
@@ -689,6 +690,29 @@ impl TyCtxt<'_> {
                 (TyKind::Int, TyKind::Int) => self.int_ty(),
                 _ => unknown(),
             },
+            BinaryOp::MemberOp(_) => {
+                if !matches!(
+                    rhs_kind,
+                    TyKind::List(_)
+                        | TyKind::Tuple(_)
+                        | TyKind::Dict(_, _, _)
+                        | TyKind::String
+                        | TyKind::Bytes
+                        | TyKind::Protocol(Protocol::Sequence(_))
+                ) {
+                    self.add_expr_diagnostic(
+                        file,
+                        parent,
+                        format!(
+                            "Operator \"{}\" not supported for types \"{}\" and \"{}\"",
+                            op,
+                            lhs_kind.display(db),
+                            rhs_kind.display(db)
+                        ),
+                    );
+                }
+                self.bool_ty()
+            }
             _ => self.bool_ty(),
         }
     }

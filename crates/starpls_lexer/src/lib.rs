@@ -393,16 +393,20 @@ impl Cursor<'_> {
         let token_kind = match first_char {
             // Skip emitting newlines if we currently have an opened parenthesis, bracket, or brace.
             c if is_whitespace(c) => {
-                if self.has_open_block() {
-                    self.eat_while(is_whitespace);
-                    Whitespace
-                } else if c == '\n' {
+                let has_open_block = self.has_open_block();
+                if c == '\n' && !has_open_block {
                     self.state = CursorState::BeforeLeadingSpaces;
                     Newline
                 } else {
-                    self.eat_while(is_non_newline_whitespace);
+                    self.eat_whitespace(has_open_block);
                     Whitespace
                 }
+            }
+
+            '\\' if self.first() == '\n' => {
+                self.bump();
+                self.eat_whitespace(self.has_open_block());
+                Whitespace
             }
 
             // Comments start with a `#` and continue until a newline character.
@@ -820,5 +824,23 @@ impl Cursor<'_> {
         }
         // End-of-file was reached.
         (false, triple_quoted)
+    }
+
+    fn eat_whitespace(&mut self, newline_allowed: bool) {
+        while !self.is_eof() {
+            match self.first() {
+                ' ' | '\t' => {
+                    self.bump();
+                }
+                '\r' | '\n' if newline_allowed => {
+                    self.bump();
+                }
+                '\\' if self.second() == '\n' => {
+                    self.bump();
+                    self.bump();
+                }
+                _ => break,
+            }
+        }
     }
 }

@@ -100,7 +100,7 @@ Steps to get up and running:
 3. In the extension development host, open a `.star` file and enjoy syntax highlighting and error messages!
 
 ## Known Issues
-- The `not in` operator is currently not supported and does not parse correctly.
+- Type guards are not supported.
 
 ## Disclaimer
 This project is still heavily WIP, so expect a decent amount of bugs and crashes if you decide to try it out! Additionally, I've elected to focus on implementing the core Starlark specification first before introducing Bazel- or Buck2-specific features.

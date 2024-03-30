@@ -140,3 +140,16 @@ $0
         &["go_binary"],
     )
 }
+
+#[test]
+fn test_param_defaults() {
+    check_scope(
+        r#"
+_tsc = ""
+
+def ts_project(tsc = _t$0sc):
+    pass
+    "#,
+        &["_tsc"],
+    )
+}

@@ -225,6 +225,7 @@ impl ScopeCollector<'_> {
     ) {
         match &self.module.stmts[stmt] {
             Stmt::Def { func, stmts } => {
+                self.collect_params(func.params(self.db), *current);
                 *current = self.scopes.alloc_scope(*current);
                 self.scopes.add_decl(
                     *current,
@@ -425,6 +426,19 @@ impl ScopeCollector<'_> {
                 CompClause::If { test } => {
                     self.collect_expr(*test, *current, None);
                 }
+            }
+        }
+    }
+
+    fn collect_params(&mut self, params: &Box<[ParamId]>, current: ScopeId) {
+        for param in params.iter().copied() {
+            let param = &self.module[param];
+            match param {
+                Param::Simple {
+                    default: Some(expr),
+                    ..
+                } => self.collect_expr(*expr, current, None),
+                _ => {}
             }
         }
     }

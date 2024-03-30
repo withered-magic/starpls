@@ -18,7 +18,7 @@ use crate::{
 };
 use starpls_common::{line_index, parse, Diagnostic, File, FileRange, Severity};
 use starpls_syntax::{
-    ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, SyntaxNodePtr, UnaryOp},
+    ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, UnaryOp},
     TextRange,
 };
 

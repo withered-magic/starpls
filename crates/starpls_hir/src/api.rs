@@ -11,7 +11,7 @@ use crate::{
     },
     Db, ExprId, Name, TyKind,
 };
-use starpls_common::{Diagnostic, Diagnostics, File};
+use starpls_common::{parse, Diagnostic, Diagnostics, File};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr, SyntaxNodePtr},
     TextSize,
@@ -114,6 +114,7 @@ impl<'a> Semantics<'a> {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Variable {
     id: Option<(File, ExprId)>,
 }
@@ -124,11 +125,24 @@ impl Variable {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct LoadItem {
     file: File,
     id: LoadItemId,
 }
 
+impl LoadItem {
+    pub fn load_stmt(&self, db: &dyn Db) -> Option<ast::LoadStmt> {
+        source_map(db, self.file)
+            .load_item_map_back
+            .get(&self.id)
+            .and_then(|ptr| ptr.try_to_node(&parse(db, self.file).syntax(db)))
+            .and_then(|node| node.syntax().parent())
+            .and_then(ast::LoadStmt::cast)
+    }
+}
+
+#[derive(Debug)]
 pub enum ScopeDef {
     Callable(Callable),
     Variable(Variable),
@@ -164,7 +178,7 @@ impl ScopeDef {
                 id: Some((file, expr)),
             }) => db.infer_expr(*file, *expr),
             ScopeDef::LoadItem(LoadItem { file, id }) => db.infer_load_item(*file, *id),
-            _ => TyKind::Unknown.intern(),
+            _ => Ty::unknown(),
         }
         .into()
     }
@@ -301,6 +315,7 @@ impl From<Ty> for Type {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Callable(CallableInner);
 
 impl Callable {
@@ -377,6 +392,7 @@ impl From<BuiltinFunction> for Callable {
     }
 }
 
+#[derive(Clone, Debug)]
 enum CallableInner {
     HirDef(HirDefFunction),
     IntrinsicFunction(IntrinsicFunction),

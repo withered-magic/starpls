@@ -37,14 +37,14 @@ pub(crate) struct IntrinsicTypes {
 impl Default for IntrinsicTypes {
     fn default() -> Self {
         Self {
-            any: TyKind::Any.intern(),
+            any: Ty::any(),
             unbound: TyKind::Unbound.intern(),
-            unknown: TyKind::Unknown.intern(),
+            unknown: Ty::unknown(),
             none: TyKind::None.intern(),
             bool: TyKind::Bool.intern(),
             int: TyKind::Int.intern(),
             float: TyKind::Float.intern(),
-            string: TyKind::String.intern(),
+            string: Ty::string(),
             string_elems: TyKind::StringElems.intern(),
             bytes: TyKind::Bytes.intern(),
             bytes_elems: TyKind::BytesElems.intern(),
@@ -131,9 +131,9 @@ impl IntrinsicFunction {
             .collect::<Vec<_>>();
 
         let key_ty = if known_keys.is_empty() {
-            TyKind::Unknown.intern()
+            Ty::unknown()
         } else {
-            TyKind::String.intern()
+            Ty::string()
         };
 
         // Determine the common type of the dict values.
@@ -148,7 +148,7 @@ impl IntrinsicFunction {
                 .then_some(first_ty)
             })
             .cloned()
-            .unwrap_or_else(|| TyKind::Unknown.intern());
+            .unwrap_or_else(|| Ty::unknown());
 
         Some(TyKind::Dict(key_ty, value_ty, Some(known_keys.into())).intern())
     }

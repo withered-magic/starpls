@@ -57,12 +57,11 @@ pub(crate) fn goto_definition(
         None => return Ok(None),
     };
 
-    let line_index = match snapshot.analysis_snapshot.line_index(file_id)? {
-        Some(line_index) => line_index,
-        None => return Ok(None),
-    };
-
     let to_lsp_location = |location: Location| -> Option<lsp_types::Location> {
+        let line_index = snapshot
+            .analysis_snapshot
+            .line_index(location.file_id)
+            .ok()??;
         let range = convert::lsp_range_from_text_range(location.range, line_index);
         Some(lsp_types::Location {
             uri: lsp_types::Url::from_file_path(

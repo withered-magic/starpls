@@ -312,7 +312,7 @@ impl Ty {
                 Params::Intrinsic(func.params(db).iter().enumerate().map(|(index, param)| {
                     let ty = param
                         .ty()
-                        .unwrap_or_else(|| TyKind::Unknown.intern())
+                        .unwrap_or_else(|| Ty::unknown())
                         .substitute(&subst.args);
                     let param = Param(ParamInner::IntrinsicParam {
                         parent: *func,
@@ -329,9 +329,7 @@ impl Ty {
                         BuiltinFunctionParam::ArgsList { .. } => {
                             TyKind::Tuple(Tuple::Variable(ty)).intern()
                         }
-                        BuiltinFunctionParam::KwargsDict { .. } => {
-                            TyKind::Dict(TyKind::String.intern(), ty, None).intern()
-                        }
+                        BuiltinFunctionParam::KwargsDict { .. } => Ty::dict(Ty::string(), ty, None),
                     };
                     let param = Param(ParamInner::BuiltinParam {
                         parent: *func,
@@ -375,8 +373,7 @@ impl Ty {
                         .chain(common_attrs)
                         .chain(iter::once((
                             Param(RuleParam::Kwargs.into()),
-                            TyKind::Dict(TyKind::String.intern(), TyKind::Any.intern(), None)
-                                .intern(),
+                            TyKind::Dict(Ty::string(), Ty::any(), None).intern(),
                         ))),
                 )
             }
@@ -392,6 +389,34 @@ impl Ty {
             TyKind::Rule(_) => TyKind::None.intern(),
             _ => return None,
         })
+    }
+
+    pub(crate) fn unknown() -> Ty {
+        TyKind::Unknown.intern()
+    }
+
+    pub(crate) fn any() -> Ty {
+        TyKind::Any.intern()
+    }
+
+    pub(crate) fn bool() -> Ty {
+        TyKind::Bool.intern()
+    }
+
+    pub(crate) fn int() -> Ty {
+        TyKind::Int.intern()
+    }
+
+    pub(crate) fn string() -> Ty {
+        TyKind::String.intern()
+    }
+
+    pub(crate) fn list(ty: Ty) -> Ty {
+        TyKind::List(ty).intern()
+    }
+
+    pub(crate) fn dict(key_ty: Ty, value_ty: Ty, known_keys: Option<Arc<[(Box<str>, Ty)]>>) -> Ty {
+        TyKind::Dict(key_ty, value_ty, known_keys).intern()
     }
 
     fn is_any(&self) -> bool {
@@ -445,8 +470,10 @@ impl Ty {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Param(pub(crate) ParamInner);
 
+#[derive(Clone, Debug)]
 pub(crate) enum ParamInner {
     Param {
         parent: Option<Function>,
@@ -463,6 +490,7 @@ pub(crate) enum ParamInner {
     RuleParam(RuleParam),
 }
 
+#[derive(Clone, Debug)]
 pub(crate) enum RuleParam {
     Keyword { name: Name, attr: Ty },
     BuiltinKeyword(RuleKind, usize),
@@ -835,28 +863,18 @@ impl Attribute {
 
     pub fn expected_ty(&self) -> Ty {
         match self.kind {
-            AttributeKind::Bool => TyKind::Bool,
-            AttributeKind::Int => TyKind::Int,
-            AttributeKind::IntList => TyKind::List(TyKind::Int.intern()),
-            AttributeKind::Label => TyKind::String,
-            AttributeKind::LabelKeyedStringDict => {
-                TyKind::Dict(TyKind::String.intern(), TyKind::String.intern(), None)
+            AttributeKind::Bool => Ty::bool(),
+            AttributeKind::Int => Ty::int(),
+            AttributeKind::IntList => Ty::list(Ty::int()),
+            AttributeKind::String | AttributeKind::Label | AttributeKind::Output => Ty::string(),
+            AttributeKind::StringDict | AttributeKind::LabelKeyedStringDict => {
+                Ty::dict(Ty::string(), Ty::string(), None)
             }
-            AttributeKind::LabelList => TyKind::List(TyKind::String.intern()),
-            AttributeKind::Output => TyKind::String,
-            AttributeKind::OutputList => TyKind::List(TyKind::String.intern()),
-            AttributeKind::String => TyKind::String,
-            AttributeKind::StringList => TyKind::List(TyKind::String.intern()),
-            AttributeKind::StringDict => {
-                TyKind::Dict(TyKind::String.intern(), TyKind::String.intern(), None)
+            AttributeKind::StringList | AttributeKind::LabelList | AttributeKind::OutputList => {
+                Ty::list(Ty::string())
             }
-            AttributeKind::StringListDict => TyKind::Dict(
-                TyKind::String.intern(),
-                TyKind::List(TyKind::String.intern()).intern(),
-                None,
-            ),
+            AttributeKind::StringListDict => Ty::dict(Ty::string(), Ty::list(Ty::string()), None),
         }
-        .intern()
     }
 }
 
@@ -1091,7 +1109,7 @@ impl<'a> TypeRefResolver<'a> {
                     // Unions require at least two type arguments. We can handle this nicely by
                     // converting Union[] to Unknown and Union[t1] to t1.
                     match args.len() {
-                        0 => TyKind::Unknown.intern(),
+                        0 => Ty::unknown(),
                         1 => self.resolve_type_ref_inner(&args[1]),
                         _ => TyKind::Union(
                             args.into_iter()
@@ -1111,7 +1129,7 @@ impl<'a> TypeRefResolver<'a> {
                 },
             },
             TypeRef::Union(args) => match args.len() {
-                0 => TyKind::Unknown.intern(),
+                0 => Ty::unknown(),
                 1 => self.resolve_type_ref_inner(&args[0]),
                 _ => TyKind::Union(
                     args.iter()
@@ -1148,10 +1166,10 @@ impl<'a> TypeRefResolver<'a> {
                     }
                     self.resolve_type_ref_inner(first)
                 }
-                _ => TyKind::Unknown.intern(),
+                _ => Ty::unknown(),
             }
         } else {
-            TyKind::Unknown.intern()
+            Ty::unknown()
         };
 
         f(arg).intern()
@@ -1165,7 +1183,7 @@ pub(crate) fn resolve_type_ref(db: &dyn Db, type_ref: &TypeRef) -> (Ty, Vec<Stri
 pub(crate) fn resolve_type_ref_opt(db: &dyn Db, type_ref: Option<TypeRef>) -> Ty {
     type_ref
         .map(|type_ref| resolve_type_ref(db, &type_ref).0)
-        .unwrap_or_else(|| TyKind::Unknown.intern())
+        .unwrap_or_else(|| Ty::unknown())
 }
 
 // TODO(withered-magic): This function currently assumes that all types are covariant in their arguments.

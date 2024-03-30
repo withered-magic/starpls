@@ -762,3 +762,37 @@ def f():
         "#]],
     );
 }
+
+#[test]
+fn test_escaped_newline() {
+    check_lexing(
+        r#"
+result = 3 + \
+1
+foo(3 + \
+1)
+"#,
+        expect![[r#"
+            Token { kind: Newline, len: 1 }
+            Token { kind: Ident, len: 6 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Plus, len: 1 }
+            Token { kind: Whitespace, len: 3 }
+            Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Ident, len: 3 }
+            Token { kind: OpenParen, len: 1 }
+            Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Plus, len: 1 }
+            Token { kind: Whitespace, len: 3 }
+            Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+            Token { kind: CloseParen, len: 1 }
+            Token { kind: Newline, len: 1 }
+        "#]],
+    )
+}

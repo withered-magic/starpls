@@ -285,7 +285,7 @@ pub struct FilePosition {
     pub pos: TextSize,
 }
 
-pub trait FileLoader: Debug + Send + Sync + 'static {
+pub trait FileLoader: Send + Sync + 'static {
     fn load_file(
         &self,
         path: &str,

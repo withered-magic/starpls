@@ -26,7 +26,7 @@ macro_rules! match_notification {
 }
 
 #[derive(Debug)]
-pub(crate) enum FetchBazelExternalReposProgress {
+pub(crate) enum BazelFetchExternalRepositoriesProgress {
     Begin,
     End(anyhow::Result<Builtins>),
 }
@@ -41,7 +41,7 @@ pub(crate) enum Task {
     /// Retry a previously failed request (e.g. due to Salsa cancellation).
     Retry(lsp_server::Request),
     /// Fetch Bazel external repositories.
-    FetchBazelExternalRepos(FetchBazelExternalReposProgress),
+    BazelFetchExternalRepositories(BazelFetchExternalRepositoriesProgress),
 }
 
 #[derive(Debug)]
@@ -95,6 +95,11 @@ impl Server {
             Event::Task(task) => self.handle_task(task),
         };
 
+        // Don't run any analysis while in the process of fetching external repositories.
+        if self.fetch_bazel_external_repos_requested == true {
+            return Ok(());
+        }
+
         // Update our diagnostics if a triggering event (e.g. document open/close/change) occured.
         // This is done asynchronously, so any new diagnostics resulting from this won't be seen until the next turn
         // of the event loop.
@@ -108,12 +113,9 @@ impl Server {
         let changed_file_ids = self.diagnostics_manager.take_changes();
 
         for file_id in changed_file_ids {
-            let document_manager = self.document_manager.read();
+            let state = self.shared_file_state.0.read();
             // Only send diagnostics for currently open editors.
-            let version = match document_manager
-                .get(file_id)
-                .map(|document| document.source)
-            {
+            let version = match state.get_document(file_id).map(|document| document.source) {
                 Some(DocumentSource::Editor(version)) => version,
                 _ => continue,
             };
@@ -122,10 +124,10 @@ impl Server {
                 .get_diagnostics(file_id)
                 .cloned()
                 .collect::<Vec<_>>();
-            let path = document_manager.lookup_by_file_id(file_id);
+            let path = state.interner.lookup_by_file_id(file_id);
             let uri = lsp_types::Url::from_file_path(path).unwrap();
 
-            drop(document_manager);
+            drop(state);
 
             self.send_notification::<lsp_types::notification::PublishDiagnostics>(
                 lsp_types::PublishDiagnosticsParams {
@@ -141,9 +143,10 @@ impl Server {
 
     fn update_diagnostics(&mut self) {
         let file_ids = self
-            .document_manager
+            .shared_file_state
+            .0
             .read()
-            .iter()
+            .documents()
             .map(|(path, _)| path.clone())
             .collect::<Vec<_>>();
         let snapshot = self.snapshot();
@@ -204,10 +207,10 @@ impl Server {
                 self.respond(resp);
             }
             Task::Retry(req) => self.handle_request(req),
-            Task::FetchBazelExternalRepos(progress) => {
+            Task::BazelFetchExternalRepositories(progress) => {
                 let token = "Fetching Bazel external repositories".to_string();
                 let work_done = match progress {
-                    FetchBazelExternalReposProgress::Begin => {
+                    BazelFetchExternalRepositoriesProgress::Begin => {
                         self.send_request::<lsp_types::request::WorkDoneProgressCreate>(
                             WorkDoneProgressCreateParams {
                                 token: lsp_types::NumberOrString::String(token.clone()),
@@ -219,7 +222,7 @@ impl Server {
                             ..Default::default()
                         })
                     }
-                    FetchBazelExternalReposProgress::End(_) => {
+                    BazelFetchExternalRepositoriesProgress::End(_) => {
                         self.fetch_bazel_external_repos_requested = false;
                         lsp_types::WorkDoneProgress::End(lsp_types::WorkDoneProgressEnd {
                             message: None,

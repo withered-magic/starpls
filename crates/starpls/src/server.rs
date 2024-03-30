@@ -1,12 +1,11 @@
 use crate::{
     debouncer::AnalysisDebouncer,
     diagnostics::DiagnosticsManager,
-    document::{DefaultFileLoader, DocumentChangeKind, DocumentManager, PathInterner},
-    event_loop::{FetchBazelExternalReposProgress, Task},
+    document::{DocumentChangeKind, SharedFileState},
+    event_loop::{BazelFetchExternalRepositoriesProgress, Task},
     task_pool::{TaskPool, TaskPoolHandle},
 };
 use lsp_server::{Connection, ReqQueue};
-use parking_lot::RwLock;
 use starpls_bazel::{
     build_language::decode_rules,
     client::{BazelCLI, BazelClient},
@@ -21,7 +20,7 @@ pub(crate) struct Server {
     pub(crate) connection: Connection,
     pub(crate) req_queue: ReqQueue<(), ()>,
     pub(crate) task_pool_handle: TaskPoolHandle<Task>,
-    pub(crate) document_manager: Arc<RwLock<DocumentManager>>,
+    pub(crate) shared_file_state: Arc<SharedFileState>,
     pub(crate) diagnostics_manager: DiagnosticsManager,
     pub(crate) analysis: Analysis,
     pub(crate) analysis_debouncer: AnalysisDebouncer,
@@ -32,7 +31,7 @@ pub(crate) struct Server {
 
 pub(crate) struct ServerSnapshot {
     pub(crate) analysis_snapshot: AnalysisSnapshot,
-    pub(crate) document_manager: Arc<RwLock<DocumentManager>>,
+    pub(crate) shared_file_state: Arc<SharedFileState>,
 }
 
 impl Server {
@@ -76,17 +75,15 @@ impl Server {
             }
         };
 
-        let path_interner = Arc::new(PathInterner::default());
-        let loader = DefaultFileLoader::new(path_interner.clone(), output_base);
-
-        let mut analysis = Analysis::new(Arc::new(loader));
+        let shared_file_state = Arc::new(SharedFileState::new_with_output_base(output_base));
+        let mut analysis = Analysis::new(shared_file_state.clone());
         analysis.set_builtin_defs(builtins, rules);
 
         Ok(Server {
             connection,
             req_queue: Default::default(),
             task_pool_handle,
-            document_manager: Arc::new(RwLock::new(DocumentManager::new(path_interner))),
+            shared_file_state,
             diagnostics_manager: Default::default(),
             analysis,
             analysis_debouncer: AnalysisDebouncer::new(DEBOUNCE_INTERVAL, sender),
@@ -99,21 +96,21 @@ impl Server {
     pub(crate) fn snapshot(&self) -> ServerSnapshot {
         ServerSnapshot {
             analysis_snapshot: self.analysis.snapshot(),
-            document_manager: Arc::clone(&self.document_manager),
+            shared_file_state: self.shared_file_state.clone(),
         }
     }
 
     pub(crate) fn process_changes(&mut self) -> bool {
         let mut change = Change::default();
-        let mut document_manager = self.document_manager.write();
-        let (has_opened_or_closed_documents, changed_file_ids) = document_manager.take_changes();
+        let mut state = self.shared_file_state.0.write();
+        let (has_opened_or_closed_documents, changed_file_ids) = state.take_document_changes();
 
         if changed_file_ids.is_empty() {
             return has_opened_or_closed_documents;
         }
 
         for (file_id, change_kind) in changed_file_ids {
-            let document = match document_manager.get(file_id) {
+            let document = match state.get_document(file_id) {
                 Some(document) => document,
                 None => continue,
             };
@@ -127,7 +124,7 @@ impl Server {
             }
         }
 
-        drop(document_manager);
+        drop(state);
 
         // Apply the change to our analyzer. This will cancel any affected active Salsa operations.
         self.analysis.apply_change(change);
@@ -164,15 +161,15 @@ impl Server {
         self.fetch_bazel_external_repos_requested = true;
         self.task_pool_handle.spawn_with_sender(move |sender| {
             sender
-                .send(Task::FetchBazelExternalRepos(
-                    FetchBazelExternalReposProgress::Begin,
+                .send(Task::BazelFetchExternalRepositories(
+                    BazelFetchExternalRepositoriesProgress::Begin,
                 ))
                 .unwrap();
 
             let res = load_bazel_build_language(&*bazel_client);
             sender
-                .send(Task::FetchBazelExternalRepos(
-                    FetchBazelExternalReposProgress::End(res),
+                .send(Task::BazelFetchExternalRepositories(
+                    BazelFetchExternalRepositoriesProgress::End(res),
                 ))
                 .unwrap();
         });

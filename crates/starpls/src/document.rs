@@ -1,7 +1,6 @@
-use dashmap::DashMap;
 use indexmap::IndexSet;
 use parking_lot::RwLock;
-use rustc_hash::FxHasher;
+use rustc_hash::{FxHashMap, FxHasher};
 use starpls_bazel::{
     self,
     label::{PartialParse, RepoKind},
@@ -15,7 +14,6 @@ use std::{
     hash::BuildHasherDefault,
     io, mem,
     path::{Path, PathBuf, MAIN_SEPARATOR},
-    sync::Arc,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -53,25 +51,55 @@ pub(crate) enum DocumentChangeKind {
     Update,
 }
 
-/// A collection of documents.
-pub(crate) struct DocumentManager {
+#[derive(Default, Debug)]
+pub(crate) struct PathInterner {
+    map: IndexSet<PathBuf, BuildHasherDefault<FxHasher>>,
+}
+
+impl PathInterner {
+    pub(crate) fn intern_path(&mut self, path: PathBuf) -> FileId {
+        let index = self.map.insert_full(path.clone()).0;
+        FileId(index as u32)
+    }
+
+    pub(crate) fn lookup_by_path_buf(&self, path: &PathBuf) -> Option<FileId> {
+        self.map
+            .get_index_of(path)
+            .map(|index| FileId(index as u32))
+    }
+
+    pub(crate) fn lookup_by_file_id(&self, file_id: FileId) -> PathBuf {
+        self.map
+            .get_index(file_id.0 as usize)
+            .expect("unknown file_id")
+            .clone()
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct SharedFileState(pub(crate) RwLock<SharedFileStateInner>);
+
+impl SharedFileState {
+    pub(crate) fn new_with_output_base(output_base: PathBuf) -> Self {
+        Self(RwLock::new(SharedFileStateInner {
+            output_base,
+            ..Default::default()
+        }))
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct SharedFileStateInner {
+    pub(crate) interner: PathInterner,
+    pub(crate) output_base: PathBuf,
+    pub(crate) cached_load_results: FxHashMap<String, PathBuf>,
     documents: HashMap<FileId, Document>,
     has_closed_or_opened_documents: bool,
     changed_file_ids: Vec<(FileId, DocumentChangeKind)>,
-    path_interner: Arc<PathInterner>,
 }
 
-impl DocumentManager {
-    pub(crate) fn new(path_interner: Arc<PathInterner>) -> Self {
-        Self {
-            documents: Default::default(),
-            has_closed_or_opened_documents: false,
-            changed_file_ids: Default::default(),
-            path_interner,
-        }
-    }
-
-    pub(crate) fn open(&mut self, path: PathBuf, version: i32, contents: String) {
+impl SharedFileStateInner {
+    pub(crate) fn open_document(&mut self, path: PathBuf, version: i32, contents: String) {
         self.has_closed_or_opened_documents = true;
 
         // Create/update the document with the given contents.
@@ -90,15 +118,15 @@ impl DocumentManager {
             },
         };
 
-        let file_id = self.path_interner.intern_path(path);
+        let file_id = self.interner.intern_path(path);
         self.documents
             .insert(file_id, Document::new(contents, dialect, Some(version)));
         self.changed_file_ids
             .push((file_id, DocumentChangeKind::Create));
     }
 
-    pub(crate) fn close(&mut self, path: &PathBuf) {
-        if let Some(file_id) = self.path_interner.lookup_by_path_buf(&path) {
+    pub(crate) fn close_document(&mut self, path: &PathBuf) {
+        if let Some(file_id) = self.interner.lookup_by_path_buf(&path) {
             self.has_closed_or_opened_documents = true;
             if let Some(document) = self.documents.get_mut(&file_id) {
                 document.source = DocumentSource::Disk;
@@ -106,7 +134,12 @@ impl DocumentManager {
         }
     }
 
-    pub(crate) fn modify(&mut self, file_id: FileId, contents: String, version: Option<i32>) {
+    pub(crate) fn modify_document(
+        &mut self,
+        file_id: FileId,
+        contents: String,
+        version: Option<i32>,
+    ) {
         if let Some(document) = self.documents.get_mut(&file_id) {
             document.contents = contents;
             document.source = version.into();
@@ -115,80 +148,28 @@ impl DocumentManager {
         };
     }
 
-    pub(crate) fn take_changes(&mut self) -> (bool, Vec<(FileId, DocumentChangeKind)>) {
+    pub(crate) fn take_document_changes(&mut self) -> (bool, Vec<(FileId, DocumentChangeKind)>) {
         let changed_documents = mem::take(&mut self.changed_file_ids);
         let has_opened_or_closed_documents = self.has_closed_or_opened_documents;
         self.has_closed_or_opened_documents = false;
         (has_opened_or_closed_documents, changed_documents)
     }
 
-    pub(crate) fn get(&self, file_id: FileId) -> Option<&Document> {
+    pub(crate) fn get_document(&self, file_id: FileId) -> Option<&Document> {
         self.documents.get(&file_id)
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (&FileId, &Document)> {
+    pub(crate) fn documents(&self) -> impl Iterator<Item = (&FileId, &Document)> {
         self.documents.iter()
     }
-
-    pub(crate) fn lookup_by_file_id(&self, file_id: FileId) -> PathBuf {
-        self.path_interner.lookup_by_file_id(file_id)
-    }
-
-    pub(crate) fn lookup_by_path_buf(&self, path: &PathBuf) -> Option<FileId> {
-        self.path_interner.lookup_by_path_buf(path)
-    }
 }
 
-#[derive(Default, Debug)]
-pub(crate) struct PathInterner {
-    map: RwLock<IndexSet<PathBuf, BuildHasherDefault<FxHasher>>>,
-}
-
-impl PathInterner {
-    pub(crate) fn intern_path(&self, path: PathBuf) -> FileId {
-        let index = self.map.write().insert_full(path.clone()).0;
-        FileId(index as u32)
-    }
-
-    pub(crate) fn lookup_by_path_buf(&self, path: &PathBuf) -> Option<FileId> {
-        self.map
-            .read()
-            .get_index_of(path)
-            .map(|index| FileId(index as u32))
-    }
-
-    pub(crate) fn lookup_by_file_id(&self, file_id: FileId) -> PathBuf {
-        self.map
-            .read()
-            .get_index(file_id.0 as usize)
-            .expect("unknown file_id")
-            .clone()
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct DefaultFileLoader {
-    interner: Arc<PathInterner>,
-    output_base: PathBuf,
-    cached_load_results: DashMap<String, PathBuf>,
-}
-
-impl DefaultFileLoader {
-    pub(crate) fn new(interner: Arc<PathInterner>, output_base: PathBuf) -> Self {
-        Self {
-            interner,
-            output_base,
-            cached_load_results: Default::default(),
-        }
-    }
-
-    fn make_cache_key(&self, repo_kind: &RepoKind, path: &str, from: FileId) -> String {
-        format!("{:?}-{:?}-{:?}", repo_kind, path, from.0)
-    }
-
+impl SharedFileState {
     fn read_cache_result(&self, repo_kind: &RepoKind, path: &str, from: FileId) -> Option<PathBuf> {
-        let key = self.make_cache_key(repo_kind, path, from);
-        self.cached_load_results
+        let key = make_cache_key(repo_kind, path, from);
+        self.0
+            .read()
+            .cached_load_results
             .get(&key)
             .map(|path_buf| path_buf.clone())
     }
@@ -200,21 +181,41 @@ impl DefaultFileLoader {
         from: FileId,
         resolved_path: PathBuf,
     ) {
-        let key = self.make_cache_key(repo_kind, path, from);
-        self.cached_load_results.insert(key, resolved_path);
+        let key = make_cache_key(repo_kind, path, from);
+        self.0
+            .write()
+            .cached_load_results
+            .insert(key, resolved_path);
     }
-}
 
-impl DefaultFileLoader {
     fn dirname(&self, file_id: FileId) -> PathBuf {
         // Find the importing file's directory.
-        let mut from_path = self.interner.lookup_by_file_id(file_id);
+        let mut from_path = self.0.read().interner.lookup_by_file_id(file_id);
         assert!(from_path.pop());
         from_path
     }
+
+    #[allow(unused)]
+    pub(crate) fn intern_path(&mut self, path: PathBuf) -> FileId {
+        self.0.write().interner.intern_path(path)
+    }
+
+    #[allow(unused)]
+    pub(crate) fn lookup_by_path_buf(&self, path: &PathBuf) -> Option<FileId> {
+        self.0.read().interner.lookup_by_path_buf(path)
+    }
+
+    #[allow(unused)]
+    pub(crate) fn lookup_by_file_id(&self, file_id: FileId) -> PathBuf {
+        self.0.read().interner.lookup_by_file_id(file_id)
+    }
 }
 
-impl FileLoader for DefaultFileLoader {
+fn make_cache_key(repo_kind: &RepoKind, path: &str, from: FileId) -> String {
+    format!("{:?}-{:?}-{:?}", repo_kind, path, from.0)
+}
+
+impl FileLoader for SharedFileState {
     fn load_file(
         &self,
         path: &str,
@@ -224,7 +225,7 @@ impl FileLoader for DefaultFileLoader {
         let path = match dialect {
             Dialect::Standard => {
                 // Find the importing file's directory.
-                let mut from_path = self.interner.lookup_by_file_id(from);
+                let mut from_path = self.0.read().interner.lookup_by_file_id(from);
                 assert!(from_path.pop());
 
                 // Resolve the given path relative to the importing file's directory.
@@ -252,12 +253,18 @@ impl FileLoader for DefaultFileLoader {
                     None => {
                         let (root, package) = match &repo_kind {
                             RepoKind::Apparent => (
-                                { self.output_base.join("external").join(label.repo()) },
+                                {
+                                    self.0
+                                        .read()
+                                        .output_base
+                                        .join("external")
+                                        .join(label.repo())
+                                },
                                 PathBuf::new(),
                             ),
                             RepoKind::Current => {
                                 // Find the Bazel workspace root.
-                                let from_path = self.interner.lookup_by_file_id(from);
+                                let from_path = self.0.read().interner.lookup_by_file_id(from);
                                 match starpls_bazel::resolve_workspace(&from_path)? {
                                     Some(root) => root,
                                     None => {
@@ -287,12 +294,14 @@ impl FileLoader for DefaultFileLoader {
         };
 
         Ok(Some({
+            let mut state = self.0.write();
+
             // If we've already interned this file, then simply return the file id.
-            if let Some(file_id) = self.interner.lookup_by_path_buf(&path) {
+            if let Some(file_id) = state.interner.lookup_by_path_buf(&path) {
                 (file_id, None)
             } else {
                 let contents = fs::read_to_string(&path)?;
-                let file_id = self.interner.intern_path(path);
+                let file_id = state.interner.intern_path(path);
                 (file_id, Some(contents))
             }
         }))
@@ -340,7 +349,7 @@ impl FileLoader for DefaultFileLoader {
             Dialect::Bazel => {
                 // Determine the loading file's workspace root and package.
                 let (root, package) = match starpls_bazel::resolve_workspace(
-                    self.interner.lookup_by_file_id(from),
+                    self.0.read().interner.lookup_by_file_id(from),
                 )? {
                     Some(res) => res,
                     None => return Ok(None),

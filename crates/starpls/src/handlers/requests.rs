@@ -14,9 +14,9 @@ use crate::{
 };
 
 pub(crate) fn show_hir(snapshot: &ServerSnapshot, params: ShowHirParams) -> anyhow::Result<String> {
-    let document_manager = snapshot.document_manager.read();
+    let state = snapshot.shared_file_state.0.read();
     let path = path_buf_from_url(&params.text_document.uri)?;
-    let file_id = match document_manager.lookup_by_path_buf(&path) {
+    let file_id = match state.interner.lookup_by_path_buf(&path) {
         Some(file_id) => file_id,
         None => return Ok("".to_string()),
     };
@@ -29,7 +29,13 @@ pub(crate) fn show_syntax_tree(
     params: ShowSyntaxTreeParams,
 ) -> anyhow::Result<String> {
     let path = path_buf_from_url(&params.text_document.uri)?;
-    let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
+    let file_id = match snapshot
+        .shared_file_state
+        .0
+        .read()
+        .interner
+        .lookup_by_path_buf(&path)
+    {
         Some(file_id) => file_id,
         None => return Ok("".to_string()),
     };
@@ -43,7 +49,13 @@ pub(crate) fn goto_definition(
 ) -> anyhow::Result<Option<lsp_types::GotoDefinitionResponse>> {
     let path = path_buf_from_url(&params.text_document_position_params.text_document.uri)?;
 
-    let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
+    let file_id = match snapshot
+        .shared_file_state
+        .0
+        .read()
+        .interner
+        .lookup_by_path_buf(&path)
+    {
         Some(file_id) => file_id,
         None => return Ok(None),
     };
@@ -67,8 +79,10 @@ pub(crate) fn goto_definition(
         Some(lsp_types::Location {
             uri: lsp_types::Url::from_file_path(
                 snapshot
-                    .document_manager
+                    .shared_file_state
+                    .0
                     .read()
+                    .interner
                     .lookup_by_file_id(location.file_id),
             )
             .ok()?,
@@ -94,7 +108,13 @@ pub(crate) fn completion(
 ) -> anyhow::Result<Option<lsp_types::CompletionResponse>> {
     let path = path_buf_from_url(&params.text_document_position.text_document.uri)?;
 
-    let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
+    let file_id = match snapshot
+        .shared_file_state
+        .0
+        .read()
+        .interner
+        .lookup_by_path_buf(&path)
+    {
         Some(file_id) => file_id,
         None => return Ok(None),
     };
@@ -165,7 +185,13 @@ pub(crate) fn hover(
     params: lsp_types::HoverParams,
 ) -> anyhow::Result<Option<lsp_types::Hover>> {
     let path = path_buf_from_url(&params.text_document_position_params.text_document.uri)?;
-    let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
+    let file_id = match snapshot
+        .shared_file_state
+        .0
+        .read()
+        .interner
+        .lookup_by_path_buf(&path)
+    {
         Some(file_id) => file_id,
         None => return Ok(None),
     };
@@ -195,7 +221,13 @@ pub(crate) fn signature_help(
     params: lsp_types::SignatureHelpParams,
 ) -> anyhow::Result<Option<lsp_types::SignatureHelp>> {
     let path = path_buf_from_url(&params.text_document_position_params.text_document.uri)?;
-    let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
+    let file_id = match snapshot
+        .shared_file_state
+        .0
+        .read()
+        .interner
+        .lookup_by_path_buf(&path)
+    {
         Some(file_id) => file_id,
         None => return Ok(None),
     };

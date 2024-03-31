@@ -1,5 +1,6 @@
 use crate::{
     def::{
+        self,
         resolver::Resolver,
         scope::{self, module_scopes, ParameterDef},
         Function as HirDefFunction, LoadItemId, Stmt,
@@ -139,6 +140,14 @@ impl LoadItem {
             .and_then(|ptr| ptr.try_to_node(&parse(db, self.file).syntax(db)))
             .and_then(|node| node.syntax().parent())
             .and_then(ast::LoadStmt::cast)
+    }
+
+    pub fn name(&self, db: &dyn Db) -> Name {
+        match &module(db, self.file).load_items[self.id] {
+            def::LoadItem::Direct { name, .. } | def::LoadItem::Aliased { name, .. } => {
+                Name::from_str(&name)
+            }
+        }
     }
 }
 

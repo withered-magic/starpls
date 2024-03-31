@@ -12,6 +12,7 @@ rust_binary(
         "//crates/starpls_ide",
         "//crates/starpls_syntax",
         "@crates//:anyhow",
+        "@crates//:clap",
         "@crates//:crossbeam-channel",
         "@crates//:dashmap",
         "@crates//:indexmap",

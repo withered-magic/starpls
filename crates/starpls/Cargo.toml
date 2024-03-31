@@ -22,3 +22,4 @@ starpls_common = { path = "../starpls_common" }
 starpls_syntax = { path = "../starpls_syntax" }
 starpls_ide = { path = "../starpls_ide" }
 parking_lot = "0.12.1"
+clap = { version = "4.5.4", features = ["derive"] }

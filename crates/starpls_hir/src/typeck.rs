@@ -30,7 +30,6 @@ use std::{
 
 mod call;
 mod infer;
-mod lower;
 
 #[cfg(test)]
 mod tests;
@@ -452,7 +451,7 @@ impl Ty {
 
     pub(crate) fn substitute(&self, args: &[Ty]) -> Ty {
         match self.kind() {
-            TyKind::List(ty) => TyKind::List(ty.substitute(args)).intern(),
+            TyKind::List(ty) => Ty::list(ty.substitute(args)),
             TyKind::Tuple(tup) => match tup {
                 Tuple::Simple(tys) => TyKind::Tuple(Tuple::Simple(
                     tys.iter().map(|ty| ty.substitute(args)).collect(),
@@ -460,12 +459,11 @@ impl Ty {
                 Tuple::Variable(ty) => TyKind::Tuple(Tuple::Variable(ty.substitute(args))),
             }
             .intern(),
-            TyKind::Dict(key_ty, value_ty, known_keys) => TyKind::Dict(
+            TyKind::Dict(key_ty, value_ty, known_keys) => Ty::dict(
                 key_ty.substitute(args),
                 value_ty.substitute(args),
                 known_keys.clone(),
-            )
-            .intern(),
+            ),
             TyKind::IntrinsicFunction(data, subst) => {
                 TyKind::IntrinsicFunction(*data, subst.substitute(args)).intern()
             }

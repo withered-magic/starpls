@@ -1,3 +1,4 @@
+use clap::{Parser, Subcommand};
 use lsp_server::Connection;
 use lsp_types::{
     CompletionOptions, HoverProviderCapability, OneOf, ServerCapabilities, SignatureHelpOptions,
@@ -17,10 +18,30 @@ mod task_pool;
 mod utils;
 
 const COMPLETION_TRIGGER_CHARACTERS: &[char] = &['.', '"', '\'', '/', ':'];
-
 const SIGNATURE_HELP_TRIGGER_CHARACTERS: &[char] = &['(', ',', ')'];
 
+#[derive(Parser)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    Check,
+    Server,
+}
+
 fn main() -> anyhow::Result<()> {
+    let cli = Cli::parse();
+
+    match &cli.command {
+        Some(Commands::Check) => Ok(()),
+        Some(Commands::Server) | None => run_server(),
+    }
+}
+
+fn run_server() -> anyhow::Result<()> {
     eprintln!("server: starpls, v0.1.5");
 
     // Create the transport over stdio.

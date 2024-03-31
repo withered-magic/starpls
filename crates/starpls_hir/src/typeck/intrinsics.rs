@@ -18,6 +18,7 @@ pub(crate) struct Intrinsics {
     pub(crate) dict_base_class: IntrinsicClass,
 }
 
+/// This serves to pre-intern common types.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct IntrinsicTypes {
     pub(crate) any: Ty,
@@ -41,8 +42,8 @@ impl Default for IntrinsicTypes {
             unbound: TyKind::Unbound.intern(),
             unknown: Ty::unknown(),
             none: TyKind::None.intern(),
-            bool: TyKind::Bool.intern(),
-            int: TyKind::Int.intern(),
+            bool: Ty::bool(),
+            int: Ty::int(),
             float: TyKind::Float.intern(),
             string: Ty::string(),
             string_elems: TyKind::StringElems.intern(),
@@ -289,7 +290,7 @@ x.f = y
 ```
 "#,
         vec![positional(Any)],
-        List(String.intern()),
+        List(Ty::string()),
     );
     add_function(
         "enumerate",
@@ -306,7 +307,7 @@ enumerate(["one", "two"], 1)                    # [(1, "one"), (2, "two")]
 ```
 "#,
         vec![positional(Any)],
-        List(Tuple(TupleVariants::Simple(smallvec![Int.intern(), Any.intern()])).intern()),
+        List(Tuple(TupleVariants::Simple(smallvec![Ty::int(), Any.intern()])).intern()),
     );
     add_function(
         "float",
@@ -522,7 +523,7 @@ determined by the host application.
             ArgsList { ty: Any.intern() },
             Keyword {
                 name: Name::new_inline("str"),
-                ty: String.intern(),
+                ty: Ty::string(),
             },
         ],
         None,
@@ -1055,9 +1056,9 @@ If S does not contain `x`, `partition` returns `(S, "", "")`.
 "#,
                 vec![positional(String)],
                 Tuple(TupleVariants::Simple(smallvec![
-                    String.intern(),
-                    String.intern(),
-                    String.intern()
+                    Ty::string(),
+                    Ty::string(),
+                    Ty::string()
                 ])),
                 0,
             ),
@@ -1161,9 +1162,9 @@ _last_ occurrence.
 "#,
                 vec![positional(String)],
                 Tuple(TupleVariants::Simple(smallvec![
-                    String.intern(),
-                    String.intern(),
-                    String.intern()
+                    Ty::string(),
+                    Ty::string(),
+                    Ty::string(),
                 ])),
                 0,
             ),
@@ -1181,7 +1182,7 @@ rightmost splits.
 ```
 "#,
                 vec![positional(String), positional_opt(Int)],
-                List(String.intern()),
+                List(Ty::string()),
                 0,
             ),
             function_field(
@@ -1231,7 +1232,7 @@ If `maxsplit` is given and non-negative, it specifies a maximum number of splits
 ```
 "#,
                 vec![positional_opt(String), positional_opt(Int)],
-                List(String.intern()),
+                List(Ty::string()),
                 0,
             ),
             function_field(
@@ -1253,7 +1254,7 @@ the final element does not necessarily end with a line terminator.
 ```
 "#,
                 vec![positional_opt(Bool)],
-                List(String.intern()),
+                List(Ty::string()),
                 0,
             ),
             function_field(

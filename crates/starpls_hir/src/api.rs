@@ -54,7 +54,9 @@ impl<'a> Semantics<'a> {
         let ty = self.type_of_expr(file, &expr.callee()?)?;
         Some(match ty.ty.kind() {
             TyKind::Function(func) => (*func).into(),
-            TyKind::IntrinsicFunction(func, _) => (*func).into(),
+            TyKind::IntrinsicFunction(func, subst) => {
+                Callable(CallableInner::IntrinsicFunction(*func, Some(subst.clone())))
+            }
             TyKind::BuiltinFunction(func) => (*func).into(),
             TyKind::Rule(_) => Callable(CallableInner::Rule(ty.ty.clone())),
             _ => return None,
@@ -205,7 +207,9 @@ impl From<scope::ScopeDef> for ScopeDef {
     fn from(value: scope::ScopeDef) -> Self {
         match value {
             scope::ScopeDef::Function(it) => ScopeDef::Callable(it.into()),
-            scope::ScopeDef::IntrinsicFunction(it) => ScopeDef::Callable(it.into()),
+            scope::ScopeDef::IntrinsicFunction(it) => {
+                ScopeDef::Callable(Callable(CallableInner::IntrinsicFunction(it, None)))
+            }
             scope::ScopeDef::BuiltinFunction(it) => ScopeDef::Callable(it.into()),
             scope::ScopeDef::Variable(it) => ScopeDef::Variable(Variable {
                 id: Some((it.file, it.expr)),
@@ -331,7 +335,7 @@ impl Callable {
     pub fn name(&self, db: &dyn Db) -> Name {
         match self.0 {
             CallableInner::HirDef(func) => func.name(db),
-            CallableInner::IntrinsicFunction(func) => func.name(db),
+            CallableInner::IntrinsicFunction(func, _) => func.name(db),
             CallableInner::BuiltinFunction(func) => func.name(db),
             CallableInner::Rule(_) => Name::new_inline("rule"),
         }
@@ -344,10 +348,13 @@ impl Callable {
     pub fn ty(&self, db: &dyn Db) -> Type {
         match self.0 {
             CallableInner::HirDef(func) => TyKind::Function(func).intern(),
-            CallableInner::IntrinsicFunction(func) => {
-                TyKind::IntrinsicFunction(func, Substitution::new_identity(func.num_vars(db)))
-                    .intern()
-            }
+            CallableInner::IntrinsicFunction(func, ref subst) => TyKind::IntrinsicFunction(
+                func,
+                subst
+                    .clone()
+                    .unwrap_or_else(|| Substitution::new_identity(func.num_vars(db))),
+            )
+            .intern(),
             CallableInner::BuiltinFunction(func) => TyKind::BuiltinFunction(func).intern(),
             CallableInner::Rule(ref ty) => ty.clone().into(),
         }
@@ -366,7 +373,7 @@ impl Callable {
         match self.0 {
             CallableInner::HirDef(func) => func.doc(db).map(|doc| doc.to_string()),
             CallableInner::BuiltinFunction(func) => Some(func.doc(db).clone()),
-            CallableInner::IntrinsicFunction(func) => Some(func.doc(db).clone()),
+            CallableInner::IntrinsicFunction(func, _) => Some(func.doc(db).clone()),
             CallableInner::Rule(ref ty) => match ty.kind() {
                 TyKind::Rule(rule) => rule.doc.as_ref().map(Box::to_string),
                 _ => None,
@@ -389,12 +396,6 @@ impl From<HirDefFunction> for Callable {
     }
 }
 
-impl From<IntrinsicFunction> for Callable {
-    fn from(func: IntrinsicFunction) -> Self {
-        Self(CallableInner::IntrinsicFunction(func))
-    }
-}
-
 impl From<BuiltinFunction> for Callable {
     fn from(func: BuiltinFunction) -> Self {
         Self(CallableInner::BuiltinFunction(func))
@@ -404,7 +405,7 @@ impl From<BuiltinFunction> for Callable {
 #[derive(Clone, Debug)]
 enum CallableInner {
     HirDef(HirDefFunction),
-    IntrinsicFunction(IntrinsicFunction),
+    IntrinsicFunction(IntrinsicFunction, Option<Substitution>),
     BuiltinFunction(BuiltinFunction),
     Rule(Ty),
 }

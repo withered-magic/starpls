@@ -1,9 +1,7 @@
 use anyhow::Ok;
 use starpls_ide::{
-    completion::{
-        CompletionItemKind,
-        CompletionMode::{InsertText, TextEdit},
-    },
+    CompletionItemKind,
+    CompletionMode::{InsertText, TextEdit},
     FilePosition, Location,
 };
 

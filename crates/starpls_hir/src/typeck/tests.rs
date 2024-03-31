@@ -495,6 +495,34 @@ baz = dict()
     )
 }
 
+#[test]
+fn test_dict_union() {
+    check_infer(
+        r#"
+a = 1 # type: int | string | int
+x = {"x": 1}
+y = {1: "x"}
+z = x | y
+"#,
+        expect![[r#"
+            1..2 "a": int | string
+            5..6 "1": int
+            34..35 "x": dict[string, int]
+            39..42 "\"x\"": string
+            44..45 "1": int
+            38..46 "{\"x\": 1}": dict[string, int]
+            47..48 "y": dict[int, string]
+            52..53 "1": int
+            55..58 "\"x\"": string
+            51..59 "{1: \"x\"}": dict[int, string]
+            60..61 "z": dict[string | int, int | string]
+            64..65 "x": dict[string, int]
+            68..69 "y": dict[int, string]
+            64..69 "x | y": dict[string | int, int | string]
+        "#]],
+    )
+}
+
 // TODO(withered-magic): Support the `struct` function in tests.
 // #[test]
 // fn test_struct() {

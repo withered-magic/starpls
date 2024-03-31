@@ -18,7 +18,7 @@ use crate::{
 };
 use starpls_common::{line_index, parse, Diagnostic, File, FileRange, Severity};
 use starpls_syntax::{
-    ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, UnaryOp},
+    ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, BitwiseOp, UnaryOp},
     TextRange,
 };
 
@@ -668,11 +668,10 @@ impl TyCtxt<'_> {
         }
 
         match op {
-            // TODO(withered-magic): Handle string interoplation with "%".
             BinaryOp::Arith(op) => match (lhs_kind, rhs_kind, op) {
                 (TyKind::String, TyKind::String, ArithOp::Add)
-                | (TyKind::String, _, ArithOp::Mod) => self.string_ty(),
-                (TyKind::Bytes, TyKind::Bytes, ArithOp::Add) => self.bytes_ty(),
+                | (TyKind::String, _, ArithOp::Mod) => self.string_ty(), // concatenation, string interpolcation
+                (TyKind::Bytes, TyKind::Bytes, ArithOp::Add) => self.bytes_ty(), // concatenation
                 (
                     TyKind::List(target)
                     | TyKind::Protocol(Protocol::Sequence(target) | Protocol::Iterable(target)),
@@ -686,8 +685,17 @@ impl TyCtxt<'_> {
                 | (TyKind::Float, TyKind::Float, _) => self.float_ty(),
                 _ => unknown(),
             },
-            BinaryOp::Bitwise(_) => match (lhs_kind, rhs_kind) {
-                (TyKind::Int, TyKind::Int) => self.int_ty(),
+            BinaryOp::Bitwise(op) => match (lhs_kind, rhs_kind, op) {
+                (TyKind::Int, TyKind::Int, _) => self.int_ty(),
+                (
+                    TyKind::Dict(lhs_key_ty, lhs_value_ty, _),
+                    TyKind::Dict(rhs_key_ty, rhs_value_ty, _),
+                    BitwiseOp::Or,
+                ) => Ty::dict(
+                    Ty::union([lhs_key_ty.clone(), rhs_key_ty.clone()].into_iter()),
+                    Ty::union([lhs_value_ty.clone(), rhs_value_ty.clone()].into_iter()),
+                    None,
+                ),
                 _ => unknown(),
             },
             BinaryOp::MemberOp(_) => {

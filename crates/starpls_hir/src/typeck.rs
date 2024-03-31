@@ -2,7 +2,10 @@ use crate::{
     def::{ExprId, Function, LoadItemId, LoadStmt, Param as HirDefParam, ParamId},
     module, source_map,
     typeck::{
-        builtins::{builtin_types, BuiltinFunction, BuiltinFunctionParam, BuiltinType},
+        builtins::{
+            builtin_types, common_attributes_query, BuiltinFunction, BuiltinFunctionParam,
+            BuiltinType,
+        },
         intrinsics::{
             intrinsic_field_types, intrinsic_types, IntrinsicClass, IntrinsicFunction,
             IntrinsicFunctionParam, Intrinsics,
@@ -12,10 +15,9 @@ use crate::{
 };
 use crossbeam::atomic::AtomicCell;
 use either::Either;
-use itertools::Itertools;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use starpls_common::{parse, Diagnostic, Dialect, File};
 use starpls_intern::{impl_internable, Interned};
 use starpls_syntax::ast::SyntaxNodePtr;
@@ -25,8 +27,6 @@ use std::{
     panic::{self, UnwindSafe},
     sync::Arc,
 };
-
-use self::builtins::common_attributes_query;
 
 mod call;
 mod infer;
@@ -419,6 +419,29 @@ impl Ty {
         TyKind::Dict(key_ty, value_ty, known_keys).intern()
     }
 
+    pub(crate) fn union(tys: impl Iterator<Item = Ty>) -> Ty {
+        let mut unique_tys = smallvec![];
+
+        // Deduplicate types. Dicts and structs are handled separately because the metadata
+        // that they store // (for their declarations, etc.) is not relevant to determining
+        // whether or not types are duplicates.
+        for ty in tys {
+            if unique_tys
+                .iter()
+                .any(|unique_ty: &Ty| Ty::eq(&ty, unique_ty))
+            {
+                continue;
+            }
+            unique_tys.push(ty);
+        }
+
+        match unique_tys.len() {
+            0 => TyKind::Unknown.intern(),
+            1 => unique_tys.into_iter().next().unwrap(),
+            _ => TyKind::Union(unique_tys).intern(),
+        }
+    }
+
     fn is_any(&self) -> bool {
         self.kind() == &TyKind::Any
     }
@@ -466,6 +489,27 @@ impl Ty {
         match self.kind() {
             TyKind::Attribute(attr) => attr,
             _ => panic!("attribute() called on invalid TyKind"),
+        }
+    }
+
+    fn eq(ty1: &Ty, ty2: &Ty) -> bool {
+        match (ty1.kind(), ty2.kind()) {
+            (TyKind::Dict(key_ty1, value_ty1, _), TyKind::Dict(key_ty2, value_ty2, _)) => {
+                key_ty1 == key_ty2 && value_ty1 == value_ty2
+            }
+            (TyKind::Struct(_), TyKind::Struct(_)) => true,
+            (TyKind::Union(tys1), TyKind::Union(tys2)) => {
+                // Check that the union types have the same cardinality.
+                if tys1.len() != tys2.len() {
+                    return false;
+                }
+
+                // Check that for each type in the first union, there is an equal type in the second union.
+                // This only works assuming the `TyKind::Union` was created with `Ty::union()`.
+                tys1.iter()
+                    .all(|ty1| tys2.iter().any(|ty2| Ty::eq(ty1, ty2)))
+            }
+            _ => ty1 == ty2,
         }
     }
 }
@@ -1097,28 +1141,12 @@ impl<'a> TypeRefResolver<'a> {
                 "Sequence" | "sequence" => {
                     self.resolve_single_arg_protocol(args, Protocol::Sequence)
                 }
-                "Union" | "union" => {
-                    let args: Vec<_> = args
-                        .iter()
+                "Union" | "union" => Ty::union(
+                    args.iter()
                         .map(|args| args.iter())
                         .flatten()
-                        .cloned()
-                        .unique()
-                        .collect();
-
-                    // Unions require at least two type arguments. We can handle this nicely by
-                    // converting Union[] to Unknown and Union[t1] to t1.
-                    match args.len() {
-                        0 => Ty::unknown(),
-                        1 => self.resolve_type_ref_inner(&args[1]),
-                        _ => TyKind::Union(
-                            args.into_iter()
-                                .map(|arg| self.resolve_type_ref_inner(&arg))
-                                .collect(),
-                        )
-                        .intern(),
-                    }
-                }
+                        .map(|type_ref| self.resolve_type_ref_inner(&type_ref)),
+                ),
                 "struct" | "structure" => TyKind::Struct(Vec::new().into_boxed_slice()).intern(),
                 name => match builtin_types.types(self.db).get(name).cloned() {
                     Some(ty) => ty,
@@ -1128,17 +1156,10 @@ impl<'a> TypeRefResolver<'a> {
                     }
                 },
             },
-            TypeRef::Union(args) => match args.len() {
-                0 => Ty::unknown(),
-                1 => self.resolve_type_ref_inner(&args[0]),
-                _ => TyKind::Union(
-                    args.iter()
-                        .unique()
-                        .map(|arg| self.resolve_type_ref_inner(arg))
-                        .collect(),
-                )
-                .intern(),
-            },
+            TypeRef::Union(args) => Ty::union(
+                args.iter()
+                    .map(|type_ref| self.resolve_type_ref_inner(&type_ref)),
+            ),
             TypeRef::Unknown => types.unknown.clone(),
         }
     }

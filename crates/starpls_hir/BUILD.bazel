@@ -18,7 +18,6 @@ rust_library(
         "@crates//:dashmap",
         "@crates//:either",
         "@crates//:id-arena",
-        "@crates//:itertools",
         "@crates//:parking_lot",
         "@crates//:rustc-hash",
         "@crates//:salsa",
@@ -33,5 +32,8 @@ rust_test(
         "@crates//:salsa": "salsa",
     },
     crate = ":starpls_hir",
-    deps = ["@crates//:expect-test"],
+    deps = [
+        "@crates//:expect-test",
+        "@crates//:itertools",
+    ],
 )

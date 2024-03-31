@@ -1,5 +1,5 @@
 {
-  "checksum": "e42822ed2db5b4a6db35faa023083d6d0a76baaa124d17c39dfa56cd90ffa077",
+  "checksum": "4cf3e64c75b5fcfe7ed44102aef69b76dba3b2202927323b2f2d6363adedcf26",
   "crates": {
     "addr2line 0.21.0": {
       "name": "addr2line",
@@ -7700,10 +7700,6 @@
               "target": "id_arena"
             },
             {
-              "id": "itertools 0.12.1",
-              "target": "itertools"
-            },
-            {
               "id": "parking_lot 0.12.1",
               "target": "parking_lot"
             },
@@ -7732,6 +7728,10 @@
             {
               "id": "expect-test 1.4.1",
               "target": "expect_test"
+            },
+            {
+              "id": "itertools 0.12.1",
+              "target": "itertools"
             }
           ],
           "selects": {}
@@ -11095,7 +11095,6 @@
     "hashbrown 0.14.3",
     "id-arena 2.2.1",
     "indexmap 2.1.0",
-    "itertools 0.12.1",
     "line-index 0.1.1",
     "lsp-server 0.7.5",
     "lsp-types 0.94.1",
@@ -11114,6 +11113,7 @@
   ],
   "direct_dev_deps": [
     "expect-test 1.4.1",
+    "itertools 0.12.1",
     "prost-types 0.12.3",
     "protoc-gen-prost 0.2.3",
     "protoc-gen-tonic 0.3.0",

@@ -673,12 +673,14 @@ impl TyCtxt<'_> {
                 | (TyKind::String, _, ArithOp::Mod) => self.string_ty(), // concatenation, string interpolcation
                 (TyKind::Bytes, TyKind::Bytes, ArithOp::Add) => self.bytes_ty(), // concatenation
                 (
-                    TyKind::List(target)
-                    | TyKind::Protocol(Protocol::Sequence(target) | Protocol::Iterable(target)),
-                    TyKind::List(source)
-                    | TyKind::Protocol(Protocol::Sequence(source) | Protocol::Iterable(source)),
+                    TyKind::List(ty1)
+                    | TyKind::Protocol(Protocol::Sequence(ty1) | Protocol::Iterable(ty1)),
+                    TyKind::List(ty2)
+                    | TyKind::Protocol(Protocol::Sequence(ty2) | Protocol::Iterable(ty2)),
                     ArithOp::Add,
-                ) if assign_tys(db, source, target) => lhs,
+                ) => Ty::list(Ty::union([ty1.clone(), ty2.clone()].into_iter())),
+                (TyKind::String, TyKind::Int, ArithOp::Mul)
+                | (TyKind::Int, TyKind::String, ArithOp::Mul) => self.string_ty(),
                 (TyKind::Int, TyKind::Int, _) => self.int_ty(),
                 (TyKind::Float, TyKind::Int, _)
                 | (TyKind::Int, TyKind::Float, _)

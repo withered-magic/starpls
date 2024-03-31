@@ -523,6 +523,57 @@ z = x | y
     )
 }
 
+#[test]
+fn test_list_addition() {
+    check_infer(
+        r#"
+a = [1] + [2]
+x = [1, 2, 3] + ["a", "b", "c"]    
+y = x[0]
+"#,
+        expect![[r#"
+            1..2 "a": list[int]
+            6..7 "1": int
+            5..8 "[1]": list[int]
+            12..13 "2": int
+            11..14 "[2]": list[int]
+            5..14 "[1] + [2]": list[int]
+            15..16 "x": list[int | string]
+            20..21 "1": int
+            23..24 "2": int
+            26..27 "3": int
+            19..28 "[1, 2, 3]": list[int]
+            32..35 "\"a\"": string
+            37..40 "\"b\"": string
+            42..45 "\"c\"": string
+            31..46 "[\"a\", \"b\", \"c\"]": list[string]
+            19..46 "[1, 2, 3] + [\"a\", \"b\", \"c\"]": list[int | string]
+            51..52 "y": int | string
+            55..56 "x": list[int | string]
+            57..58 "0": int
+            55..59 "x[0]": int | string
+        "#]],
+    )
+}
+
+#[test]
+fn test_string_repetition() {
+    check_infer(
+        r#"
+"abc" * 3
+3 * "abc"
+"#,
+        expect![[r#"
+            1..6 "\"abc\"": string
+            9..10 "3": int
+            1..10 "\"abc\" * 3": string
+            11..12 "3": int
+            15..20 "\"abc\"": string
+            11..20 "3 * \"abc\"": string
+        "#]],
+    )
+}
+
 // TODO(withered-magic): Support the `struct` function in tests.
 // #[test]
 // fn test_struct() {

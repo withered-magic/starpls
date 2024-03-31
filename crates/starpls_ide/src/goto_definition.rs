@@ -25,7 +25,7 @@ pub(crate) fn goto_definition(
         let name = Name::from_ast_node(name_ref.clone());
         let scope =
             sema.scope_for_expr(file, &ast::Expression::cast(name_ref.syntax().clone())?)?;
-        Some(
+        return Some(
             scope
                 .resolve_name(&name)?
                 .into_iter()
@@ -51,15 +51,17 @@ pub(crate) fn goto_definition(
                     }),
                 })
                 .collect(),
-        )
-    } else if let Some(load_module) = ast::LoadModule::cast(parent) {
-        let load_stmt = ast::LoadStmt::cast(load_module.syntax().parent()?)?;
-        let file = sema.resolve_load_stmt(file, &load_stmt)?;
-        Some(vec![Location {
-            file_id: file.id(db),
-            range: TextRange::new(TextSize::new(0), TextSize::new(1)),
-        }])
-    } else {
-        None
+        );
     }
+
+    let load_module = ast::LoadModule::cast(parent)?;
+    let load_stmt = ast::LoadStmt::cast(load_module.syntax().parent()?)?;
+    let file = sema.resolve_load_stmt(file, &load_stmt)?;
+    Some(vec![Location {
+        file_id: file.id(db),
+        range: TextRange::new(TextSize::new(0), TextSize::new(1)),
+    }])
 }
+
+#[cfg(test)]
+mod tests {}

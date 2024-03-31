@@ -1,4 +1,5 @@
 use dashmap::{mapref::entry::Entry, DashMap};
+use rustc_hash::FxHashMap;
 use salsa::ParallelDatabase;
 use starpls_bazel::Builtins;
 use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate};
@@ -229,6 +230,17 @@ pub struct AnalysisSnapshot {
 }
 
 impl AnalysisSnapshot {
+    pub fn from_single_file(contents: &str) -> (Self, FileId) {
+        let mut file_set = FxHashMap::default();
+        let file_id = FileId(0);
+        file_set.insert("main.star".to_string(), (file_id, contents.to_string()));
+        let mut change = Change::default();
+        change.create_file(file_id, Dialect::Standard, contents.to_string());
+        let mut analysis = Analysis::new(Arc::new(SimpleFileLoader::from_file_set(file_set)));
+        analysis.apply_change(change);
+        (analysis.snapshot(), file_id)
+    }
+
     pub fn completion(
         &self,
         pos: FilePosition,
@@ -291,7 +303,9 @@ pub struct FilePosition {
     pub pos: TextSize,
 }
 
-pub trait FileLoader: Debug + Send + Sync + 'static {
+/// A trait for loading a path and listing its exported symbols.
+pub trait FileLoader: Send + Sync + 'static {
+    /// Open the Starlark file corresponding to the given `path` and of the given `Dialect`.
     fn load_file(
         &self,
         path: &str,
@@ -299,10 +313,46 @@ pub trait FileLoader: Debug + Send + Sync + 'static {
         from: FileId,
     ) -> io::Result<Option<(FileId, Option<String>)>>;
 
+    /// Returns a list of Starlark modules that can be loaded from the given `path`.
     fn list_load_candidates(
         &self,
         path: &str,
         dialect: Dialect,
         from: FileId,
     ) -> io::Result<Option<Vec<LoadItemCandidate>>>;
+}
+
+/// [`FileLoader`] that looks up files by path from a hash map.
+pub(crate) struct SimpleFileLoader {
+    file_set: FxHashMap<String, (FileId, String)>,
+}
+
+impl SimpleFileLoader {
+    /// Creates a [`SimpleFileLoader`] from a static set of files.
+    pub(crate) fn from_file_set(file_set: FxHashMap<String, (FileId, String)>) -> Self {
+        Self { file_set }
+    }
+}
+
+impl FileLoader for SimpleFileLoader {
+    fn load_file(
+        &self,
+        path: &str,
+        _dialect: Dialect,
+        _from: FileId,
+    ) -> io::Result<Option<(FileId, Option<String>)>> {
+        Ok(self
+            .file_set
+            .get(path)
+            .map(|(file_id, contents)| (*file_id, Some(contents.clone()))))
+    }
+
+    fn list_load_candidates(
+        &self,
+        _path: &str,
+        _dialect: Dialect,
+        _from: FileId,
+    ) -> io::Result<Option<Vec<LoadItemCandidate>>> {
+        Ok(None)
+    }
 }

@@ -75,8 +75,6 @@ impl<'a> Semantics<'a> {
         Some(self.db.infer_param(file, *param).into())
     }
 
-    // pub fn type_of_load_item(&self, file: File, load_item: &ast::LoadItem) -> Option<Type> {}
-
     pub fn resolve_load_stmt(&self, file: File, load_stmt: &ast::LoadStmt) -> Option<File> {
         let ptr = AstPtr::new(&ast::Statement::Load(load_stmt.clone()));
         let stmt = source_map(self.db, file).stmt_map.get(&ptr)?;

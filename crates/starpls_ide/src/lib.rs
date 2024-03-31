@@ -1,7 +1,5 @@
-use crate::{completion::CompletionItem, hover::Hover};
 use dashmap::{mapref::entry::Entry, DashMap};
 use salsa::ParallelDatabase;
-use signature_help::SignatureHelp;
 use starpls_bazel::Builtins;
 use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate};
 use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, LoadItemId, LoadStmt, ParamId, Ty};
@@ -10,14 +8,22 @@ use std::fmt::Debug;
 use std::io;
 use std::sync::Arc;
 
+pub use crate::{
+    completion::{CompletionItem, CompletionItemKind, CompletionMode},
+    hover::{Hover, Markup},
+    signature_help::{ParameterInfo, SignatureHelp, SignatureInfo},
+};
 pub use starpls_hir::Cancelled;
 
-mod handlers;
+mod completion;
+mod diagnostics;
+mod goto_definition;
+mod hover;
+mod line_index;
+mod show_hir;
+mod show_syntax_tree;
+mod signature_help;
 mod util;
-
-pub mod completion;
-pub mod hover;
-pub mod signature_help;
 
 pub type Cancellable<T> = Result<T, Cancelled>;
 
@@ -228,38 +234,38 @@ impl AnalysisSnapshot {
         pos: FilePosition,
         trigger_character: Option<String>,
     ) -> Cancellable<Option<Vec<CompletionItem>>> {
-        self.query(|db| handlers::completion::completion(db, pos, trigger_character))
+        self.query(|db| completion::completions(db, pos, trigger_character))
     }
 
     pub fn diagnostics(&self, file_id: FileId) -> Cancellable<Vec<Diagnostic>> {
-        self.query(|db| handlers::diagnostics::diagnostics(db, file_id))
+        self.query(|db| diagnostics::diagnostics(db, file_id))
     }
 
     pub fn goto_definition(&self, pos: FilePosition) -> Cancellable<Option<Vec<Location>>> {
         self.query(|db| {
-            let res = handlers::goto_definition::goto_definition(db, pos);
+            let res = goto_definition::goto_definition(db, pos);
             res
         })
     }
 
     pub fn hover(&self, pos: FilePosition) -> Cancellable<Option<Hover>> {
-        self.query(|db| handlers::hover::hover(db, pos))
+        self.query(|db| hover::hover(db, pos))
     }
 
     pub fn line_index<'a>(&'a self, file_id: FileId) -> Cancellable<Option<&'a LineIndex>> {
-        self.query(move |db| handlers::line_index::line_index(db, file_id))
+        self.query(move |db| line_index::line_index(db, file_id))
     }
 
     pub fn show_hir(&self, file_id: FileId) -> Cancellable<Option<String>> {
-        self.query(|db| handlers::show_hir::show_hir(db, file_id))
+        self.query(|db| show_hir::show_hir(db, file_id))
     }
 
     pub fn show_syntax_tree(&self, file_id: FileId) -> Cancellable<Option<String>> {
-        self.query(|db| handlers::show_syntax_tree::show_syntax_tree(db, file_id))
+        self.query(|db| show_syntax_tree::show_syntax_tree(db, file_id))
     }
 
     pub fn signature_help(&self, pos: FilePosition) -> Cancellable<Option<SignatureHelp>> {
-        self.query(|db| handlers::signature_help::signature_help(db, pos))
+        self.query(|db| signature_help::signature_help(db, pos))
     }
 
     /// Helper method to handle Salsa cancellations.

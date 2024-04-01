@@ -5,7 +5,8 @@ use starpls_test_util::parse_fixture;
 fn check_scope(fixture: &str, expected: &[&str]) {
     let test_db: TestDatabase = Default::default();
     let file_id = FileId(0);
-    let (text, offset) = parse_fixture(fixture);
+    let (text, offset, _) = parse_fixture(fixture);
+
     let file = File::new(&test_db, file_id, Dialect::Bazel, text);
     let resolver = Resolver::new_for_offset(&test_db, file, offset);
     let names = resolver.module_names();

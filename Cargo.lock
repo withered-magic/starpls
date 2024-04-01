@@ -1455,6 +1455,7 @@ dependencies = [
  "starpls_common",
  "starpls_hir",
  "starpls_syntax",
+ "starpls_test_util",
 ]
 
 [[package]]

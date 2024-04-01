@@ -530,6 +530,8 @@ fn test_list_addition() {
 a = [1] + [2]
 x = [1, 2, 3] + ["a", "b", "c"]    
 y = x[0]
+i = 1 # type: int | string
+j = [i] + [""]
 "#,
         expect![[r#"
             1..2 "a": list[int]
@@ -552,6 +554,14 @@ y = x[0]
             55..56 "x": list[int | string]
             57..58 "0": int
             55..59 "x[0]": int | string
+            60..61 "i": int | string
+            64..65 "1": int
+            87..88 "j": list[int | string]
+            92..93 "i": int | string
+            91..94 "[i]": list[int | string]
+            98..100 "\"\"": string
+            97..101 "[\"\"]": list[string]
+            91..101 "[i] + [\"\"]": list[int | string]
         "#]],
     )
 }

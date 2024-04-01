@@ -46,13 +46,14 @@ pub enum CompletionMode {
 #[derive(Debug)]
 pub enum CompletionItemKind {
     Function,
+    Field,
     Variable,
-    Keyword,
     Class,
+    Module,
+    Keyword,
     File,
     Folder,
     Constant,
-    Module,
 }
 
 #[repr(u16)]
@@ -169,7 +170,7 @@ pub(crate) fn completions(
                     kind: if ty.is_function() {
                         CompletionItemKind::Function
                     } else {
-                        CompletionItemKind::Variable
+                        CompletionItemKind::Field
                     },
                     mode: None,
                     relevance: CompletionRelevance::VariableOrKeyword,

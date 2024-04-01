@@ -47,56 +47,17 @@ pub struct BuiltinGlobals {
     pub variables: FxHashMap<String, TypeRef>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BuiltinFunctionFlag {
-    Struct,
-    Rule,
-    RepositoryRule,
-    AttrBool,
-    AttrInt,
-    AttrIntList,
-    AttrLabel,
-    AttrLabelKeyedStringDict,
-    AttrLabelList,
-    AttrOutput,
-    AttrOutputList,
-    AttrString,
-    AttrStringDict,
-    AttrStringList,
-    AttrStringListDict,
-    Standard,
-}
-
-impl BuiltinFunctionFlag {
-    pub fn is_attr(&self) -> bool {
-        use BuiltinFunctionFlag::*;
-
-        match self {
-            AttrBool
-            | AttrInt
-            | AttrIntList
-            | AttrLabel
-            | AttrLabelKeyedStringDict
-            | AttrLabelList
-            | AttrOutput
-            | AttrOutputList
-            | AttrString
-            | AttrStringList
-            | AttrStringListDict => true,
-            _ => false,
-        }
-    }
-}
-
 #[salsa::tracked]
 pub struct BuiltinFunction {
     pub name: Name,
     #[return_ref]
+    pub parent_type: Option<String>,
+    #[return_ref]
     pub params: Vec<BuiltinFunctionParam>,
+    #[return_ref]
     pub ret_type_ref: TypeRef,
     #[return_ref]
     pub doc: String,
-    flag: BuiltinFunctionFlag,
 }
 
 impl BuiltinFunction {
@@ -109,10 +70,13 @@ impl BuiltinFunction {
     where
         I: Iterator<Item = (&'a Argument, &'a Ty)>,
     {
-        use BuiltinFunctionFlag::*;
-
-        match self.flag(db) {
-            Struct => {
+        let ret_kind = match (
+            self.parent_type(db)
+                .as_ref()
+                .map(|parent_type| parent_type.as_str()),
+            self.name(db).as_str(),
+        ) {
+            (None, "struct") => {
                 let fields = args
                     .filter_map(|(arg, ty)| match arg {
                         Argument::Keyword { name, .. } => Some((name.clone(), ty.clone())),
@@ -120,12 +84,11 @@ impl BuiltinFunction {
                     })
                     .collect::<Vec<_>>()
                     .into_boxed_slice();
-                Some(TyKind::Struct(fields).intern())
+                TyKind::Struct(fields)
             }
-            flag @ (Rule | RepositoryRule) => {
+            (None, name @ ("rule" | "repository_rule")) => {
                 let mut attrs = None;
                 let mut doc = None;
-
                 for (arg, ty) in args {
                     if let Argument::Keyword { name, expr } = arg {
                         match name.as_str() {
@@ -149,24 +112,20 @@ impl BuiltinFunction {
                     }
                 }
 
-                Some(
-                    TyKind::Rule(TyRule {
-                        kind: if flag == Rule {
-                            RuleKind::Build
-                        } else {
-                            RuleKind::Repository
-                        },
-                        doc,
-                        attrs: attrs.unwrap_or_else(|| Vec::new().into_boxed_slice()),
-                    })
-                    .intern(),
-                )
+                TyKind::Rule(TyRule {
+                    kind: if name == "rule" {
+                        RuleKind::Build
+                    } else {
+                        RuleKind::Repository
+                    },
+                    doc,
+                    attrs: attrs.unwrap_or_else(|| Vec::new().into_boxed_slice()),
+                })
             }
-            flag if flag.is_attr() => {
+            (Some("attr"), attr) => {
                 let mut doc: Option<Box<str>> = None;
                 let mut mandatory = false;
                 let mut default_ptr = None;
-
                 for (arg, _) in args {
                     if let Argument::Keyword { name, expr } = arg {
                         match name.as_str() {
@@ -186,31 +145,31 @@ impl BuiltinFunction {
                     }
                 }
 
-                Some(
-                    TyKind::Attribute(Attribute::new(
-                        match flag {
-                            AttrBool => AttributeKind::Bool,
-                            AttrInt => AttributeKind::Int,
-                            AttrIntList => AttributeKind::IntList,
-                            AttrLabel => AttributeKind::Label,
-                            AttrLabelKeyedStringDict => AttributeKind::LabelKeyedStringDict,
-                            AttrLabelList => AttributeKind::LabelList,
-                            AttrOutput => AttributeKind::Output,
-                            AttrOutputList => AttributeKind::OutputList,
-                            AttrString => AttributeKind::String,
-                            AttrStringList => AttributeKind::StringList,
-                            AttrStringListDict => AttributeKind::StringListDict,
-                            _ => unreachable!(),
-                        },
-                        doc,
-                        mandatory,
-                        default_ptr.map(|text_range| Either::Left((file, text_range))),
-                    ))
-                    .intern(),
-                )
+                TyKind::Attribute(Attribute::new(
+                    match attr {
+                        "bool" => AttributeKind::Bool,
+                        "int" => AttributeKind::Int,
+                        "int_list" => AttributeKind::IntList,
+                        "label" => AttributeKind::Label,
+                        "label_keyed_string_dict" => AttributeKind::LabelKeyedStringDict,
+                        "label_list" => AttributeKind::LabelList,
+                        "output" => AttributeKind::Output,
+                        "output_list" => AttributeKind::OutputList,
+                        "string" => AttributeKind::String,
+                        "string_dict" => AttributeKind::StringDict,
+                        "string_list" => AttributeKind::StringList,
+                        "strict_list_dict" => AttributeKind::StringListDict,
+                        _ => return None,
+                    },
+                    doc,
+                    mandatory,
+                    default_ptr.map(|text_range| Either::Left((file, text_range))),
+                ))
             }
-            _ => None,
-        }
+            _ => return None,
+        };
+
+        Some(ret_kind.intern())
     }
 }
 
@@ -414,8 +373,6 @@ fn builtin_function(
     doc: &str,
     parent_name: Option<&str>,
 ) -> BuiltinFunction {
-    use BuiltinFunctionFlag::*;
-
     let mut params = Vec::new();
 
     for param in callable.param.iter() {
@@ -450,34 +407,16 @@ fn builtin_function(
         });
     }
 
-    let is_attr_field = parent_name == Some("attr");
     BuiltinFunction::new(
         db,
         Name::from_str(name),
+        parent_name.map(|parent_name| parent_name.to_string()),
         params,
         normalize_type_ref(&callable.return_type),
         if doc.is_empty() {
             DEFAULT_DOC.to_string()
         } else {
             normalize_doc_text(&doc)
-        },
-        match name {
-            "struct" => Struct,
-            "rule" => Rule,
-            "repository_rule" => RepositoryRule,
-            "bool" if is_attr_field => AttrBool,
-            "int" if is_attr_field => AttrInt,
-            "int_list" if is_attr_field => AttrIntList,
-            "label" if is_attr_field => AttrLabel,
-            "label_keyed_string_dict" if is_attr_field => AttrLabelKeyedStringDict,
-            "label_list" if is_attr_field => AttrLabelList,
-            "output" if is_attr_field => AttrOutput,
-            "output_list" if is_attr_field => AttrOutputList,
-            "string" if is_attr_field => AttrString,
-            "string_dict" if is_attr_field => AttrStringDict,
-            "string_list" if is_attr_field => AttrStringList,
-            "string_list_dict" if is_attr_field => AttrStringListDict,
-            _ => Standard,
         },
     )
 }

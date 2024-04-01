@@ -1,4 +1,3 @@
-use completions::completions;
 use dashmap::{mapref::entry::Entry, DashMap};
 use rustc_hash::FxHashMap;
 use salsa::ParallelDatabase;
@@ -6,9 +5,7 @@ use starpls_bazel::Builtins;
 use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate};
 use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, LoadItemId, LoadStmt, ParamId, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
-use std::fmt::Debug;
-use std::io;
-use std::sync::Arc;
+use std::{fmt::Debug, io, sync::Arc};
 
 pub use crate::{
     completions::{CompletionItem, CompletionItemKind, CompletionMode},

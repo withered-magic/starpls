@@ -880,8 +880,32 @@ pub(crate) enum TyKind {
     /// Use this instead of the `Attribute` type defined in `builtin.pb`.
     Attribute(Attribute),
     /// A Bazel rule (https://bazel.build/rules/lib/builtins/rule).
-    /// The `Ty`s contained in the boxed slice must be `TyKind::Attribute`s.
+    /// The `Ty`s contained in the boxed slice must have kind `TyKind::Attribute`.
     Rule(Rule),
+    /// A Bazel provider (https://bazel.build/rules/lib/builtins/Provider.html).
+    /// This is a callable the yields "provider instances".
+    Provider(Provider),
+    /// An instance of a provider. The contained `Ty` must have kind `TyKind::Provider`.
+    ProviderInstance(Ty),
+}
+
+impl_internable!(TyKind);
+
+impl TyKind {
+    pub fn intern(self) -> Ty {
+        Ty(Interned::new(self))
+    }
+
+    pub fn builtin_class(&self, db: &dyn Db) -> Option<IntrinsicClass> {
+        let intrinsics = intrinsic_types(db);
+        Some(match self {
+            TyKind::String => intrinsics.string_base_class(db),
+            TyKind::Bytes => intrinsics.bytes_base_class(db),
+            TyKind::List(_) => intrinsics.list_base_class(db),
+            TyKind::Dict(_, _, _) => intrinsics.dict_base_class(db),
+            _ => return None,
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -953,14 +977,14 @@ pub enum RuleKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Rule {
-    pub kind: RuleKind,
-    pub doc: Option<Box<str>>,
+pub(crate) struct Rule {
+    pub(crate) kind: RuleKind,
+    pub(crate) doc: Option<Box<str>>,
     attrs: Box<[(Name, Ty)]>,
 }
 
 impl Rule {
-    pub fn attrs<'a>(&'a self, db: &'a dyn Db) -> impl Iterator<Item = (&Name, &Attribute)> {
+    pub(crate) fn attrs<'a>(&'a self, db: &'a dyn Db) -> impl Iterator<Item = (&Name, &Attribute)> {
         // This chaining is done to put the `name` attribute first.
         let common = common_attributes_query(db);
         let mut common_attrs = match self.kind {
@@ -982,7 +1006,11 @@ impl Rule {
     }
 }
 
-impl_internable!(TyKind);
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct Provider {
+    pub(crate) doc: Option<Box<str>>,
+    pub(crate) fields: Option<Box<[ProviderField]>>,
+}
 
 impl TyKind {
     pub fn intern(self) -> Ty {
@@ -999,6 +1027,12 @@ impl TyKind {
             _ => return None,
         })
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct ProviderField {
+    pub(crate) name: Name,
+    pub(crate) doc: Option<Box<str>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -258,7 +258,7 @@ impl Type {
     }
 
     pub fn is_callable(&self) -> bool {
-        self.is_function() || matches!(self.ty.kind(), TyKind::Rule(_))
+        self.is_function() || matches!(self.ty.kind(), TyKind::Rule(_) | TyKind::Provider(_))
     }
 
     pub fn is_unknown(&self) -> bool {
@@ -283,6 +283,7 @@ impl Type {
             TyKind::Function(func) => return func.doc(db).map(|doc| doc.to_string()),
             TyKind::IntrinsicFunction(func, _) => func.doc(db).clone(),
             TyKind::Rule(rule) => return rule.doc.as_ref().map(Box::to_string),
+            TyKind::Provider(provider) => return provider.doc.as_ref().map(Box::to_string),
             _ => return None,
         })
     }

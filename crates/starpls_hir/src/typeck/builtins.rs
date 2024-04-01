@@ -1,7 +1,7 @@
 use crate::{
     def::Argument,
     source_map,
-    typeck::{Attribute, AttributeKind, Rule as TyRule, RuleKind},
+    typeck::{Attribute, AttributeKind, Provider, ProviderField, Rule as TyRule, RuleKind},
     Db, Name, Ty, TyKind, TypeRef,
 };
 use either::Either;
@@ -84,6 +84,35 @@ impl BuiltinFunction {
                     .collect::<Vec<_>>()
                     .into_boxed_slice();
                 TyKind::Struct(fields)
+            }
+            (None, "provider") => {
+                let mut fields = None;
+                let mut doc = None;
+                for (arg, ty) in args {
+                    if let Argument::Keyword { name, expr } = arg {
+                        match name.as_str() {
+                            "doc" => {
+                                doc = extract_string_literal(db, file, *expr);
+                            }
+                            "fields" => {
+                                if let TyKind::Dict(_, _, Some(known_keys)) = ty.kind() {
+                                    fields = Some(
+                                        known_keys
+                                            .iter()
+                                            .map(|(key, _)| ProviderField {
+                                                name: Name::from_str(key),
+                                                doc: None,
+                                            })
+                                            .collect(),
+                                    );
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                TyKind::Provider(Provider { doc, fields })
             }
             (None, name @ ("rule" | "repository_rule")) => {
                 let mut attrs = None;

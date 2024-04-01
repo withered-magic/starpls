@@ -272,6 +272,8 @@ impl DisplayWithDb for TyKind {
                 RuleKind::Build => "rule",
                 RuleKind::Repository => "repository_rule",
             },
+            TyKind::Provider(_) => "Provider",
+            TyKind::ProviderInstance(_) => "_",
         };
 
         f.write_str(text)

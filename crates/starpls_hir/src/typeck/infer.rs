@@ -200,14 +200,17 @@ impl TyCtxt<'_> {
             } => {
                 let receiver_ty = self.infer_expr(file, *dot_expr);
 
-                // Special-casing for "Any", "Unknown", "Unbound", invalid field
-                // names, and Bazel `struct`s.
-                // TODO(withered-magic): Is there a better way to handle `struct`s here?
+                // Special-casing for `Any`, `Unknown`, `Unbound`, `ProviderInstance`, and
+                // missing fields.
                 if receiver_ty.is_any() {
                     return self.any_ty();
                 }
 
-                if receiver_ty.is_unknown() || field.is_missing() {
+                if matches!(
+                    receiver_ty.kind(),
+                    TyKind::Unknown | TyKind::ProviderInstance(_) | TyKind::Unbound
+                ) || field.is_missing()
+                {
                     return self.unknown_ty();
                 }
 
@@ -575,6 +578,7 @@ impl TyCtxt<'_> {
 
                         self.none_ty()
                     }
+                    TyKind::Provider(_) => TyKind::ProviderInstance(callee_ty.clone()).intern(),
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.unknown_ty(),
                     _ => self.add_expr_diagnostic_ty(
                         file,

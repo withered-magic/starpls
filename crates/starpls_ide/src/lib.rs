@@ -1,3 +1,4 @@
+use completions::completions;
 use dashmap::{mapref::entry::Entry, DashMap};
 use rustc_hash::FxHashMap;
 use salsa::ParallelDatabase;
@@ -10,13 +11,13 @@ use std::io;
 use std::sync::Arc;
 
 pub use crate::{
-    completion::{CompletionItem, CompletionItemKind, CompletionMode},
+    completions::{CompletionItem, CompletionItemKind, CompletionMode},
     hover::{Hover, Markup},
     signature_help::{ParameterInfo, SignatureHelp, SignatureInfo},
 };
 pub use starpls_hir::Cancelled;
 
-mod completion;
+mod completions;
 mod diagnostics;
 mod goto_definition;
 mod hover;
@@ -246,7 +247,7 @@ impl AnalysisSnapshot {
         pos: FilePosition,
         trigger_character: Option<String>,
     ) -> Cancellable<Option<Vec<CompletionItem>>> {
-        self.query(|db| completion::completions(db, pos, trigger_character))
+        self.query(|db| completions::completions(db, pos, trigger_character))
     }
 
     pub fn diagnostics(&self, file_id: FileId) -> Cancellable<Vec<Diagnostic>> {

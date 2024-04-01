@@ -64,4 +64,54 @@ pub(crate) fn goto_definition(
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use crate::{AnalysisSnapshot, FilePosition};
+    use starpls_test_util::parse_fixture;
+
+    fn check_goto_definition(fixture: &str) {
+        let (contents, pos, expected) = parse_fixture(fixture);
+        let (snap, file_id) = AnalysisSnapshot::from_single_file(&contents);
+        let actual = snap
+            .goto_definition(FilePosition { file_id, pos })
+            .unwrap()
+            .unwrap()
+            .into_iter()
+            .map(|loc| loc.range)
+            .collect::<Vec<_>>();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_simple() {
+        check_goto_definition(
+            r#"
+foo = 1
+#^^
+f$0oo
+"#,
+        )
+    }
+
+    #[test]
+    fn test_global_variable() {
+        check_goto_definition(
+            r#"
+GLOBAL_LIST = [1, 2, 3]
+#^^^^^^^^^^
+def f():
+    print(GLOBAL$0_LIST)
+"#,
+        )
+    }
+
+    #[test]
+    fn test_param() {
+        check_goto_definition(
+            r#"
+def f(abc):
+      #^^
+      a$0bc
+"#,
+        )
+    }
+}

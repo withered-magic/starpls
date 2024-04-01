@@ -214,49 +214,66 @@ impl Ty {
     ) -> Option<impl Iterator<Item = (Field, Ty)> + 'a> {
         let kind = self.kind();
         if let Some(class) = kind.builtin_class(db) {
-            Some(Fields::Intrinsic(self.intrinsic_class_fields(db, class)))
-        } else if let TyKind::BuiltinType(ty) = kind {
-            Some(Fields::Builtin(
-                ty.fields(db)
-                    .iter()
-                    .enumerate()
-                    .map(|(index, field)| {
-                        (
-                            Field(FieldInner::BuiltinField { parent: *ty, index }),
-                            resolve_type_ref(db, &field.type_ref).0,
-                        )
-                    })
-                    .chain(ty.methods(db).iter().map(|func| {
-                        (
-                            Field(FieldInner::BuiltinMethod { func: *func }),
-                            TyKind::BuiltinFunction(*func).intern(),
-                        )
-                    })),
-            ))
-        } else if let TyKind::Union(tys) = kind {
-            // TODO(withered-magic): Can probably do better than a Vec here?
-            let mut acc = Vec::new();
-            tys.iter().for_each(|ty| {
-                let fields = match ty.fields(db) {
-                    Some(fields) => fields,
-                    None => return,
-                };
-
-                for (field, ty) in fields {
-                    acc.push((field, ty));
-                }
-            });
-            Some(Fields::Union(acc.into_iter()))
-        } else if let TyKind::Struct(fields) = kind {
-            Some(Fields::Struct(fields.iter().map(|(name, ty)| {
-                (
-                    Field(FieldInner::StructField { name: name.clone() }),
-                    ty.clone(),
-                )
-            })))
-        } else {
-            None
+            return Some(Fields::Intrinsic(self.intrinsic_class_fields(db, class)));
         }
+
+        let fields =
+            match kind {
+                TyKind::BuiltinType(ty) => Fields::Builtin(
+                    ty.fields(db)
+                        .iter()
+                        .enumerate()
+                        .map(|(index, field)| {
+                            (
+                                Field(FieldInner::BuiltinField { parent: *ty, index }),
+                                resolve_type_ref(db, &field.type_ref).0,
+                            )
+                        })
+                        .chain(ty.methods(db).iter().map(|func| {
+                            (
+                                Field(FieldInner::BuiltinMethod { func: *func }),
+                                TyKind::BuiltinFunction(*func).intern(),
+                            )
+                        })),
+                ),
+                TyKind::Union(tys) => {
+                    // TODO(withered-magic): Can probably do better than a Vec here?
+                    let mut acc = Vec::new();
+                    tys.iter().for_each(|ty| {
+                        let fields = match ty.fields(db) {
+                            Some(fields) => fields,
+                            None => return,
+                        };
+
+                        for (field, ty) in fields {
+                            acc.push((field, ty));
+                        }
+                    });
+                    Fields::Union(acc.into_iter())
+                }
+                TyKind::Struct(fields) => Fields::Struct(fields.iter().map(|(name, ty)| {
+                    (
+                        Field(FieldInner::StructField { name: name.clone() }),
+                        ty.clone(),
+                    )
+                })),
+                TyKind::ProviderInstance(provider) => {
+                    Fields::Provider(provider.fields.as_ref()?.iter().enumerate().map(
+                        |(index, _)| {
+                            (
+                                Field(FieldInner::ProviderField {
+                                    provider: provider.clone(),
+                                    index,
+                                }),
+                                Ty::unknown(),
+                            )
+                        },
+                    ))
+                }
+                _ => return None,
+            };
+
+        Some(fields)
     }
 
     fn intrinsic_class_fields<'a>(
@@ -763,6 +780,12 @@ impl Field {
             FieldInner::BuiltinMethod { func } => func.name(db),
             FieldInner::IntrinsicField { parent, index } => parent.fields(db)[index].name.clone(),
             FieldInner::StructField { ref name, .. } => name.clone(),
+            FieldInner::ProviderField {
+                ref provider,
+                index,
+            } => provider.fields.as_ref().expect("expected provider fields")[index]
+                .name
+                .clone(),
         }
     }
 
@@ -772,6 +795,14 @@ impl Field {
             FieldInner::BuiltinMethod { func } => func.doc(db).clone(),
             FieldInner::IntrinsicField { parent, index } => parent.fields(db)[index].doc.clone(),
             FieldInner::StructField { .. } => String::new(),
+            FieldInner::ProviderField {
+                ref provider,
+                index,
+            } => provider.fields.as_ref().expect("expected provider fields")[index]
+                .doc
+                .as_ref()
+                .map(|doc| doc.to_string())
+                .unwrap_or_default(),
         }
     }
 }
@@ -791,21 +822,27 @@ enum FieldInner {
     StructField {
         name: Name,
     },
+    ProviderField {
+        provider: Arc<Provider>,
+        index: usize,
+    },
 }
 
-enum Fields<I1, I2, I3, I4> {
+enum Fields<I1, I2, I3, I4, I5> {
     Intrinsic(I1),
     Builtin(I2),
     Union(I3),
     Struct(I4),
+    Provider(I5),
 }
 
-impl<I1, I2, I3, I4> Iterator for Fields<I1, I2, I3, I4>
+impl<I1, I2, I3, I4, I5> Iterator for Fields<I1, I2, I3, I4, I5>
 where
     I1: Iterator<Item = (Field, Ty)>,
     I2: Iterator<Item = (Field, Ty)>,
     I3: Iterator<Item = (Field, Ty)>,
     I4: Iterator<Item = (Field, Ty)>,
+    I5: Iterator<Item = (Field, Ty)>,
 {
     type Item = (Field, Ty);
 
@@ -815,6 +852,7 @@ where
             Self::Builtin(iter) => iter.next(),
             Self::Union(iter) => iter.next(),
             Self::Struct(iter) => iter.next(),
+            Self::Provider(iter) => iter.next(),
         }
     }
 }

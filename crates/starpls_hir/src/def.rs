@@ -98,6 +98,7 @@ impl Index<LoadItemId> for Module {
     }
 }
 
+#[allow(private_interfaces)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expr {
     Missing,
@@ -151,7 +152,6 @@ pub enum Expr {
     },
     Call {
         callee: ExprId,
-        #[allow(private_interfaces)]
         args: Box<[Argument]>,
     },
     Index {
@@ -370,7 +370,7 @@ pub enum LoadItem {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum CompClause {
+pub(crate) enum CompClause {
     For {
         iterable: ExprId,
         targets: Box<[ExprId]>,
@@ -381,19 +381,34 @@ pub enum CompClause {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DictEntry {
-    pub key: ExprId,
-    pub value: ExprId,
+pub(crate) struct DictEntry {
+    pub(crate) key: ExprId,
+    pub(crate) value: ExprId,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Literal {
+pub(crate) enum Literal {
     Int(u64),
     Float,
-    String(Box<str>),
+    String(LiteralString),
     Bytes,
     Bool(bool),
     None,
+}
+
+impl Literal {
+    fn from_ast_literal(db: &dyn Db, value: &ast::LiteralKind) -> Self {
+        match value {
+            ast::LiteralKind::Int(lit) => Literal::Int(lit.value().unwrap_or(0)),
+            ast::LiteralKind::Float(_) => Literal::Float,
+            ast::LiteralKind::String(lit) => {
+                Literal::String(LiteralString::new(db, lit.value().unwrap_or_default()))
+            }
+            ast::LiteralKind::Bytes(_) => Literal::Bytes,
+            ast::LiteralKind::Bool(lit) => Literal::Bool(*lit),
+            ast::LiteralKind::None => Literal::None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -431,6 +446,11 @@ impl Name {
     fn new(repr: SmolStr) -> Self {
         Self(repr)
     }
+}
+
+#[salsa::interned]
+pub(crate) struct LiteralString {
+    pub(crate) value: Box<str>,
 }
 
 #[salsa::tracked]

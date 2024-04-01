@@ -1,5 +1,5 @@
 use crate::{
-    def::Argument,
+    def::{Argument, LiteralString},
     typeck::{self, Binders, Substitution, Tuple as TupleVariants, Ty, TyKind},
     Db, Name,
 };
@@ -124,9 +124,10 @@ impl IntrinsicFunction {
 
         let known_keys = args
             .filter_map(|(arg, ty)| match arg {
-                Argument::Keyword { name, .. } => {
-                    Some((name.as_str().to_string().into_boxed_str(), ty.clone()))
-                }
+                Argument::Keyword { name, .. } => Some((
+                    LiteralString::new(db, name.as_str().to_string().into_boxed_str()),
+                    ty.clone(),
+                )),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -210,9 +211,9 @@ pub(crate) fn intrinsic_functions(db: &dyn Db) -> IntrinsicFunctions {
 
     // TODO(withered-magic): SupportsAbs[T] -> T
     add_function("abs", "`abs(x)` takes either an integer or a float, and returns the absolute value of that number (a non-negative number with the same magnitude).", vec![positional(Any)], Any);
-    add_function("any", "`any(x)` returns `True` if any element of the iterable sequence x is true. If the iterable is empty, it returns `False`.", vec![positional(Any)], Bool);
-    add_function("all", "`all(x)` returns `False` if any element of the iterable sequence x is false. If the iterable is empty, it returns `True`.", vec![positional(Any)], Bool);
-    add_function("bool", "`bool(x)` interprets `x` as a Boolean value---`True` or `False`. With no argument, `bool()` returns `False`.", vec![positional_opt(Any)], Bool);
+    add_function("any", "`any(x)` returns `True` if any element of the iterable sequence x is true. If the iterable is empty, it returns `False`.", vec![positional(Any)], non_literal_bool());
+    add_function("all", "`all(x)` returns `False` if any element of the iterable sequence x is false. If the iterable is empty, it returns `True`.", vec![positional(Any)], non_literal_bool());
+    add_function("bool", "`bool(x)` interprets `x` as a Boolean value---`True` or `False`. With no argument, `bool()` returns `False`.", vec![positional_opt(Any)], non_literal_bool());
     // TODO(withered-magic): SupportsBytes[T] -> T
     add_function(
         "bytes",
@@ -362,14 +363,18 @@ getattr("banana", "myattr", "mydefault")	# "mydefault"
 The three-argument form `getattr(x, name, default)` returns the
 provided `default` value instead of failing.
 "#,
-        vec![positional(Any), positional(String), positional_opt(Any)],
+        vec![
+            positional(Any),
+            positional(non_literal_string()),
+            positional_opt(Any),
+        ],
         Any,
     );
     add_function(
         "hasattr",
         r#"`hasattr(x, name)` reports whether x has an attribute (field or method) named `name`."#,
-        vec![positional(Any), positional(String)],
-        Bool,
+        vec![positional(Any), positional(non_literal_string())],
+        non_literal_bool(),
     );
     // // TODO(withered-magic): SupportsHash[T] -> T
     add_function(
@@ -601,7 +606,7 @@ repr("🙂"[:1])		# "\xf0" (UTF-8) or "\ud83d" (UTF-16)
 "\ud83d"                # error: invalid Unicode code point U+D83D
 ```"#,
         vec![positional(Any)],
-        String,
+        non_literal_string(),
     );
     // TODO(withered-magic): Iterable[T] -> List[T]
     add_function(
@@ -643,7 +648,7 @@ sorted(["two", "three", "four"], key=len, reverse=True)    # ["three", "four", "
             positional(Any),
             Keyword {
                 name: Name::new_inline("reverse"),
-                ty: Bool.intern(),
+                ty: non_literal_bool().intern(),
             },
             Keyword {
                 name: Name::new_inline("key"),
@@ -672,7 +677,7 @@ Each byte that is not part of a valid encoding is replaced by the
 UTF-K encoding of the replacement character, U+FFFD.
 "#,
         vec![positional(Any)],
-        String,
+        non_literal_string(),
     );
     // TODO(withered-magic): The tuple returned here can be of any size,
     // might have to introduce a separate type.
@@ -694,7 +699,7 @@ type(0)                 # "int"
 type(0.0)               # "float"
     ```"#,
         vec![positional(Any)],
-        String,
+        non_literal_string(),
     );
     add_function(
         "zip",
@@ -749,7 +754,7 @@ is converted to uppercase; all other characters are converted to lowercase.
 ```
 "#,
                 vec![],
-                String,
+                non_literal_string(),
                 0,
             ),
             function_field(
@@ -765,7 +770,11 @@ They are interpreted according to Starlark's [indexing conventions](#indexing).
 "hello, world!".count("o", 7, 12)       # 1  (in "world")
 ```
 "#,
-                vec![positional(String), positional_opt(Int), positional_opt(Int)],
+                vec![
+                    positional(non_literal_string()),
+                    positional_opt(Int),
+                    positional_opt(Int),
+                ],
                 Int,
                 0,
             ),
@@ -805,8 +814,12 @@ function reports whether any one of them is a suffix.
 'foo.cc'.endswith(('.cc', '.h'))         # True
 ```
 "#,
-                vec![positional(String), positional_opt(Int), positional_opt(Int)],
-                Bool,
+                vec![
+                    positional(non_literal_string()),
+                    positional_opt(Int),
+                    positional_opt(Int),
+                ],
+                non_literal_bool(),
                 0,
             ),
             function_field(
@@ -827,7 +840,11 @@ If no occurrence is found, `found` returns -1.
 "bonbon".find("on", 2, 5)       # -1
 ```
 "#,
-                vec![positional(String), positional_opt(Int), positional_opt(Int)],
+                vec![
+                    positional(non_literal_string()),
+                    positional_opt(Int),
+                    positional_opt(Int),
+                ],
                 Int,
                 0,
             ),
@@ -864,7 +881,7 @@ the explicit and implicit forms may not be mixed.
 ```
 "#,
                 vec![ArgsList { ty: Any.intern() }, KwargsDict],
-                String,
+                non_literal_string(),
                 0,
             ),
             function_field(
@@ -880,7 +897,11 @@ that if the substring is not found, the operation fails.
 "bonbon".index("on", 2, 5)       # error: substring not found  (in "nbo")
 ```
 "#,
-                vec![positional(String), positional_opt(Int), positional_opt(Int)],
+                vec![
+                    positional(non_literal_string()),
+                    positional_opt(Int),
+                    positional_opt(Int),
+                ],
                 Int,
                 0,
             ),
@@ -896,7 +917,7 @@ Unicode letters and digits.
 ```
 "#,
                 vec![],
-                Bool,
+                non_literal_bool(),
                 0,
             ),
             function_field(
@@ -911,7 +932,7 @@ Unicode letters and digits.
 ```
 "#,
                 vec![],
-                Bool,
+                non_literal_bool(),
                 0,
             ),
             function_field(
@@ -926,7 +947,7 @@ Unicode letters and digits.
 ```
 "#,
                 vec![],
-                Bool,
+                non_literal_bool(),
                 0,
             ),
             function_field(
@@ -942,7 +963,7 @@ letter, and all such letters are lowercase.
 ```
 "#,
                 vec![],
-                Bool,
+                non_literal_bool(),
                 0,
             ),
             function_field(
@@ -957,7 +978,7 @@ letter, and all such letters are lowercase.
 ```
 "#,
                 vec![],
-                Bool,
+                non_literal_bool(),
                 0,
             ),
             function_field(
@@ -974,7 +995,7 @@ letter, and all such letters that begin a word are in title case.
 ```
             "#,
                 vec![],
-                Bool,
+                non_literal_bool(),
                 0,
             ),
             function_field(
@@ -990,7 +1011,7 @@ letter, and all such letters are uppercase.
 ```
 "#,
                 vec![],
-                Bool,
+                non_literal_bool(),
                 0,
             ),
             function_field(
@@ -1007,7 +1028,7 @@ are strings.
 ```
 "#,
                 vec![positional(Any)],
-                String,
+                non_literal_string(),
                 0,
             ),
             function_field(
@@ -1020,7 +1041,7 @@ are strings.
 ```
 "#,
                 vec![],
-                String,
+                non_literal_string(),
                 0,
             ),
             function_field(
@@ -1036,8 +1057,8 @@ alternative set of Unicode code points to remove.
 "   hello  ".lstrip("h o")              # "ello  "
 ```
 "#,
-                vec![positional_opt(String)],
-                String,
+                vec![positional_opt(non_literal_string())],
+                non_literal_string(),
                 0,
             ),
             function_field(
@@ -1054,7 +1075,7 @@ If S does not contain `x`, `partition` returns `(S, "", "")`.
 "one/two/three".partition("/")		# ("one", "/", "two/three")
 ```
 "#,
-                vec![positional(String)],
+                vec![positional(non_literal_string())],
                 Tuple(TupleVariants::Simple(smallvec![
                     Ty::string(),
                     Ty::string(),
@@ -1077,8 +1098,8 @@ If the prefix string is not found then it returns the original string.
 "bbaa".removeprefix("b")		# "baa"
 ```
 "#,
-                vec![positional(String)],
-                String,
+                vec![positional(non_literal_string())],
+                non_literal_string(),
                 0,
             ),
             function_field(
@@ -1096,8 +1117,8 @@ If the suffix string is not found then it returns the original string.
 "bbaa".removesuffix("a")		# "bba"
 ```
 "#,
-                vec![positional(String)],
-                String,
+                vec![positional(non_literal_string())],
+                non_literal_string(),
                 0,
             ),
             function_field(
@@ -1113,8 +1134,12 @@ specifies a maximum number of occurrences to replace.
 "banana".replace("a", "o", 2)		# "bonona"
 ```
 "#,
-                vec![positional(String), positional(String), positional_opt(Int)],
-                String,
+                vec![
+                    positional(non_literal_string()),
+                    positional(non_literal_string()),
+                    positional_opt(Int),
+                ],
+                non_literal_string(),
                 0,
             ),
             function_field(
@@ -1130,7 +1155,11 @@ _last_ occurrence.
 "bonbon".rfind("on", 2, 5)       # -1
 ```
 "#,
-                vec![positional(String), positional_opt(Int), positional_opt(Int)],
+                vec![
+                    positional(non_literal_string()),
+                    positional_opt(Int),
+                    positional_opt(Int),
+                ],
                 Int,
                 0,
             ),
@@ -1147,7 +1176,11 @@ _last_ occurrence.
 "bonbon".rindex("on", 2, 5)       # error: substring not found  (in "nbo")
 ```
 "#,
-                vec![positional(String), positional_opt(Int), positional_opt(Int)],
+                vec![
+                    positional(non_literal_string()),
+                    positional_opt(Int),
+                    positional_opt(Int),
+                ],
                 Int,
                 0,
             ),
@@ -1160,7 +1193,7 @@ _last_ occurrence.
 "one/two/three".rpartition("/")         # ("one/two", "/", "three")
 ```
 "#,
-                vec![positional(String)],
+                vec![positional(non_literal_string())],
                 Tuple(TupleVariants::Simple(smallvec![
                     Ty::string(),
                     Ty::string(),
@@ -1181,7 +1214,7 @@ rightmost splits.
 "one two  three".rsplit(None, 1)             # ["one two", "three"]
 ```
 "#,
-                vec![positional(String), positional_opt(Int)],
+                vec![positional(non_literal_string()), positional_opt(Int)],
                 List(Ty::string()),
                 0,
             ),
@@ -1198,8 +1231,8 @@ alternative set of Unicode code points to remove.
 "  hello   ".rstrip("h o")              # "  hell"
 ```
 "#,
-                vec![positional_opt(String)],
-                String,
+                vec![positional_opt(non_literal_string())],
+                non_literal_string(),
                 0,
             ),
             function_field(
@@ -1231,7 +1264,7 @@ If `maxsplit` is given and non-negative, it specifies a maximum number of splits
 "banana".split("n", 1)                      # ["ba", "ana"]
 ```
 "#,
-                vec![positional_opt(String), positional_opt(Int)],
+                vec![positional_opt(non_literal_string()), positional_opt(Int)],
                 List(Ty::string()),
                 0,
             ),
@@ -1253,7 +1286,7 @@ the final element does not necessarily end with a line terminator.
 "one\n\ntwo".splitlines(True)   # ["one\n", "\n", "two"]
 ```
 "#,
-                vec![positional_opt(Bool)],
+                vec![positional_opt(non_literal_bool())],
                 List(Ty::string()),
                 0,
             ),
@@ -1278,8 +1311,12 @@ function reports whether any one of them is a prefix.
 'def'.startswith(('a', 'A'))                  # False
 ```
 "#,
-                vec![positional(String), positional_opt(Int), positional_opt(Int)],
-                Bool,
+                vec![
+                    positional(non_literal_string()),
+                    positional_opt(Int),
+                    positional_opt(Int),
+                ],
+                non_literal_bool(),
                 0,
             ),
             function_field(
@@ -1296,8 +1333,8 @@ and trailing Unicode code points contained in `cutset`.
 "  hello   ".strip("h o")               # "ell"
 ```
 "#,
-                vec![positional_opt(Bool)],
-                String,
+                vec![positional_opt(non_literal_bool())],
+                non_literal_string(),
                 0,
             ),
             function_field(
@@ -1312,7 +1349,7 @@ Letters are converted to uppercase at the start of words, lowercase elsewhere.
 ```
 "#,
                 vec![],
-                String,
+                non_literal_string(),
                 0,
             ),
             function_field(
@@ -1326,7 +1363,7 @@ Letters are converted to uppercase at the start of words, lowercase elsewhere.
 ```
 "#,
                 vec![],
-                String,
+                non_literal_string(),
                 0,
             ),
         ],
@@ -1793,4 +1830,12 @@ fn positional_opt(kind: TyKind) -> IntrinsicFunctionParam {
         ty: kind.intern(),
         optional: true,
     }
+}
+
+fn non_literal_string() -> TyKind {
+    TyKind::String(None)
+}
+
+fn non_literal_bool() -> TyKind {
+    TyKind::Bool(None)
 }

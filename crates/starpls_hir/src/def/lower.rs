@@ -194,7 +194,7 @@ impl<'a> LoweringContext<'a> {
                 Expr::Name { name }
             }
             ast::Expression::Literal(node) => {
-                let literal = node.kind().into();
+                let literal = Literal::from_ast_literal(self.db, &node.kind());
                 Expr::Literal { literal }
             }
             ast::Expression::If(node) => {
@@ -585,21 +585,5 @@ impl<'a> LoweringContext<'a> {
         self.source_map.load_item_map.insert(ptr.clone(), id);
         self.source_map.load_item_map_back.insert(id, ptr.clone());
         id
-    }
-}
-
-impl From<ast::LiteralKind> for Literal {
-    fn from(value: ast::LiteralKind) -> Self {
-        match value {
-            ast::LiteralKind::Int(lit) => Literal::Int(lit.value().unwrap_or(0)),
-            ast::LiteralKind::Float(_) => Literal::Float,
-            ast::LiteralKind::String(lit) => Literal::String(
-                lit.value()
-                    .unwrap_or_else(|| String::new().into_boxed_str()),
-            ),
-            ast::LiteralKind::Bytes(_) => Literal::Bytes,
-            ast::LiteralKind::Bool(lit) => Literal::Bool(lit),
-            ast::LiteralKind::None => Literal::None,
-        }
     }
 }

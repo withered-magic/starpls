@@ -1,5 +1,5 @@
 use crate::{
-    def::{ExprId, Function, LoadItemId, LoadStmt, Param as HirDefParam, ParamId},
+    def::{ExprId, Function, LiteralString, LoadItemId, LoadStmt, Param as HirDefParam, ParamId},
     module, source_map,
     typeck::{
         builtins::{
@@ -399,7 +399,7 @@ impl Ty {
     }
 
     pub(crate) fn bool() -> Ty {
-        TyKind::Bool.intern()
+        TyKind::Bool(None).intern()
     }
 
     pub(crate) fn int() -> Ty {
@@ -407,14 +407,18 @@ impl Ty {
     }
 
     pub(crate) fn string() -> Ty {
-        TyKind::String.intern()
+        TyKind::String(None).intern()
     }
 
     pub(crate) fn list(ty: Ty) -> Ty {
         TyKind::List(ty).intern()
     }
 
-    pub(crate) fn dict(key_ty: Ty, value_ty: Ty, known_keys: Option<Arc<[(Box<str>, Ty)]>>) -> Ty {
+    pub(crate) fn dict(
+        key_ty: Ty,
+        value_ty: Ty,
+        known_keys: Option<Arc<[(LiteralString, Ty)]>>,
+    ) -> Ty {
         TyKind::Dict(key_ty, value_ty, known_keys).intern()
     }
 
@@ -480,7 +484,7 @@ impl Ty {
         }
     }
 
-    pub(crate) fn known_keys(&self) -> Option<&[(Box<str>, Ty)]> {
+    pub(crate) fn known_keys(&self) -> Option<&[(LiteralString, Ty)]> {
         match self.kind() {
             TyKind::Dict(_, _, known_keys) => known_keys.as_ref().map(|known_keys| &**known_keys),
             _ => None,
@@ -515,7 +519,16 @@ impl Ty {
                 tys1.iter()
                     .all(|ty1| tys2.iter().any(|ty2| Ty::eq(ty1, ty2)))
             }
+            (TyKind::Attribute(_), TyKind::Attribute(_)) => true,
             _ => ty1 == ty2,
+        }
+    }
+
+    fn normalize(self) -> Ty {
+        match self.kind() {
+            TyKind::Bool(_) => Ty::bool(),
+            TyKind::String(_) => Ty::string(),
+            _ => self,
         }
     }
 }
@@ -816,13 +829,13 @@ pub(crate) enum TyKind {
     /// The type of the predefined `None` variable.
     None,
     /// A boolean.
-    Bool,
+    Bool(Option<bool>),
     /// A 64-bit integer.
     Int,
     /// A 64-bit floating point number.
     Float,
     /// A UTF-8 encoded string.
-    String,
+    String(Option<LiteralString>),
     /// The individual characters of a UTF-8 encoded string.
     StringElems,
     /// A series of bytes.
@@ -834,7 +847,7 @@ pub(crate) enum TyKind {
     /// A fixed-size collection of elements.
     Tuple(Tuple),
     /// A mapping of keys to values.
-    Dict(Ty, Ty, Option<Arc<[(Box<str>, Ty)]>>),
+    Dict(Ty, Ty, Option<Arc<[(LiteralString, Ty)]>>),
     /// An iterable and indexable sequence of numbers. Obtained from
     /// the `range()` function.
     Range,
@@ -974,7 +987,7 @@ impl TyKind {
     pub fn builtin_class(&self, db: &dyn Db) -> Option<IntrinsicClass> {
         let intrinsics = intrinsic_types(db);
         Some(match self {
-            TyKind::String => intrinsics.string_base_class(db),
+            TyKind::String(_) => intrinsics.string_base_class(db),
             TyKind::Bytes => intrinsics.bytes_base_class(db),
             TyKind::List(_) => intrinsics.list_base_class(db),
             TyKind::Dict(_, _, _) => intrinsics.dict_base_class(db),
@@ -1242,7 +1255,8 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
         (TyKind::Dict(key_source, value_source, _), TyKind::Dict(key_target, value_target, _)) => {
             assign_tys(db, key_source, key_target) && assign_tys(db, value_source, value_target)
         }
-        (TyKind::String, TyKind::BuiltinType(ty)) | (TyKind::BuiltinType(ty), TyKind::String)
+        (TyKind::String(_), TyKind::BuiltinType(ty))
+        | (TyKind::BuiltinType(ty), TyKind::String(_))
             if ty.name(db).as_str() == "Label" =>
         {
             true
@@ -1258,8 +1272,10 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
         // this once we support type guards.
         (_, TyKind::Union(tys)) => tys.iter().any(|target| assign_tys(db, source, target)),
         (TyKind::Union(tys), _) => tys.iter().any(|source| assign_tys(db, source, target)),
-        (TyKind::Struct(_), TyKind::Struct(_)) => true,
-        (TyKind::Attribute(_), TyKind::Attribute(_)) => true,
+        (TyKind::String(_), TyKind::String(_))
+        | (TyKind::Attribute(_), TyKind::Attribute(_))
+        | (TyKind::Struct(_), TyKind::Struct(_))
+        | (TyKind::Bool(_), TyKind::Bool(_)) => true,
         (source, target) => source == target,
     }
 }

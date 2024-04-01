@@ -86,10 +86,16 @@ impl DisplayWithDb for TyKind {
             TyKind::Unknown => "Unknown",
             TyKind::Any => "Any",
             TyKind::None => "None",
-            TyKind::Bool => "bool",
+            TyKind::Bool(Some(b)) => {
+                f.write_str("Literal[")?;
+                f.write_str(if *b { "True" } else { "False" })?;
+                return f.write_char(']');
+            }
+            TyKind::Bool(None) => "bool",
             TyKind::Int => "int",
             TyKind::Float => "float",
-            TyKind::String => "string",
+            TyKind::String(Some(s)) => return write!(f, "Literal[{:?}]", s.value(db)),
+            TyKind::String(None) => "string",
             TyKind::StringElems => "string.elems",
             TyKind::Bytes => "bytes",
             TyKind::BytesElems => "bytes.elems",

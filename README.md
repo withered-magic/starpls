@@ -2,6 +2,9 @@
 `starpls` is a language server for [Starlark](https://github.com/bazelbuild/starlark), the configuration language used by Bazel and Buck2.
 
 ## Installation
+
+### VSCode
+
 Make sure you have at least the [0.9.0](https://github.com/bazelbuild/vscode-bazel/releases/tag/0.9.0) version of the [vscode-bazel](https://github.com/bazelbuild/vscode-bazel) extension installed, as it adds support for launching a language server.
 
 You can grab a release from the [releases page](https://github.com/withered-magic/starpls/releases). Make sure to download the appropriate version for your OS and architecture! After downloading the binary, make sure to adjust its permissions to make it executable, e.g.
@@ -40,7 +43,12 @@ bazel run -c opt //editors/code:copy_starpls
 
 This builds the executable and copies it to `<repository_root>/editors/code/bin/starpls`. From there, you can add it to the `$PATH` or copy it to a different directory, remembering to update the extension settings as detailed above.
 
+### Zed
+
+Install the [zed-starlark](https://github.com/zaucy/zed-starlark) extension.
+
 ## Tips and Tricks
+
 Make sure to use [PEP 484 type comments](https://peps.python.org/pep-0484/#type-comments) to document your function signatures. This helps a ton with autocomplete for situations like `rule` implementation functions. For example, if you add a type comment as in the following...
 
 ```python
@@ -53,6 +61,7 @@ def _impl(ctx):
 then you'll get autocomplete suggestions for the attributes on `ctx`, like `ctx.actions`, `ctx.attr`, and so on!
 
 ## Roadmap
+
 - Parsing
     - [x] Error resilient Starlark parser
     - [x] Syntax error reporting
@@ -88,9 +97,11 @@ then you'll get autocomplete suggestions for the attributes on `ctx`, like `ctx.
     - [x] Bazel external repositories
 
 ## Development
+
 `starpls` currently requires a nightly build of Rust, due to usage of `trait_upcasting` as specified by [RFC3324](https://rust-lang.github.io/rfcs/3324-dyn-upcasting.html).
 
 ### Prerequisites
+
 - `pnpm`, for managing Node dependencies
 - `protoc`, for compiling `builtin.proto`
 
@@ -100,11 +111,14 @@ Steps to get up and running:
 3. In the extension development host, open a `.star` file and enjoy syntax highlighting and error messages!
 
 ## Known Issues
+
 - Type guards are not supported.
 
 ## Disclaimer
+
 This project is still heavily WIP, so expect a decent amount of bugs and crashes if you decide to try it out! Additionally, I've elected to focus on implementing the core Starlark specification first before introducing Bazel- or Buck2-specific features.
 
 ## Acknowledgements
+
 - `starpls` is heavily based on the [rust-analyzer](https://github.com/rust-lang/rust-analyzer/tree/master) codebase; one might consider it a vastly simplified version of rust-analyzer that works on Starlark files! As such, major thanks to the rust-analyzer team, especially [Aleksey Kladov](https://matklad.github.io/), whose [Explaining rust-analyzer](https://www.youtube.com/playlist?list=PLhb66M_x9UmrqXhQuIpWC5VgTdrGxMx3y) series on YouTube proved invaluable as a learning resource!
 - `starpls`'s mechanism for carrying out type inference is heavily derived from that of [Pyright](https://github.com/microsoft/pyright).

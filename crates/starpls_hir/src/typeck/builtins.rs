@@ -103,9 +103,14 @@ impl BuiltinFunction {
                                     fields = Some(
                                         known_keys
                                             .iter()
-                                            .map(|(key, _)| ProviderField {
+                                            .map(|(key, value)| ProviderField {
                                                 name: Name::from_str(&key.value(db)),
-                                                doc: None,
+                                                doc: match value.kind() {
+                                                    TyKind::String(Some(s)) => Some(
+                                                        s.value(db).to_string().into_boxed_str(),
+                                                    ),
+                                                    _ => None,
+                                                },
                                             })
                                             .collect(),
                                     );

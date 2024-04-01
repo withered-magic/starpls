@@ -245,9 +245,9 @@ pub(crate) fn completions(
             let file = db.get_file(file_id)?;
             let ty = sema.type_of_expr(file, &lhs)?;
 
-            for key in ty.known_keys()?.iter() {
+            for key in ty.known_keys(db)?.into_iter() {
                 items.push(CompletionItem {
-                    label: key.to_string(),
+                    label: key,
                     kind: CompletionItemKind::Constant,
                     mode: None,
                     relevance: CompletionRelevance::VariableOrKeyword,

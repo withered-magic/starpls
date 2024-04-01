@@ -34,6 +34,7 @@ pub struct Jar(
     ModuleInfo,
     def::Function,
     def::LoadStmt,
+    def::LiteralString,
     def::scope::ModuleScopes,
     def::scope::module_scopes,
     def::scope::module_scopes_query,

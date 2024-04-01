@@ -2,15 +2,14 @@ use crate::{
     def::Argument,
     source_map,
     typeck::{Attribute, AttributeKind, Rule as TyRule, RuleKind},
-    Db, ExprId, Name, Ty, TyKind, TypeRef,
+    Db, Name, Ty, TyKind, TypeRef,
 };
 use either::Either;
 use rustc_hash::FxHashMap;
 use starpls_bazel::{
     attr, builtin::Callable, env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
 };
-use starpls_common::{parse, Dialect, File};
-use starpls_syntax::ast;
+use starpls_common::{Dialect, File};
 use std::collections::HashSet;
 
 const DEFAULT_DOC: &str = "See the [Bazel Build Encyclopedia](https://bazel.build/reference/be/overview) for more details.";
@@ -90,10 +89,12 @@ impl BuiltinFunction {
                 let mut attrs = None;
                 let mut doc = None;
                 for (arg, ty) in args {
-                    if let Argument::Keyword { name, expr } = arg {
+                    if let Argument::Keyword { name, .. } = arg {
                         match name.as_str() {
                             "doc" => {
-                                doc = extract_string_literal(db, file, *expr);
+                                if let TyKind::String(Some(s)) = ty.kind() {
+                                    doc = Some(s.clone());
+                                }
                             }
                             "attrs" => {
                                 if let TyKind::Dict(_, _, Some(known_keys)) = ty.kind() {
@@ -101,7 +102,9 @@ impl BuiltinFunction {
                                         known_keys
                                             .iter()
                                             .filter(|(_, ty)| ty.is_attribute())
-                                            .map(|(name, ty)| (Name::from_str(name), ty.clone()))
+                                            .map(|(name, ty)| {
+                                                (Name::from_str(&name.value(db)), ty.clone())
+                                            })
                                             .collect::<Vec<_>>()
                                             .into_boxed_slice(),
                                     )
@@ -118,7 +121,7 @@ impl BuiltinFunction {
                     } else {
                         RuleKind::Repository
                     },
-                    doc,
+                    doc: doc.map(|doc| doc.value(db).clone()),
                     attrs: attrs.unwrap_or_else(|| Vec::new().into_boxed_slice()),
                 })
             }
@@ -126,14 +129,18 @@ impl BuiltinFunction {
                 let mut doc: Option<Box<str>> = None;
                 let mut mandatory = false;
                 let mut default_ptr = None;
-                for (arg, _) in args {
+                for (arg, ty) in args {
                     if let Argument::Keyword { name, expr } = arg {
                         match name.as_str() {
                             "doc" => {
-                                doc = extract_string_literal(db, file, *expr);
+                                if let TyKind::String(Some(s)) = ty.kind() {
+                                    doc = Some(s.value(db).clone());
+                                }
                             }
                             "mandatory" => {
-                                mandatory = extract_bool_literal(db, file, *expr).unwrap_or(false);
+                                if let TyKind::Bool(Some(b)) = ty.kind() {
+                                    mandatory = *b;
+                                }
                             }
                             "default" => {
                                 if let Some(ptr) = source_map(db, file).expr_map_back.get(expr) {
@@ -171,29 +178,6 @@ impl BuiltinFunction {
 
         Some(ret_kind.intern())
     }
-}
-
-fn expr_as_literal(db: &dyn Db, file: File, expr: ExprId) -> Option<ast::LiteralExpr> {
-    let root = parse(db, file).syntax(db);
-    source_map(db, file)
-        .expr_map_back
-        .get(&expr)
-        .and_then(|ptr| ptr.clone().cast::<ast::LiteralExpr>())
-        .and_then(|ptr| ptr.try_to_node(&root))
-}
-
-fn extract_string_literal(db: &dyn Db, file: File, expr: ExprId) -> Option<Box<str>> {
-    expr_as_literal(db, file, expr).and_then(|expr| match expr.kind() {
-        ast::LiteralKind::String(s) => s.value(),
-        _ => None,
-    })
-}
-
-fn extract_bool_literal(db: &dyn Db, file: File, expr: ExprId) -> Option<bool> {
-    expr_as_literal(db, file, expr).and_then(|expr| match expr.kind() {
-        ast::LiteralKind::Bool(b) => Some(b),
-        _ => None,
-    })
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

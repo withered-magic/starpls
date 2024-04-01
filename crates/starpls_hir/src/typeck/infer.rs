@@ -2,7 +2,8 @@ use crate::{
     def::{
         resolver::{Export, Resolver},
         scope::{LoadItemDef, ParameterDef, ScopeDef, VariableDef},
-        Argument, Expr, ExprId, Literal, LoadItem, LoadItemId, LoadStmt, Param, ParamId, Stmt,
+        Argument, Expr, ExprId, Literal, LiteralString, LoadItem, LoadItemId, LoadStmt, Param,
+        ParamId, Stmt,
     },
     display::DisplayWithDb,
     module, source_map,
@@ -177,9 +178,9 @@ impl TyCtxt<'_> {
             Expr::Literal { literal } => match literal {
                 Literal::Int(_) => self.int_ty(),
                 Literal::Float => self.float_ty(),
-                Literal::String(_) => self.string_ty(),
+                Literal::String(s) => TyKind::String(Some(s.clone())).intern(),
                 Literal::Bytes => self.bytes_ty(),
-                Literal::Bool(_) => self.bool_ty(),
+                Literal::Bool(b) => TyKind::Bool(Some(*b)).intern(),
                 Literal::None => self.none_ty(),
             },
             Expr::Unary {
@@ -249,7 +250,7 @@ impl TyCtxt<'_> {
                     TyKind::Tuple(Tuple::Variable(ty)) => (&int_ty, ty, "tuple"),
                     TyKind::List(ty) => (&int_ty, ty, "list"),
                     TyKind::Dict(key_ty, value_ty, _) => (key_ty, value_ty, "dict"),
-                    TyKind::String => (&int_ty, &string_ty, "string"),
+                    TyKind::String(_) => (&int_ty, &string_ty, "string"),
                     TyKind::Bytes => (&int_ty, &int_ty, "bytes"),
                     TyKind::Range => (&int_ty, &int_ty, "range"),
                     TyKind::Any => return self.any_ty(),
@@ -669,8 +670,17 @@ impl TyCtxt<'_> {
 
         match op {
             BinaryOp::Arith(op) => match (lhs_kind, rhs_kind, op) {
-                (TyKind::String, TyKind::String, ArithOp::Add)
-                | (TyKind::String, _, ArithOp::Mod) => self.string_ty(), // concatenation, string interpolcation
+                (TyKind::String(Some(s1)), TyKind::String(Some(s2)), ArithOp::Add) => {
+                    let s1 = &s1.value(db);
+                    let s2 = &s2.value(db);
+                    let mut s = String::with_capacity(s1.len() + s2.len());
+                    s.push_str(s1);
+                    s.push_str(s2);
+                    let interned = LiteralString::new(db, s.into_boxed_str());
+                    TyKind::String(Some(interned)).intern()
+                }
+                (TyKind::String(_), TyKind::String(_), ArithOp::Add)
+                | (TyKind::String(_), _, ArithOp::Mod) => self.string_ty(), // concatenation, string interpolcation
                 (TyKind::Bytes, TyKind::Bytes, ArithOp::Add) => self.bytes_ty(), // concatenation
                 (
                     TyKind::List(ty1)
@@ -679,8 +689,8 @@ impl TyCtxt<'_> {
                     | TyKind::Protocol(Protocol::Sequence(ty2) | Protocol::Iterable(ty2)),
                     ArithOp::Add,
                 ) => Ty::list(Ty::union([ty1.clone(), ty2.clone()].into_iter())),
-                (TyKind::String, TyKind::Int, ArithOp::Mul)
-                | (TyKind::Int, TyKind::String, ArithOp::Mul) => self.string_ty(),
+                (TyKind::String(_), TyKind::Int, ArithOp::Mul)
+                | (TyKind::Int, TyKind::String(_), ArithOp::Mul) => self.string_ty(),
                 (TyKind::Int, TyKind::Int, _) => self.int_ty(),
                 (TyKind::Float, TyKind::Int, _)
                 | (TyKind::Int, TyKind::Float, _)
@@ -706,7 +716,7 @@ impl TyCtxt<'_> {
                     TyKind::List(_)
                         | TyKind::Tuple(_)
                         | TyKind::Dict(_, _, _)
-                        | TyKind::String
+                        | TyKind::String(_)
                         | TyKind::Bytes
                         | TyKind::Protocol(Protocol::Sequence(_))
                 ) {
@@ -933,15 +943,10 @@ impl TyCtxt<'_> {
         first
             .map(|first| self.infer_expr(file, first))
             .and_then(|first_ty| {
-                let first_ty_kind = first_ty.kind();
+                let first_ty = first_ty.normalize();
                 exprs
                     .map(|expr| self.infer_expr(file, expr))
-                    .all(|ty| match (ty.kind(), first_ty_kind) {
-                        // TODO(withered-magic): Special handling for attributes, which should always be considered
-                        // the same type.
-                        (TyKind::Attribute(_), TyKind::Attribute(_)) => true,
-                        _ => ty == first_ty,
-                    })
+                    .all(|ty| Ty::eq(&ty.normalize(), &first_ty))
                     .then_some(first_ty)
             })
             .unwrap_or(default)

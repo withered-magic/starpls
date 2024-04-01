@@ -296,11 +296,11 @@ impl Type {
         fields.map(|(name, ty)| (name, ty.into())).collect()
     }
 
-    pub fn known_keys(&self) -> Option<Vec<String>> {
+    pub fn known_keys(&self, db: &dyn Db) -> Option<Vec<String>> {
         self.ty.known_keys().map(|known_keys| {
             known_keys
                 .iter()
-                .map(|(name, _)| name.to_string())
+                .map(|(name, _)| name.value(db).to_string())
                 .collect()
         })
     }

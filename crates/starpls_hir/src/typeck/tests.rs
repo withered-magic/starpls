@@ -96,20 +96,20 @@ b"hello"
 "#,
         expect![[r#"
             0..4 "None": None
-            5..9 "True": bool
-            10..15 "False": bool
+            5..9 "True": Literal[True]
+            10..15 "False": Literal[False]
             16..17 "0": int
             18..20 "0.": float
-            21..28 "\"hello\"": string
+            21..28 "\"hello\"": Literal["hello"]
             29..37 "b\"hello\"": bytes
-            39..44 "\"foo\"": string
-            46..51 "\"bar\"": string
+            39..44 "\"foo\"": Literal["foo"]
+            46..51 "\"bar\"": Literal["bar"]
             38..52 "[\"foo\", \"bar\"]": list[string]
             54..55 "1": int
             57..58 "2": int
             60..61 "3": int
             53..62 "(1, 2, 3)": tuple[int, int, int]
-            64..67 "\"a\"": string
+            64..67 "\"a\"": Literal["a"]
             69..70 "1": int
             63..71 "{\"a\": 1}": dict[string, int]
         "#]],
@@ -135,19 +135,19 @@ h, i = [4, 5, 6]
             14..15 "2": int
             17..18 "3": int
             14..18 "2, 3": tuple[int, int]
-            20..21 "d": bool
+            20..21 "d": Literal[True]
             19..22 "(d)": Any
-            25..29 "True": bool
+            25..29 "True": Literal[True]
             32..33 "e": int
-            35..36 "f": string
+            35..36 "f": Literal["a"]
             31..37 "[e, f]": list[Unknown]
             39..40 "g": int
             30..41 "([e, f], g)": tuple[list[Unknown], int]
             46..47 "1": int
-            49..52 "\"a\"": string
-            45..53 "(1, \"a\")": tuple[int, string]
+            49..52 "\"a\"": Literal["a"]
+            45..53 "(1, \"a\")": tuple[int, Literal["a"]]
             55..56 "3": int
-            44..57 "((1, \"a\"), 3)": tuple[tuple[int, string], int]
+            44..57 "((1, \"a\"), 3)": tuple[tuple[int, Literal["a"]], int]
             58..59 "h": int
             61..62 "i": int
             58..62 "h, i": tuple[int, int]
@@ -177,21 +177,21 @@ fn test_common_type() {
             8..9 "2": int
             4..10 "[1, 2]": list[int]
             12..13 "1": int
-            15..18 "\"a\"": string
+            15..18 "\"a\"": Literal["a"]
             11..19 "[1, \"a\"]": list[Unknown]
             20..22 "{}": dict[Any, Unknown]
-            24..27 "\"a\"": string
+            24..27 "\"a\"": Literal["a"]
             29..30 "1": int
             23..31 "{\"a\": 1}": dict[string, int]
-            33..36 "\"a\"": string
+            33..36 "\"a\"": Literal["a"]
             38..39 "1": int
-            41..44 "\"b\"": string
-            46..49 "\"c\"": string
+            41..44 "\"b\"": Literal["b"]
+            46..49 "\"c\"": Literal["c"]
             32..50 "{\"a\": 1, \"b\": \"c\"}": dict[string, Unknown]
-            52..55 "\"a\"": string
+            52..55 "\"a\"": Literal["a"]
             57..58 "1": int
             60..61 "1": int
-            63..66 "\"a\"": string
+            63..66 "\"a\"": Literal["a"]
             51..67 "{\"a\": 1, 1: \"a\"}": dict[Any, Unknown]
         "#]],
     );
@@ -222,14 +222,14 @@ res2 = 2 + "y" # type: ignore
         expect![[r#"
             1..5 "res1": Unknown
             8..9 "1": int
-            12..15 "\"x\"": string
+            12..15 "\"x\"": Literal["x"]
             8..15 "1 + \"x\"": Unknown
             16..20 "res2": Unknown
             23..24 "2": int
-            27..30 "\"y\"": string
+            27..30 "\"y\"": Literal["y"]
             23..30 "2 + \"y\"": Unknown
 
-            8..15 Operator "+" not supported for types "int" and "string"
+            8..15 Operator "+" not supported for types "int" and "Literal["x"]"
         "#]],
     )
 }
@@ -291,12 +291,12 @@ bar(y)
             156..157 "2": int
             152..158 "bar(2)": None
             160..161 "y": int | string
-            164..171 "\"hello\"": string
+            164..171 "\"hello\"": Literal["hello"]
             193..196 "bar": def bar(x: int | string | None) -> None
             197..198 "y": int | string
             193..199 "bar(y)": None
             201..202 "y": int | string | float | None
-            205..214 "\"goodbye\"": string
+            205..214 "\"goodbye\"": Literal["goodbye"]
             251..254 "bar": def bar(x: int | string | None) -> None
             255..256 "y": int | string | float | None
             251..257 "bar(y)": None
@@ -485,7 +485,7 @@ baz = dict()
             33..36 "bar": dict[string, Unknown]
             39..43 "dict": def dict(x0: Iterable[Iterable[Any]] = None, **kwargs) -> dict[Unknown, Unknown]
             48..49 "4": int
-            55..61 "\"five\"": string
+            55..61 "\"five\"": Literal["five"]
             67..69 "6.": float
             39..70 "dict(d = 4, e = \"five\", f = 6.)": dict[string, Unknown]
             71..74 "baz": dict[Unknown, Unknown]
@@ -508,12 +508,12 @@ z = x | y
             1..2 "a": int | string
             5..6 "1": int
             34..35 "x": dict[string, int]
-            39..42 "\"x\"": string
+            39..42 "\"x\"": Literal["x"]
             44..45 "1": int
             38..46 "{\"x\": 1}": dict[string, int]
             47..48 "y": dict[int, string]
             52..53 "1": int
-            55..58 "\"x\"": string
+            55..58 "\"x\"": Literal["x"]
             51..59 "{1: \"x\"}": dict[int, string]
             60..61 "z": dict[string | int, int | string]
             64..65 "x": dict[string, int]
@@ -545,9 +545,9 @@ j = [i] + [""]
             23..24 "2": int
             26..27 "3": int
             19..28 "[1, 2, 3]": list[int]
-            32..35 "\"a\"": string
-            37..40 "\"b\"": string
-            42..45 "\"c\"": string
+            32..35 "\"a\"": Literal["a"]
+            37..40 "\"b\"": Literal["b"]
+            42..45 "\"c\"": Literal["c"]
             31..46 "[\"a\", \"b\", \"c\"]": list[string]
             19..46 "[1, 2, 3] + [\"a\", \"b\", \"c\"]": list[int | string]
             51..52 "y": int | string
@@ -559,7 +559,7 @@ j = [i] + [""]
             87..88 "j": list[int | string]
             92..93 "i": int | string
             91..94 "[i]": list[int | string]
-            98..100 "\"\"": string
+            98..100 "\"\"": Literal[""]
             97..101 "[\"\"]": list[string]
             91..101 "[i] + [\"\"]": list[int | string]
         "#]],
@@ -574,11 +574,11 @@ fn test_string_repetition() {
 3 * "abc"
 "#,
         expect![[r#"
-            1..6 "\"abc\"": string
+            1..6 "\"abc\"": Literal["abc"]
             9..10 "3": int
             1..10 "\"abc\" * 3": string
             11..12 "3": int
-            15..20 "\"abc\"": string
+            15..20 "\"abc\"": Literal["abc"]
             11..20 "3 * \"abc\"": string
         "#]],
     )

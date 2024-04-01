@@ -1748,13 +1748,14 @@ x                                       # {"a": 1, "b": "2", "c": 3, "d": 4, "e"
 ```
 "#,
                 vec![
-                    positional(List(
-                        Tuple(TupleVariants::Simple(smallvec![
-                            BoundVar(0).intern(),
-                            BoundVar(1).intern()
-                        ]))
+                    positional_opt(TyKind::Union(smallvec![
+                        Ty::dict(Ty::unknown(), Ty::unknown(), std::option::Option::None,),
+                        TyKind::Protocol(typeck::Protocol::Iterable(
+                            TyKind::Protocol(typeck::Protocol::Iterable(Ty::any())).intern()
+                        ))
                         .intern(),
-                    )),
+                        Ty::none(),
+                    ])),
                     KwargsDict,
                 ],
                 None,

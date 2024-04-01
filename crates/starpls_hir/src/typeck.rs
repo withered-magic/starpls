@@ -390,6 +390,10 @@ impl Ty {
         })
     }
 
+    pub(crate) fn none() -> Ty {
+        TyKind::None.intern()
+    }
+
     pub(crate) fn unknown() -> Ty {
         TyKind::Unknown.intern()
     }

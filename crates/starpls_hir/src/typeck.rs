@@ -430,9 +430,10 @@ impl Ty {
         // whether or not types are duplicates.
         for ty in tys {
             let mut check_unique = |ty: Ty| {
+                let ty = ty.normalize();
                 if unique_tys
                     .iter()
-                    .any(|unique_ty: &Ty| Ty::eq(&ty, unique_ty))
+                    .any(|unique_ty: &Ty| Ty::eq(&ty, &unique_ty.clone().normalize()))
                 {
                     return;
                 }

@@ -425,13 +425,21 @@ impl Ty {
         // that they store // (for their declarations, etc.) is not relevant to determining
         // whether or not types are duplicates.
         for ty in tys {
-            if unique_tys
-                .iter()
-                .any(|unique_ty: &Ty| Ty::eq(&ty, unique_ty))
-            {
-                continue;
+            let mut check_unique = |ty: Ty| {
+                if unique_tys
+                    .iter()
+                    .any(|unique_ty: &Ty| Ty::eq(&ty, unique_ty))
+                {
+                    return;
+                }
+                unique_tys.push(ty);
+            };
+            match ty.kind() {
+                TyKind::Union(tys) => {
+                    tys.iter().cloned().for_each(check_unique);
+                }
+                _ => check_unique(ty),
             }
-            unique_tys.push(ty);
         }
 
         match unique_tys.len() {

@@ -273,7 +273,9 @@ impl DisplayWithDb for TyKind {
                 RuleKind::Repository => "repository_rule",
             },
             TyKind::Provider(_) => "Provider",
-            TyKind::ProviderInstance(_) => "_",
+            TyKind::ProviderInstance(provider) => {
+                provider.name.as_ref().map_or("_", |name| name.as_str())
+            }
         };
 
         f.write_str(text)

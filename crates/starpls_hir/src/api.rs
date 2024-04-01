@@ -283,7 +283,7 @@ impl Type {
             TyKind::Function(func) => return func.doc(db).map(|doc| doc.to_string()),
             TyKind::IntrinsicFunction(func, _) => func.doc(db).clone(),
             TyKind::Rule(rule) => return rule.doc.as_ref().map(Box::to_string),
-            TyKind::Provider(provider) => return provider.doc.as_ref().map(Box::to_string),
+            TyKind::Provider(provider) => return provider.doc.map(|doc| doc.value(db).to_string()),
             _ => return None,
         })
     }

@@ -884,29 +884,12 @@ pub(crate) enum TyKind {
     Rule(Rule),
     /// A Bazel provider (https://bazel.build/rules/lib/builtins/Provider.html).
     /// This is a callable the yields "provider instances".
-    Provider(Provider),
+    Provider(Arc<Provider>),
     /// An instance of a provider. The contained `Ty` must have kind `TyKind::Provider`.
-    ProviderInstance(Ty),
+    ProviderInstance(Arc<Provider>),
 }
 
 impl_internable!(TyKind);
-
-impl TyKind {
-    pub fn intern(self) -> Ty {
-        Ty(Interned::new(self))
-    }
-
-    pub fn builtin_class(&self, db: &dyn Db) -> Option<IntrinsicClass> {
-        let intrinsics = intrinsic_types(db);
-        Some(match self {
-            TyKind::String => intrinsics.string_base_class(db),
-            TyKind::Bytes => intrinsics.bytes_base_class(db),
-            TyKind::List(_) => intrinsics.list_base_class(db),
-            TyKind::Dict(_, _, _) => intrinsics.dict_base_class(db),
-            _ => return None,
-        })
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Tuple {
@@ -1008,7 +991,8 @@ impl Rule {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct Provider {
-    pub(crate) doc: Option<Box<str>>,
+    pub(crate) name: Option<Name>,
+    pub(crate) doc: Option<LiteralString>,
     pub(crate) fields: Option<Box<[ProviderField]>>,
 }
 

@@ -2,15 +2,16 @@ use crate::{
     def::Argument,
     source_map,
     typeck::{Attribute, AttributeKind, Provider, ProviderField, Rule as TyRule, RuleKind},
-    Db, Name, Ty, TyKind, TypeRef,
+    Db, ExprId, Name, Ty, TyKind, TypeRef,
 };
 use either::Either;
 use rustc_hash::FxHashMap;
 use starpls_bazel::{
     attr, builtin::Callable, env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
 };
-use starpls_common::{Dialect, File};
-use std::collections::HashSet;
+use starpls_common::{parse, Dialect, File};
+use starpls_syntax::ast::{self, AstNode};
+use std::{collections::HashSet, sync::Arc};
 
 const DEFAULT_DOC: &str = "See the [Bazel Build Encyclopedia](https://bazel.build/reference/be/overview) for more details.";
 
@@ -64,6 +65,7 @@ impl BuiltinFunction {
         &'a self,
         db: &'a dyn Db,
         file: File,
+        call_expr: ExprId,
         args: I,
     ) -> Option<Ty>
     where
@@ -89,10 +91,12 @@ impl BuiltinFunction {
                 let mut fields = None;
                 let mut doc = None;
                 for (arg, ty) in args {
-                    if let Argument::Keyword { name, expr } = arg {
+                    if let Argument::Keyword { name, .. } = arg {
                         match name.as_str() {
                             "doc" => {
-                                doc = extract_string_literal(db, file, *expr);
+                                if let TyKind::String(Some(s)) = ty.kind() {
+                                    doc = Some(s.clone());
+                                }
                             }
                             "fields" => {
                                 if let TyKind::Dict(_, _, Some(known_keys)) = ty.kind() {
@@ -100,7 +104,7 @@ impl BuiltinFunction {
                                         known_keys
                                             .iter()
                                             .map(|(key, _)| ProviderField {
-                                                name: Name::from_str(key),
+                                                name: Name::from_str(&key.value(db)),
                                                 doc: None,
                                             })
                                             .collect(),
@@ -112,7 +116,22 @@ impl BuiltinFunction {
                     }
                 }
 
-                TyKind::Provider(Provider { doc, fields })
+                let name = source_map(db, file)
+                    .expr_map_back
+                    .get(&call_expr)
+                    .and_then(|ptr| ptr.try_to_node(&parse(db, file).syntax(db)))
+                    .and_then(|expr| expr.syntax().parent())
+                    .and_then(|parent| ast::AssignStmt::cast(parent))
+                    .and_then(|assign_stmt| assign_stmt.lhs())
+                    .and_then(|lhs| match lhs {
+                        ast::Expression::Name(name_ref) => Some(name_ref),
+                        _ => None,
+                    })
+                    .and_then(|name_ref| name_ref.name())
+                    .as_ref()
+                    .map(|name| Name::from_str(name.text()));
+
+                TyKind::Provider(Arc::new(Provider { name, doc, fields }))
             }
             (None, name @ ("rule" | "repository_rule")) => {
                 let mut attrs = None;

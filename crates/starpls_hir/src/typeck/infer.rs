@@ -530,7 +530,7 @@ impl TyCtxt<'_> {
                             self.add_expr_diagnostic(file, expr, message);
                         }
 
-                        func.maybe_unique_ret_type(db, file, args_with_ty)
+                        func.maybe_unique_ret_type(db, file, expr, args_with_ty)
                             .unwrap_or_else(|| resolve_type_ref(db, &func.ret_type_ref(db)).0)
                     }
                     TyKind::Rule(rule) => {
@@ -578,7 +578,9 @@ impl TyCtxt<'_> {
 
                         self.none_ty()
                     }
-                    TyKind::Provider(_) => TyKind::ProviderInstance(callee_ty.clone()).intern(),
+                    TyKind::Provider(provider) => {
+                        TyKind::ProviderInstance(provider.clone()).intern()
+                    }
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.unknown_ty(),
                     _ => self.add_expr_diagnostic_ty(
                         file,

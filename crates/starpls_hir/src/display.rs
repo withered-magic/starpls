@@ -282,6 +282,7 @@ impl DisplayWithDb for TyKind {
             TyKind::ProviderInstance(provider) => {
                 provider.name.as_ref().map_or("_", |name| name.as_str())
             }
+            TyKind::ProviderRawConstructor(_, _) => "ProviderRawConstructor",
         };
 
         f.write_str(text)

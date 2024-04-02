@@ -1,11 +1,12 @@
 use crate::{
     def::Argument,
     source_map,
-    typeck::{Attribute, AttributeKind, Provider, ProviderField, Rule as TyRule, RuleKind},
+    typeck::{Attribute, AttributeKind, Provider, ProviderField, Rule as TyRule, RuleKind, Tuple},
     Db, ExprId, Name, Ty, TyKind, TypeRef,
 };
 use either::Either;
 use rustc_hash::FxHashMap;
+use smallvec::smallvec;
 use starpls_bazel::{
     attr, builtin::Callable, env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
 };
@@ -87,9 +88,11 @@ impl BuiltinFunction {
                     .into_boxed_slice();
                 TyKind::Struct(fields)
             }
+
             (None, "provider") => {
                 let mut fields = None;
                 let mut doc = None;
+                let mut has_init = false;
                 for (arg, ty) in args {
                     if let Argument::Keyword { name, .. } = arg {
                         match name.as_str() {
@@ -125,28 +128,79 @@ impl BuiltinFunction {
                                     );
                                 }
                             }
+                            "init" => {
+                                has_init = true;
+                            }
                             _ => {}
                         }
                     }
                 }
 
-                let name = source_map(db, file)
+                let lhs = source_map(db, file)
                     .expr_map_back
                     .get(&call_expr)
                     .and_then(|ptr| ptr.try_to_node(&parse(db, file).syntax(db)))
                     .and_then(|expr| expr.syntax().parent())
                     .and_then(|parent| ast::AssignStmt::cast(parent))
-                    .and_then(|assign_stmt| assign_stmt.lhs())
-                    .and_then(|lhs| match lhs {
+                    .and_then(|assign_stmt| assign_stmt.lhs());
+
+                let extract_name = |expr: ast::Expression| {
+                    match expr {
                         ast::Expression::Name(name_ref) => Some(name_ref),
                         _ => None,
-                    })
+                    }
                     .and_then(|name_ref| name_ref.name())
                     .as_ref()
-                    .map(|name| Name::from_str(name.text()));
+                    .and_then(|name| {
+                        let text = name.text();
+                        if !text.is_empty() {
+                            Some(Name::from_str(text))
+                        } else {
+                            None
+                        }
+                    })
+                };
 
-                TyKind::Provider(Arc::new(Provider { name, doc, fields }))
+                if has_init {
+                    let (provider_name, ctor_name) = lhs
+                        .and_then(|lhs| match lhs {
+                            ast::Expression::Tuple(tuple_expr) => {
+                                let mut elements = tuple_expr.elements();
+                                let provider_name = elements.next().and_then(extract_name);
+                                let ctor_name = elements.next().and_then(extract_name);
+                                Some((provider_name, ctor_name))
+                            }
+                            _ => None,
+                        })
+                        .unwrap_or_default();
+
+                    let provider = Arc::new(Provider {
+                        name: provider_name,
+                        doc,
+                        fields,
+                    });
+
+                    TyKind::Tuple(Tuple::Simple(smallvec![
+                        TyKind::Provider(provider.clone()).intern(),
+                        TyKind::ProviderRawConstructor(
+                            ctor_name.unwrap_or_else(|| Name::new_inline("ctor")),
+                            provider
+                        )
+                        .intern(),
+                    ]))
+                } else {
+                    let name = lhs
+                        .and_then(|lhs| match lhs {
+                            ast::Expression::Name(name_ref) => Some(name_ref),
+                            _ => None,
+                        })
+                        .and_then(|name_ref| name_ref.name())
+                        .as_ref()
+                        .map(|name| Name::from_str(name.text()));
+                    TyKind::Provider(Arc::new(Provider { name, doc, fields }))
+                }
             }
+
             (None, name @ ("rule" | "repository_rule")) => {
                 let mut attrs = None;
                 let mut doc = None;
@@ -187,6 +241,7 @@ impl BuiltinFunction {
                     attrs: attrs.unwrap_or_else(|| Vec::new().into_boxed_slice()),
                 })
             }
+
             (Some("attr"), attr) => {
                 let mut doc: Option<Box<str>> = None;
                 let mut mandatory = false;
@@ -235,6 +290,7 @@ impl BuiltinFunction {
                     default_ptr.map(|text_range| Either::Left((file, text_range))),
                 ))
             }
+
             _ => return None,
         };
 

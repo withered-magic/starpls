@@ -578,7 +578,7 @@ impl TyCtxt<'_> {
 
                         self.none_ty()
                     }
-                    TyKind::Provider(provider) => {
+                    TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
                         TyKind::ProviderInstance(provider.clone()).intern()
                     }
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.unknown_ty(),
@@ -1246,7 +1246,9 @@ impl TyCtxt<'_> {
                     TyKind::IntrinsicFunction(func, _) => func.params(db)[..].into(),
                     TyKind::BuiltinFunction(func) => func.params(db)[..].into(),
                     TyKind::Rule(rule) => Slots::from_rule(db, rule),
-                    TyKind::Provider(provider) => Slots::from_provider(&provider),
+                    TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
+                        Slots::from_provider(&provider)
+                    }
                     _ => return None,
                 };
 

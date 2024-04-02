@@ -61,6 +61,9 @@ impl<'a> Semantics<'a> {
             TyKind::BuiltinFunction(func) => (*func).into(),
             TyKind::Rule(_) => Callable(CallableInner::Rule(ty.ty.clone())),
             TyKind::Provider(provider) => Callable(CallableInner::Provider(provider.clone())),
+            TyKind::ProviderRawConstructor(name, provider) => Callable(
+                CallableInner::ProviderRawConstructor(name.clone(), provider.clone()),
+            ),
             _ => return None,
         })
     }
@@ -260,7 +263,11 @@ impl Type {
     }
 
     pub fn is_callable(&self) -> bool {
-        self.is_function() || matches!(self.ty.kind(), TyKind::Rule(_) | TyKind::Provider(_))
+        self.is_function()
+            || matches!(
+                self.ty.kind(),
+                TyKind::Rule(_) | TyKind::Provider(_) | TyKind::ProviderRawConstructor(_, _)
+            )
     }
 
     pub fn is_unknown(&self) -> bool {
@@ -344,6 +351,7 @@ impl Callable {
                 .as_ref()
                 .cloned()
                 .unwrap_or_else(|| Name::new_inline("provider")),
+            CallableInner::ProviderRawConstructor(ref name, _) => name.clone(),
         }
     }
 
@@ -364,6 +372,9 @@ impl Callable {
             CallableInner::BuiltinFunction(func) => TyKind::BuiltinFunction(func).intern(),
             CallableInner::Rule(ref ty) => ty.clone().into(),
             CallableInner::Provider(ref provider) => TyKind::Provider(provider.clone()).intern(),
+            CallableInner::ProviderRawConstructor(ref name, ref provider) => {
+                TyKind::ProviderRawConstructor(name.clone(), provider.clone()).intern()
+            }
         }
         .into()
     }
@@ -385,7 +396,8 @@ impl Callable {
                 TyKind::Rule(rule) => rule.doc.as_ref().map(Box::to_string),
                 _ => None,
             },
-            CallableInner::Provider(ref provider) => {
+            CallableInner::Provider(ref provider)
+            | CallableInner::ProviderRawConstructor(_, ref provider) => {
                 provider.doc.map(|doc| doc.value(db).to_string())
             }
         }
@@ -419,4 +431,5 @@ enum CallableInner {
     BuiltinFunction(BuiltinFunction),
     Rule(Ty),
     Provider(Arc<Provider>),
+    ProviderRawConstructor(Name, Arc<Provider>),
 }

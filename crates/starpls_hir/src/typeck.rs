@@ -393,7 +393,7 @@ impl Ty {
                         ))),
                 )
             }
-            TyKind::Provider(provider) => {
+            TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
                 Params::Provider(provider.fields.iter().flat_map(|fields| {
                     fields.iter().enumerate().map(|(index, _)| {
                         (
@@ -416,7 +416,9 @@ impl Ty {
             TyKind::IntrinsicFunction(func, subst) => func.ret_ty(db).substitute(&subst.args),
             TyKind::BuiltinFunction(func) => resolve_type_ref(db, &func.ret_type_ref(db)).0,
             TyKind::Rule(_) => Ty::none(),
-            TyKind::Provider(provider) => TyKind::ProviderInstance(provider.clone()).intern(),
+            TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
+                TyKind::ProviderInstance(provider.clone()).intern()
+            }
             _ => return None,
         })
     }
@@ -959,6 +961,8 @@ pub(crate) enum TyKind {
     Provider(Arc<Provider>),
     /// An instance of a provider. The contained `Ty` must have kind `TyKind::Provider`.
     ProviderInstance(Arc<Provider>),
+    /// The raw constructor for a provider.
+    ProviderRawConstructor(Name, Arc<Provider>),
 }
 
 impl_internable!(TyKind);

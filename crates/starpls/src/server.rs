@@ -13,7 +13,7 @@ use starpls_bazel::{
     decode_builtins, Builtins,
 };
 use starpls_ide::{Analysis, AnalysisSnapshot, Change};
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{panic, path::PathBuf, sync::Arc, time::Duration};
 
 const DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -178,6 +178,8 @@ impl Server {
         });
     }
 }
+
+impl panic::RefUnwindSafe for ServerSnapshot {}
 
 fn load_bazel_builtins() -> anyhow::Result<Builtins> {
     let data = include_bytes!("builtin/builtin.pb");

@@ -1,16 +1,18 @@
 use crate::{
     def::Argument,
     source_map,
-    typeck::{Attribute, AttributeKind, Rule as TyRule, RuleKind},
-    Db, Name, Ty, TyKind, TypeRef,
+    typeck::{Attribute, AttributeKind, Provider, ProviderField, Rule as TyRule, RuleKind, Tuple},
+    Db, ExprId, Name, Ty, TyKind, TypeRef,
 };
 use either::Either;
 use rustc_hash::FxHashMap;
+use smallvec::smallvec;
 use starpls_bazel::{
     attr, builtin::Callable, env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
 };
-use starpls_common::{Dialect, File};
-use std::collections::HashSet;
+use starpls_common::{parse, Dialect, File};
+use starpls_syntax::ast::{self, AstNode};
+use std::{collections::HashSet, sync::Arc};
 
 const DEFAULT_DOC: &str = "See the [Bazel Build Encyclopedia](https://bazel.build/reference/be/overview) for more details.";
 
@@ -64,6 +66,7 @@ impl BuiltinFunction {
         &'a self,
         db: &'a dyn Db,
         file: File,
+        call_expr: ExprId,
         args: I,
     ) -> Option<Ty>
     where
@@ -85,6 +88,119 @@ impl BuiltinFunction {
                     .into_boxed_slice();
                 TyKind::Struct(fields)
             }
+
+            (None, "provider") => {
+                let mut fields = None;
+                let mut doc = None;
+                let mut has_init = false;
+                for (arg, ty) in args {
+                    if let Argument::Keyword { name, .. } = arg {
+                        match name.as_str() {
+                            "doc" => {
+                                if let TyKind::String(Some(s)) = ty.kind() {
+                                    doc = Some(s.clone());
+                                }
+                            }
+                            "fields" => {
+                                if let TyKind::Dict(_, _, Some(known_keys)) = ty.kind() {
+                                    fields = Some(
+                                        known_keys
+                                            .iter()
+                                            .flat_map(|(key, value)| {
+                                                let name = &key.value(db);
+                                                if !name.is_empty() {
+                                                    Some(ProviderField {
+                                                        name: Name::from_str(&key.value(db)),
+                                                        doc: match value.kind() {
+                                                            TyKind::String(Some(s)) => Some(
+                                                                s.value(db)
+                                                                    .to_string()
+                                                                    .into_boxed_str(),
+                                                            ),
+                                                            _ => None,
+                                                        },
+                                                    })
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                            .collect(),
+                                    );
+                                }
+                            }
+                            "init" => {
+                                has_init = true;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                let lhs = source_map(db, file)
+                    .expr_map_back
+                    .get(&call_expr)
+                    .and_then(|ptr| ptr.try_to_node(&parse(db, file).syntax(db)))
+                    .and_then(|expr| expr.syntax().parent())
+                    .and_then(|parent| ast::AssignStmt::cast(parent))
+                    .and_then(|assign_stmt| assign_stmt.lhs());
+
+                let extract_name = |expr: ast::Expression| {
+                    match expr {
+                        ast::Expression::Name(name_ref) => Some(name_ref),
+                        _ => None,
+                    }
+                    .and_then(|name_ref| name_ref.name())
+                    .as_ref()
+                    .and_then(|name| {
+                        let text = name.text();
+                        if !text.is_empty() {
+                            Some(Name::from_str(text))
+                        } else {
+                            None
+                        }
+                    })
+                };
+
+                if has_init {
+                    let (provider_name, ctor_name) = lhs
+                        .and_then(|lhs| match lhs {
+                            ast::Expression::Tuple(tuple_expr) => {
+                                let mut elements = tuple_expr.elements();
+                                let provider_name = elements.next().and_then(extract_name);
+                                let ctor_name = elements.next().and_then(extract_name);
+                                Some((provider_name, ctor_name))
+                            }
+                            _ => None,
+                        })
+                        .unwrap_or_default();
+
+                    let provider = Arc::new(Provider {
+                        name: provider_name,
+                        doc,
+                        fields,
+                    });
+
+                    TyKind::Tuple(Tuple::Simple(smallvec![
+                        TyKind::Provider(provider.clone()).intern(),
+                        TyKind::ProviderRawConstructor(
+                            ctor_name.unwrap_or_else(|| Name::new_inline("ctor")),
+                            provider
+                        )
+                        .intern(),
+                    ]))
+                } else {
+                    let name = lhs
+                        .and_then(|lhs| match lhs {
+                            ast::Expression::Name(name_ref) => Some(name_ref),
+                            _ => None,
+                        })
+                        .and_then(|name_ref| name_ref.name())
+                        .as_ref()
+                        .map(|name| Name::from_str(name.text()));
+                    TyKind::Provider(Arc::new(Provider { name, doc, fields }))
+                }
+            }
+
             (None, name @ ("rule" | "repository_rule")) => {
                 let mut attrs = None;
                 let mut doc = None;
@@ -125,6 +241,7 @@ impl BuiltinFunction {
                     attrs: attrs.unwrap_or_else(|| Vec::new().into_boxed_slice()),
                 })
             }
+
             (Some("attr"), attr) => {
                 let mut doc: Option<Box<str>> = None;
                 let mut mandatory = false;
@@ -173,6 +290,7 @@ impl BuiltinFunction {
                     default_ptr.map(|text_range| Either::Left((file, text_range))),
                 ))
             }
+
             _ => return None,
         };
 

@@ -214,49 +214,66 @@ impl Ty {
     ) -> Option<impl Iterator<Item = (Field, Ty)> + 'a> {
         let kind = self.kind();
         if let Some(class) = kind.builtin_class(db) {
-            Some(Fields::Intrinsic(self.intrinsic_class_fields(db, class)))
-        } else if let TyKind::BuiltinType(ty) = kind {
-            Some(Fields::Builtin(
-                ty.fields(db)
-                    .iter()
-                    .enumerate()
-                    .map(|(index, field)| {
-                        (
-                            Field(FieldInner::BuiltinField { parent: *ty, index }),
-                            resolve_type_ref(db, &field.type_ref).0,
-                        )
-                    })
-                    .chain(ty.methods(db).iter().map(|func| {
-                        (
-                            Field(FieldInner::BuiltinMethod { func: *func }),
-                            TyKind::BuiltinFunction(*func).intern(),
-                        )
-                    })),
-            ))
-        } else if let TyKind::Union(tys) = kind {
-            // TODO(withered-magic): Can probably do better than a Vec here?
-            let mut acc = Vec::new();
-            tys.iter().for_each(|ty| {
-                let fields = match ty.fields(db) {
-                    Some(fields) => fields,
-                    None => return,
-                };
-
-                for (field, ty) in fields {
-                    acc.push((field, ty));
-                }
-            });
-            Some(Fields::Union(acc.into_iter()))
-        } else if let TyKind::Struct(fields) = kind {
-            Some(Fields::Struct(fields.iter().map(|(name, ty)| {
-                (
-                    Field(FieldInner::StructField { name: name.clone() }),
-                    ty.clone(),
-                )
-            })))
-        } else {
-            None
+            return Some(Fields::Intrinsic(self.intrinsic_class_fields(db, class)));
         }
+
+        let fields =
+            match kind {
+                TyKind::BuiltinType(ty) => Fields::Builtin(
+                    ty.fields(db)
+                        .iter()
+                        .enumerate()
+                        .map(|(index, field)| {
+                            (
+                                Field(FieldInner::BuiltinField { parent: *ty, index }),
+                                resolve_type_ref(db, &field.type_ref).0,
+                            )
+                        })
+                        .chain(ty.methods(db).iter().map(|func| {
+                            (
+                                Field(FieldInner::BuiltinMethod { func: *func }),
+                                TyKind::BuiltinFunction(*func).intern(),
+                            )
+                        })),
+                ),
+                TyKind::Union(tys) => {
+                    // TODO(withered-magic): Can probably do better than a Vec here?
+                    let mut acc = Vec::new();
+                    tys.iter().for_each(|ty| {
+                        let fields = match ty.fields(db) {
+                            Some(fields) => fields,
+                            None => return,
+                        };
+
+                        for (field, ty) in fields {
+                            acc.push((field, ty));
+                        }
+                    });
+                    Fields::Union(acc.into_iter())
+                }
+                TyKind::Struct(fields) => Fields::Struct(fields.iter().map(|(name, ty)| {
+                    (
+                        Field(FieldInner::StructField { name: name.clone() }),
+                        ty.clone(),
+                    )
+                })),
+                TyKind::ProviderInstance(provider) => {
+                    Fields::Provider(provider.fields.as_ref()?.iter().enumerate().map(
+                        |(index, _)| {
+                            (
+                                Field(FieldInner::ProviderField {
+                                    provider: provider.clone(),
+                                    index,
+                                }),
+                                Ty::unknown(),
+                            )
+                        },
+                    ))
+                }
+                _ => return None,
+            };
+
+        Some(fields)
     }
 
     fn intrinsic_class_fields<'a>(
@@ -376,6 +393,19 @@ impl Ty {
                         ))),
                 )
             }
+            TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
+                Params::Provider(provider.fields.iter().flat_map(|fields| {
+                    fields.iter().enumerate().map(|(index, _)| {
+                        (
+                            Param(ParamInner::ProviderParam {
+                                provider: provider.clone(),
+                                index,
+                            }),
+                            Ty::unknown(),
+                        )
+                    })
+                }))
+            }
             _ => return None,
         })
     }
@@ -385,7 +415,10 @@ impl Ty {
             TyKind::Function(func) => resolve_type_ref_opt(db, func.ret_type_ref(db)),
             TyKind::IntrinsicFunction(func, subst) => func.ret_ty(db).substitute(&subst.args),
             TyKind::BuiltinFunction(func) => resolve_type_ref(db, &func.ret_type_ref(db)).0,
-            TyKind::Rule(_) => TyKind::None.intern(),
+            TyKind::Rule(_) => Ty::none(),
+            TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
+                TyKind::ProviderInstance(provider.clone()).intern()
+            }
             _ => return None,
         })
     }
@@ -407,7 +440,7 @@ impl Ty {
     }
 
     pub(crate) fn int() -> Ty {
-        TyKind::Int.intern()
+        TyKind::Int(None).intern()
     }
 
     pub(crate) fn string() -> Ty {
@@ -532,6 +565,7 @@ impl Ty {
     fn normalize(self) -> Ty {
         match self.kind() {
             TyKind::Bool(_) => Ty::bool(),
+            TyKind::Int(_) => Ty::int(),
             TyKind::String(_) => Ty::string(),
             _ => self,
         }
@@ -556,6 +590,10 @@ pub(crate) enum ParamInner {
         index: usize,
     },
     RuleParam(RuleParam),
+    ProviderParam {
+        provider: Arc<Provider>,
+        index: usize,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -606,6 +644,14 @@ impl Param {
                     .clone(),
             ),
             ParamInner::RuleParam(RuleParam::Kwargs) => Some(Name::new_inline("kwargs")),
+            ParamInner::ProviderParam {
+                ref provider,
+                index,
+            } => Some(
+                provider.fields.as_ref().expect("expected provider fields")[index]
+                    .name
+                    .clone(),
+            ),
         }
     }
 
@@ -635,7 +681,12 @@ impl Param {
                     .as_ref()
                     .map(Box::to_string)
             }
-
+            ParamInner::ProviderParam { provider, index } => {
+                return provider.fields.as_ref().expect("expected provider fields")[*index]
+                    .doc
+                    .as_ref()
+                    .map(Box::to_string)
+            }
             _ => return None,
         })
     }
@@ -728,19 +779,21 @@ impl Param {
     }
 }
 
-enum Params<I1, I2, I3, I4> {
+enum Params<I1, I2, I3, I4, I5> {
     Simple(I1),
     Intrinsic(I2),
     Builtin(I3),
     Rule(I4),
+    Provider(I5),
 }
 
-impl<I1, I2, I3, I4> Iterator for Params<I1, I2, I3, I4>
+impl<I1, I2, I3, I4, I5> Iterator for Params<I1, I2, I3, I4, I5>
 where
     I1: Iterator<Item = (Param, Ty)>,
     I2: Iterator<Item = (Param, Ty)>,
     I3: Iterator<Item = (Param, Ty)>,
     I4: Iterator<Item = (Param, Ty)>,
+    I5: Iterator<Item = (Param, Ty)>,
 {
     type Item = (Param, Ty);
 
@@ -750,6 +803,7 @@ where
             Params::Intrinsic(iter) => iter.next(),
             Params::Builtin(iter) => iter.next(),
             Params::Rule(iter) => iter.next(),
+            Params::Provider(iter) => iter.next(),
         }
     }
 }
@@ -763,6 +817,12 @@ impl Field {
             FieldInner::BuiltinMethod { func } => func.name(db),
             FieldInner::IntrinsicField { parent, index } => parent.fields(db)[index].name.clone(),
             FieldInner::StructField { ref name, .. } => name.clone(),
+            FieldInner::ProviderField {
+                ref provider,
+                index,
+            } => provider.fields.as_ref().expect("expected provider fields")[index]
+                .name
+                .clone(),
         }
     }
 
@@ -772,6 +832,14 @@ impl Field {
             FieldInner::BuiltinMethod { func } => func.doc(db).clone(),
             FieldInner::IntrinsicField { parent, index } => parent.fields(db)[index].doc.clone(),
             FieldInner::StructField { .. } => String::new(),
+            FieldInner::ProviderField {
+                ref provider,
+                index,
+            } => provider.fields.as_ref().expect("expected provider fields")[index]
+                .doc
+                .as_ref()
+                .map(|doc| doc.to_string())
+                .unwrap_or_default(),
         }
     }
 }
@@ -791,21 +859,27 @@ enum FieldInner {
     StructField {
         name: Name,
     },
+    ProviderField {
+        provider: Arc<Provider>,
+        index: usize,
+    },
 }
 
-enum Fields<I1, I2, I3, I4> {
+enum Fields<I1, I2, I3, I4, I5> {
     Intrinsic(I1),
     Builtin(I2),
     Union(I3),
     Struct(I4),
+    Provider(I5),
 }
 
-impl<I1, I2, I3, I4> Iterator for Fields<I1, I2, I3, I4>
+impl<I1, I2, I3, I4, I5> Iterator for Fields<I1, I2, I3, I4, I5>
 where
     I1: Iterator<Item = (Field, Ty)>,
     I2: Iterator<Item = (Field, Ty)>,
     I3: Iterator<Item = (Field, Ty)>,
     I4: Iterator<Item = (Field, Ty)>,
+    I5: Iterator<Item = (Field, Ty)>,
 {
     type Item = (Field, Ty);
 
@@ -815,6 +889,7 @@ where
             Self::Builtin(iter) => iter.next(),
             Self::Union(iter) => iter.next(),
             Self::Struct(iter) => iter.next(),
+            Self::Provider(iter) => iter.next(),
         }
     }
 }
@@ -836,7 +911,7 @@ pub(crate) enum TyKind {
     /// A boolean.
     Bool(Option<bool>),
     /// A 64-bit integer.
-    Int,
+    Int(Option<i64>),
     /// A 64-bit floating point number.
     Float,
     /// A UTF-8 encoded string.
@@ -880,9 +955,18 @@ pub(crate) enum TyKind {
     /// Use this instead of the `Attribute` type defined in `builtin.pb`.
     Attribute(Attribute),
     /// A Bazel rule (https://bazel.build/rules/lib/builtins/rule).
-    /// The `Ty`s contained in the boxed slice must be `TyKind::Attribute`s.
+    /// The `Ty`s contained in the boxed slice must have kind `TyKind::Attribute`.
     Rule(Rule),
+    /// A Bazel provider (https://bazel.build/rules/lib/builtins/Provider.html).
+    /// This is a callable the yields "provider instances".
+    Provider(Arc<Provider>),
+    /// An instance of a provider. The contained `Ty` must have kind `TyKind::Provider`.
+    ProviderInstance(Arc<Provider>),
+    /// The raw constructor for a provider.
+    ProviderRawConstructor(Name, Arc<Provider>),
 }
+
+impl_internable!(TyKind);
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Tuple {
@@ -953,14 +1037,14 @@ pub enum RuleKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Rule {
-    pub kind: RuleKind,
-    pub doc: Option<Box<str>>,
+pub(crate) struct Rule {
+    pub(crate) kind: RuleKind,
+    pub(crate) doc: Option<Box<str>>,
     attrs: Box<[(Name, Ty)]>,
 }
 
 impl Rule {
-    pub fn attrs<'a>(&'a self, db: &'a dyn Db) -> impl Iterator<Item = (&Name, &Attribute)> {
+    pub(crate) fn attrs<'a>(&'a self, db: &'a dyn Db) -> impl Iterator<Item = (&Name, &Attribute)> {
         // This chaining is done to put the `name` attribute first.
         let common = common_attributes_query(db);
         let mut common_attrs = match self.kind {
@@ -982,7 +1066,12 @@ impl Rule {
     }
 }
 
-impl_internable!(TyKind);
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct Provider {
+    pub(crate) name: Option<Name>,
+    pub(crate) doc: Option<LiteralString>,
+    pub(crate) fields: Option<Box<[ProviderField]>>,
+}
 
 impl TyKind {
     pub fn intern(self) -> Ty {
@@ -999,6 +1088,12 @@ impl TyKind {
             _ => return None,
         })
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct ProviderField {
+    pub(crate) name: Name,
+    pub(crate) doc: Option<Box<str>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1280,7 +1375,8 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
         (TyKind::String(_), TyKind::String(_))
         | (TyKind::Attribute(_), TyKind::Attribute(_))
         | (TyKind::Struct(_), TyKind::Struct(_))
-        | (TyKind::Bool(_), TyKind::Bool(_)) => true,
+        | (TyKind::Bool(_), TyKind::Bool(_))
+        | (TyKind::Int(_), TyKind::Int(_)) => true,
         (source, target) => source == target,
     }
 }

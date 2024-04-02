@@ -1,18 +1,33 @@
-use crate::{def::ExprId, BuiltinDefs, Dialect, GlobalCtxt, LoadItemId, ParamId, Ty};
-use dashmap::DashMap;
-use starpls_bazel::Builtins;
+use crate::{def::ExprId, BuiltinDefs, Db, Dialect, GlobalCtxt, LoadItemId, ParamId, Ty};
+use dashmap::{mapref::entry::Entry, DashMap};
+use starpls_bazel::{
+    builtin::{Callable, Param, Value},
+    Builtins,
+};
 use starpls_common::{File, FileId, LoadItemCandidate};
 use std::{io, sync::Arc};
 
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, crate::Jar)]
 pub(crate) struct TestDatabase {
+    builtin_defs: Arc<DashMap<Dialect, BuiltinDefs>>,
     storage: salsa::Storage<Self>,
     files: Arc<DashMap<FileId, File>>,
     pub(crate) gcx: Arc<GlobalCtxt>,
 }
 
 impl TestDatabase {
+    #[allow(unused)]
+    pub(crate) fn with_catch_all_functions(names: &[&str]) -> Self {
+        let mut db = Self::default();
+        db.set_builtin_defs(
+            Dialect::Bazel,
+            builtins_with_catch_all_functions(names),
+            Builtins::default(),
+        );
+        db
+    }
+
     #[allow(dead_code)]
     pub(crate) fn infer_all_exprs(&self, file: File) {
         self.gcx.with_tcx(self, |tcx| tcx.infer_all_exprs(file));
@@ -57,7 +72,7 @@ impl starpls_common::Db for TestDatabase {
         _path: &str,
         _from: FileId,
     ) -> io::Result<Option<Vec<LoadItemCandidate>>> {
-        unimplemented!()
+        Ok(None)
     }
 }
 
@@ -88,9 +103,53 @@ impl crate::Db for TestDatabase {
         None
     }
 
-    fn set_builtin_defs(&mut self, _dialect: Dialect, _builtins: Builtins, _rules: Builtins) {}
+    fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins, rules: Builtins) {
+        let defs = match self.builtin_defs.entry(dialect) {
+            Entry::Occupied(entry) => *entry.get(),
+            Entry::Vacant(entry) => {
+                entry.insert(BuiltinDefs::new(self, builtins, rules));
+                return;
+            }
+        };
+        defs.set_builtins(self).to(builtins);
+    }
 
-    fn get_builtin_defs(&self, _dialect: &Dialect) -> BuiltinDefs {
-        BuiltinDefs::new(self, Default::default(), Default::default())
+    fn get_builtin_defs(&self, dialect: &Dialect) -> BuiltinDefs {
+        self.builtin_defs
+            .get(dialect)
+            .map(|defs| *defs)
+            .unwrap_or(BuiltinDefs::new(
+                self,
+                Builtins::default(),
+                Builtins::default(),
+            ))
+    }
+}
+
+fn builtins_with_catch_all_functions(names: &[&str]) -> Builtins {
+    Builtins {
+        global: names
+            .iter()
+            .map(|name| Value {
+                name: name.to_string(),
+                callable: Some(Callable {
+                    param: vec![
+                        Param {
+                            name: "*args".to_string(),
+                            is_star_arg: true,
+                            ..Default::default()
+                        },
+                        Param {
+                            name: "**kwargs".to_string(),
+                            is_star_star_arg: true,
+                            ..Default::default()
+                        },
+                    ],
+                    return_type: "Unknown".to_string(),
+                }),
+                ..Default::default()
+            })
+            .collect(),
+        ..Default::default()
     }
 }

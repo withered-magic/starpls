@@ -395,7 +395,7 @@ s[0]*31^(n-1) + s[1]*31^(n-2) + ... + s[n-1]
 ```
 "#,
         vec![positional(Any)],
-        Int,
+        non_literal_int(),
     );
     // // TODO(withered-magic): SupportInt[T] -> T
     add_function(
@@ -435,8 +435,8 @@ int("0b111", 0)    # 7
 int("0x1234")      # error (invalid base 10 number)
 ```
 "#,
-        vec![positional(Any), positional_opt(Int)],
-        Int,
+        vec![positional(Any), positional_opt(non_literal_int())],
+        non_literal_int(),
     );
     add_function(
         "len",
@@ -444,7 +444,7 @@ int("0x1234")      # error (invalid base 10 number)
 
 It is a dynamic error if its argument is not a sequence."#,
         vec![positional(Any)],
-        Int,
+        non_literal_int(),
     );
     add_function(
         "list",
@@ -579,7 +579,11 @@ The `x in y` operator, where `y` is a range, reports whether `x` is equal to
 some member of the sequence `y`; the operation fails unless `x` is a
 number.
 "#,
-        vec![positional(Int), positional_opt(Int), positional_opt(Int)],
+        vec![
+            positional(non_literal_int()),
+            positional_opt(non_literal_int()),
+            positional_opt(non_literal_int()),
+        ],
         Range,
     );
     add_function(
@@ -772,10 +776,10 @@ They are interpreted according to Starlark's [indexing conventions](#indexing).
 "#,
                 vec![
                     positional(non_literal_string()),
-                    positional_opt(Int),
-                    positional_opt(Int),
+                    positional_opt(non_literal_int()),
+                    positional_opt(non_literal_int()),
                 ],
-                Int,
+                non_literal_int(),
                 0,
             ),
             function_field(
@@ -816,8 +820,8 @@ function reports whether any one of them is a suffix.
 "#,
                 vec![
                     positional(non_literal_string()),
-                    positional_opt(Int),
-                    positional_opt(Int),
+                    positional_opt(non_literal_int()),
+                    positional_opt(non_literal_int()),
                 ],
                 non_literal_bool(),
                 0,
@@ -842,10 +846,10 @@ If no occurrence is found, `found` returns -1.
 "#,
                 vec![
                     positional(non_literal_string()),
-                    positional_opt(Int),
-                    positional_opt(Int),
+                    positional_opt(non_literal_int()),
+                    positional_opt(non_literal_int()),
                 ],
-                Int,
+                non_literal_int(),
                 0,
             ),
             // TODO(withered-magic): Handle *args and **kwargs for format().
@@ -899,10 +903,10 @@ that if the substring is not found, the operation fails.
 "#,
                 vec![
                     positional(non_literal_string()),
-                    positional_opt(Int),
-                    positional_opt(Int),
+                    positional_opt(non_literal_int()),
+                    positional_opt(non_literal_int()),
                 ],
-                Int,
+                non_literal_int(),
                 0,
             ),
             function_field(
@@ -1137,7 +1141,7 @@ specifies a maximum number of occurrences to replace.
                 vec![
                     positional(non_literal_string()),
                     positional(non_literal_string()),
-                    positional_opt(Int),
+                    positional_opt(non_literal_int()),
                 ],
                 non_literal_string(),
                 0,
@@ -1157,10 +1161,10 @@ _last_ occurrence.
 "#,
                 vec![
                     positional(non_literal_string()),
-                    positional_opt(Int),
-                    positional_opt(Int),
+                    positional_opt(non_literal_int()),
+                    positional_opt(non_literal_int()),
                 ],
-                Int,
+                non_literal_int(),
                 0,
             ),
             function_field(
@@ -1178,10 +1182,10 @@ _last_ occurrence.
 "#,
                 vec![
                     positional(non_literal_string()),
-                    positional_opt(Int),
-                    positional_opt(Int),
+                    positional_opt(non_literal_int()),
+                    positional_opt(non_literal_int()),
                 ],
-                Int,
+                non_literal_int(),
                 0,
             ),
             function_field(
@@ -1214,7 +1218,10 @@ rightmost splits.
 "one two  three".rsplit(None, 1)             # ["one two", "three"]
 ```
 "#,
-                vec![positional(non_literal_string()), positional_opt(Int)],
+                vec![
+                    positional(non_literal_string()),
+                    positional_opt(non_literal_int()),
+                ],
                 List(Ty::string()),
                 0,
             ),
@@ -1264,7 +1271,10 @@ If `maxsplit` is given and non-negative, it specifies a maximum number of splits
 "banana".split("n", 1)                      # ["ba", "ana"]
 ```
 "#,
-                vec![positional_opt(non_literal_string()), positional_opt(Int)],
+                vec![
+                    positional_opt(non_literal_string()),
+                    positional_opt(non_literal_int()),
+                ],
                 List(Ty::string()),
                 0,
             ),
@@ -1313,8 +1323,8 @@ function reports whether any one of them is a prefix.
 "#,
                 vec![
                     positional(non_literal_string()),
-                    positional_opt(Int),
-                    positional_opt(Int),
+                    positional_opt(non_literal_int()),
+                    positional_opt(non_literal_int()),
                 ],
                 non_literal_bool(),
                 0,
@@ -1498,10 +1508,10 @@ x.index("a", -2)                        # 5 (bananA)
 "#,
                 vec![
                     positional(BoundVar(0)),
-                    positional_opt(Int),
-                    positional_opt(Int),
+                    positional_opt(non_literal_int()),
+                    positional_opt(non_literal_int()),
                 ],
-                Int,
+                non_literal_int(),
                 1,
             ),
             function_field(
@@ -1523,7 +1533,7 @@ x.insert(-1, "d")                       # None
 x                                       # ["a", "b", "c", "d", "e"]
 ```
 "#,
-                vec![positional(Int), positional(BoundVar(0))],
+                vec![positional(non_literal_int()), positional(BoundVar(0))],
                 None,
                 1,
             ),
@@ -1543,7 +1553,7 @@ x.pop()                                 # 2
 x                                       # [1]
 ```
 "#,
-                vec![positional_opt(Int)],
+                vec![positional_opt(non_literal_int())],
                 Any,
                 1,
             ),
@@ -1839,4 +1849,8 @@ fn non_literal_string() -> TyKind {
 
 fn non_literal_bool() -> TyKind {
     TyKind::Bool(None)
+}
+
+fn non_literal_int() -> TyKind {
+    TyKind::Int(None)
 }

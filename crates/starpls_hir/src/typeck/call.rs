@@ -3,7 +3,7 @@
 //! but with a couple of modifications for handling "*args" and "**kwargs" arguments.
 use crate::{
     def::{Argument, Param},
-    typeck::{builtins::BuiltinFunctionParam, intrinsics::IntrinsicFunctionParam, Rule},
+    typeck::{builtins::BuiltinFunctionParam, intrinsics::IntrinsicFunctionParam, Provider, Rule},
     Db, ExprId, Name,
 };
 use smallvec::{smallvec, SmallVec};
@@ -205,7 +205,24 @@ impl Slots {
                     providers: smallvec![],
                 }))
                 .collect(),
-            disable_errors: false,
+            disable_errors: true,
+        }
+    }
+
+    pub(crate) fn from_provider(provider: &Provider) -> Self {
+        Self {
+            slots: provider
+                .fields
+                .iter()
+                .flat_map(|fields| {
+                    fields.iter().map(|field| Slot::Keyword {
+                        name: field.name.clone(),
+                        provider: SlotProvider::Missing,
+                        positional: false,
+                    })
+                })
+                .collect(),
+            disable_errors: true,
         }
     }
 }

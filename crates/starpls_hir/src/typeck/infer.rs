@@ -176,7 +176,7 @@ impl TyCtxt<'_> {
                 TyKind::Dict(key_ty, value_ty, None).intern()
             }
             Expr::Literal { literal } => match literal {
-                Literal::Int(_) => self.int_ty(),
+                Literal::Int(x) => TyKind::Int(i64::try_from(*x).ok()).intern(),
                 Literal::Float => self.float_ty(),
                 Literal::String(s) => TyKind::String(Some(s.clone())).intern(),
                 Literal::Bytes => self.bytes_ty(),
@@ -251,6 +251,33 @@ impl TyCtxt<'_> {
                 // well as the `Indexable` and `SetIndexable` protocols, support indexing.
                 let (target, value, name) = match lhs_ty.kind() {
                     TyKind::Tuple(Tuple::Variable(ty)) => (&int_ty, ty, "tuple"),
+                    TyKind::Tuple(Tuple::Simple(tys)) => {
+                        let return_ty = match index_ty.kind() {
+                            TyKind::Int(Some(x)) => match tys.get(*x as usize) {
+                                Some(ty) => ty.clone(),
+                                None => self.add_expr_diagnostic_ty(
+                                    file,
+                                    expr,
+                                    format!(
+                                        "Index {} is out of range for type {}",
+                                        x,
+                                        lhs_ty.display(db)
+                                    ),
+                                ),
+                            },
+                            TyKind::Int(None) => Ty::union(tys.iter().cloned()),
+                            _ => self.add_expr_diagnostic_ty(
+                                file,
+                                expr,
+                                format!(
+                                    "Cannot index tuple with type \"{}\"",
+                                    index_ty.display(db).alt()
+                                ),
+                            ),
+                        };
+
+                        return self.set_expr_type(file, expr, return_ty);
+                    }
                     TyKind::List(ty) => (&int_ty, ty, "list"),
                     TyKind::Dict(key_ty, value_ty, _) => (key_ty, value_ty, "dict"),
                     TyKind::String(_) => (&int_ty, &string_ty, "string"),
@@ -629,12 +656,12 @@ impl TyCtxt<'_> {
         let kind = ty.kind();
         match op {
             UnaryOp::Arith(_) => match kind {
-                TyKind::Int => self.int_ty(),
+                TyKind::Int(_) => self.int_ty(),
                 TyKind::Float => self.float_ty(),
                 _ => unknown(),
             },
             UnaryOp::Inv => match kind {
-                TyKind::Int => self.int_ty(),
+                TyKind::Int(_) => self.int_ty(),
                 _ => unknown(),
             },
             UnaryOp::Not => self.bool_ty(),
@@ -695,16 +722,19 @@ impl TyCtxt<'_> {
                     | TyKind::Protocol(Protocol::Sequence(ty2) | Protocol::Iterable(ty2)),
                     ArithOp::Add,
                 ) => Ty::list(Ty::union([ty1.clone(), ty2.clone()].into_iter())),
-                (TyKind::String(_), TyKind::Int, ArithOp::Mul)
-                | (TyKind::Int, TyKind::String(_), ArithOp::Mul) => self.string_ty(),
-                (TyKind::Int, TyKind::Int, _) => self.int_ty(),
-                (TyKind::Float, TyKind::Int, _)
-                | (TyKind::Int, TyKind::Float, _)
+                (TyKind::String(_), TyKind::Int(_), ArithOp::Mul)
+                | (TyKind::Int(_), TyKind::String(_), ArithOp::Mul) => self.string_ty(),
+                (TyKind::Int(Some(x1)), TyKind::Int(Some(x2)), ArithOp::Add) => {
+                    TyKind::Int(Some(x1 + x2)).intern()
+                }
+                (TyKind::Int(_), TyKind::Int(_), _) => self.int_ty(),
+                (TyKind::Float, TyKind::Int(_), _)
+                | (TyKind::Int(_), TyKind::Float, _)
                 | (TyKind::Float, TyKind::Float, _) => self.float_ty(),
                 _ => unknown(),
             },
             BinaryOp::Bitwise(op) => match (lhs_kind, rhs_kind, op) {
-                (TyKind::Int, TyKind::Int, _) => self.int_ty(),
+                (TyKind::Int(_), TyKind::Int(_), _) => self.int_ty(),
                 (
                     TyKind::Dict(lhs_key_ty, lhs_value_ty, _),
                     TyKind::Dict(rhs_key_ty, rhs_value_ty, _),

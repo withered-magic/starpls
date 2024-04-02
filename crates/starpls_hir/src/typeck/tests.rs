@@ -98,19 +98,19 @@ b"hello"
             0..4 "None": None
             5..9 "True": Literal[True]
             10..15 "False": Literal[False]
-            16..17 "0": int
+            16..17 "0": Literal[0]
             18..20 "0.": float
             21..28 "\"hello\"": Literal["hello"]
             29..37 "b\"hello\"": bytes
             39..44 "\"foo\"": Literal["foo"]
             46..51 "\"bar\"": Literal["bar"]
             38..52 "[\"foo\", \"bar\"]": list[string]
-            54..55 "1": int
-            57..58 "2": int
-            60..61 "3": int
-            53..62 "(1, 2, 3)": tuple[int, int, int]
+            54..55 "1": Literal[1]
+            57..58 "2": Literal[2]
+            60..61 "3": Literal[3]
+            53..62 "(1, 2, 3)": tuple[Literal[1], Literal[2], Literal[3]]
             64..67 "\"a\"": Literal["a"]
-            69..70 "1": int
+            69..70 "1": Literal[1]
             63..71 "{\"a\": 1}": dict[string, int]
         "#]],
     );
@@ -127,33 +127,33 @@ b, c = 2, 3
 h, i = [4, 5, 6]
 "#,
         expect![[r#"
-            1..2 "a": int
-            5..6 "1": int
-            7..8 "b": int
-            10..11 "c": int
-            7..11 "b, c": tuple[int, int]
-            14..15 "2": int
-            17..18 "3": int
-            14..18 "2, 3": tuple[int, int]
+            1..2 "a": Literal[1]
+            5..6 "1": Literal[1]
+            7..8 "b": Literal[2]
+            10..11 "c": Literal[3]
+            7..11 "b, c": tuple[Literal[2], Literal[3]]
+            14..15 "2": Literal[2]
+            17..18 "3": Literal[3]
+            14..18 "2, 3": tuple[Literal[2], Literal[3]]
             20..21 "d": Literal[True]
             19..22 "(d)": Any
             25..29 "True": Literal[True]
-            32..33 "e": int
+            32..33 "e": Literal[1]
             35..36 "f": Literal["a"]
             31..37 "[e, f]": list[Unknown]
-            39..40 "g": int
-            30..41 "([e, f], g)": tuple[list[Unknown], int]
-            46..47 "1": int
+            39..40 "g": Literal[3]
+            30..41 "([e, f], g)": tuple[list[Unknown], Literal[3]]
+            46..47 "1": Literal[1]
             49..52 "\"a\"": Literal["a"]
-            45..53 "(1, \"a\")": tuple[int, Literal["a"]]
-            55..56 "3": int
-            44..57 "((1, \"a\"), 3)": tuple[tuple[int, Literal["a"]], int]
+            45..53 "(1, \"a\")": tuple[Literal[1], Literal["a"]]
+            55..56 "3": Literal[3]
+            44..57 "((1, \"a\"), 3)": tuple[tuple[Literal[1], Literal["a"]], Literal[3]]
             58..59 "h": int
             61..62 "i": int
             58..62 "h, i": tuple[int, int]
-            66..67 "4": int
-            69..70 "5": int
-            72..73 "6": int
+            66..67 "4": Literal[4]
+            69..70 "5": Literal[5]
+            72..73 "6": Literal[6]
             65..74 "[4, 5, 6]": list[int]
         "#]],
     );
@@ -173,24 +173,24 @@ fn test_common_type() {
 "#,
         expect![[r#"
             1..3 "[]": list[Unknown]
-            5..6 "1": int
-            8..9 "2": int
+            5..6 "1": Literal[1]
+            8..9 "2": Literal[2]
             4..10 "[1, 2]": list[int]
-            12..13 "1": int
+            12..13 "1": Literal[1]
             15..18 "\"a\"": Literal["a"]
             11..19 "[1, \"a\"]": list[Unknown]
             20..22 "{}": dict[Any, Unknown]
             24..27 "\"a\"": Literal["a"]
-            29..30 "1": int
+            29..30 "1": Literal[1]
             23..31 "{\"a\": 1}": dict[string, int]
             33..36 "\"a\"": Literal["a"]
-            38..39 "1": int
+            38..39 "1": Literal[1]
             41..44 "\"b\"": Literal["b"]
             46..49 "\"c\"": Literal["c"]
             32..50 "{\"a\": 1, \"b\": \"c\"}": dict[string, Unknown]
             52..55 "\"a\"": Literal["a"]
-            57..58 "1": int
-            60..61 "1": int
+            57..58 "1": Literal[1]
+            60..61 "1": Literal[1]
             63..66 "\"a\"": Literal["a"]
             51..67 "{\"a\": 1, 1: \"a\"}": dict[Any, Unknown]
         "#]],
@@ -205,7 +205,7 @@ greeting = 1 # type: string
     "#,
         expect![[r#"
             1..9 "greeting": string
-            12..13 "1": int
+            12..13 "1": Literal[1]
 
             12..13 Expected value of type "string"
         "#]],
@@ -221,15 +221,15 @@ res2 = 2 + "y" # type: ignore
     "#,
         expect![[r#"
             1..5 "res1": Unknown
-            8..9 "1": int
+            8..9 "1": Literal[1]
             12..15 "\"x\"": Literal["x"]
             8..15 "1 + \"x\"": Unknown
             16..20 "res2": Unknown
-            23..24 "2": int
+            23..24 "2": Literal[2]
             27..30 "\"y\"": Literal["y"]
             23..30 "2 + \"y\"": Unknown
 
-            8..15 Operator "+" not supported for types "int" and "Literal["x"]"
+            8..15 Operator "+" not supported for types "Literal[1]" and "Literal["x"]"
         "#]],
     )
 }
@@ -246,8 +246,8 @@ def frobnicate(
     pass
 "#,
         expect![[r#"
-            1..4 "num": int
-            7..8 "1": int
+            1..4 "num": Literal[1]
+            7..8 "1": Literal[1]
 
             9..20 Unknown type "foo"
             42..43 Unknown type "bar"
@@ -280,7 +280,7 @@ bar(y)
 "#,
         expect![[r#"
             113..114 "x": int | None
-            117..118 "1": int
+            117..118 "1": Literal[1]
             138..141 "foo": def foo(x: int) -> None
             142..143 "x": int | None
             138..144 "foo(x)": None
@@ -288,7 +288,7 @@ bar(y)
             149..150 "x": int | None
             145..151 "bar(x)": None
             152..155 "bar": def bar(x: int | string | None) -> None
-            156..157 "2": int
+            156..157 "2": Literal[2]
             152..158 "bar(2)": None
             160..161 "y": int | string
             164..171 "\"hello\"": Literal["hello"]
@@ -317,12 +317,12 @@ foo(1, 2, 3, 4, d=5, e=6)
 "#,
         expect![[r#"
             46..49 "foo": def foo(a, b, *args: Unknown, d, **kwargs: Unknown) -> Unknown
-            50..51 "1": int
-            53..54 "2": int
-            56..57 "3": int
-            59..60 "4": int
-            64..65 "5": int
-            69..70 "6": int
+            50..51 "1": Literal[1]
+            53..54 "2": Literal[2]
+            56..57 "3": Literal[3]
+            59..60 "4": Literal[4]
+            64..65 "5": Literal[5]
+            69..70 "6": Literal[6]
             46..71 "foo(1, 2, 3, 4, d=5, e=6)": Unknown
         "#]],
     );
@@ -339,10 +339,10 @@ foo(1, 2, a=3, b=4)
 "#,
         expect![[r#"
             37..40 "foo": def foo(*args: Unknown, **kwargs: Unknown) -> Unknown
-            41..42 "1": int
-            44..45 "2": int
-            49..50 "3": int
-            54..55 "4": int
+            41..42 "1": Literal[1]
+            44..45 "2": Literal[2]
+            49..50 "3": Literal[3]
+            54..55 "4": Literal[4]
             37..56 "foo(1, 2, a=3, b=4)": Unknown
         "#]],
     );
@@ -360,10 +360,10 @@ foo(baz=1)
     "#,
         expect![[r#"
             25..28 "foo": def foo(bar) -> Unknown
-            29..30 "1": int
+            29..30 "1": Literal[1]
             25..31 "foo(1)": Unknown
             32..35 "foo": def foo(bar) -> Unknown
-            40..41 "1": int
+            40..41 "1": Literal[1]
             32..42 "foo(baz=1)": Unknown
 
             32..42 Argument missing for parameter(s) "bar"
@@ -385,14 +385,14 @@ foo(bar=4)
 "#,
         expect![[r#"
             28..31 "foo": def foo(*, bar) -> Unknown
-            32..33 "1": int
+            32..33 "1": Literal[1]
             28..34 "foo(1)": Unknown
             35..38 "foo": def foo(*, bar) -> Unknown
-            39..40 "2": int
-            46..47 "3": int
+            39..40 "2": Literal[2]
+            46..47 "3": Literal[3]
             35..48 "foo(2, bar=3)": Unknown
             49..52 "foo": def foo(*, bar) -> Unknown
-            57..58 "4": int
+            57..58 "4": Literal[4]
             49..59 "foo(bar=4)": Unknown
 
             28..34 Argument missing for parameter(s) "bar"
@@ -413,8 +413,8 @@ foo(bar=1, bar=2)
 "#,
         expect![[r#"
             25..28 "foo": def foo(bar) -> Unknown
-            33..34 "1": int
-            40..41 "2": int
+            33..34 "1": Literal[1]
+            40..41 "2": Literal[2]
             25..42 "foo(bar=1, bar=2)": Unknown
 
             40..41 Unexpected keyword argument "bar"
@@ -442,15 +442,15 @@ foo(**kwargs, *args)
             36..42 "kwargs": dict[Any, Unknown]
             45..47 "{}": dict[Any, Unknown]
             48..51 "foo": def foo(x, y) -> Unknown
-            54..55 "1": int
-            57..58 "2": int
+            54..55 "1": Literal[1]
+            57..58 "2": Literal[2]
             48..59 "foo(y=1, 2)": Unknown
             60..63 "foo": def foo(x, y) -> Unknown
             66..72 "kwargs": dict[Any, Unknown]
-            74..75 "2": int
+            74..75 "2": Literal[2]
             60..76 "foo(**kwargs, 2)": Unknown
             77..80 "foo": def foo(x, y) -> Unknown
-            83..84 "1": int
+            83..84 "1": Literal[1]
             87..91 "args": list[Unknown]
             77..92 "foo(y=1, *args)": Unknown
             93..96 "foo": def foo(x, y) -> Unknown
@@ -476,15 +476,15 @@ bar = dict(d = 4, e = "five", f = 6.)
 baz = dict()
 "#,
         expect![[r#"
-            1..4 "foo": dict[string, int]
+            1..4 "foo": dict[string, Unknown]
             7..11 "dict": def dict(x0: Iterable[Iterable[Any]] = None, **kwargs) -> dict[Unknown, Unknown]
-            16..17 "1": int
-            23..24 "2": int
-            30..31 "3": int
-            7..32 "dict(a = 1, b = 2, c = 3)": dict[string, int]
+            16..17 "1": Literal[1]
+            23..24 "2": Literal[2]
+            30..31 "3": Literal[3]
+            7..32 "dict(a = 1, b = 2, c = 3)": dict[string, Unknown]
             33..36 "bar": dict[string, Unknown]
             39..43 "dict": def dict(x0: Iterable[Iterable[Any]] = None, **kwargs) -> dict[Unknown, Unknown]
-            48..49 "4": int
+            48..49 "4": Literal[4]
             55..61 "\"five\"": Literal["five"]
             67..69 "6.": float
             39..70 "dict(d = 4, e = \"five\", f = 6.)": dict[string, Unknown]
@@ -506,13 +506,13 @@ z = x | y
 "#,
         expect![[r#"
             1..2 "a": int | string
-            5..6 "1": int
+            5..6 "1": Literal[1]
             34..35 "x": dict[string, int]
             39..42 "\"x\"": Literal["x"]
-            44..45 "1": int
+            44..45 "1": Literal[1]
             38..46 "{\"x\": 1}": dict[string, int]
             47..48 "y": dict[int, string]
-            52..53 "1": int
+            52..53 "1": Literal[1]
             55..58 "\"x\"": Literal["x"]
             51..59 "{1: \"x\"}": dict[int, string]
             60..61 "z": dict[string | int, int | string]
@@ -535,15 +535,15 @@ j = [i] + [""]
 "#,
         expect![[r#"
             1..2 "a": list[int]
-            6..7 "1": int
+            6..7 "1": Literal[1]
             5..8 "[1]": list[int]
-            12..13 "2": int
+            12..13 "2": Literal[2]
             11..14 "[2]": list[int]
             5..14 "[1] + [2]": list[int]
             15..16 "x": list[int | string]
-            20..21 "1": int
-            23..24 "2": int
-            26..27 "3": int
+            20..21 "1": Literal[1]
+            23..24 "2": Literal[2]
+            26..27 "3": Literal[3]
             19..28 "[1, 2, 3]": list[int]
             32..35 "\"a\"": Literal["a"]
             37..40 "\"b\"": Literal["b"]
@@ -552,10 +552,10 @@ j = [i] + [""]
             19..46 "[1, 2, 3] + [\"a\", \"b\", \"c\"]": list[int | string]
             51..52 "y": int | string
             55..56 "x": list[int | string]
-            57..58 "0": int
+            57..58 "0": Literal[0]
             55..59 "x[0]": int | string
             60..61 "i": int | string
-            64..65 "1": int
+            64..65 "1": Literal[1]
             87..88 "j": list[int | string]
             92..93 "i": int | string
             91..94 "[i]": list[int | string]
@@ -575,9 +575,9 @@ fn test_string_repetition() {
 "#,
         expect![[r#"
             1..6 "\"abc\"": Literal["abc"]
-            9..10 "3": int
+            9..10 "3": Literal[3]
             1..10 "\"abc\" * 3": string
-            11..12 "3": int
+            11..12 "3": Literal[3]
             15..20 "\"abc\"": Literal["abc"]
             11..20 "3 * \"abc\"": string
         "#]],
@@ -596,11 +596,11 @@ foo.c
         expect![[r#"
             1..4 "foo": struct
             7..13 "struct": def struct(**args, **kwargs) -> Unknown
-            18..19 "1": int
+            18..19 "1": Literal[1]
             25..30 "\"bar\"": Literal["bar"]
             7..31 "struct(a = 1, b = \"bar\")": struct
             32..35 "foo": struct
-            32..37 "foo.a": int
+            32..37 "foo.a": Literal[1]
             38..41 "foo": struct
             38..43 "foo.b": Literal["bar"]
             44..47 "foo": struct
@@ -664,6 +664,49 @@ info2 = DataInfo()
             114..119 "info2": DataInfo
             122..130 "DataInfo": Provider[DataInfo]
             122..132 "DataInfo()": DataInfo
+        "#]],
+    )
+}
+
+#[test]
+fn test_anonymous_provider() {
+    check_infer(
+        r#"
+providers = struct(DefaultInfo = provider())
+info = providers.DefaultInfo()
+
+providers = struct(result = provider(init = None))
+info1 = providers.result[0]()
+info2 = providers.result[1]()
+"#,
+        expect![[r#"
+            1..10 "providers": struct
+            13..19 "struct": def struct(**args, **kwargs) -> Unknown
+            34..42 "provider": def provider(**args, **kwargs) -> Unknown
+            34..44 "provider()": Provider[_]
+            13..45 "struct(DefaultInfo = provider())": struct
+            46..50 "info": _
+            53..62 "providers": struct
+            53..74 "providers.DefaultInfo": Provider[_]
+            53..76 "providers.DefaultInfo()": _
+            78..87 "providers": struct
+            90..96 "struct": def struct(**args, **kwargs) -> Unknown
+            106..114 "provider": def provider(**args, **kwargs) -> Unknown
+            122..126 "None": None
+            106..127 "provider(init = None)": tuple[Provider[_], ProviderRawConstructor]
+            90..128 "struct(result = provider(init = None))": struct
+            129..134 "info1": _
+            137..146 "providers": struct
+            137..153 "providers.result": tuple[Provider[_], ProviderRawConstructor]
+            154..155 "0": Literal[0]
+            137..156 "providers.result[0]": Provider[_]
+            137..158 "providers.result[0]()": _
+            159..164 "info2": _
+            167..176 "providers": struct
+            167..183 "providers.result": tuple[Provider[_], ProviderRawConstructor]
+            184..185 "1": Literal[1]
+            167..186 "providers.result[1]": ProviderRawConstructor
+            167..188 "providers.result[1]()": _
         "#]],
     )
 }

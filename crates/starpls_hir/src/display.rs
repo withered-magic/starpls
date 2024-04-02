@@ -92,7 +92,8 @@ impl DisplayWithDb for TyKind {
                 return f.write_char(']');
             }
             TyKind::Bool(None) => "bool",
-            TyKind::Int => "int",
+            TyKind::Int(Some(x)) => return write!(f, "Literal[{}]", x),
+            TyKind::Int(None) => "int",
             TyKind::Float => "float",
             TyKind::String(Some(s)) => return write!(f, "Literal[{:?}]", s.value(db)),
             TyKind::String(None) => "string",

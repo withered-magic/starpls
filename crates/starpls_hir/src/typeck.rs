@@ -440,7 +440,7 @@ impl Ty {
     }
 
     pub(crate) fn int() -> Ty {
-        TyKind::Int.intern()
+        TyKind::Int(None).intern()
     }
 
     pub(crate) fn string() -> Ty {
@@ -565,6 +565,7 @@ impl Ty {
     fn normalize(self) -> Ty {
         match self.kind() {
             TyKind::Bool(_) => Ty::bool(),
+            TyKind::Int(_) => Ty::int(),
             TyKind::String(_) => Ty::string(),
             _ => self,
         }
@@ -910,7 +911,7 @@ pub(crate) enum TyKind {
     /// A boolean.
     Bool(Option<bool>),
     /// A 64-bit integer.
-    Int,
+    Int(Option<i64>),
     /// A 64-bit floating point number.
     Float,
     /// A UTF-8 encoded string.
@@ -1374,7 +1375,8 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
         (TyKind::String(_), TyKind::String(_))
         | (TyKind::Attribute(_), TyKind::Attribute(_))
         | (TyKind::Struct(_), TyKind::Struct(_))
-        | (TyKind::Bool(_), TyKind::Bool(_)) => true,
+        | (TyKind::Bool(_), TyKind::Bool(_))
+        | (TyKind::Int(_), TyKind::Int(_)) => true,
         (source, target) => source == target,
     }
 }

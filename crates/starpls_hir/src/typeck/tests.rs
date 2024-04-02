@@ -595,7 +595,7 @@ foo.c
 "#,
         expect![[r#"
             1..4 "foo": struct
-            7..13 "struct": def struct(**args, **kwargs) -> Unknown
+            7..13 "struct": def struct(*args, **kwargs) -> Unknown
             18..19 "1": Literal[1]
             25..30 "\"bar\"": Literal["bar"]
             7..31 "struct(a = 1, b = \"bar\")": struct
@@ -624,7 +624,7 @@ info = DataInfo(foo = "foo", bar = "bar")
     "#,
         expect![[r#"
             1..9 "DataInfo": Provider[DataInfo]
-            12..20 "provider": def provider(**args, **kwargs) -> Unknown
+            12..20 "provider": def provider(*args, **kwargs) -> Unknown
             45..50 "\"foo\"": Literal["foo"]
             52..67 "\"The foo field\"": Literal["The foo field"]
             77..82 "\"bar\"": Literal["bar"]
@@ -655,7 +655,7 @@ info2 = DataInfo()
             42..50 "DataInfo": Provider[DataInfo]
             52..66 "data_info_ctor": ProviderRawConstructor
             42..66 "DataInfo, data_info_ctor": tuple[Provider[DataInfo], ProviderRawConstructor]
-            69..77 "provider": def provider(**args, **kwargs) -> Unknown
+            69..77 "provider": def provider(*args, **kwargs) -> Unknown
             85..93 "validate": def validate(*args: Unknown, **kwargs: Unknown) -> Unknown
             69..94 "provider(init = validate)": tuple[Provider[DataInfo], ProviderRawConstructor]
             95..100 "info1": DataInfo
@@ -681,8 +681,8 @@ info2 = providers.result[1]()
 "#,
         expect![[r#"
             1..10 "providers": struct
-            13..19 "struct": def struct(**args, **kwargs) -> Unknown
-            34..42 "provider": def provider(**args, **kwargs) -> Unknown
+            13..19 "struct": def struct(*args, **kwargs) -> Unknown
+            34..42 "provider": def provider(*args, **kwargs) -> Unknown
             34..44 "provider()": Provider[_]
             13..45 "struct(DefaultInfo = provider())": struct
             46..50 "info": _
@@ -690,8 +690,8 @@ info2 = providers.result[1]()
             53..74 "providers.DefaultInfo": Provider[_]
             53..76 "providers.DefaultInfo()": _
             78..87 "providers": struct
-            90..96 "struct": def struct(**args, **kwargs) -> Unknown
-            106..114 "provider": def provider(**args, **kwargs) -> Unknown
+            90..96 "struct": def struct(*args, **kwargs) -> Unknown
+            106..114 "provider": def provider(*args, **kwargs) -> Unknown
             122..126 "None": None
             106..127 "provider(init = None)": tuple[Provider[_], ProviderRawConstructor]
             90..128 "struct(result = provider(init = None))": struct
@@ -707,6 +707,43 @@ info2 = providers.result[1]()
             184..185 "1": Literal[1]
             167..186 "providers.result[1]": ProviderRawConstructor
             167..188 "providers.result[1]()": _
+        "#]],
+    )
+}
+
+#[test]
+fn test_provider_indexing() {
+    check_infer(
+        r#"
+GoInfo = provider()
+
+def foo(foo, bar, baz):
+    # type: (Unknown, Any) -> None
+    info1 = foo[GoInfo]
+    info2 = bar[GoInfo]
+    x1 = foo[0]
+    x2 = bar[0]
+"#,
+        expect![[r#"
+            1..7 "GoInfo": Provider[GoInfo]
+            10..18 "provider": def provider(*args, **kwargs) -> Unknown
+            10..20 "provider()": Provider[GoInfo]
+            85..90 "info1": GoInfo
+            93..96 "foo": Unknown
+            97..103 "GoInfo": Provider[GoInfo]
+            93..104 "foo[GoInfo]": GoInfo
+            109..114 "info2": GoInfo
+            117..120 "bar": Any
+            121..127 "GoInfo": Provider[GoInfo]
+            117..128 "bar[GoInfo]": GoInfo
+            133..135 "x1": Unknown
+            138..141 "foo": Unknown
+            142..143 "0": Literal[0]
+            138..144 "foo[0]": Unknown
+            149..151 "x2": Unknown
+            154..157 "bar": Any
+            158..159 "0": Literal[0]
+            154..160 "bar[0]": Unknown
         "#]],
     )
 }

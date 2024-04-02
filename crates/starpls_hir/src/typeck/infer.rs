@@ -283,14 +283,32 @@ impl TyCtxt<'_> {
                     TyKind::String(_) => (&int_ty, &string_ty, "string"),
                     TyKind::Bytes => (&int_ty, &int_ty, "bytes"),
                     TyKind::Range => (&int_ty, &int_ty, "range"),
-                    TyKind::Any => return self.any_ty(),
-                    TyKind::Unknown => return self.unknown_ty(),
-                    _ => {
-                        let return_ty = self.add_expr_diagnostic_ty(
-                            file,
-                            expr,
-                            format!("Type \"{}\" is not indexable", lhs_ty.display(db).alt()),
-                        );
+                    kind => {
+                        let return_ty = if let TyKind::Provider(provider) = index_ty.kind() {
+                            match kind {
+                                TyKind::Any | TyKind::Unknown => {
+                                    Some(TyKind::ProviderInstance(provider.clone()).intern())
+                                }
+                                TyKind::BuiltinType(builtin)
+                                    if builtin.name(db).as_str() == "Target" =>
+                                {
+                                    Some(TyKind::ProviderInstance(provider.clone()).intern())
+                                }
+                                _ => None,
+                            }
+                        } else if matches!(kind, TyKind::Any | TyKind::Unknown) {
+                            Some(Ty::unknown())
+                        } else {
+                            None
+                        }
+                        .unwrap_or_else(|| {
+                            self.add_expr_diagnostic_ty(
+                                file,
+                                expr,
+                                format!("Type \"{}\" is not indexable", lhs_ty.display(db).alt()),
+                            )
+                        });
+
                         return self.set_expr_type(file, expr, return_ty);
                     }
                 };

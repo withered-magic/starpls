@@ -393,6 +393,19 @@ impl Ty {
                         ))),
                 )
             }
+            TyKind::Provider(provider) => {
+                Params::Provider(provider.fields.iter().flat_map(|fields| {
+                    fields.iter().enumerate().map(|(index, _)| {
+                        (
+                            Param(ParamInner::ProviderParam {
+                                provider: provider.clone(),
+                                index,
+                            }),
+                            Ty::unknown(),
+                        )
+                    })
+                }))
+            }
             _ => return None,
         })
     }
@@ -402,7 +415,8 @@ impl Ty {
             TyKind::Function(func) => resolve_type_ref_opt(db, func.ret_type_ref(db)),
             TyKind::IntrinsicFunction(func, subst) => func.ret_ty(db).substitute(&subst.args),
             TyKind::BuiltinFunction(func) => resolve_type_ref(db, &func.ret_type_ref(db)).0,
-            TyKind::Rule(_) => TyKind::None.intern(),
+            TyKind::Rule(_) => Ty::none(),
+            TyKind::Provider(provider) => TyKind::ProviderInstance(provider.clone()).intern(),
             _ => return None,
         })
     }
@@ -573,6 +587,10 @@ pub(crate) enum ParamInner {
         index: usize,
     },
     RuleParam(RuleParam),
+    ProviderParam {
+        provider: Arc<Provider>,
+        index: usize,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -623,6 +641,14 @@ impl Param {
                     .clone(),
             ),
             ParamInner::RuleParam(RuleParam::Kwargs) => Some(Name::new_inline("kwargs")),
+            ParamInner::ProviderParam {
+                ref provider,
+                index,
+            } => Some(
+                provider.fields.as_ref().expect("expected provider fields")[index]
+                    .name
+                    .clone(),
+            ),
         }
     }
 
@@ -652,7 +678,12 @@ impl Param {
                     .as_ref()
                     .map(Box::to_string)
             }
-
+            ParamInner::ProviderParam { provider, index } => {
+                return provider.fields.as_ref().expect("expected provider fields")[*index]
+                    .doc
+                    .as_ref()
+                    .map(Box::to_string)
+            }
             _ => return None,
         })
     }
@@ -745,19 +776,21 @@ impl Param {
     }
 }
 
-enum Params<I1, I2, I3, I4> {
+enum Params<I1, I2, I3, I4, I5> {
     Simple(I1),
     Intrinsic(I2),
     Builtin(I3),
     Rule(I4),
+    Provider(I5),
 }
 
-impl<I1, I2, I3, I4> Iterator for Params<I1, I2, I3, I4>
+impl<I1, I2, I3, I4, I5> Iterator for Params<I1, I2, I3, I4, I5>
 where
     I1: Iterator<Item = (Param, Ty)>,
     I2: Iterator<Item = (Param, Ty)>,
     I3: Iterator<Item = (Param, Ty)>,
     I4: Iterator<Item = (Param, Ty)>,
+    I5: Iterator<Item = (Param, Ty)>,
 {
     type Item = (Param, Ty);
 
@@ -767,6 +800,7 @@ where
             Params::Intrinsic(iter) => iter.next(),
             Params::Builtin(iter) => iter.next(),
             Params::Rule(iter) => iter.next(),
+            Params::Provider(iter) => iter.next(),
         }
     }
 }

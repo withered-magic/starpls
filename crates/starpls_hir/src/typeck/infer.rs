@@ -1246,6 +1246,7 @@ impl TyCtxt<'_> {
                     TyKind::IntrinsicFunction(func, _) => func.params(db)[..].into(),
                     TyKind::BuiltinFunction(func) => func.params(db)[..].into(),
                     TyKind::Rule(rule) => Slots::from_rule(db, rule),
+                    TyKind::Provider(provider) => Slots::from_provider(&provider),
                     _ => return None,
                 };
 

@@ -8,7 +8,7 @@ use crate::{
     module, source_map,
     typeck::{
         builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref, ParamInner,
-        Substitution, Tuple, Ty, TypeRef,
+        Provider, Substitution, Tuple, Ty, TypeRef,
     },
     Db, ExprId, Name, TyKind,
 };
@@ -17,6 +17,7 @@ use starpls_syntax::{
     ast::{self, AstNode, AstPtr, SyntaxNodePtr},
     TextSize,
 };
+use std::sync::Arc;
 
 pub use crate::typeck::{Field, Param};
 
@@ -59,6 +60,7 @@ impl<'a> Semantics<'a> {
             }
             TyKind::BuiltinFunction(func) => (*func).into(),
             TyKind::Rule(_) => Callable(CallableInner::Rule(ty.ty.clone())),
+            TyKind::Provider(provider) => Callable(CallableInner::Provider(provider.clone())),
             _ => return None,
         })
     }
@@ -337,6 +339,11 @@ impl Callable {
             CallableInner::IntrinsicFunction(func, _) => func.name(db),
             CallableInner::BuiltinFunction(func) => func.name(db),
             CallableInner::Rule(_) => Name::new_inline("rule"),
+            CallableInner::Provider(ref provider) => provider
+                .name
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(|| Name::new_inline("provider")),
         }
     }
 
@@ -356,6 +363,7 @@ impl Callable {
             .intern(),
             CallableInner::BuiltinFunction(func) => TyKind::BuiltinFunction(func).intern(),
             CallableInner::Rule(ref ty) => ty.clone().into(),
+            CallableInner::Provider(ref provider) => TyKind::Provider(provider.clone()).intern(),
         }
         .into()
     }
@@ -377,6 +385,9 @@ impl Callable {
                 TyKind::Rule(rule) => rule.doc.as_ref().map(Box::to_string),
                 _ => None,
             },
+            CallableInner::Provider(ref provider) => {
+                provider.doc.map(|doc| doc.value(db).to_string())
+            }
         }
     }
 
@@ -407,4 +418,5 @@ enum CallableInner {
     IntrinsicFunction(IntrinsicFunction, Option<Substitution>),
     BuiltinFunction(BuiltinFunction),
     Rule(Ty),
+    Provider(Arc<Provider>),
 }

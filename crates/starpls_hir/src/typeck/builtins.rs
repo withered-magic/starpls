@@ -103,14 +103,23 @@ impl BuiltinFunction {
                                     fields = Some(
                                         known_keys
                                             .iter()
-                                            .map(|(key, value)| ProviderField {
-                                                name: Name::from_str(&key.value(db)),
-                                                doc: match value.kind() {
-                                                    TyKind::String(Some(s)) => Some(
-                                                        s.value(db).to_string().into_boxed_str(),
-                                                    ),
-                                                    _ => None,
-                                                },
+                                            .flat_map(|(key, value)| {
+                                                let name = &key.value(db);
+                                                if !name.is_empty() {
+                                                    Some(ProviderField {
+                                                        name: Name::from_str(&key.value(db)),
+                                                        doc: match value.kind() {
+                                                            TyKind::String(Some(s)) => Some(
+                                                                s.value(db)
+                                                                    .to_string()
+                                                                    .into_boxed_str(),
+                                                            ),
+                                                            _ => None,
+                                                        },
+                                                    })
+                                                } else {
+                                                    None
+                                                }
                                             })
                                             .collect(),
                                     );

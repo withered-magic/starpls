@@ -6,9 +6,9 @@ use starpls_syntax::ast::AstNode;
 use std::{cmp::Ordering, fmt::Write};
 
 fn check_infer(input: &str, expect: Expect) {
-    let mut db = TestDatabase::default();
+    let mut db = TestDatabase::with_catch_all_functions(&["provider", "struct"]);
     let file_id = FileId(0);
-    let file = db.create_file(file_id, Dialect::Standard, input.to_string());
+    let file = db.create_file(file_id, Dialect::Bazel, input.to_string());
     let root = parse(&db, file).syntax(&db);
     let source_map = source_map(&db, file);
     let mut res = String::new();
@@ -584,16 +584,86 @@ fn test_string_repetition() {
     )
 }
 
-// TODO(withered-magic): Support the `struct` function in tests.
-// #[test]
-// fn test_struct() {
-//     check_infer(
-//         r#"
-// foo = struct(a = 1, b = "bar")
-// foo.a
-// foo.b
-// foo.c
-// "#,
-//         expect![],
-//     )
-// }
+#[test]
+fn test_struct() {
+    check_infer(
+        r#"
+foo = struct(a = 1, b = "bar")
+foo.a
+foo.b
+foo.c
+"#,
+        expect![[r#"
+            1..4 "foo": struct
+            7..13 "struct": def struct(**args, **kwargs) -> Unknown
+            18..19 "1": int
+            25..30 "\"bar\"": Literal["bar"]
+            7..31 "struct(a = 1, b = \"bar\")": struct
+            32..35 "foo": struct
+            32..37 "foo.a": int
+            38..41 "foo": struct
+            38..43 "foo.b": Literal["bar"]
+            44..47 "foo": struct
+            44..49 "foo.c": Unknown
+        "#]],
+    )
+}
+
+#[test]
+fn test_provider() {
+    check_infer(
+        r#"
+DataInfo = provider(
+    fields = {
+        "foo": "The foo field",
+        "bar": "The bar field",
+    },
+)
+
+info = DataInfo(foo = "foo", bar = "bar")
+    "#,
+        expect![[r#"
+            1..9 "DataInfo": Provider[DataInfo]
+            12..20 "provider": def provider(**args, **kwargs) -> Unknown
+            45..50 "\"foo\"": Literal["foo"]
+            52..67 "\"The foo field\"": Literal["The foo field"]
+            77..82 "\"bar\"": Literal["bar"]
+            84..99 "\"The bar field\"": Literal["The bar field"]
+            35..106 "{\n        \"foo\": \"The foo field\",\n        \"bar\": \"The bar field\",\n    }": dict[string, string]
+            12..109 "provider(\n    fields = {\n        \"foo\": \"The foo field\",\n        \"bar\": \"The bar field\",\n    },\n)": Provider[DataInfo]
+            111..115 "info": DataInfo
+            118..126 "DataInfo": Provider[DataInfo]
+            133..138 "\"foo\"": Literal["foo"]
+            146..151 "\"bar\"": Literal["bar"]
+            118..152 "DataInfo(foo = \"foo\", bar = \"bar\")": DataInfo
+        "#]],
+    )
+}
+
+#[test]
+fn test_provider_constructor() {
+    check_infer(
+        r#"
+def validate(*args, **kwargs):
+    pass
+
+DataInfo, data_info_ctor = provider(init = validate)
+info1 = DataInfo()
+info2 = DataInfo()
+    "#,
+        expect![[r#"
+            42..50 "DataInfo": Provider[DataInfo]
+            52..66 "data_info_ctor": ProviderRawConstructor
+            42..66 "DataInfo, data_info_ctor": tuple[Provider[DataInfo], ProviderRawConstructor]
+            69..77 "provider": def provider(**args, **kwargs) -> Unknown
+            85..93 "validate": def validate(*args: Unknown, **kwargs: Unknown) -> Unknown
+            69..94 "provider(init = validate)": tuple[Provider[DataInfo], ProviderRawConstructor]
+            95..100 "info1": DataInfo
+            103..111 "DataInfo": Provider[DataInfo]
+            103..113 "DataInfo()": DataInfo
+            114..119 "info2": DataInfo
+            122..130 "DataInfo": Provider[DataInfo]
+            122..132 "DataInfo()": DataInfo
+        "#]],
+    )
+}

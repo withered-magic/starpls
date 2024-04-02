@@ -284,22 +284,17 @@ impl TyCtxt<'_> {
                     TyKind::Bytes => (&int_ty, &int_ty, "bytes"),
                     TyKind::Range => (&int_ty, &int_ty, "range"),
                     kind => {
-                        let return_ty = if let TyKind::Provider(provider) = index_ty.kind() {
-                            match kind {
-                                TyKind::Any | TyKind::Unknown => {
-                                    Some(TyKind::ProviderInstance(provider.clone()).intern())
-                                }
-                                TyKind::BuiltinType(builtin)
-                                    if builtin.name(db).as_str() == "Target" =>
-                                {
-                                    Some(TyKind::ProviderInstance(provider.clone()).intern())
-                                }
-                                _ => None,
+                        let return_ty = match (kind, index_ty.kind()) {
+                            (TyKind::Any | TyKind::Unknown, TyKind::Provider(provider)) => {
+                                Some(TyKind::ProviderInstance(provider.clone()).intern())
                             }
-                        } else if matches!(kind, TyKind::Any | TyKind::Unknown) {
-                            Some(Ty::unknown())
-                        } else {
-                            None
+                            (TyKind::Any | TyKind::Unknown, _) => Some(Ty::unknown()),
+                            (TyKind::BuiltinType(builtin), TyKind::Provider(provider))
+                                if builtin.name(db).as_str() == "Target" =>
+                            {
+                                Some(TyKind::ProviderInstance(provider.clone()).intern())
+                            }
+                            _ => None,
                         }
                         .unwrap_or_else(|| {
                             self.add_expr_diagnostic_ty(

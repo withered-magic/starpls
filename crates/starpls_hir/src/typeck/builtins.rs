@@ -483,7 +483,7 @@ fn builtin_function(
         // We need to apply a few normalization steps to parameter types.
         params.push(if param.is_star_arg {
             BuiltinFunctionParam::ArgsList {
-                name: Name::from_str(&param.name),
+                name,
                 type_ref: maybe_strip_iterable_or_dict(normalize_type_ref(&param.r#type)),
                 doc: normalize_doc_text(&param.doc),
             }

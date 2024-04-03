@@ -1,16 +1,22 @@
 use anyhow::format_err;
-use line_index::{LineCol, LineIndex};
+use line_index::{LineIndex, WideEncoding, WideLineCol};
 use std::ops::Range;
 
 pub(crate) fn text_offset(
     line_index: &LineIndex,
     pos: lsp_types::Position,
 ) -> anyhow::Result<usize> {
+    let line_col = line_index
+        .to_utf8(
+            WideEncoding::Utf16,
+            WideLineCol {
+                line: pos.line,
+                col: pos.character,
+            },
+        )
+        .ok_or_else(|| format_err!("error converting wide line col to utf-8"))?;
     line_index
-        .offset(LineCol {
-            line: pos.line,
-            col: pos.character,
-        })
+        .offset(line_col)
         .map(|offset| offset.into())
         .ok_or_else(|| format_err!("invalid offset"))
 }
@@ -29,7 +35,6 @@ pub(crate) fn apply_document_content_changes(
     content_changes: Vec<lsp_types::TextDocumentContentChangeEvent>,
 ) -> String {
     let mut line_index = LineIndex::new(&current_document_contents);
-
     for change in content_changes {
         let Some(pos_range) = change.range else {
             continue;

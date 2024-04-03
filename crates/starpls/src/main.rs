@@ -66,7 +66,6 @@ fn run_server() -> anyhow::Result<()> {
         ..Default::default()
     })?;
     let initialize_params = serde_json::from_value(connection.initialize(server_capabilities)?)?;
-
     event_loop::process_connection(connection, initialize_params)?;
 
     // Graceful shutdown.

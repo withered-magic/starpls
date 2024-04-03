@@ -69,7 +69,7 @@ pub(crate) fn goto_definition(
                     .lookup_by_file_id(location.file_id),
             )
             .ok()?,
-            range,
+            range: range?,
         })
     };
 
@@ -119,7 +119,7 @@ pub(crate) fn completion(
             )?
             .unwrap_or_else(|| Vec::new())
             .into_iter()
-            .map(|item| {
+            .flat_map(|item| {
                 let sort_text = Some(item.sort_text());
                 let (insert_text, text_edit) = match item.mode {
                     Some(mode) => match mode {
@@ -127,14 +127,14 @@ pub(crate) fn completion(
                         TextEdit(edit) => (
                             None,
                             Some(lsp_types::CompletionTextEdit::Edit(lsp_types::TextEdit {
-                                range: convert::lsp_range_from_text_range(edit.range, line_index),
+                                range: convert::lsp_range_from_text_range(edit.range, line_index)?,
                                 new_text: edit.new_text,
                             })),
                         ),
                     },
                     None => (None, None),
                 };
-                lsp_types::CompletionItem {
+                Some(lsp_types::CompletionItem {
                     label: item.label,
                     kind: Some(match item.kind {
                         CompletionItemKind::Function => lsp_types::CompletionItemKind::FUNCTION,
@@ -151,7 +151,7 @@ pub(crate) fn completion(
                     insert_text,
                     text_edit,
                     ..Default::default()
-                }
+                })
             })
             .collect::<Vec<_>>()
             .into(),

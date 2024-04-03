@@ -495,6 +495,7 @@ impl Ty {
         self.kind() == &TyKind::Any
     }
 
+    #[allow(unused)]
     fn is_unknown(&self) -> bool {
         self.kind() == &TyKind::Unknown || self.kind() == &TyKind::Unbound
     }

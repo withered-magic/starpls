@@ -636,49 +636,56 @@ impl TyCtxt<'_> {
                     .collect(),
             ))
             .intern(),
+            Expr::If {
+                if_expr,
+                test,
+                else_expr,
+            } => {
+                self.infer_expr(file, *test);
+                Ty::union(
+                    [
+                        self.infer_expr(file, *if_expr),
+                        self.infer_expr(file, *else_expr),
+                    ]
+                    .into_iter(),
+                )
+            }
             _ => self.any_ty(),
         };
         self.set_expr_type(file, expr, ty)
     }
 
     fn infer_unary_expr(&mut self, file: File, parent: ExprId, expr: ExprId, op: UnaryOp) -> Ty {
-        let db = self.db;
         let ty = self.infer_expr(file, expr);
-        let mut unknown = || {
-            self.add_expr_diagnostic_ty(
+        match self.check_unary_expr(&ty, op) {
+            Ok(ty) => ty,
+            Err(()) => self.add_expr_diagnostic_ty(
                 file,
                 parent,
                 format!(
                     "Operator \"{}\" is not supported for type \"{}\"",
                     op,
-                    ty.display(db)
+                    ty.display(self.db)
                 ),
-            )
-        };
-
-        // Special handling for "Any".
-        if ty.is_any() {
-            return self.any_ty();
+            ),
         }
+    }
 
-        // Special handling for "Unknown" and "Unbound".
-        if ty.is_unknown() {
-            return self.unknown_ty();
-        }
-
-        let kind = ty.kind();
-        match op {
-            UnaryOp::Arith(_) => match kind {
-                TyKind::Int(_) => self.int_ty(),
-                TyKind::Float => self.float_ty(),
-                _ => unknown(),
-            },
-            UnaryOp::Inv => match kind {
-                TyKind::Int(_) => self.int_ty(),
-                _ => unknown(),
-            },
-            UnaryOp::Not => self.bool_ty(),
-        }
+    fn check_unary_expr(&self, ty: &Ty, op: UnaryOp) -> Result<Ty, ()> {
+        Ok(match (op, ty.kind()) {
+            (UnaryOp::Arith(_) | UnaryOp::Inv, TyKind::Int(_)) => self.int_ty(),
+            (UnaryOp::Arith(_), TyKind::Float) => self.float_ty(),
+            (UnaryOp::Not, _) => self.bool_ty(),
+            (_, TyKind::Unknown | TyKind::Any) => self.unknown_ty(),
+            (op, TyKind::Union(tys)) => {
+                let mut mapped_tys = Vec::with_capacity(tys.len());
+                for ty in tys.iter() {
+                    mapped_tys.push(self.check_unary_expr(ty, op)?);
+                }
+                Ty::union(mapped_tys.into_iter())
+            }
+            _ => return Err(()),
+        })
     }
 
     fn infer_binary_expr(

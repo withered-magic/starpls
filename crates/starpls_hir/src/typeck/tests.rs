@@ -747,3 +747,96 @@ def foo(foo, bar, baz):
         "#]],
     )
 }
+
+#[test]
+fn test_unary_expr() {
+    check_infer(
+        r#"
+a = +1
+b = -1
+c = ~1
+d = +1.
+e = -1.
+f = ~1.
+g = not 3
+h = 1 # type: Unknown
+i = not h
+j = 1 # type: Any
+k = not j
+l = ~"abc"
+m = 1 # type: int | float
+n = +m
+o = ~m
+"#,
+        expect![[r#"
+            1..2 "a": int
+            6..7 "1": Literal[1]
+            5..7 "+1": int
+            8..9 "b": int
+            13..14 "1": Literal[1]
+            12..14 "-1": int
+            15..16 "c": int
+            20..21 "1": Literal[1]
+            19..21 "~1": int
+            22..23 "d": float
+            27..29 "1.": float
+            26..29 "+1.": float
+            30..31 "e": float
+            35..37 "1.": float
+            34..37 "-1.": float
+            38..39 "f": Unknown
+            43..45 "1.": float
+            42..45 "~1.": Unknown
+            46..47 "g": bool
+            54..55 "3": Literal[3]
+            50..55 "not 3": bool
+            56..57 "h": Unknown
+            60..61 "1": Literal[1]
+            78..79 "i": bool
+            86..87 "h": Unknown
+            82..87 "not h": bool
+            88..89 "j": Any
+            92..93 "1": Literal[1]
+            106..107 "k": bool
+            114..115 "j": Any
+            110..115 "not j": bool
+            116..117 "l": Unknown
+            121..126 "\"abc\"": Literal["abc"]
+            120..126 "~\"abc\"": Unknown
+            127..128 "m": int | float
+            131..132 "1": Literal[1]
+            153..154 "n": int | float
+            158..159 "m": int | float
+            157..159 "+m": int | float
+            160..161 "o": Unknown
+            165..166 "m": int | float
+            164..166 "~m": Unknown
+
+            42..45 Operator "~" is not supported for type "float"
+            120..126 Operator "~" is not supported for type "Literal["abc"]"
+            164..166 Operator "~" is not supported for type "int | float"
+        "#]],
+    )
+}
+
+#[test]
+fn test_if_expr() {
+    check_infer(
+        r#"
+x = 3 if True else 4
+y = 1. if True else ""
+"#,
+        expect![[r#"
+            1..2 "x": int
+            5..6 "3": Literal[3]
+            10..14 "True": Literal[True]
+            20..21 "4": Literal[4]
+            5..21 "3 if True else 4": int
+            22..23 "y": float | string
+            26..28 "1.": float
+            32..36 "True": Literal[True]
+            42..44 "\"\"": Literal[""]
+            26..44 "1. if True else \"\"": float | string
+        "#]],
+    );
+}

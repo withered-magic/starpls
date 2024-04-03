@@ -3,6 +3,7 @@ use crate::{
     server::{Server, ServerSnapshot},
 };
 use starpls_ide::Cancelled;
+use std::panic;
 
 pub(crate) struct RequestDispatcher<'a> {
     req: Option<lsp_server::Request>,
@@ -23,7 +24,7 @@ impl<'a> RequestDispatcher<'a> {
     ) -> &mut Self
     where
         R: lsp_types::request::Request + 'static,
-        R::Params: serde::de::DeserializeOwned + Send,
+        R::Params: serde::de::DeserializeOwned + Send + panic::UnwindSafe,
     {
         let (req, params) = match self.parse::<R>() {
             Some(res) => res,
@@ -32,17 +33,36 @@ impl<'a> RequestDispatcher<'a> {
 
         let snapshot = self.server.snapshot();
         self.server.task_pool_handle.spawn(move || {
-            Task::ResponseReady(match f(&snapshot, params) {
-                Ok(res) => lsp_server::Response::new_ok(req.id, res),
-                Err(err) => match err.downcast::<Cancelled>() {
-                    Ok(_) => return Task::Retry(req),
-                    Err(err) => lsp_server::Response::new_err(
+            let res = panic::catch_unwind(|| f(&snapshot, params));
+            let response = match res {
+                Ok(res) => match res {
+                    Ok(res) => lsp_server::Response::new_ok(req.id, res),
+                    Err(err) => match err.downcast::<Cancelled>() {
+                        Ok(_) => return Task::Retry(req),
+                        Err(err) => lsp_server::Response::new_err(
+                            req.id,
+                            lsp_server::ErrorCode::RequestFailed as i32,
+                            err.to_string(),
+                        ),
+                    },
+                },
+                Err(err) => {
+                    let panic_message = err
+                        .downcast_ref::<String>()
+                        .map(String::as_str)
+                        .or_else(|| err.downcast_ref::<&str>().copied());
+                    lsp_server::Response::new_err(
                         req.id,
                         lsp_server::ErrorCode::RequestFailed as i32,
-                        err.to_string(),
-                    ),
-                },
-            })
+                        format!(
+                            "request handler panicked: {}",
+                            panic_message.unwrap_or("unknown reason")
+                        ),
+                    )
+                }
+            };
+
+            Task::ResponseReady(response)
         });
 
         self

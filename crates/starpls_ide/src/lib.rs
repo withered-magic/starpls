@@ -5,7 +5,7 @@ use starpls_bazel::Builtins;
 use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate};
 use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, LoadItemId, LoadStmt, ParamId, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
-use std::{fmt::Debug, io, sync::Arc};
+use std::{fmt::Debug, io, panic, sync::Arc};
 
 pub use crate::{
     completions::{CompletionItem, CompletionItemKind, CompletionMode},
@@ -281,13 +281,13 @@ impl AnalysisSnapshot {
     /// Helper method to handle Salsa cancellations.
     fn query<'a, F, T>(&'a self, f: F) -> Cancellable<T>
     where
-        F: FnOnce(&'a Database) -> T + std::panic::UnwindSafe,
+        F: FnOnce(&'a Database) -> T + panic::UnwindSafe,
     {
         starpls_hir::Cancelled::catch(|| f(&self.db))
     }
 }
 
-impl std::panic::RefUnwindSafe for AnalysisSnapshot {}
+impl panic::RefUnwindSafe for AnalysisSnapshot {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Location {

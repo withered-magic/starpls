@@ -471,13 +471,16 @@ pub struct Struct {
 }
 
 impl Struct {
-    pub fn call_expr(&self, db: &dyn Db) -> Option<ast::CallExpr> {
+    pub fn call_expr(&self, db: &dyn Db) -> Option<InFile<ast::CallExpr>> {
         let call_expr = source_map(db, self.call_expr.file)
             .expr_map_back
             .get(&self.call_expr.value)
             .cloned()?
             .cast::<ast::CallExpr>()?
             .try_to_node(&parse(db, self.call_expr.file).syntax(db))?;
-        Some(call_expr)
+        Some(InFile {
+            file: self.call_expr.file,
+            value: call_expr,
+        })
     }
 }

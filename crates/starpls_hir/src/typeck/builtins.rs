@@ -109,9 +109,10 @@ impl BuiltinFunction {
                                 }
                             }
                             "fields" => {
-                                if let TyKind::Dict(_, _, Some(known_keys)) = ty.kind() {
-                                    fields = Some(
-                                        known_keys
+                                if let TyKind::Dict(_, _, Some(lit)) = ty.kind() {
+                                    fields = Some((
+                                        lit.expr.clone(),
+                                        lit.known_keys
                                             .iter()
                                             .flat_map(|(key, value)| {
                                                 let name = &key.value(db);
@@ -132,7 +133,7 @@ impl BuiltinFunction {
                                                 }
                                             })
                                             .collect(),
-                                    );
+                                    ));
                                 }
                             }
                             "init" => {
@@ -220,9 +221,9 @@ impl BuiltinFunction {
                                 }
                             }
                             "attrs" => {
-                                if let TyKind::Dict(_, _, Some(known_keys)) = ty.kind() {
+                                if let TyKind::Dict(_, _, Some(lit)) = ty.kind() {
                                     attrs = Some(
-                                        known_keys
+                                        lit.known_keys
                                             .iter()
                                             .filter(|(_, ty)| ty.is_attribute())
                                             .map(|(name, ty)| {

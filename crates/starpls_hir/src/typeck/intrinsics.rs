@@ -1,10 +1,11 @@
 use crate::{
     def::{Argument, LiteralString},
-    typeck::{self, Binders, Substitution, Tuple as TupleVariants, Ty, TyKind},
+    typeck::{self, Binders, DictLiteral, Substitution, Tuple as TupleVariants, Ty, TyKind},
     Db, Name,
 };
 use rustc_hash::FxHashMap;
 use smallvec::smallvec;
+use std::sync::Arc;
 
 #[salsa::tracked]
 pub(crate) struct Intrinsics {
@@ -152,7 +153,17 @@ impl IntrinsicFunction {
             .cloned()
             .unwrap_or_else(|| Ty::unknown());
 
-        Some(TyKind::Dict(key_ty, value_ty, Some(known_keys.into())).intern())
+        Some(
+            TyKind::Dict(
+                key_ty,
+                value_ty,
+                Some(Arc::new(DictLiteral {
+                    expr: None,
+                    known_keys: known_keys.into_boxed_slice(),
+                })),
+            )
+            .intern(),
+        )
     }
 }
 

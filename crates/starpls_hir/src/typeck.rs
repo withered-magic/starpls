@@ -217,67 +217,66 @@ impl Ty {
             return Some(Fields::Intrinsic(self.intrinsic_class_fields(db, class)));
         }
 
-        let fields =
-            match kind {
-                TyKind::BuiltinType(ty) => Fields::Builtin(
-                    ty.fields(db)
-                        .iter()
-                        .enumerate()
-                        .map(|(index, field)| {
-                            (
-                                Field(FieldInner::BuiltinField { parent: *ty, index }),
-                                resolve_type_ref(db, &field.type_ref).0,
-                            )
-                        })
-                        .chain(ty.methods(db).iter().map(|func| {
-                            (
-                                Field(FieldInner::BuiltinMethod { func: *func }),
-                                TyKind::BuiltinFunction(*func).intern(),
-                            )
-                        })),
-                ),
-                TyKind::Union(tys) => {
-                    // TODO(withered-magic): Can probably do better than a Vec here?
-                    let mut acc = Vec::new();
-                    tys.iter().for_each(|ty| {
-                        let fields = match ty.fields(db) {
-                            Some(fields) => fields,
-                            None => return,
-                        };
+        let fields = match kind {
+            TyKind::BuiltinType(ty) => Fields::Builtin(
+                ty.fields(db)
+                    .iter()
+                    .enumerate()
+                    .map(|(index, field)| {
+                        (
+                            Field(FieldInner::BuiltinField { parent: *ty, index }),
+                            resolve_type_ref(db, &field.type_ref).0,
+                        )
+                    })
+                    .chain(ty.methods(db).iter().map(|func| {
+                        (
+                            Field(FieldInner::BuiltinMethod { func: *func }),
+                            TyKind::BuiltinFunction(*func).intern(),
+                        )
+                    })),
+            ),
+            TyKind::Union(tys) => {
+                // TODO(withered-magic): Can probably do better than a Vec here?
+                let mut acc = Vec::new();
+                tys.iter().for_each(|ty| {
+                    let fields = match ty.fields(db) {
+                        Some(fields) => fields,
+                        None => return,
+                    };
 
-                        for (field, ty) in fields {
-                            acc.push((field, ty));
-                        }
-                    });
-                    Fields::Union(acc.into_iter())
-                }
-                TyKind::Struct(struct_) => Fields::Struct(
-                    struct_
-                        .as_ref()
-                        .into_iter()
-                        .flat_map(|struct_| struct_.fields.iter())
-                        .map(|(name, ty)| {
-                            (
-                                Field(FieldInner::StructField { name: name.clone() }),
-                                ty.clone(),
-                            )
-                        }),
-                ),
-                TyKind::ProviderInstance(provider) => {
-                    Fields::Provider(provider.fields.as_ref()?.iter().enumerate().map(
-                        |(index, _)| {
-                            (
-                                Field(FieldInner::ProviderField {
-                                    provider: provider.clone(),
-                                    index,
-                                }),
-                                Ty::unknown(),
-                            )
-                        },
-                    ))
-                }
-                _ => return None,
-            };
+                    for (field, ty) in fields {
+                        acc.push((field, ty));
+                    }
+                });
+                Fields::Union(acc.into_iter())
+            }
+            TyKind::Struct(struct_) => Fields::Struct(
+                struct_
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|struct_| struct_.fields.iter())
+                    .map(|(name, ty)| {
+                        (
+                            Field(FieldInner::StructField { name: name.clone() }),
+                            ty.clone(),
+                        )
+                    }),
+            ),
+            TyKind::ProviderInstance(provider) => {
+                Fields::Provider(provider.fields.as_ref()?.1.iter().enumerate().map(
+                    |(index, _)| {
+                        (
+                            Field(FieldInner::ProviderField {
+                                provider: provider.clone(),
+                                index,
+                            }),
+                            Ty::unknown(),
+                        )
+                    },
+                ))
+            }
+            _ => return None,
+        };
 
         Some(fields)
     }
@@ -401,7 +400,7 @@ impl Ty {
             }
             TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
                 Params::Provider(provider.fields.iter().flat_map(|fields| {
-                    fields.iter().enumerate().map(|(index, _)| {
+                    fields.1.iter().enumerate().map(|(index, _)| {
                         (
                             Param(ParamInner::ProviderParam {
                                 provider: provider.clone(),
@@ -457,11 +456,7 @@ impl Ty {
         TyKind::List(ty).intern()
     }
 
-    pub(crate) fn dict(
-        key_ty: Ty,
-        value_ty: Ty,
-        known_keys: Option<Arc<[(LiteralString, Ty)]>>,
-    ) -> Ty {
+    pub(crate) fn dict(key_ty: Ty, value_ty: Ty, known_keys: Option<Arc<DictLiteral>>) -> Ty {
         TyKind::Dict(key_ty, value_ty, known_keys).intern()
     }
 
@@ -516,10 +511,10 @@ impl Ty {
                 Tuple::Variable(ty) => TyKind::Tuple(Tuple::Variable(ty.substitute(args))),
             }
             .intern(),
-            TyKind::Dict(key_ty, value_ty, known_keys) => Ty::dict(
+            TyKind::Dict(key_ty, value_ty, lit) => Ty::dict(
                 key_ty.substitute(args),
                 value_ty.substitute(args),
-                known_keys.clone(),
+                lit.as_ref().cloned(),
             ),
             TyKind::IntrinsicFunction(data, subst) => {
                 TyKind::IntrinsicFunction(*data, subst.substitute(args)).intern()
@@ -531,7 +526,7 @@ impl Ty {
 
     pub(crate) fn known_keys(&self) -> Option<&[(LiteralString, Ty)]> {
         match self.kind() {
-            TyKind::Dict(_, _, known_keys) => known_keys.as_ref().map(|known_keys| &**known_keys),
+            TyKind::Dict(_, _, known_keys) => known_keys.as_ref().map(|lit| &*lit.known_keys),
             _ => None,
         }
     }
@@ -655,7 +650,11 @@ impl Param {
                 ref provider,
                 index,
             } => Some(
-                provider.fields.as_ref().expect("expected provider fields")[index]
+                provider
+                    .fields
+                    .as_ref()
+                    .expect("expected provider fields")
+                    .1[index]
                     .name
                     .clone(),
             ),
@@ -689,7 +688,11 @@ impl Param {
                     .map(Box::to_string)
             }
             ParamInner::ProviderParam { provider, index } => {
-                return provider.fields.as_ref().expect("expected provider fields")[*index]
+                return provider
+                    .fields
+                    .as_ref()
+                    .expect("expected provider fields")
+                    .1[*index]
                     .doc
                     .as_ref()
                     .map(Box::to_string)
@@ -827,7 +830,11 @@ impl Field {
             FieldInner::ProviderField {
                 ref provider,
                 index,
-            } => provider.fields.as_ref().expect("expected provider fields")[index]
+            } => provider
+                .fields
+                .as_ref()
+                .expect("expected provider fields")
+                .1[index]
                 .name
                 .clone(),
         }
@@ -842,7 +849,11 @@ impl Field {
             FieldInner::ProviderField {
                 ref provider,
                 index,
-            } => provider.fields.as_ref().expect("expected provider fields")[index]
+            } => provider
+                .fields
+                .as_ref()
+                .expect("expected provider fields")
+                .1[index]
                 .doc
                 .as_ref()
                 .map(|doc| doc.to_string())
@@ -934,7 +945,7 @@ pub(crate) enum TyKind {
     /// A fixed-size collection of elements.
     Tuple(Tuple),
     /// A mapping of keys to values.
-    Dict(Ty, Ty, Option<Arc<[(LiteralString, Ty)]>>),
+    Dict(Ty, Ty, Option<Arc<DictLiteral>>),
     /// An iterable and indexable sequence of numbers. Obtained from
     /// the `range()` function.
     Range,
@@ -1077,7 +1088,7 @@ impl Rule {
 pub(crate) struct Provider {
     pub(crate) name: Option<Name>,
     pub(crate) doc: Option<LiteralString>,
-    pub(crate) fields: Option<Box<[ProviderField]>>,
+    pub(crate) fields: Option<(Option<InFile<ExprId>>, Box<[ProviderField]>)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1107,6 +1118,12 @@ impl TyKind {
 pub(crate) struct ProviderField {
     pub(crate) name: Name,
     pub(crate) doc: Option<Box<str>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct DictLiteral {
+    pub(crate) expr: Option<InFile<ExprId>>,
+    pub(crate) known_keys: Box<[(LiteralString, Ty)]>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

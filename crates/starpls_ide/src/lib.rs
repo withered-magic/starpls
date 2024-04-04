@@ -238,7 +238,7 @@ impl AnalysisSnapshot {
         let mut analysis = Analysis::new(Arc::new(SimpleFileLoader::from_file_set(file_set)));
         analysis.db.set_builtin_defs(
             Dialect::Bazel,
-            builtins_with_catch_all_functions(&["struct"]),
+            builtins_with_catch_all_functions(&["provider", "struct"]),
             Builtins::default(),
         );
         analysis.apply_change(change);

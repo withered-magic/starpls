@@ -306,6 +306,28 @@ impl Type {
         fields.map(|(name, ty)| (name, ty.into())).collect()
     }
 
+    pub fn provider_fields_source(&self, db: &dyn Db) -> Option<InFile<ast::DictExpr>> {
+        match self.ty.kind() {
+            TyKind::Provider(provider) | TyKind::ProviderInstance(provider) => {
+                let dict_expr = provider
+                    .fields
+                    .as_ref()
+                    .and_then(|fields| fields.0.clone())?;
+                source_map(db, dict_expr.file)
+                    .expr_map_back
+                    .get(&dict_expr.value)
+                    .and_then(|ptr| ptr.clone().cast::<ast::DictExpr>())
+                    .and_then(|ptr| {
+                        Some(InFile {
+                            file: dict_expr.file,
+                            value: ptr.try_to_node(&parse(db, dict_expr.file).syntax(db))?,
+                        })
+                    })
+            }
+            _ => None,
+        }
+    }
+
     pub fn known_keys(&self, db: &dyn Db) -> Option<Vec<String>> {
         self.ty.known_keys().map(|known_keys| {
             known_keys

@@ -29,7 +29,7 @@ fn find_selected_ranges(contents: &str) -> Vec<TextRange> {
                 ranges.push(TextRange::new(range_start, range_end))
             }
         }
-        line_starts.push(TextSize::of(line));
+        line_starts.push(line_starts.last().unwrap() + TextSize::of(line));
     }
     ranges
 }

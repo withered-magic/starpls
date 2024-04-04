@@ -11,17 +11,18 @@ use crate::{
         assign_tys,
         call::{Slot, SlotProvider, Slots},
         intrinsics::{IntrinsicFunctionParam, IntrinsicTypes},
-        resolve_type_ref, resolve_type_ref_opt, FileExprId, FileLoadItemId, FileLoadStmt,
-        FileParamId, Protocol, Substitution, Tuple, Ty, TyCtxt, TyKind, TypeRef,
+        resolve_type_ref, resolve_type_ref_opt, DictLiteral, FileExprId, FileLoadItemId,
+        FileLoadStmt, FileParamId, Protocol, Substitution, Tuple, Ty, TyCtxt, TyKind, TypeRef,
         TypecheckCancelled,
     },
     Name,
 };
-use starpls_common::{line_index, parse, Diagnostic, File, FileRange, Severity};
+use starpls_common::{line_index, parse, Diagnostic, File, FileRange, InFile, Severity};
 use starpls_syntax::{
     ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, BitwiseOp, UnaryOp},
     TextRange,
 };
+use std::sync::Arc;
 
 impl TyCtxt<'_> {
     pub fn infer_all_exprs(&mut self, file: File) {
@@ -168,7 +169,15 @@ impl TyCtxt<'_> {
                     })
                     .collect::<Vec<_>>();
 
-                TyKind::Dict(key_ty, value_ty, Some(known_keys.into())).intern()
+                TyKind::Dict(
+                    key_ty,
+                    value_ty,
+                    Some(Arc::new(DictLiteral {
+                        expr: Some(InFile { file, value: expr }),
+                        known_keys: known_keys.into_boxed_slice(),
+                    })),
+                )
+                .intern()
             }
             Expr::DictComp { entry, .. } => {
                 let key_ty = self.infer_expr(file, entry.key);

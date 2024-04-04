@@ -68,14 +68,24 @@ then you'll get autocomplete suggestions for the attributes on `ctx`, like `ctx.
 - Semantic highlighting
     - [x] Unbound variables
     - [x] Type mismatches
-    - [x] Function call argument validation (partial, works for Starlark builtins)
+    - [x] Function call argument validation
 - Auto-completion
     - [x] Variables/function parameters
-    - [x] Fields 
+    - [x] Builtin type fields
+    - [x] Rule attributes
+    - [x] Custom provider fields
+    - [x] Custom struct fields
 - Hover
     - [x] Variable types
     - [x] Function signatures
     - [x] Function/method docs
+- Go to definition
+    - [x] Variables (including `load`ed symbols)
+    - [x] Function definitions
+    - [x] Struct fields
+    - [x] Provider fields
+    - [x] Labels in `load` statements
+    - [ ] Rule attributes
 - Type inference
     - [x] Basic type inference
     - [ ] Dataflow analysis
@@ -87,8 +97,8 @@ then you'll get autocomplete suggestions for the attributes on `ctx`, like `ctx.
     - [x] Bazel builtins (partial, Bazel builtins are supported but still need to handle a number of edge cases)
     - Special handling for various Bazel constructs
         - [x] `struct`s (autocomplete fields)
-        - [ ] providers (autocomplete and validate fields)
-        - [ ] rules defined with `rule` and `repository_rule` (autocomplete and validate attributes)
+        - [x] providers (autocomplete and validate fields)
+        - [x] rules defined with `rule` and `repository_rule` (autocomplete and validate attributes)
 - Projects
     - [x] Type inference across multiple files
     - [x] `load` support

@@ -1565,7 +1565,7 @@ x                                       # [1]
 ```
 "#,
                 vec![positional_opt(non_literal_int())],
-                Any,
+                BoundVar(0),
                 1,
             ),
             function_field(
@@ -1689,7 +1689,7 @@ x.pop("four")                           # error: missing key
 ```
 "#,
                 vec![positional(BoundVar(0)), positional_opt(BoundVar(1))],
-                Any,
+                BoundVar(1),
                 2,
             ),
             function_field(

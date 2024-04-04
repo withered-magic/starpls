@@ -9,9 +9,18 @@ pub(crate) fn pick_best_token(
 
 // TODO(withered-magic): This logic should probably be more sophisticated, but it works well
 // enough for now.
-pub(crate) fn deindent_doc(doc: &str) -> String {
-    doc.lines()
-        .map(|line| format!("{}  ", line.trim_start()))
+pub(crate) fn unindent_doc(doc: &str) -> String {
+    unindent::unindent(doc)
+        .lines()
+        .map(|line| {
+            let trimmed = line.trim_start();
+            let num_trimmed = line.len() - trimmed.len();
+            let mut s = String::new();
+            (0..num_trimmed).for_each(|_| s.push_str("&nbsp;"));
+            s.push_str(trimmed);
+            s.push_str("  ");
+            s
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }

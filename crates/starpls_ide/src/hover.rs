@@ -1,5 +1,5 @@
 use crate::{
-    util::{deindent_doc, pick_best_token},
+    util::{pick_best_token, unindent_doc},
     Database, FilePosition,
 };
 use starpls_common::{parse, Db as _};
@@ -77,7 +77,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
         text.push_str("\n```\n");
 
         if let Some(doc) = ty.doc(db) {
-            text.push_str(&deindent_doc(&doc));
+            text.push_str(&unindent_doc(&doc));
             text.push('\n');
         }
 
@@ -121,7 +121,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             let mut text = String::from("```python\n(function) ");
             write!(text, "{}\n```\n", func.ty(db).display(db)).ok()?;
             if let Some(doc) = func.doc(db) {
-                text.push_str(&deindent_doc(&doc));
+                text.push_str(&unindent_doc(&doc));
                 text.push('\n');
             }
             return Some(text.into());

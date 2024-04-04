@@ -17,5 +17,6 @@ rust_library(
         "@crates//:dashmap",
         "@crates//:rustc-hash",
         "@crates//:salsa",
+        "@crates//:unindent",
     ],
 )

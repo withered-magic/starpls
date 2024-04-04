@@ -1,9 +1,6 @@
 use crate::Database;
-use starpls_common::{Db, FileId};
-use starpls_hir::lower;
+use starpls_common::FileId;
 
-pub(crate) fn show_hir(db: &Database, file_id: FileId) -> Option<String> {
-    let file = db.get_file(file_id)?;
-    let lower = lower(db, file);
-    Some(format!("{:#?}", lower.module(db)))
+pub(crate) fn show_hir(_db: &Database, _file_id: FileId) -> Option<String> {
+    Some("Note: This functionality is now deprecated.".to_string())
 }

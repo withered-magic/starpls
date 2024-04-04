@@ -33,7 +33,7 @@ pub(crate) enum FetchBazelExternalReposProgress {
 
 #[derive(Debug)]
 pub(crate) enum Task {
-    AnalysisRequested,
+    AnalysisRequested(Vec<FileId>),
     /// A new set of diagnostics has been processed and is ready for forwarding.
     DiagnosticsReady(Vec<(FileId, Vec<lsp_types::Diagnostic>)>),
     /// A request has been evaluated and its response is ready.
@@ -98,11 +98,15 @@ impl Server {
         // Update our diagnostics if a triggering event (e.g. document open/close/change) occured.
         // This is done asynchronously, so any new diagnostics resulting from this won't be seen until the next turn
         // of the event loop.
-        if self.process_changes() {
-            self.analysis_requested = false;
-            self.analysis_debouncer.sender.send(()).unwrap();
-        } else if self.analysis_requested {
-            self.update_diagnostics();
+        let (changed_file_ids, should_request_analysis) = self.process_changes();
+        if should_request_analysis {
+            self.analysis_requested_for_files = None;
+            self.analysis_debouncer
+                .sender
+                .send(changed_file_ids)
+                .unwrap();
+        } else if let Some(file_ids) = self.analysis_requested_for_files.take() {
+            self.update_diagnostics(file_ids);
         }
 
         let changed_file_ids = self.diagnostics_manager.take_changes();
@@ -139,13 +143,7 @@ impl Server {
         Ok(())
     }
 
-    fn update_diagnostics(&mut self) {
-        let file_ids = self
-            .document_manager
-            .read()
-            .iter()
-            .map(|(path, _)| path.clone())
-            .collect::<Vec<_>>();
+    fn update_diagnostics(&mut self, file_ids: Vec<FileId>) {
         let snapshot = self.snapshot();
         self.task_pool_handle.spawn(move || {
             let mut res = Vec::new();
@@ -161,7 +159,7 @@ impl Server {
 
             Task::DiagnosticsReady(res)
         });
-        self.analysis_requested = false;
+        self.analysis_requested_for_files = None;
     }
 
     fn register_and_handle_request(&mut self, req: lsp_server::Request) {
@@ -193,7 +191,7 @@ impl Server {
 
     fn handle_task(&mut self, task: Task) {
         match task {
-            Task::AnalysisRequested => self.analysis_requested = true,
+            Task::AnalysisRequested(file_ids) => self.analysis_requested_for_files = Some(file_ids),
             Task::DiagnosticsReady(diagnostics) => {
                 for (file_id, diagnostics) in diagnostics {
                     self.diagnostics_manager

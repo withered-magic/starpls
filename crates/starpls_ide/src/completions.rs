@@ -124,7 +124,11 @@ pub(crate) fn completions(
             // Add completions for parameter names (excluding arg list and kwarg dict parameters).
             for name in params
                 .iter()
-                .filter(|param| !param.is_args_list(db) && !param.is_kwargs_dict(db))
+                .filter(|param| {
+                    !param.is_args_list(db)
+                        && !param.is_kwargs_dict(db)
+                        && !param.is_positional_only(db)
+                })
                 .filter_map(|param| param.name(db))
             {
                 items.push(CompletionItem {

@@ -767,6 +767,16 @@ impl Param {
         }
     }
 
+    pub fn is_positional_only(&self, db: &dyn Db) -> bool {
+        match self.0 {
+            ParamInner::IntrinsicParam { parent, index } => matches!(
+                parent.params(db)[index],
+                IntrinsicFunctionParam::Positional { .. }
+            ),
+            _ => false,
+        }
+    }
+
     pub fn default_value(&self, db: &dyn Db) -> Option<String> {
         let common = common_attributes_query(db);
         let attr = match &self.0 {

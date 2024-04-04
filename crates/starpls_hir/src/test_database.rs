@@ -1,10 +1,8 @@
 use crate::{def::ExprId, BuiltinDefs, Db, Dialect, GlobalCtxt, LoadItemId, ParamId, Ty};
 use dashmap::{mapref::entry::Entry, DashMap};
-use starpls_bazel::{
-    builtin::{Callable, Param, Value},
-    Builtins,
-};
+use starpls_bazel::Builtins;
 use starpls_common::{File, FileId, LoadItemCandidate};
+use starpls_test_util::builtins_with_catch_all_functions;
 use std::{io, sync::Arc};
 
 #[derive(Default)]
@@ -123,33 +121,5 @@ impl crate::Db for TestDatabase {
                 Builtins::default(),
                 Builtins::default(),
             ))
-    }
-}
-
-fn builtins_with_catch_all_functions(names: &[&str]) -> Builtins {
-    Builtins {
-        global: names
-            .iter()
-            .map(|name| Value {
-                name: name.to_string(),
-                callable: Some(Callable {
-                    param: vec![
-                        Param {
-                            name: "*args".to_string(),
-                            is_star_arg: true,
-                            ..Default::default()
-                        },
-                        Param {
-                            name: "**kwargs".to_string(),
-                            is_star_star_arg: true,
-                            ..Default::default()
-                        },
-                    ],
-                    return_type: "Unknown".to_string(),
-                }),
-                ..Default::default()
-            })
-            .collect(),
-        ..Default::default()
     }
 }

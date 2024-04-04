@@ -1,7 +1,9 @@
 use crate::{
     def::Argument,
     source_map,
-    typeck::{Attribute, AttributeKind, Provider, ProviderField, Rule as TyRule, RuleKind, Tuple},
+    typeck::{
+        Attribute, AttributeKind, Provider, ProviderField, Rule as TyRule, RuleKind, Struct, Tuple,
+    },
     Db, ExprId, Name, Ty, TyKind, TypeRef,
 };
 use either::Either;
@@ -10,7 +12,7 @@ use smallvec::smallvec;
 use starpls_bazel::{
     attr, builtin::Callable, env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
 };
-use starpls_common::{parse, Dialect, File};
+use starpls_common::{parse, Dialect, File, InFile};
 use starpls_syntax::ast::{self, AstNode};
 use std::{collections::HashSet, sync::Arc};
 
@@ -86,9 +88,14 @@ impl BuiltinFunction {
                     })
                     .collect::<Vec<_>>()
                     .into_boxed_slice();
-                TyKind::Struct(fields)
+                TyKind::Struct(Some(Struct {
+                    call_expr: InFile {
+                        file,
+                        value: call_expr,
+                    },
+                    fields,
+                }))
             }
-
             (None, "provider") => {
                 let mut fields = None;
                 let mut doc = None;
@@ -102,9 +109,10 @@ impl BuiltinFunction {
                                 }
                             }
                             "fields" => {
-                                if let TyKind::Dict(_, _, Some(known_keys)) = ty.kind() {
-                                    fields = Some(
-                                        known_keys
+                                if let TyKind::Dict(_, _, Some(lit)) = ty.kind() {
+                                    fields = Some((
+                                        lit.expr.clone(),
+                                        lit.known_keys
                                             .iter()
                                             .flat_map(|(key, value)| {
                                                 let name = &key.value(db);
@@ -125,7 +133,7 @@ impl BuiltinFunction {
                                                 }
                                             })
                                             .collect(),
-                                    );
+                                    ));
                                 }
                             }
                             "init" => {
@@ -213,9 +221,9 @@ impl BuiltinFunction {
                                 }
                             }
                             "attrs" => {
-                                if let TyKind::Dict(_, _, Some(known_keys)) = ty.kind() {
+                                if let TyKind::Dict(_, _, Some(lit)) = ty.kind() {
                                     attrs = Some(
-                                        known_keys
+                                        lit.known_keys
                                             .iter()
                                             .filter(|(_, ty)| ty.is_attribute())
                                             .map(|(name, ty)| {

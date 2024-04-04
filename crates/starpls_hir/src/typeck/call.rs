@@ -215,7 +215,7 @@ impl Slots {
                 .fields
                 .iter()
                 .flat_map(|fields| {
-                    fields.iter().map(|field| Slot::Keyword {
+                    fields.1.iter().map(|field| Slot::Keyword {
                         name: field.name.clone(),
                         provider: SlotProvider::Missing,
                         positional: false,

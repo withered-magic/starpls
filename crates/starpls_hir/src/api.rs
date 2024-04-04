@@ -12,7 +12,7 @@ use crate::{
     },
     Db, ExprId, Name, TyKind,
 };
-use starpls_common::{parse, Diagnostic, Diagnostics, File};
+use starpls_common::{parse, Diagnostic, Diagnostics, File, InFile};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr, SyntaxNodePtr},
     TextSize,
@@ -306,6 +306,28 @@ impl Type {
         fields.map(|(name, ty)| (name, ty.into())).collect()
     }
 
+    pub fn provider_fields_source(&self, db: &dyn Db) -> Option<InFile<ast::DictExpr>> {
+        match self.ty.kind() {
+            TyKind::Provider(provider) | TyKind::ProviderInstance(provider) => {
+                let dict_expr = provider
+                    .fields
+                    .as_ref()
+                    .and_then(|fields| fields.0.clone())?;
+                source_map(db, dict_expr.file)
+                    .expr_map_back
+                    .get(&dict_expr.value)
+                    .and_then(|ptr| ptr.clone().cast::<ast::DictExpr>())
+                    .and_then(|ptr| {
+                        Some(InFile {
+                            file: dict_expr.file,
+                            value: ptr.try_to_node(&parse(db, dict_expr.file).syntax(db))?,
+                        })
+                    })
+            }
+            _ => None,
+        }
+    }
+
     pub fn known_keys(&self, db: &dyn Db) -> Option<Vec<String>> {
         self.ty.known_keys().map(|known_keys| {
             known_keys
@@ -325,6 +347,15 @@ impl Type {
     pub fn variable_tuple_element_ty(&self) -> Option<Type> {
         match self.ty.kind() {
             TyKind::Tuple(Tuple::Variable(ty)) => Some(ty.clone().into()),
+            _ => None,
+        }
+    }
+
+    pub fn try_as_struct(&self) -> Option<Struct> {
+        match self.ty.kind() {
+            TyKind::Struct(struct_) => struct_.as_ref().map(|struct_| Struct {
+                call_expr: struct_.call_expr.clone(),
+            }),
             _ => None,
         }
     }
@@ -432,4 +463,21 @@ enum CallableInner {
     Rule(Ty),
     Provider(Arc<Provider>),
     ProviderRawConstructor(Name, Arc<Provider>),
+}
+
+#[derive(Clone, Debug)]
+pub struct Struct {
+    call_expr: InFile<ExprId>,
+}
+
+impl Struct {
+    pub fn call_expr(&self, db: &dyn Db) -> Option<ast::CallExpr> {
+        let call_expr = source_map(db, self.call_expr.file)
+            .expr_map_back
+            .get(&self.call_expr.value)
+            .cloned()?
+            .cast::<ast::CallExpr>()?
+            .try_to_node(&parse(db, self.call_expr.file).syntax(db))?;
+        Some(call_expr)
+    }
 }

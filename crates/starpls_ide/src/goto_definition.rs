@@ -62,6 +62,7 @@ pub(crate) fn goto_definition(
         if let Some(struct_) = ty.try_as_struct() {
             let struct_call_expr = struct_.call_expr(db)?;
             return struct_call_expr
+                .value
                 .arguments()
                 .into_iter()
                 .flat_map(|args| args.arguments())
@@ -70,7 +71,7 @@ pub(crate) fn goto_definition(
                         let name = kwarg.name()?;
                         (name.name()?.text() == token.text()).then(|| {
                             vec![Location {
-                                file_id,
+                                file_id: struct_call_expr.file.id(db),
                                 range: name.syntax().text_range(),
                             }]
                         })

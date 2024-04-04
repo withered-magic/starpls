@@ -12,6 +12,7 @@ use starpls_bazel::{
     client::{BazelCLI, BazelClient},
     decode_builtins, Builtins,
 };
+use starpls_common::FileId;
 use starpls_ide::{Analysis, AnalysisSnapshot, Change};
 use std::{panic, path::PathBuf, sync::Arc, time::Duration};
 
@@ -25,7 +26,7 @@ pub(crate) struct Server {
     pub(crate) diagnostics_manager: DiagnosticsManager,
     pub(crate) analysis: Analysis,
     pub(crate) analysis_debouncer: AnalysisDebouncer,
-    pub(crate) analysis_requested: bool,
+    pub(crate) analysis_requested_for_files: Option<Vec<FileId>>,
     pub(crate) fetch_bazel_external_repos_requested: bool,
     pub(crate) bazel_client: Arc<dyn BazelClient>,
 }
@@ -90,7 +91,7 @@ impl Server {
             diagnostics_manager: Default::default(),
             analysis,
             analysis_debouncer: AnalysisDebouncer::new(DEBOUNCE_INTERVAL, sender),
-            analysis_requested: false,
+            analysis_requested_for_files: None,
             fetch_bazel_external_repos_requested: false,
             bazel_client,
         })
@@ -103,16 +104,17 @@ impl Server {
         }
     }
 
-    pub(crate) fn process_changes(&mut self) -> bool {
+    pub(crate) fn process_changes(&mut self) -> (Vec<FileId>, bool) {
         let mut change = Change::default();
         let mut document_manager = self.document_manager.write();
-        let (has_opened_or_closed_documents, changed_file_ids) = document_manager.take_changes();
+        let (has_opened_or_closed_documents, changes) = document_manager.take_changes();
+        let changed_file_ids = changes.iter().map(|(file_id, _)| *file_id).collect();
 
-        if changed_file_ids.is_empty() {
-            return has_opened_or_closed_documents;
+        if changes.is_empty() {
+            return (changed_file_ids, has_opened_or_closed_documents);
         }
 
-        for (file_id, change_kind) in changed_file_ids {
+        for (file_id, change_kind) in changes {
             let document = match document_manager.get(file_id) {
                 Some(document) => document,
                 None => continue,
@@ -131,7 +133,7 @@ impl Server {
 
         // Apply the change to our analyzer. This will cancel any affected active Salsa operations.
         self.analysis.apply_change(change);
-        true
+        (changed_file_ids, true)
     }
 
     pub(crate) fn send_request<R: lsp_types::request::Request>(&mut self, params: R::Params) {

@@ -126,10 +126,6 @@ impl DocumentManager {
         self.documents.get(&file_id)
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (&FileId, &Document)> {
-        self.documents.iter()
-    }
-
     pub(crate) fn lookup_by_file_id(&self, file_id: FileId) -> PathBuf {
         self.path_interner.lookup_by_file_id(file_id)
     }

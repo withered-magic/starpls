@@ -12,7 +12,7 @@ use crate::{
     },
     Db, ExprId, Name, TyKind,
 };
-use starpls_common::{parse, Diagnostic, Diagnostics, File};
+use starpls_common::{parse, Diagnostic, Diagnostics, File, InFile};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr, SyntaxNodePtr},
     TextSize,
@@ -328,6 +328,15 @@ impl Type {
             _ => None,
         }
     }
+
+    pub fn try_as_struct(&self) -> Option<Struct> {
+        match self.ty.kind() {
+            TyKind::Struct(struct_) => struct_.as_ref().map(|struct_| Struct {
+                call_expr: struct_.call_expr.clone(),
+            }),
+            _ => None,
+        }
+    }
 }
 
 impl From<Ty> for Type {
@@ -432,4 +441,21 @@ enum CallableInner {
     Rule(Ty),
     Provider(Arc<Provider>),
     ProviderRawConstructor(Name, Arc<Provider>),
+}
+
+#[derive(Clone, Debug)]
+pub struct Struct {
+    call_expr: InFile<ExprId>,
+}
+
+impl Struct {
+    pub fn call_expr(&self, db: &dyn Db) -> Option<ast::CallExpr> {
+        let call_expr = source_map(db, self.call_expr.file)
+            .expr_map_back
+            .get(&self.call_expr.value)
+            .cloned()?
+            .cast::<ast::CallExpr>()?
+            .try_to_node(&parse(db, self.call_expr.file).syntax(db))?;
+        Some(call_expr)
+    }
 }

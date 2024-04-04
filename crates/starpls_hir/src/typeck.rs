@@ -18,7 +18,7 @@ use either::Either;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use smallvec::{smallvec, SmallVec};
-use starpls_common::{parse, Diagnostic, Dialect, File};
+use starpls_common::{parse, Diagnostic, Dialect, File, InFile};
 use starpls_intern::{impl_internable, Interned};
 use starpls_syntax::ast::SyntaxNodePtr;
 use std::{
@@ -251,12 +251,18 @@ impl Ty {
                     });
                     Fields::Union(acc.into_iter())
                 }
-                TyKind::Struct(fields) => Fields::Struct(fields.iter().map(|(name, ty)| {
-                    (
-                        Field(FieldInner::StructField { name: name.clone() }),
-                        ty.clone(),
-                    )
-                })),
+                TyKind::Struct(struct_) => Fields::Struct(
+                    struct_
+                        .as_ref()
+                        .into_iter()
+                        .flat_map(|struct_| struct_.fields.iter())
+                        .map(|(name, ty)| {
+                            (
+                                Field(FieldInner::StructField { name: name.clone() }),
+                                ty.clone(),
+                            )
+                        }),
+                ),
                 TyKind::ProviderInstance(provider) => {
                     Fields::Provider(provider.fields.as_ref()?.iter().enumerate().map(
                         |(index, _)| {
@@ -951,7 +957,7 @@ pub(crate) enum TyKind {
     Union(SmallVec<[Ty; 2]>),
     /// A Bazel struct (https://bazel.build/rules/lib/builtins/struct).
     /// Use this instead of the `struct` type defined in `builtin.pb`.
-    Struct(Box<[(Name, Ty)]>),
+    Struct(Option<Struct>),
     /// A Bazel attribute (https://bazel.build/rules/lib/builtins/Attribute.html).
     /// Use this instead of the `Attribute` type defined in `builtin.pb`.
     Attribute(Attribute),
@@ -1072,6 +1078,12 @@ pub(crate) struct Provider {
     pub(crate) name: Option<Name>,
     pub(crate) doc: Option<LiteralString>,
     pub(crate) fields: Option<Box<[ProviderField]>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct Struct {
+    pub(crate) call_expr: InFile<ExprId>,
+    pub(crate) fields: Box<[(Name, Ty)]>,
 }
 
 impl TyKind {
@@ -1267,7 +1279,7 @@ impl<'a> TypeRefResolver<'a> {
                         .flatten()
                         .map(|type_ref| self.resolve_type_ref_inner(&type_ref)),
                 ),
-                "struct" | "structure" => TyKind::Struct(Vec::new().into_boxed_slice()).intern(),
+                "struct" | "structure" => TyKind::Struct(None).intern(),
                 name => match builtin_types.types(self.db).get(name).cloned() {
                     Some(ty) => ty,
                     None => {

@@ -1,4 +1,4 @@
-use std::io;
+use std::{fmt::Debug, io};
 
 use starpls_syntax::{
     line_index as syntax_line_index, parse_module, LineIndex, Module, ParseTree, SyntaxNode,
@@ -120,4 +120,10 @@ fn line_index_query(db: &dyn Db, file: File) -> LineIndexResult {
 
 pub fn line_index(db: &dyn Db, file: File) -> &LineIndex {
     line_index_query(db, file).inner(db)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct InFile<T: Clone + Debug> {
+    pub file: File,
+    pub value: T,
 }

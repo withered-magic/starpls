@@ -13,13 +13,13 @@ pub(crate) fn goto_definition(
     let sema = Semantics::new(db);
     let file = db.get_file(file_id)?;
     let parse = parse(db, file);
-    let parent = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
+    let token = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
         T![ident] => 2,
         T!['('] | T![')'] | T!['['] | T![']'] | T!['{'] | T!['}'] => 0,
         kind if kind.is_trivia_token() => 0,
         _ => 1,
-    })?
-    .parent()?;
+    })?;
+    let parent = token.parent()?;
 
     if let Some(name_ref) = ast::NameRef::cast(parent.clone()) {
         let name = Name::from_ast_node(name_ref.clone());
@@ -52,6 +52,29 @@ pub(crate) fn goto_definition(
                 })
                 .collect(),
         );
+    }
+
+    if let Some(name) = ast::Name::cast(parent.clone()) {
+        let dot_expr = ast::DotExpr::cast(name.syntax().parent()?)?;
+        let ty = sema.type_of_expr(file, &dot_expr.expr()?)?;
+        let struct_ = ty.try_as_struct()?;
+        let struct_call_expr = struct_.call_expr(db)?;
+        return struct_call_expr
+            .arguments()
+            .into_iter()
+            .flat_map(|args| args.arguments())
+            .find_map(|arg| match arg {
+                ast::Argument::Keyword(kwarg) => {
+                    let name = kwarg.name()?;
+                    (name.name()?.text() == token.text()).then(|| {
+                        vec![Location {
+                            file_id,
+                            range: name.syntax().text_range(),
+                        }]
+                    })
+                }
+                _ => None,
+            });
     }
 
     let load_module = ast::LoadModule::cast(parent)?;
@@ -111,6 +134,18 @@ def f():
 def f(abc):
       #^^
       a$0bc
+"#,
+        )
+    }
+
+    #[test]
+    fn test_struct_field() {
+        check_goto_definition(
+            r#"
+s = struct(foo = "bar")
+           #^^
+
+s.f$0oo
 "#,
         )
     }

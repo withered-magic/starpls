@@ -5,6 +5,7 @@ use starpls_bazel::Builtins;
 use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate};
 use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, LoadItemId, LoadStmt, ParamId, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
+use starpls_test_util::builtins_with_catch_all_functions;
 use std::{fmt::Debug, io, panic, sync::Arc};
 
 pub use crate::{
@@ -233,8 +234,13 @@ impl AnalysisSnapshot {
         let file_id = FileId(0);
         file_set.insert("main.star".to_string(), (file_id, contents.to_string()));
         let mut change = Change::default();
-        change.create_file(file_id, Dialect::Standard, contents.to_string());
+        change.create_file(file_id, Dialect::Bazel, contents.to_string());
         let mut analysis = Analysis::new(Arc::new(SimpleFileLoader::from_file_set(file_set)));
+        analysis.db.set_builtin_defs(
+            Dialect::Bazel,
+            builtins_with_catch_all_functions(&["struct"]),
+            Builtins::default(),
+        );
         analysis.apply_change(change);
         (analysis.snapshot(), file_id)
     }

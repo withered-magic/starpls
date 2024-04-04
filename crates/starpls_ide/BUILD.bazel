@@ -13,6 +13,7 @@ rust_library(
         "//crates/starpls_common",
         "//crates/starpls_hir",
         "//crates/starpls_syntax",
+        "//crates/starpls_test_util",
         "@crates//:dashmap",
         "@crates//:rustc-hash",
         "@crates//:salsa",

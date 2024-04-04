@@ -1,3 +1,7 @@
+use starpls_bazel::{
+    builtin::{Callable, Param, Value},
+    Builtins,
+};
 use starpls_syntax::{TextRange, TextSize};
 
 pub const CURSOR_MARKER: &str = "$0";
@@ -28,4 +32,31 @@ fn find_selected_ranges(contents: &str) -> Vec<TextRange> {
         line_starts.push(TextSize::of(line));
     }
     ranges
+}
+pub fn builtins_with_catch_all_functions(names: &[&str]) -> Builtins {
+    Builtins {
+        global: names
+            .iter()
+            .map(|name| Value {
+                name: name.to_string(),
+                callable: Some(Callable {
+                    param: vec![
+                        Param {
+                            name: "*args".to_string(),
+                            is_star_arg: true,
+                            ..Default::default()
+                        },
+                        Param {
+                            name: "**kwargs".to_string(),
+                            is_star_star_arg: true,
+                            ..Default::default()
+                        },
+                    ],
+                    return_type: "Unknown".to_string(),
+                }),
+                ..Default::default()
+            })
+            .collect(),
+        ..Default::default()
+    }
 }

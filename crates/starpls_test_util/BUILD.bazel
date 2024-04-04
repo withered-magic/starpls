@@ -6,6 +6,7 @@ rust_library(
     name = "starpls_test_util",
     srcs = glob(["src/**/*.rs"]),
     deps = [
+        "//crates/starpls_bazel",
         "//crates/starpls_syntax",
     ],
 )

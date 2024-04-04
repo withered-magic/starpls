@@ -1,5 +1,5 @@
 {
-  "checksum": "b2a7d1d0a1d47ab661de39458a335e6d3877eacc5d7cec4b21fd224c2382422f",
+  "checksum": "629124c68ababa2289c66227ccce72f5c9adb7ebe1715a3a31f80fc8c79ffe70",
   "crates": {
     "addr2line 0.21.0": {
       "name": "addr2line",
@@ -3854,85 +3854,149 @@
           "**"
         ],
         "crate_features": {
-          "common": [
-            "extra_traits",
-            "std"
-          ],
+          "common": [],
           "selects": {
             "aarch64-apple-darwin": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "aarch64-apple-ios": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "aarch64-apple-ios-sim": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "aarch64-fuchsia": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "aarch64-linux-android": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "aarch64-unknown-linux-gnu": [
-              "default"
+              "default",
+              "std"
             ],
             "aarch64-unknown-nixos-gnu": [
-              "default"
+              "default",
+              "std"
             ],
             "aarch64-unknown-nto-qnx710": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "arm-unknown-linux-gnueabi": [
-              "default"
+              "default",
+              "std"
             ],
             "armv7-linux-androideabi": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "armv7-unknown-linux-gnueabi": [
-              "default"
+              "default",
+              "std"
             ],
             "i686-apple-darwin": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "i686-linux-android": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "i686-unknown-freebsd": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "i686-unknown-linux-gnu": [
-              "default"
+              "default",
+              "std"
             ],
             "powerpc-unknown-linux-gnu": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
+            ],
+            "riscv32imc-unknown-none-elf": [
+              "extra_traits",
+              "std"
+            ],
+            "riscv64gc-unknown-none-elf": [
+              "extra_traits",
+              "std"
             ],
             "s390x-unknown-linux-gnu": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
+            ],
+            "thumbv7em-none-eabi": [
+              "extra_traits",
+              "std"
+            ],
+            "thumbv8m.main-none-eabi": [
+              "extra_traits",
+              "std"
+            ],
+            "wasm32-unknown-unknown": [
+              "extra_traits",
+              "std"
             ],
             "wasm32-wasi": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "x86_64-apple-darwin": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "x86_64-apple-ios": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "x86_64-fuchsia": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "x86_64-linux-android": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "x86_64-unknown-freebsd": [
-              "default"
+              "default",
+              "extra_traits",
+              "std"
             ],
             "x86_64-unknown-linux-gnu": [
-              "default"
+              "default",
+              "std"
             ],
             "x86_64-unknown-nixos-gnu": [
-              "default"
+              "default",
+              "std"
+            ],
+            "x86_64-unknown-none": [
+              "extra_traits",
+              "std"
             ]
           }
         },
@@ -4025,40 +4089,13 @@
         ],
         "crate_features": {
           "common": [
+            "elf",
+            "errno",
             "general",
             "ioctl",
             "no_std"
           ],
-          "selects": {
-            "aarch64-unknown-linux-gnu": [
-              "elf",
-              "errno"
-            ],
-            "aarch64-unknown-nixos-gnu": [
-              "elf",
-              "errno"
-            ],
-            "arm-unknown-linux-gnueabi": [
-              "elf",
-              "errno"
-            ],
-            "armv7-unknown-linux-gnueabi": [
-              "elf",
-              "errno"
-            ],
-            "i686-unknown-linux-gnu": [
-              "elf",
-              "errno"
-            ],
-            "x86_64-unknown-linux-gnu": [
-              "elf",
-              "errno"
-            ],
-            "x86_64-unknown-nixos-gnu": [
-              "elf",
-              "errno"
-            ]
-          }
+          "selects": {}
         },
         "edition": "2021",
         "version": "0.4.13"
@@ -7809,6 +7846,10 @@
               "id": "salsa-2022 0.1.0",
               "target": "salsa_2022",
               "alias": "salsa"
+            },
+            {
+              "id": "unindent 0.2.3",
+              "target": "unindent"
             }
           ],
           "selects": {}
@@ -9343,6 +9384,36 @@
         "version": "0.1.22"
       },
       "license": "MIT/Apache-2.0"
+    },
+    "unindent 0.2.3": {
+      "name": "unindent",
+      "version": "0.2.3",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/unindent/0.2.3/download",
+          "sha256": "c7de7d73e1754487cb58364ee906a499937a0dfabd86bcb980fa99ec8c8fa2ce"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "unindent",
+            "crate_root": "src/lib.rs",
+            "srcs": [
+              "**/*.rs"
+            ]
+          }
+        }
+      ],
+      "library_target_name": "unindent",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "edition": "2021",
+        "version": "0.2.3"
+      },
+      "license": "MIT OR Apache-2.0"
     },
     "url 2.5.0": {
       "name": "url",
@@ -11143,7 +11214,8 @@
     "serde_json 1.0.114",
     "smallvec 1.11.2",
     "smol_str 0.2.0",
-    "triomphe 0.1.11"
+    "triomphe 0.1.11",
+    "unindent 0.2.3"
   ],
   "direct_dev_deps": [
     "expect-test 1.4.1",

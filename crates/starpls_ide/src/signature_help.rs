@@ -1,5 +1,5 @@
 use crate::{
-    util::{deindent_doc, pick_best_token},
+    util::{pick_best_token, unindent_doc},
     Database, FilePosition,
 };
 use starpls_common::{parse, Db as _};
@@ -145,7 +145,7 @@ pub(crate) fn signature_help(
     Some(SignatureHelp {
         signatures: vec![SignatureInfo {
             label,
-            documentation: func.doc(db).map(|doc| deindent_doc(&doc)),
+            documentation: func.doc(db).map(|doc| unindent_doc(&doc)),
             parameters: Some(
                 params
                     .into_iter()

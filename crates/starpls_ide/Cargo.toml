@@ -14,3 +14,4 @@ starpls_common = { path = "../starpls_common" }
 starpls_hir = { path = "../starpls_hir" }
 starpls_syntax = { path = "../starpls_syntax" }
 starpls_test_util = { path = "../starpls_test_util" }
+unindent = "0.2.3"

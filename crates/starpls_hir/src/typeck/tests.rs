@@ -840,3 +840,30 @@ y = 1. if True else ""
         "#]],
     );
 }
+
+#[test]
+fn test_sequence_assignments() {
+    check_infer(
+        r#"
+def foo(foo, bar):
+    # type: (list[Unknown], Iterable[Unknown]) -> Unknown
+    pass
+
+a = [] # type: Sequence[Unknown]
+foo(a, a)
+foo([], [])
+"#,
+        expect![[r#"
+            88..89 "a": Sequence[Unknown]
+            92..94 "[]": list[Unknown]
+            121..124 "foo": def foo(foo: list[Unknown], bar: Iterable[Unknown]) -> Unknown
+            125..126 "a": Sequence[Unknown]
+            128..129 "a": Sequence[Unknown]
+            121..130 "foo(a, a)": Unknown
+            131..134 "foo": def foo(foo: list[Unknown], bar: Iterable[Unknown]) -> Unknown
+            135..137 "[]": list[Unknown]
+            139..141 "[]": list[Unknown]
+            131..142 "foo([], [])": Unknown
+        "#]],
+    );
+}

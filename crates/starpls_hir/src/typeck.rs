@@ -1370,14 +1370,17 @@ pub(crate) fn resolve_type_ref_opt(db: &dyn Db, type_ref: Option<TypeRef>) -> Ty
 pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
     use Protocol::*;
 
-    // // Assignments involving "Any", "Unknown", or "Unbound" at the top-level
-    // // are always valid to avoid confusion.
+    // Assignments involving "Any", "Unknown", or "Unbound" at the top-level
+    // are always valid to avoid confusion.
     match (source.kind(), target.kind()) {
         (TyKind::Any | TyKind::Unknown, _) | (_, TyKind::Any | TyKind::Unknown) => true,
         (
             TyKind::List(source),
             TyKind::List(target) | TyKind::Protocol(Iterable(target) | Sequence(target)),
-        ) => assign_tys(db, source, target),
+        )
+        | (TyKind::Protocol(Sequence(source)), TyKind::List(target)) => {
+            assign_tys(db, source, target)
+        }
         (TyKind::Tuple(tuple), TyKind::Protocol(Iterable(target) | Sequence(target))) => {
             match tuple {
                 Tuple::Simple(sources) => {
@@ -1387,9 +1390,9 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
             }
         }
         (TyKind::Protocol(source), TyKind::Protocol(target)) => match &(source, target) {
-            (Iterable(source), Iterable(target)) | (Sequence(source), Sequence(target)) => {
-                assign_tys(db, source, target)
-            }
+            (Iterable(source), Iterable(target))
+            | (Sequence(source), Sequence(target))
+            | (Sequence(source), Iterable(target)) => assign_tys(db, source, target),
             _ => false,
         },
         (TyKind::Dict(key_source, value_source, _), TyKind::Dict(key_target, value_target, _)) => {

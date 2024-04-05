@@ -49,6 +49,11 @@ pub(crate) struct ServerArgs {
     /// Infer attributes on a rule implementation function's context parameter.
     #[clap(long = "experimental_infer_ctx_attributes", default_value_t = false)]
     experimental_infer_ctx_attributes: bool,
+    #[clap(
+        long = "experimental_enable_dataflow_analysis",
+        default_value_t = false
+    )]
+    experimental_enable_dataflow_analysis: bool,
 }
 
 fn main() -> anyhow::Result<()> {

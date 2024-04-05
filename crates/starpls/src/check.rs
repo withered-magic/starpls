@@ -1,4 +1,6 @@
 use crate::document::{DefaultFileLoader, PathInterner};
+use anyhow::anyhow;
+use rustc_hash::FxHashMap;
 use starpls_common::{Dialect, Severity};
 use starpls_ide::{Analysis, Change};
 use std::{fmt::Write, fs, path::PathBuf, sync::Arc};
@@ -9,17 +11,31 @@ pub(crate) fn run_check(paths: &[String], output_base: &str) -> anyhow::Result<(
     let mut analysis = Analysis::new(Arc::new(loader));
     let mut change = Change::default();
     let mut file_ids = Vec::new();
+    let mut original_paths = FxHashMap::default();
 
     for path in paths {
-        let path = PathBuf::from(path);
-        if interner.lookup_by_path_buf(&path).is_some() {
+        let err = || anyhow!("Could not resolve the path {:?} as a Starlark file.", path);
+        let resolved = PathBuf::from(path).canonicalize().map_err(|_| err())?;
+        if interner.lookup_by_path_buf(&resolved).is_some() {
             continue;
         }
-        let contents = fs::read_to_string(&path)?;
-        let dialect = match path.extension().and_then(|ext| ext.to_str()) {
-            _ => Dialect::Standard,
+
+        let contents = fs::read_to_string(&resolved).map_err(|_| err())?;
+        let dialect = match resolved.extension().and_then(|ext| ext.to_str()) {
+            Some("bzl" | "bazel") => Dialect::Bazel,
+            Some("sky" | "star") => Dialect::Standard,
+            None if matches!(
+                resolved.file_name().and_then(|name| name.to_str()),
+                Some("WORKSPACE | BUILD")
+            ) =>
+            {
+                Dialect::Bazel
+            }
+            _ => return Err(err()),
         };
-        let file_id = interner.intern_path(path);
+
+        let file_id = interner.intern_path(resolved);
+        original_paths.insert(file_id, path);
         change.create_file(file_id, dialect, contents);
         file_ids.push(file_id);
     }
@@ -36,7 +52,7 @@ pub(crate) fn run_check(paths: &[String], output_base: &str) -> anyhow::Result<(
             writeln!(
                 &mut rendered_diagnostics,
                 "{}:{}:{} - {}: {}",
-                interner.lookup_by_file_id(file_id).display(),
+                original_paths.get(&file_id).unwrap(),
                 start.line + 1,
                 start.col + 1,
                 match diagnostic.severity {

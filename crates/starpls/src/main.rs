@@ -34,7 +34,7 @@ enum Commands {
         /// Paths to typecheck.
         paths: Vec<String>,
         /// Path to the Bazel output base.
-        #[clap(long)]
+        #[clap(long = "output_base")]
         output_base: String,
     },
     Server,

@@ -123,10 +123,7 @@ Steps to get up and running:
 ## Known Issues
 
 - Type guards are not supported.
-
-## Disclaimer
-
-This project is still heavily WIP, so expect a decent amount of bugs and crashes if you decide to try it out! Additionally, I've elected to focus on implementing the core Starlark specification first before introducing Bazel- or Buck2-specific features.
+- Type checker shows some false positives, especially when the definitions from the builtins proto are incorrect.
 
 ## Acknowledgements
 

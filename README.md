@@ -122,6 +122,7 @@ Steps to get up and running:
 
 ## Known Issues
 
+- Loading external dependencies when `bzlmod` is enabled does not yet work correctly (coming soon, tracking in https://github.com/withered-magic/starpls/issues/168).
 - Type guards are not supported.
 - Type checker shows some false positives, especially when the definitions from the builtins proto are incorrect.
 

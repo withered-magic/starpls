@@ -55,14 +55,14 @@ impl Server {
         let bazel_client = Arc::new(BazelCLI::default());
 
         // Determine the workspace root.
-        eprintln!("server: determining workspace root");
         let workspace = bazel_client.workspace().unwrap_or_else(|err| {
             eprintln!("server: failed to run `bazel info workspace`: {}", err);
             Default::default()
         });
 
+        eprintln!("server: workspace root: {:?}", workspace);
+
         // Determine the output base for the purpose of resolving external repositories.
-        eprintln!("server: determining workspace output_base");
         let external_output_base = bazel_client
             .output_base()
             .map(|output_base| output_base.join("external"))
@@ -71,17 +71,17 @@ impl Server {
                 Default::default()
             });
 
+        eprintln!("server: external output base: {:?}", external_output_base);
+
         let bzlmod_enabled = workspace.join("MODULE.bazel").try_exists().unwrap_or(false);
+        eprintln!("server: bzlmod_enabled = {}", bzlmod_enabled);
 
         // Additionally, load builtin rules.
-        eprintln!("server: running \"bazel info build-language\"");
+        eprintln!("server: fetching builtin rules via `bazel info build-language`");
         let rules = match load_bazel_build_language(&*bazel_client) {
             Ok(builtins) => builtins,
             Err(err) => {
-                eprintln!(
-                    "server: failed to run \"bazel info build-language\": {}",
-                    err
-                );
+                eprintln!("server: failed to run `bazel info build-language`: {}", err);
                 Default::default()
             }
         };

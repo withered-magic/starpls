@@ -73,7 +73,18 @@ impl Server {
 
         eprintln!("server: external output base: {:?}", external_output_base);
 
-        let bzlmod_enabled = workspace.join("MODULE.bazel").try_exists().unwrap_or(false);
+        let bzlmod_enabled = workspace.join("MODULE.bazel").try_exists().unwrap_or(false)
+            && {
+                eprintln!("server: checking for `bazel mod dump_repo_mapping` capability");
+                match bazel_client.dump_repo_mapping("") {
+                    Ok(_) => true,
+                    Err(_) => {
+                        eprintln!("server: installed Bazel version doesn't support `bazel mod dump_repo_mapping`, disabling bzlmod support");
+                        false
+                    }
+                }
+            };
+
         eprintln!("server: bzlmod_enabled = {}", bzlmod_enabled);
 
         // Additionally, load builtin rules.

@@ -1,5 +1,5 @@
 {
-  "checksum": "629124c68ababa2289c66227ccce72f5c9adb7ebe1715a3a31f80fc8c79ffe70",
+  "checksum": "3377260485f0df9827523cf9cb45cd52662c4cfc72e73fd3b9bc2e30f0ecdced",
   "crates": {
     "addr2line 0.21.0": {
       "name": "addr2line",
@@ -453,13 +453,13 @@
       },
       "license": "MIT OR Apache-2.0"
     },
-    "anyhow 1.0.79": {
+    "anyhow 1.0.81": {
       "name": "anyhow",
-      "version": "1.0.79",
+      "version": "1.0.81",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/anyhow/1.0.79/download",
-          "sha256": "080e9890a082662b09c1ad45f567faeeb47f22b5fb23895fbe1e651e718e25ca"
+          "url": "https://static.crates.io/crates/anyhow/1.0.81/download",
+          "sha256": "0952808a6c2afd1aa8947271f3a60f1a6763c7b912d210184c5149b5cf147247"
         }
       },
       "targets": [
@@ -497,14 +497,14 @@
         "deps": {
           "common": [
             {
-              "id": "anyhow 1.0.79",
+              "id": "anyhow 1.0.81",
               "target": "build_script_build"
             }
           ],
           "selects": {}
         },
         "edition": "2018",
-        "version": "1.0.79"
+        "version": "1.0.81"
       },
       "build_script_attrs": {
         "data_glob": [
@@ -3854,149 +3854,85 @@
           "**"
         ],
         "crate_features": {
-          "common": [],
+          "common": [
+            "extra_traits",
+            "std"
+          ],
           "selects": {
             "aarch64-apple-darwin": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "aarch64-apple-ios": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "aarch64-apple-ios-sim": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "aarch64-fuchsia": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "aarch64-linux-android": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "aarch64-unknown-linux-gnu": [
-              "default",
-              "std"
+              "default"
             ],
             "aarch64-unknown-nixos-gnu": [
-              "default",
-              "std"
+              "default"
             ],
             "aarch64-unknown-nto-qnx710": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "arm-unknown-linux-gnueabi": [
-              "default",
-              "std"
+              "default"
             ],
             "armv7-linux-androideabi": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "armv7-unknown-linux-gnueabi": [
-              "default",
-              "std"
+              "default"
             ],
             "i686-apple-darwin": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "i686-linux-android": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "i686-unknown-freebsd": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "i686-unknown-linux-gnu": [
-              "default",
-              "std"
+              "default"
             ],
             "powerpc-unknown-linux-gnu": [
-              "default",
-              "extra_traits",
-              "std"
-            ],
-            "riscv32imc-unknown-none-elf": [
-              "extra_traits",
-              "std"
-            ],
-            "riscv64gc-unknown-none-elf": [
-              "extra_traits",
-              "std"
+              "default"
             ],
             "s390x-unknown-linux-gnu": [
-              "default",
-              "extra_traits",
-              "std"
-            ],
-            "thumbv7em-none-eabi": [
-              "extra_traits",
-              "std"
-            ],
-            "thumbv8m.main-none-eabi": [
-              "extra_traits",
-              "std"
-            ],
-            "wasm32-unknown-unknown": [
-              "extra_traits",
-              "std"
+              "default"
             ],
             "wasm32-wasi": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "x86_64-apple-darwin": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "x86_64-apple-ios": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "x86_64-fuchsia": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "x86_64-linux-android": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "x86_64-unknown-freebsd": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "x86_64-unknown-linux-gnu": [
-              "default",
-              "std"
+              "default"
             ],
             "x86_64-unknown-nixos-gnu": [
-              "default",
-              "std"
-            ],
-            "x86_64-unknown-none": [
-              "extra_traits",
-              "std"
+              "default"
             ]
           }
         },
@@ -4089,13 +4025,40 @@
         ],
         "crate_features": {
           "common": [
-            "elf",
-            "errno",
             "general",
             "ioctl",
             "no_std"
           ],
-          "selects": {}
+          "selects": {
+            "aarch64-unknown-linux-gnu": [
+              "elf",
+              "errno"
+            ],
+            "aarch64-unknown-nixos-gnu": [
+              "elf",
+              "errno"
+            ],
+            "arm-unknown-linux-gnueabi": [
+              "elf",
+              "errno"
+            ],
+            "armv7-unknown-linux-gnueabi": [
+              "elf",
+              "errno"
+            ],
+            "i686-unknown-linux-gnu": [
+              "elf",
+              "errno"
+            ],
+            "x86_64-unknown-linux-gnu": [
+              "elf",
+              "errno"
+            ],
+            "x86_64-unknown-nixos-gnu": [
+              "elf",
+              "errno"
+            ]
+          }
         },
         "edition": "2021",
         "version": "0.4.13"
@@ -5760,7 +5723,7 @@
         "deps": {
           "common": [
             {
-              "id": "anyhow 1.0.79",
+              "id": "anyhow 1.0.81",
               "target": "anyhow"
             },
             {
@@ -5815,7 +5778,7 @@
         "deps": {
           "common": [
             {
-              "id": "anyhow 1.0.79",
+              "id": "anyhow 1.0.81",
               "target": "anyhow"
             },
             {
@@ -7540,7 +7503,7 @@
         "deps": {
           "common": [
             {
-              "id": "anyhow 1.0.79",
+              "id": "anyhow 1.0.81",
               "target": "anyhow"
             },
             {
@@ -7631,12 +7594,16 @@
         "deps": {
           "common": [
             {
-              "id": "anyhow 1.0.79",
+              "id": "anyhow 1.0.81",
               "target": "anyhow"
             },
             {
               "id": "bytes 1.5.0",
               "target": "bytes"
+            },
+            {
+              "id": "parking_lot 0.12.1",
+              "target": "parking_lot"
             },
             {
               "id": "prost 0.12.3",
@@ -7720,6 +7687,10 @@
         "deps": {
           "common": [
             {
+              "id": "anyhow 1.0.81",
+              "target": "anyhow"
+            },
+            {
               "id": "salsa-2022 0.1.0",
               "target": "salsa_2022",
               "alias": "salsa"
@@ -7754,6 +7725,10 @@
         ],
         "deps": {
           "common": [
+            {
+              "id": "anyhow 1.0.81",
+              "target": "anyhow"
+            },
             {
               "id": "crossbeam 0.8.3",
               "target": "crossbeam"
@@ -7834,6 +7809,10 @@
         ],
         "deps": {
           "common": [
+            {
+              "id": "anyhow 1.0.81",
+              "target": "anyhow"
+            },
             {
               "id": "dashmap 5.5.3",
               "target": "dashmap"
@@ -10699,7 +10678,7 @@
         "deps": {
           "common": [
             {
-              "id": "anyhow 1.0.79",
+              "id": "anyhow 1.0.81",
               "target": "anyhow"
             },
             {
@@ -11188,7 +11167,7 @@
     ]
   },
   "direct_deps": [
-    "anyhow 1.0.79",
+    "anyhow 1.0.81",
     "bytes 1.5.0",
     "cc 1.0.83",
     "clap 4.5.4",

@@ -1,4 +1,4 @@
-use std::{fmt::Debug, io};
+use std::fmt::Debug;
 
 use starpls_syntax::{
     line_index as syntax_line_index, parse_module, LineIndex, Module, ParseTree, SyntaxNode,
@@ -52,7 +52,8 @@ pub trait Db: salsa::DbWithJar<Jar> {
     fn update_file(&mut self, file_id: FileId, contents: String);
 
     /// Loads a file from the filesystem.
-    fn load_file(&self, path: &str, dialect: Dialect, from: FileId) -> io::Result<Option<File>>;
+    fn load_file(&self, path: &str, dialect: Dialect, from: FileId)
+        -> anyhow::Result<Option<File>>;
 
     /// Returns the `File` identified by the given `FileId`.
     fn get_file(&self, file_id: FileId) -> Option<File>;
@@ -61,7 +62,7 @@ pub trait Db: salsa::DbWithJar<Jar> {
         &self,
         path: &str,
         from: FileId,
-    ) -> io::Result<Option<Vec<LoadItemCandidate>>>;
+    ) -> anyhow::Result<Option<Vec<LoadItemCandidate>>>;
 }
 
 #[salsa::input]

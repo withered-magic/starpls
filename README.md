@@ -125,6 +125,8 @@ Steps to get up and running:
 - Loading external dependencies when `bzlmod` is enabled does not yet work correctly (coming soon, tracking in https://github.com/withered-magic/starpls/issues/168).
 - Type guards are not supported.
 - Type checker shows some false positives, especially when the definitions from the builtins proto are incorrect.
+- When `--enable-bzlmod` is set, type checking/goto definition may be slow for a given file the first time it is loaded. This is because resolution of repo mappings, done with `bazel mod dump_repo_mappings`, is done lazily.
+    - Additionally, when new dependencies are added, the language server needs to be restarted to refresh the mappings. This is due to the fact that repo mappings are cached, which is necessary to avoid slow type checking.
 
 ## Acknowledgements
 

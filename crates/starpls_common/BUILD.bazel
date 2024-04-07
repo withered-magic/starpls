@@ -10,6 +10,7 @@ rust_library(
     },
     deps = [
         "//crates/starpls_syntax",
+        "@crates//:anyhow",
         "@crates//:salsa",
     ],
 )

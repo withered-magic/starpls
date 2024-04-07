@@ -3,7 +3,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use starpls_bazel::Builtins;
 use starpls_common::{File, FileId, LoadItemCandidate};
 use starpls_test_util::builtins_with_catch_all_functions;
-use std::{io, sync::Arc};
+use std::sync::Arc;
 
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, crate::Jar)]
@@ -52,7 +52,12 @@ impl starpls_common::Db for TestDatabase {
         }
     }
 
-    fn load_file(&self, _path: &str, _dialect: Dialect, _from: FileId) -> io::Result<Option<File>> {
+    fn load_file(
+        &self,
+        _path: &str,
+        _dialect: Dialect,
+        _from: FileId,
+    ) -> anyhow::Result<Option<File>> {
         Ok(Some(File::new(
             self,
             FileId(0),
@@ -69,7 +74,7 @@ impl starpls_common::Db for TestDatabase {
         &self,
         _path: &str,
         _from: FileId,
-    ) -> io::Result<Option<Vec<LoadItemCandidate>>> {
+    ) -> anyhow::Result<Option<Vec<LoadItemCandidate>>> {
         Ok(None)
     }
 }

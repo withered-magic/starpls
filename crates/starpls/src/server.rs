@@ -14,7 +14,7 @@ use starpls_bazel::{
 };
 use starpls_common::FileId;
 use starpls_ide::{Analysis, AnalysisSnapshot, Change};
-use std::{panic, path::PathBuf, sync::Arc, time::Duration};
+use std::{panic, sync::Arc, time::Duration};
 
 const DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -52,17 +52,26 @@ impl Server {
             }
         };
 
-        // Determine the output base for the purpose of resolving external repositories.
         let bazel_client = Arc::new(BazelCLI::default());
 
+        // Determine the workspace root.
+        eprintln!("server: determining workspace root");
+        let workspace = bazel_client.workspace().unwrap_or_else(|err| {
+            eprintln!("server: failed to run `bazel info workspace`: {}", err);
+            Default::default()
+        });
+
+        // Determine the output base for the purpose of resolving external repositories.
         eprintln!("server: determining workspace output_base");
-        let output_base = match bazel_client.output_base() {
-            Ok(output_base) => output_base,
-            Err(err) => {
-                eprintln!("server: failed to run \"bazel info output_base\": {}", err);
-                PathBuf::new()
-            }
-        };
+        let external_output_base = bazel_client
+            .output_base()
+            .map(|output_base| output_base.join("external"))
+            .unwrap_or_else(|err| {
+                eprintln!("server: failed to run `bazel info output_base`: {}", err);
+                Default::default()
+            });
+
+        let bzlmod_enabled = workspace.join("MODULE.bazel").try_exists().unwrap_or(false);
 
         // Additionally, load builtin rules.
         eprintln!("server: running \"bazel info build-language\"");
@@ -78,7 +87,13 @@ impl Server {
         };
 
         let path_interner = Arc::new(PathInterner::default());
-        let loader = DefaultFileLoader::new(path_interner.clone(), output_base);
+        let loader = DefaultFileLoader::new(
+            bazel_client.clone(),
+            path_interner.clone(),
+            workspace,
+            external_output_base,
+            bzlmod_enabled,
+        );
 
         let mut analysis = Analysis::new(Arc::new(loader));
         analysis.set_builtin_defs(builtins, rules);

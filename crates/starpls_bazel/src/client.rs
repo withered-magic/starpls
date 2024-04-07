@@ -35,6 +35,15 @@ impl BazelCLI {
         let output = Command::new(&self.executable).args(args).output()?;
         Ok(output.stdout)
     }
+
+    fn dump_repo_mapping(&self, repo: &str) -> anyhow::Result<HashMap<String, String>> {
+        let output = self.run_command(&["mod", "dump_repo_mapping", repo])?;
+        let json = String::from_utf8(output)?;
+        let mut mappings = Deserializer::from_str(&json).into_iter::<HashMap<String, String>>();
+        Ok(mappings
+            .next()
+            .ok_or_else(|| anyhow!("missing repo mapping for repository: {:?}", repo))??)
+    }
 }
 
 impl BazelClient for BazelCLI {
@@ -64,13 +73,8 @@ impl BazelClient for BazelCLI {
         }
         drop(mappings);
 
-        // Otherwise, fetch the repo mapping and cache it.
-        let output = self.run_command(&["mod", "dump_repo_mapping", from_repo])?;
-        let json = String::from_utf8(output)?;
-        let mut mappings = Deserializer::from_str(&json).into_iter::<HashMap<String, String>>();
-        let mapping = mappings
-            .next()
-            .ok_or_else(|| anyhow!("missing repo mapping for repository: {:?}", from_repo))??;
+        // Otherwise, fetch the repo mapping and cache it. For now, we always cache the result, even if the call failed.
+        let mapping = self.dump_repo_mapping(from_repo).unwrap_or_default();
         let canonical_repo = mapping.get(apparent_repo).cloned();
         self.repo_mappings
             .write()

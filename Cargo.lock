@@ -94,9 +94,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.79"
+version = "1.0.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "080e9890a082662b09c1ad45f567faeeb47f22b5fb23895fbe1e651e718e25ca"
+checksum = "0952808a6c2afd1aa8947271f3a60f1a6763c7b912d210184c5149b5cf147247"
 
 [[package]]
 name = "arc-swap"
@@ -1404,6 +1404,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
+ "parking_lot",
  "prost 0.12.3",
  "prost-build 0.12.3",
  "prost-types 0.12.3",
@@ -1418,6 +1419,7 @@ dependencies = [
 name = "starpls_common"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "salsa-2022",
  "starpls_syntax",
 ]
@@ -1426,6 +1428,7 @@ dependencies = [
 name = "starpls_hir"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "crossbeam",
  "dashmap",
  "either",
@@ -1448,6 +1451,7 @@ dependencies = [
 name = "starpls_ide"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "dashmap",
  "rustc-hash",
  "salsa-2022",

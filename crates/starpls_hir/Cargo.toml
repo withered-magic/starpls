@@ -20,6 +20,7 @@ parking_lot = "0.12.1"
 smol_str = "0.2.0"
 smallvec = "1.11.2"
 either = "1.10.0"
+anyhow = "1.0.81"
 
 [dev-dependencies]
 expect-test = "1.4.1"

@@ -6,7 +6,7 @@ use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate};
 use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, LoadItemId, LoadStmt, ParamId, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use starpls_test_util::builtins_with_catch_all_functions;
-use std::{fmt::Debug, io, panic, sync::Arc};
+use std::{fmt::Debug, panic, sync::Arc};
 
 pub use crate::{
     completions::{CompletionItem, CompletionItemKind, CompletionMode},
@@ -80,7 +80,12 @@ impl starpls_common::Db for Database {
         }
     }
 
-    fn load_file(&self, path: &str, dialect: Dialect, from: FileId) -> io::Result<Option<File>> {
+    fn load_file(
+        &self,
+        path: &str,
+        dialect: Dialect,
+        from: FileId,
+    ) -> anyhow::Result<Option<File>> {
         let (file_id, contents) = match self.loader.load_file(path, dialect, from)? {
             Some(res) => res,
             None => return Ok(None),
@@ -104,7 +109,7 @@ impl starpls_common::Db for Database {
         &self,
         path: &str,
         from: FileId,
-    ) -> io::Result<Option<Vec<LoadItemCandidate>>> {
+    ) -> anyhow::Result<Option<Vec<LoadItemCandidate>>> {
         let dialect = match self.get_file(from) {
             Some(file) => file.dialect(self),
             None => return Ok(None),
@@ -315,7 +320,7 @@ pub trait FileLoader: Send + Sync + 'static {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> io::Result<Option<(FileId, Option<String>)>>;
+    ) -> anyhow::Result<Option<(FileId, Option<String>)>>;
 
     /// Returns a list of Starlark modules that can be loaded from the given `path`.
     fn list_load_candidates(
@@ -323,7 +328,7 @@ pub trait FileLoader: Send + Sync + 'static {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> io::Result<Option<Vec<LoadItemCandidate>>>;
+    ) -> anyhow::Result<Option<Vec<LoadItemCandidate>>>;
 }
 
 /// [`FileLoader`] that looks up files by path from a hash map.
@@ -344,7 +349,7 @@ impl FileLoader for SimpleFileLoader {
         path: &str,
         _dialect: Dialect,
         _from: FileId,
-    ) -> io::Result<Option<(FileId, Option<String>)>> {
+    ) -> anyhow::Result<Option<(FileId, Option<String>)>> {
         Ok(self
             .file_set
             .get(path)
@@ -356,7 +361,7 @@ impl FileLoader for SimpleFileLoader {
         _path: &str,
         _dialect: Dialect,
         _from: FileId,
-    ) -> io::Result<Option<Vec<LoadItemCandidate>>> {
+    ) -> anyhow::Result<Option<Vec<LoadItemCandidate>>> {
         Ok(None)
     }
 }

@@ -14,7 +14,7 @@ use starpls_bazel::{
 };
 use starpls_common::FileId;
 use starpls_ide::{Analysis, AnalysisSnapshot, Change};
-use std::{panic, path::PathBuf, sync::Arc, time::Duration};
+use std::{panic, sync::Arc, time::Duration};
 
 const DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -52,33 +52,59 @@ impl Server {
             }
         };
 
-        // Determine the output base for the purpose of resolving external repositories.
         let bazel_client = Arc::new(BazelCLI::default());
 
-        eprintln!("server: determining workspace output_base");
-        let output_base = match bazel_client.output_base() {
-            Ok(output_base) => output_base,
-            Err(err) => {
-                eprintln!("server: failed to run \"bazel info output_base\": {}", err);
-                PathBuf::new()
-            }
-        };
+        // Determine the workspace root.
+        let workspace = bazel_client.workspace().unwrap_or_else(|err| {
+            eprintln!("server: failed to run `bazel info workspace`: {}", err);
+            Default::default()
+        });
+
+        eprintln!("server: workspace root: {:?}", workspace);
+
+        // Determine the output base for the purpose of resolving external repositories.
+        let external_output_base = bazel_client
+            .output_base()
+            .map(|output_base| output_base.join("external"))
+            .unwrap_or_else(|err| {
+                eprintln!("server: failed to run `bazel info output_base`: {}", err);
+                Default::default()
+            });
+
+        eprintln!("server: external output base: {:?}", external_output_base);
+
+        let bzlmod_enabled = workspace.join("MODULE.bazel").try_exists().unwrap_or(false)
+            && {
+                eprintln!("server: checking for `bazel mod dump_repo_mapping` capability");
+                match bazel_client.dump_repo_mapping("") {
+                    Ok(_) => true,
+                    Err(_) => {
+                        eprintln!("server: installed Bazel version doesn't support `bazel mod dump_repo_mapping`, disabling bzlmod support");
+                        false
+                    }
+                }
+            };
+
+        eprintln!("server: bzlmod_enabled = {}", bzlmod_enabled);
 
         // Additionally, load builtin rules.
-        eprintln!("server: running \"bazel info build-language\"");
+        eprintln!("server: fetching builtin rules via `bazel info build-language`");
         let rules = match load_bazel_build_language(&*bazel_client) {
             Ok(builtins) => builtins,
             Err(err) => {
-                eprintln!(
-                    "server: failed to run \"bazel info build-language\": {}",
-                    err
-                );
+                eprintln!("server: failed to run `bazel info build-language`: {}", err);
                 Default::default()
             }
         };
 
         let path_interner = Arc::new(PathInterner::default());
-        let loader = DefaultFileLoader::new(path_interner.clone(), output_base);
+        let loader = DefaultFileLoader::new(
+            bazel_client.clone(),
+            path_interner.clone(),
+            workspace,
+            external_output_base,
+            bzlmod_enabled,
+        );
 
         let mut analysis = Analysis::new(Arc::new(loader));
         analysis.set_builtin_defs(builtins, rules);

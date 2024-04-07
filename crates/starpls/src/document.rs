@@ -1,9 +1,11 @@
+use anyhow::{anyhow, bail, Ok};
 use dashmap::DashMap;
 use indexmap::IndexSet;
 use parking_lot::RwLock;
 use rustc_hash::FxHasher;
 use starpls_bazel::{
     self,
+    client::BazelClient,
     label::{PartialParse, RepoKind},
     Label, ParseError,
 };
@@ -13,7 +15,7 @@ use std::{
     collections::HashMap,
     fs,
     hash::BuildHasherDefault,
-    io, mem,
+    mem,
     path::{Path, PathBuf, MAIN_SEPARATOR},
     sync::Arc,
 };
@@ -162,19 +164,30 @@ impl PathInterner {
     }
 }
 
-#[derive(Debug)]
 pub(crate) struct DefaultFileLoader {
+    bazel_client: Arc<dyn BazelClient>,
     interner: Arc<PathInterner>,
-    output_base: PathBuf,
+    workspace: PathBuf,
+    external_output_base: PathBuf,
     cached_load_results: DashMap<String, PathBuf>,
+    bzlmod_enabled: bool,
 }
 
 impl DefaultFileLoader {
-    pub(crate) fn new(interner: Arc<PathInterner>, output_base: PathBuf) -> Self {
+    pub(crate) fn new(
+        bazel_client: Arc<dyn BazelClient>,
+        interner: Arc<PathInterner>,
+        workspace: PathBuf,
+        external_output_base: PathBuf,
+        bzlmod_enabled: bool,
+    ) -> Self {
         Self {
+            bazel_client,
             interner,
-            output_base,
+            workspace,
+            external_output_base,
             cached_load_results: Default::default(),
+            bzlmod_enabled,
         }
     }
 
@@ -216,7 +229,7 @@ impl FileLoader for DefaultFileLoader {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> io::Result<Option<(FileId, Option<String>)>> {
+    ) -> anyhow::Result<Option<(FileId, Option<String>)>> {
         let path = match dialect {
             Dialect::Standard => {
                 // Find the importing file's directory.
@@ -229,16 +242,13 @@ impl FileLoader for DefaultFileLoader {
             Dialect::Bazel => {
                 // Parse the load path as a Bazel label.
                 let label = match Label::parse(path) {
-                    Ok(label) => label,
-                    Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.err)),
+                    Result::Ok(label) => label,
+                    Err(err) => return Err(anyhow!("error parsing label: {}", err.err)),
                 };
 
                 // Only .bzl files can be loaded.
                 if !label.target().ends_with(".bzl") {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "cannot load a non-bzl file",
-                    ));
+                    bail!("cannot load a non-bzl file");
                 }
 
                 let repo_kind = label.kind();
@@ -246,26 +256,50 @@ impl FileLoader for DefaultFileLoader {
                 match self.read_cache_result(&repo_kind, path, from) {
                     Some(path) => path,
                     None => {
-                        let (root, package) = match &repo_kind {
-                            RepoKind::Apparent => (
-                                { self.output_base.join("external").join(label.repo()) },
-                                PathBuf::new(),
-                            ),
-                            RepoKind::Current => {
-                                // Find the Bazel workspace root.
-                                let from_path = self.interner.lookup_by_file_id(from);
-                                match starpls_bazel::resolve_workspace(&from_path)? {
-                                    Some(root) => root,
-                                    None => {
-                                        return Err(io::Error::new(
-                                            io::ErrorKind::Other,
-                                            "not in a Bazel workspace",
-                                        ))
+                        let (root, package) =
+                            match &repo_kind {
+                                RepoKind::Apparent if self.bzlmod_enabled => {
+                                    let from_path = self.interner.lookup_by_file_id(from);
+                                    let from_repo =
+                                        if from_path.starts_with(&self.workspace) {
+                                            ""
+                                        } else {
+                                            let from_path = from_path
+                                                .strip_prefix(&self.external_output_base)?;
+                                            match from_path.components().next().as_ref().and_then(
+                                                |component| component.as_os_str().to_str(),
+                                            ) {
+                                                Some(from_repo) => from_repo,
+                                                None => return Ok(None),
+                                            }
+                                        };
+
+                                    let canonical_repo = self
+                                        .bazel_client
+                                        .resolve_repo_from_mapping(label.repo(), from_repo)?;
+
+                                    match canonical_repo {
+                                        Some(canonical_repo) => (
+                                            self.external_output_base.join(canonical_repo),
+                                            PathBuf::new(),
+                                        ),
+                                        None => return Ok(None),
                                     }
                                 }
-                            }
-                            _ => return Ok(None),
-                        };
+                                RepoKind::Canonical | RepoKind::Apparent => {
+                                    (self.external_output_base.join(label.repo()), PathBuf::new())
+                                }
+                                RepoKind::Current => {
+                                    // Find the Bazel workspace root.
+                                    let from_path = self.interner.lookup_by_file_id(from);
+                                    match starpls_bazel::resolve_workspace(&from_path)? {
+                                        Some(root) => root,
+                                        None => {
+                                            bail!("not in a Bazel workspace")
+                                        }
+                                    }
+                                }
+                            };
 
                         // Loading targets using a relative label causes them to be resolved from the closest package to the importing file.
                         let resolved_path = if label.is_relative() {
@@ -299,7 +333,7 @@ impl FileLoader for DefaultFileLoader {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> io::Result<Option<Vec<LoadItemCandidate>>> {
+    ) -> anyhow::Result<Option<Vec<LoadItemCandidate>>> {
         match dialect {
             Dialect::Standard => {
                 let from_dir = self.dirname(from);
@@ -343,7 +377,7 @@ impl FileLoader for DefaultFileLoader {
                 };
 
                 let (label, err) = match Label::parse(path) {
-                    Ok(label) => (label, None),
+                    Result::Ok(label) => (label, None),
                     Err(PartialParse { partial, err }) => (partial, Some(err)),
                 };
 
@@ -396,7 +430,7 @@ impl FileLoader for DefaultFileLoader {
     }
 }
 
-fn read_dir_packages(path: impl AsRef<Path>) -> io::Result<Vec<LoadItemCandidate>> {
+fn read_dir_packages(path: impl AsRef<Path>) -> anyhow::Result<Vec<LoadItemCandidate>> {
     Ok(fs::read_dir(path)?
         .flat_map(|entry| entry)
         .filter_map(|entry| {
@@ -420,7 +454,7 @@ fn read_dir_packages(path: impl AsRef<Path>) -> io::Result<Vec<LoadItemCandidate
         .collect())
 }
 
-fn read_dir_targets(path: impl AsRef<Path>) -> io::Result<Vec<LoadItemCandidate>> {
+fn read_dir_targets(path: impl AsRef<Path>) -> anyhow::Result<Vec<LoadItemCandidate>> {
     Ok(fs::read_dir(path)?
         .flat_map(|entry| entry)
         .filter_map(|entry| {

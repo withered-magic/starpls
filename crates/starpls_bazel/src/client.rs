@@ -37,7 +37,7 @@ impl BazelCLI {
     }
 
     fn dump_repo_mapping(&self, repo: &str) -> anyhow::Result<HashMap<String, String>> {
-        let output = self.run_command(&["mod", "dump_repo_mapping", repo])?;
+        let output = self.run_command(&["mod", "--enable_bzlmod", "dump_repo_mapping", repo])?;
         let json = String::from_utf8(output)?;
         let mut mappings = Deserializer::from_str(&json).into_iter::<HashMap<String, String>>();
         Ok(mappings

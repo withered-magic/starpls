@@ -142,6 +142,14 @@ impl TyCtxt<'_> {
             }
             Expr::ListComp { expr, .. } => TyKind::List(self.infer_expr(file, *expr)).intern(),
             Expr::Dict { entries } => {
+                if entries.len() > 32 {
+                    return self.set_expr_type(
+                        file,
+                        expr,
+                        Ty::dict(Ty::any(), Ty::unknown(), None),
+                    );
+                }
+
                 // Determine the dict's key type. For now, if all specified entries have the key type `T`, then we also
                 // use the type `T` as the dict's key tpe. Otherwise, we use `Any` as the key type.
                 // TODO(withered-magic): Eventually, we should use a union type here.

@@ -1333,7 +1333,10 @@ function reports whether any one of them is a prefix.
 ```
 "#,
                 vec![
-                    positional(non_literal_string()),
+                    positional(TyKind::Union(smallvec![
+                        Ty::string(),
+                        TyKind::Tuple(typeck::Tuple::Variable(Ty::string())).intern()
+                    ])),
                     positional_opt(non_literal_int()),
                     positional_opt(non_literal_int()),
                 ],

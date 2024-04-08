@@ -126,7 +126,7 @@ impl TyCtxt<'_> {
                         }
                     })
                     .unwrap_or_else(|| {
-                        self.add_expr_diagnostic(
+                        self.add_expr_diagnostic_error(
                             file,
                             expr,
                             format!("\"{}\" is not defined", name.as_str()),
@@ -247,7 +247,7 @@ impl TyCtxt<'_> {
                             return self.unknown_ty();
                         }
 
-                        self.add_expr_diagnostic_ty(
+                        self.add_expr_diagnostic_ty_warning(
                             file,
                             expr,
                             format!(
@@ -272,7 +272,7 @@ impl TyCtxt<'_> {
                         let return_ty = match index_ty.kind() {
                             TyKind::Int(Some(x)) => match tys.get(*x as usize) {
                                 Some(ty) => ty.clone(),
-                                None => self.add_expr_diagnostic_ty(
+                                None => self.add_expr_diagnostic_ty_error(
                                     file,
                                     expr,
                                     format!(
@@ -283,7 +283,7 @@ impl TyCtxt<'_> {
                                 ),
                             },
                             TyKind::Int(None) => Ty::union(tys.iter().cloned()),
-                            _ => self.add_expr_diagnostic_ty(
+                            _ => self.add_expr_diagnostic_ty_error(
                                 file,
                                 expr,
                                 format!(
@@ -314,7 +314,7 @@ impl TyCtxt<'_> {
                             _ => None,
                         }
                         .unwrap_or_else(|| {
-                            self.add_expr_diagnostic_ty(
+                            self.add_expr_diagnostic_ty_warning(
                                 file,
                                 expr,
                                 format!("Type \"{}\" is not indexable", lhs_ty.display(db).alt()),
@@ -328,7 +328,7 @@ impl TyCtxt<'_> {
                 if assign_tys(db, &index_ty, target) {
                     value.clone()
                 } else {
-                    self.add_expr_diagnostic_ty(
+                    self.add_expr_diagnostic_ty_warning(
                         file,
                         *lhs,
                         format!(
@@ -348,7 +348,7 @@ impl TyCtxt<'_> {
                     .map(|arg| match arg {
                         Argument::Simple { expr } => {
                             if saw_keyword {
-                                self.add_expr_diagnostic(
+                                self.add_expr_diagnostic_error(
                                     file,
                                     *expr,
                                     String::from(
@@ -357,7 +357,7 @@ impl TyCtxt<'_> {
                                 );
                             }
                             if saw_unpacked_dict {
-                                self.add_expr_diagnostic(
+                                self.add_expr_diagnostic_error(
                                     file,
                                     *expr,
                                     String::from(
@@ -373,7 +373,7 @@ impl TyCtxt<'_> {
                         }
                         Argument::UnpackedList { expr } => {
                             if saw_keyword {
-                                self.add_expr_diagnostic(
+                                self.add_expr_diagnostic_error(
                                     file,
                                     *expr,
                                     String::from(
@@ -382,7 +382,7 @@ impl TyCtxt<'_> {
                                 );
                             }
                             if saw_unpacked_dict {
-                                self.add_expr_diagnostic(
+                                self.add_expr_diagnostic_error(
                                     file,
                                     *expr,
                                     String::from(
@@ -412,7 +412,7 @@ impl TyCtxt<'_> {
                         let errors = slots.assign_args(&args, None).0;
 
                         for error in errors {
-                            self.add_expr_diagnostic(file, error.expr, error.message);
+                            self.add_expr_diagnostic_error(file, error.expr, error.message);
                         }
 
                         let mut missing_params = Vec::new();
@@ -438,7 +438,7 @@ impl TyCtxt<'_> {
                                 SlotProvider::Single(expr, index) => {
                                     let ty = &arg_tys[index];
                                     if !assign_tys(db, ty, &param_ty) {
-                                        self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
+                                        self.add_expr_diagnostic_error(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                 }
                                 _ => {}
@@ -467,7 +467,7 @@ impl TyCtxt<'_> {
                                 message.push('"');
                             }
 
-                            self.add_expr_diagnostic(file, expr, message);
+                            self.add_expr_diagnostic_error(file, expr, message);
                         }
 
                         func.ret_type_ref(db)
@@ -480,7 +480,7 @@ impl TyCtxt<'_> {
                         let errors = slots.assign_args(&args, None).0;
 
                         for error in errors {
-                            self.add_expr_diagnostic(file, error.expr, error.message);
+                            self.add_expr_diagnostic_error(file, error.expr, error.message);
                         }
 
                         // Validate argument types.
@@ -496,7 +496,7 @@ impl TyCtxt<'_> {
                             let mut validate_provider = |provider| match provider {
                                 SlotProvider::Missing => {
                                     if !param.is_optional() {
-                                        self.add_expr_diagnostic(
+                                        self.add_expr_diagnostic_error(
                                             file,
                                             expr,
                                             format!(
@@ -509,7 +509,7 @@ impl TyCtxt<'_> {
                                 SlotProvider::Single(expr, index) => {
                                     let ty = &arg_tys[index];
                                     if !assign_tys(db, ty, &param_ty) {
-                                        self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
+                                        self.add_expr_diagnostic_error(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                 }
                                 _ => {}
@@ -535,7 +535,7 @@ impl TyCtxt<'_> {
                         let errors = slots.assign_args(&args, None).0;
 
                         for error in errors {
-                            self.add_expr_diagnostic(file, error.expr, error.message);
+                            self.add_expr_diagnostic_error(file, error.expr, error.message);
                         }
 
                         let mut missing_params = Vec::new();
@@ -555,7 +555,7 @@ impl TyCtxt<'_> {
                                 SlotProvider::Single(expr, index) => {
                                     let ty = &arg_tys[index];
                                     if !assign_tys(db, ty, &param_ty) {
-                                        self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
+                                        self.add_expr_diagnostic_error(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                 }
                                 _ => {}
@@ -584,7 +584,7 @@ impl TyCtxt<'_> {
                                 message.push('"');
                             }
 
-                            self.add_expr_diagnostic(file, expr, message);
+                            self.add_expr_diagnostic_error(file, expr, message);
                         }
 
                         func.maybe_unique_ret_type(db, file, expr, args_with_ty)
@@ -604,7 +604,7 @@ impl TyCtxt<'_> {
                                     SlotProvider::Single(expr, index) => {
                                         let ty = &arg_tys[index];
                                         if !assign_tys(db, ty, &expected_ty) {
-                                            self.add_expr_diagnostic(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), expected_ty.display(self.db).alt()));
+                                            self.add_expr_diagnostic_error(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), expected_ty.display(self.db).alt()));
                                         }
                                     }
                                     SlotProvider::Missing => {
@@ -630,7 +630,7 @@ impl TyCtxt<'_> {
                                 message.push('"');
                             }
 
-                            self.add_expr_diagnostic(file, expr, message);
+                            self.add_expr_diagnostic_error(file, expr, message);
                         }
 
                         self.none_ty()
@@ -639,7 +639,7 @@ impl TyCtxt<'_> {
                         TyKind::ProviderInstance(provider.clone()).intern()
                     }
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.unknown_ty(),
-                    _ => self.add_expr_diagnostic_ty(
+                    _ => self.add_expr_diagnostic_ty_warning(
                         file,
                         expr,
                         format!("Type \"{}\" is not callable", callee_ty.display(db).alt()),
@@ -676,7 +676,7 @@ impl TyCtxt<'_> {
         let ty = self.infer_expr(file, expr);
         match self.check_unary_expr(&ty, op) {
             Ok(ty) => ty,
-            Err(()) => self.add_expr_diagnostic_ty(
+            Err(()) => self.add_expr_diagnostic_ty_error(
                 file,
                 parent,
                 format!(
@@ -719,7 +719,7 @@ impl TyCtxt<'_> {
         let lhs_kind = lhs.kind();
         let rhs_kind = rhs.kind();
         let mut unknown = || {
-            self.add_expr_diagnostic_ty(
+            self.add_expr_diagnostic_ty_warning(
                 file,
                 parent,
                 format!(
@@ -793,7 +793,7 @@ impl TyCtxt<'_> {
                         | TyKind::Bytes
                         | TyKind::Protocol(Protocol::Sequence(_))
                 ) {
-                    self.add_expr_diagnostic(
+                    self.add_expr_diagnostic_warning(
                         file,
                         parent,
                         format!(
@@ -884,7 +884,7 @@ impl TyCtxt<'_> {
             TyKind::BytesElems => self.int_ty(),
             TyKind::Unknown => self.unknown_ty(),
             _ => {
-                self.add_expr_diagnostic(
+                self.add_expr_diagnostic_warning(
                     file,
                     source,
                     format!("Type \"{}\" is not iterable", source_ty.display(db)),
@@ -916,7 +916,7 @@ impl TyCtxt<'_> {
                 // We also emit any error if the source and expected types aren't compatible.
                 if let Some(expected_ty) = expected_ty {
                     if !assign_tys(self.db, &source_ty, &expected_ty) {
-                        self.add_expr_diagnostic(
+                        self.add_expr_diagnostic_error(
                             file,
                             root,
                             format!(
@@ -962,7 +962,7 @@ impl TyCtxt<'_> {
                             self.assign_expr_unknown_rec(file, *expr);
                         }
                     }
-                    self.add_expr_diagnostic(
+                    self.add_expr_diagnostic_error(
                         file,
                         root,
                         format!(
@@ -979,7 +979,7 @@ impl TyCtxt<'_> {
                 }
             }
             _ => {
-                self.add_expr_diagnostic(
+                self.add_expr_diagnostic_warning(
                     file,
                     root,
                     format!("Type \"{}\" is not iterable", source_ty.display(self.db)),
@@ -1025,21 +1025,50 @@ impl TyCtxt<'_> {
             .unwrap_or(default)
     }
 
-    fn add_expr_diagnostic<T: Into<String>>(&mut self, file: File, expr: ExprId, message: T) {
+    fn add_expr_diagnostic_warning<T: Into<String>>(
+        &mut self,
+        file: File,
+        expr: ExprId,
+        message: T,
+    ) {
+        self.add_expr_diagnostic_with_severity(file, expr, Severity::Warning, message)
+    }
+
+    fn add_expr_diagnostic_error<T: Into<String>>(&mut self, file: File, expr: ExprId, message: T) {
+        self.add_expr_diagnostic_with_severity(file, expr, Severity::Error, message)
+    }
+
+    fn add_expr_diagnostic_with_severity<T: Into<String>>(
+        &mut self,
+        file: File,
+        expr: ExprId,
+        severity: Severity,
+        message: T,
+    ) {
         let range = match source_map(self.db, file).expr_map_back.get(&expr) {
             Some(ptr) => ptr.syntax_node_ptr().text_range(),
             None => return,
         };
-        self.add_diagnostic_for_range(file, Severity::Error, range, message);
+        self.add_diagnostic_for_range(file, severity, range, message);
     }
 
-    fn add_expr_diagnostic_ty<T: Into<String>>(
+    fn add_expr_diagnostic_ty_error<T: Into<String>>(
         &mut self,
         file: File,
         expr: ExprId,
         message: T,
     ) -> Ty {
-        self.add_expr_diagnostic(file, expr, message);
+        self.add_expr_diagnostic_error(file, expr, message);
+        self.unknown_ty()
+    }
+
+    fn add_expr_diagnostic_ty_warning<T: Into<String>>(
+        &mut self,
+        file: File,
+        expr: ExprId,
+        message: T,
+    ) -> Ty {
+        self.add_expr_diagnostic_warning(file, expr, message);
         self.unknown_ty()
     }
 
@@ -1103,7 +1132,7 @@ impl TyCtxt<'_> {
             if let Some(ptr) = source_map(self.db, file).param_map_back.get(&param) {
                 self.add_diagnostic_for_range(
                     file,
-                    Severity::Error,
+                    Severity::Warning,
                     ptr.syntax_node_ptr().text_range(),
                     error,
                 );
@@ -1142,7 +1171,7 @@ impl TyCtxt<'_> {
                         if file == loaded_file {
                             self.add_diagnostic_for_range(
                                 file,
-                                Severity::Error,
+                                Severity::Warning,
                                 range(),
                                 "Cannot load the current file",
                             );
@@ -1171,7 +1200,7 @@ impl TyCtxt<'_> {
                                 let (file, load_stmt) = self.cx.load_resolution_stack[i].clone();
                                 self.add_diagnostic_for_range(
                                     file,
-                                    Severity::Error,
+                                    Severity::Warning,
                                     load_stmt.ptr(db).text_range(),
                                     message.clone(),
                                 )
@@ -1180,7 +1209,7 @@ impl TyCtxt<'_> {
                             // Also add the current (importing) file.
                             self.add_diagnostic_for_range(
                                 file,
-                                Severity::Error,
+                                Severity::Warning,
                                 load_stmt.ptr(db).text_range(),
                                 message,
                             );

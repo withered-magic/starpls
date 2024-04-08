@@ -1385,13 +1385,20 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
         | (TyKind::Protocol(Sequence(source)), TyKind::List(target)) => {
             assign_tys(db, source, target)
         }
-        (TyKind::Tuple(tuple), TyKind::Protocol(Iterable(target) | Sequence(target))) => {
-            match tuple {
-                Tuple::Simple(sources) => {
-                    sources.iter().all(|source| assign_tys(db, source, target))
-                }
-                Tuple::Variable(source) => assign_tys(db, source, target),
-            }
+        (
+            TyKind::Tuple(tuple),
+            TyKind::Protocol(Iterable(target) | Sequence(target))
+            | TyKind::Tuple(Tuple::Variable(target)),
+        ) => match tuple {
+            Tuple::Simple(sources) => sources.iter().all(|source| assign_tys(db, source, target)),
+            Tuple::Variable(source) => assign_tys(db, source, target),
+        },
+        (TyKind::Tuple(Tuple::Simple(sources)), TyKind::Tuple(Tuple::Simple(targets))) => {
+            sources.len() == targets.len()
+                && sources
+                    .iter()
+                    .zip(targets.iter())
+                    .all(|(source, target)| assign_tys(db, source, target))
         }
         (TyKind::Protocol(source), TyKind::Protocol(target)) => match &(source, target) {
             (Iterable(source), Iterable(target))

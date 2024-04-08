@@ -873,3 +873,34 @@ foo([], [])
         "#]],
     );
 }
+
+#[test]
+fn test_tuple_assignments() {
+    check_infer(
+        r#"
+"abc".startswith("a")
+"abc".startswith(("abc", "ABC"))
+"abc".startswith(("abc", 1))
+"#,
+        expect![[r#"
+            1..6 "\"abc\"": Literal["abc"]
+            1..17 "\"abc\".startswith": def startswith(x0: string | tuple[string, ...], x1: int = None, x2: int = None) -> bool
+            18..21 "\"a\"": Literal["a"]
+            1..22 "\"abc\".startswith(\"a\")": bool
+            23..28 "\"abc\"": Literal["abc"]
+            23..39 "\"abc\".startswith": def startswith(x0: string | tuple[string, ...], x1: int = None, x2: int = None) -> bool
+            41..46 "\"abc\"": Literal["abc"]
+            48..53 "\"ABC\"": Literal["ABC"]
+            40..54 "(\"abc\", \"ABC\")": tuple[Literal["abc"], Literal["ABC"]]
+            23..55 "\"abc\".startswith((\"abc\", \"ABC\"))": bool
+            56..61 "\"abc\"": Literal["abc"]
+            56..72 "\"abc\".startswith": def startswith(x0: string | tuple[string, ...], x1: int = None, x2: int = None) -> bool
+            74..79 "\"abc\"": Literal["abc"]
+            81..82 "1": Literal[1]
+            73..83 "(\"abc\", 1)": tuple[Literal["abc"], Literal[1]]
+            56..84 "\"abc\".startswith((\"abc\", 1))": bool
+
+            73..83 Argument of type "tuple[Literal["abc"], Literal[1]]" cannot be assigned to parameter of type "string | tuple[string, ...]"
+        "#]],
+    )
+}

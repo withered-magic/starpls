@@ -247,7 +247,6 @@ bytes(65)			# error: got int, want string, bytes, or iterable of int
         vec![positional(Any)],
         Bytes,
     );
-    // TODO(withered-magic): Support dict()
     add_function(
         "dict",
         r#"`dict` creates a dictionary.  It accepts up to one positional
@@ -271,17 +270,18 @@ With no arguments, `dict()` returns a new empty dictionary.
         
 `dict(x)` where x is a dictionary returns a new copy of x."#,
         vec![
-            positional_opt(Protocol(typeck::Protocol::Iterable(
-                Protocol(typeck::Protocol::Iterable(Any.intern())).intern(),
-            ))),
+            positional_opt(TyKind::Union(smallvec![
+                Ty::dict(Ty::unknown(), Ty::unknown(), Option::None),
+                Protocol(typeck::Protocol::Iterable(
+                    Protocol(typeck::Protocol::Iterable(Any.intern())).intern(),
+                ))
+                .intern(),
+            ])),
             KwargsDict,
         ],
-        Dict(
-            Unknown.intern(),
-            Unknown.intern(),
-            std::option::Option::None,
-        ),
+        Dict(Unknown.intern(), Unknown.intern(), Option::None),
     );
+
     add_function(
         "dir",
         r#"`dir(x)` returns a new sorted list of the names of the attributes (fields and methods) of its operand.

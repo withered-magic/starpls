@@ -1,3 +1,4 @@
+use check::run_check;
 use clap::{Parser, Subcommand};
 use lsp_server::Connection;
 use lsp_types::{
@@ -5,6 +6,7 @@ use lsp_types::{
     TextDocumentSyncCapability, TextDocumentSyncKind,
 };
 
+mod check;
 mod convert;
 mod debouncer;
 mod diagnostics;
@@ -28,15 +30,21 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    Check,
+    Check {
+        /// Paths to typecheck.
+        paths: Vec<String>,
+        /// Path to the Bazel output base.
+        #[clap(long = "output_base")]
+        output_base: Option<String>,
+    },
     Server,
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    match &cli.command {
-        Some(Commands::Check) => Ok(()),
+    match cli.command {
+        Some(Commands::Check { paths, output_base }) => run_check(paths, output_base),
         Some(Commands::Server) | None => run_server(),
     }
 }

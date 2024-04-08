@@ -152,7 +152,7 @@ pub(crate) fn signature_help(
                     .zip(param_labels.into_iter())
                     .map(|((param, _), label)| ParameterInfo {
                         label,
-                        documentation: param.doc(db),
+                        documentation: param.doc(db).map(|doc| unindent_doc(&doc)),
                     })
                     .collect(),
             ),

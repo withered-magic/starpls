@@ -111,7 +111,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
 
             let doc = field.doc(db);
             if !doc.is_empty() {
-                text.push_str(&doc);
+                text.push_str(&unindent_doc(&doc));
                 text.push('\n');
             }
 
@@ -160,7 +160,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
 
             if let Some(doc) = param.doc(db) {
                 if !doc.is_empty() {
-                    text.push_str(&doc);
+                    text.push_str(&unindent_doc(&doc));
                     text.push('\n');
                 }
             }
@@ -170,7 +170,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
         let ty = sema.resolve_type(&type_)?;
         let mut text = format!("```python\n(type) {}\n```\n", ty.display(db));
         if let Some(doc) = ty.doc(db) {
-            text.push_str(&doc);
+            text.push_str(&unindent_doc(&doc));
             text.push('\n');
         }
         return Some(text.into());

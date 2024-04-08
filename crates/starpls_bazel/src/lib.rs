@@ -88,6 +88,7 @@ pub const BUILTINS_VALUES_DENY_LIST: &[&str] = &[
 pub enum APIContext {
     Bzl,
     Module,
+    Repo,
     Workspace,
 }
 

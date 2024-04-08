@@ -79,6 +79,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_name_in_builtin_globals(&self, name: &Name) -> Option<Vec<ScopeDef>> {
+        let api_context = self.file.api_context(self.db)?;
         let globals = builtin_globals(self.db, self.file.dialect(self.db));
         let resolve_in_api_globals = |api_globals: &APIGlobals| {
             api_globals
@@ -95,14 +96,14 @@ impl<'a> Resolver<'a> {
                 })
         };
 
-        resolve_in_api_globals(globals.bzl_globals(self.db)).or_else(|| {
-            match self.file.api_context(self.db) {
-                Some(APIContext::Module) => resolve_in_api_globals(globals.bzlmod_globals(self.db)),
-                Some(APIContext::Workspace) => {
-                    resolve_in_api_globals(globals.workspace_globals(self.db))
-                }
-                _ => None,
-            }
+        if api_context == APIContext::Repo {
+            return resolve_in_api_globals(globals.repo_globals(self.db));
+        }
+
+        resolve_in_api_globals(globals.bzl_globals(self.db)).or_else(|| match api_context {
+            APIContext::Module => resolve_in_api_globals(globals.bzlmod_globals(self.db)),
+            APIContext::Workspace => resolve_in_api_globals(globals.workspace_globals(self.db)),
+            _ => None,
         })
     }
 
@@ -117,6 +118,11 @@ impl<'a> Resolver<'a> {
             names.insert(key.clone(), ScopeDef::IntrinsicFunction(*func));
         }
 
+        let api_context = match self.file.api_context(self.db) {
+            Some(api_context) => api_context,
+            None => return Default::default(),
+        };
+
         // Add names from builtins, taking the current Bazel API context into account.
         let mut add_builtins = |api_globals: &APIGlobals| {
             for (name, func) in api_globals.functions.iter() {
@@ -130,11 +136,15 @@ impl<'a> Resolver<'a> {
             }
         };
 
-        add_builtins(builtin_globals.bzl_globals(self.db));
-        match self.file.api_context(self.db) {
-            Some(APIContext::Module) => add_builtins(builtin_globals.bzlmod_globals(self.db)),
-            Some(APIContext::Workspace) => add_builtins(builtin_globals.workspace_globals(self.db)),
-            _ => {}
+        if api_context == APIContext::Repo {
+            add_builtins(builtin_globals.repo_globals(self.db));
+        } else {
+            add_builtins(builtin_globals.bzl_globals(self.db));
+            match api_context {
+                APIContext::Module => add_builtins(builtin_globals.bzlmod_globals(self.db)),
+                APIContext::Workspace => add_builtins(builtin_globals.workspace_globals(self.db)),
+                _ => {}
+            }
         }
 
         names

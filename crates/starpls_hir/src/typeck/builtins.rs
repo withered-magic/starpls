@@ -51,6 +51,8 @@ pub struct BuiltinGlobals {
     #[return_ref]
     pub bzlmod_globals: APIGlobals,
     #[return_ref]
+    pub repo_globals: APIGlobals,
+    #[return_ref]
     pub workspace_globals: APIGlobals,
 }
 
@@ -422,10 +424,17 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
     );
     let bzlmod_globals =
         APIGlobals::from_values(db, env::make_module_bazel_builtins().global.iter());
+    let repo_globals = APIGlobals::from_values(db, env::make_repo_builtins().global.iter());
     let workspace_globals =
         APIGlobals::from_values(db, env::make_workspace_builtins().global.iter());
 
-    BuiltinGlobals::new(db, bzl_globals, bzlmod_globals, workspace_globals)
+    BuiltinGlobals::new(
+        db,
+        bzl_globals,
+        bzlmod_globals,
+        repo_globals,
+        workspace_globals,
+    )
 }
 
 pub(crate) fn builtin_types(db: &dyn Db, dialect: Dialect) -> BuiltinTypes {

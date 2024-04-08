@@ -81,6 +81,7 @@ impl DocumentManager {
     }
 
     pub(crate) fn open(&mut self, path: PathBuf, version: i32, contents: String) {
+        // Create/update the document with the given contents.
         self.has_closed_or_opened_documents = true;
         let (dialect, api_context) = match dialect_and_api_context_for_path(&path) {
             Some(res) => res,
@@ -488,11 +489,11 @@ fn read_dir_targets(path: impl AsRef<Path>) -> anyhow::Result<Vec<LoadItemCandid
 pub(crate) fn dialect_and_api_context_for_path(
     path: impl AsRef<Path>,
 ) -> Option<(Dialect, Option<APIContext>)> {
-    // Create/update the document with the given contents.
     let path = path.as_ref();
     let basename = path.file_name().and_then(|name| name.to_str())?;
     Some(match basename {
-        "BUILD" | "BUILD.bazel" | "REPO.bazel" => (Dialect::Bazel, Some(APIContext::Bzl)),
+        "BUILD" | "BUILD.bazel" => (Dialect::Bazel, Some(APIContext::Bzl)),
+        "REPO.bazel" => (Dialect::Bazel, Some(APIContext::Repo)),
         "MODULE.bazel" => (Dialect::Bazel, Some(APIContext::Module)),
         "WORKSPACE" | "WORKSPACE.bazel" => (Dialect::Bazel, Some(APIContext::Workspace)),
         _ => match path.extension().and_then(|ext| ext.to_str()) {

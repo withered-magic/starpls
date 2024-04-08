@@ -209,13 +209,13 @@ impl Server {
 
 impl panic::RefUnwindSafe for ServerSnapshot {}
 
-fn load_bazel_builtins() -> anyhow::Result<Builtins> {
+pub(crate) fn load_bazel_builtins() -> anyhow::Result<Builtins> {
     let data = include_bytes!("builtin/builtin.pb");
     let builtins = decode_builtins(&data[..])?;
     Ok(builtins)
 }
 
-fn load_bazel_build_language(client: &dyn BazelClient) -> anyhow::Result<Builtins> {
+pub(crate) fn load_bazel_build_language(client: &dyn BazelClient) -> anyhow::Result<Builtins> {
     let build_language_output = client.build_language()?;
     decode_rules(&build_language_output)
 }

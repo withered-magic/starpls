@@ -35,7 +35,7 @@ enum Commands {
         paths: Vec<String>,
         /// Path to the Bazel output base.
         #[clap(long = "output_base")]
-        output_base: String,
+        output_base: Option<String>,
     },
     Server,
 }
@@ -43,8 +43,8 @@ enum Commands {
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    match &cli.command {
-        Some(Commands::Check { paths, output_base }) => run_check(paths, &output_base),
+    match cli.command {
+        Some(Commands::Check { paths, output_base }) => run_check(paths, output_base),
         Some(Commands::Server) | None => run_server(),
     }
 }

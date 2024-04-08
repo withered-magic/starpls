@@ -76,14 +76,15 @@ impl<'a> Resolver<'a> {
 
     fn resolve_name_in_builtin_globals(&self, name: &Name) -> Option<Vec<ScopeDef>> {
         let globals = builtin_globals(self.db, self.file.dialect(self.db));
-        globals
-            .functions(self.db)
+        let all_contexts_globals = globals.all_contexts_globals(self.db);
+        all_contexts_globals
+            .functions
             .get(name.as_str())
             .copied()
             .map(|func| vec![ScopeDef::BuiltinFunction(func)])
             .or_else(|| {
-                globals
-                    .variables(self.db)
+                all_contexts_globals
+                    .variables
                     .get(name.as_str())
                     .cloned()
                     .map(|type_ref| vec![ScopeDef::BuiltinVariable(type_ref)])
@@ -91,6 +92,9 @@ impl<'a> Resolver<'a> {
     }
 
     pub(crate) fn names(&self) -> FxHashMap<Name, ScopeDef> {
+        let builtin_globals = builtin_globals(self.db, self.file.dialect(self.db));
+        let all_contexts_globals = builtin_globals.all_contexts_globals(self.db);
+
         // Add names from this module.
         let mut names = self.module_names();
 
@@ -100,13 +104,12 @@ impl<'a> Resolver<'a> {
         }
 
         // Add global functions from third-party builtins (e.g. Bazel builtins).
-        let globals = builtin_globals(self.db, self.file.dialect(self.db));
-        for (name, func) in globals.functions(self.db).iter() {
+        for (name, func) in all_contexts_globals.functions.iter() {
             names.insert(Name::from_str(&name), ScopeDef::BuiltinFunction(*func));
         }
 
         // Add global variables from third-party builtins (e.g. Bazel builtins).
-        for (name, type_ref) in globals.variables(self.db).iter() {
+        for (name, type_ref) in all_contexts_globals.variables.iter() {
             names.insert(
                 Name::from_str(&name),
                 ScopeDef::BuiltinVariable(type_ref.clone()),

@@ -45,8 +45,12 @@ pub struct BuiltinField {
 #[salsa::tracked]
 pub struct BuiltinGlobals {
     #[return_ref]
+    pub all_contexts_globals: APIGlobals,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct APIGlobals {
     pub functions: FxHashMap<String, BuiltinFunction>,
-    #[return_ref]
     pub variables: FxHashMap<String, TypeRef>,
 }
 
@@ -397,7 +401,13 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
         }
     }
 
-    BuiltinGlobals::new(db, functions, variables)
+    BuiltinGlobals::new(
+        db,
+        APIGlobals {
+            functions,
+            variables,
+        },
+    )
 }
 
 pub(crate) fn builtin_types(db: &dyn Db, dialect: Dialect) -> BuiltinTypes {

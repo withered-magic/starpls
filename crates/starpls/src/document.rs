@@ -276,7 +276,11 @@ impl FileLoader for DefaultFileLoader {
 
                                     match canonical_repo {
                                         Some(canonical_repo) => (
-                                            self.external_output_base.join(canonical_repo),
+                                            if canonical_repo.is_empty() {
+                                                self.workspace.clone()
+                                            } else {
+                                                self.external_output_base.join(canonical_repo)
+                                            },
                                             PathBuf::new(),
                                         ),
                                         None => return Ok(None),

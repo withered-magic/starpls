@@ -33,6 +33,7 @@ rust_library(
         ":data/build.builtins.json",
         ":data/bzl.builtins.json",
         ":data/commonAttributes.json",
+        ":data/missingModuleFields.json",
         ":data/module-bazel.builtins.json",
         ":data/workspace.builtins.json",
     ],

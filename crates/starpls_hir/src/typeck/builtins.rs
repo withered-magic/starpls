@@ -410,6 +410,7 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
     let mut types = FxHashMap::default();
     let builtins = defs.builtins(db);
     let rules = defs.rules(db);
+    let mut missing_module_members = env::make_missing_module_members();
 
     for type_ in builtins.r#type.iter() {
         // Skip deny-listed types, which are handled directly by the
@@ -439,7 +440,12 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
             }
         }
 
-        for field in type_.field.iter() {
+        for field in type_.field.iter().chain(
+            missing_module_members
+                .remove(&type_.name)
+                .unwrap_or_default()
+                .iter(),
+        ) {
             if let Some(callable) = &field.callable {
                 // Filter out duplicates.
                 if !seen_methods.contains(&field.name.as_str()) {

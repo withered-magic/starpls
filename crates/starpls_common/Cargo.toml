@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.81"
 salsa = { git = "https://github.com/withered-magic/salsa", package = "salsa-2022", rev = "91fdda90b344ef74e9bf35c3a5bb0fbae22ed6fb" }
+starpls_bazel = { path = "../starpls_bazel" }
 starpls_syntax = { path = "../starpls_syntax" }

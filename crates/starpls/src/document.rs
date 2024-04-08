@@ -7,7 +7,7 @@ use starpls_bazel::{
     self,
     client::BazelClient,
     label::{PartialParse, RepoKind},
-    Label, ParseError,
+    APIContext, Label, ParseError,
 };
 use starpls_common::{Dialect, FileId, LoadItemCandidate, LoadItemCandidateKind};
 use starpls_ide::FileLoader;
@@ -37,14 +37,21 @@ impl From<Option<i32>> for DocumentSource {
 pub(crate) struct Document {
     pub(crate) contents: String,
     pub(crate) dialect: Dialect,
+    pub(crate) api_context: Option<APIContext>,
     pub(crate) source: DocumentSource,
 }
 
 impl Document {
-    fn new(contents: String, dialect: Dialect, version: Option<i32>) -> Self {
+    fn new(
+        contents: String,
+        dialect: Dialect,
+        api_context: Option<APIContext>,
+        version: Option<i32>,
+    ) -> Self {
         Self {
             contents,
             dialect,
+            api_context,
             source: version.into(),
         }
     }
@@ -75,26 +82,15 @@ impl DocumentManager {
 
     pub(crate) fn open(&mut self, path: PathBuf, version: i32, contents: String) {
         self.has_closed_or_opened_documents = true;
-
-        // Create/update the document with the given contents.
-        let basename = match path.file_name().and_then(|name| name.to_str()) {
-            Some(basename) => basename,
+        let (dialect, api_context) = match dialect_and_api_context_for_path(&path) {
+            Some(res) => res,
             None => return,
         };
-
-        let dialect = match basename {
-            "BUILD" | "BUILD.bazel" | "MODULE.bazel" | "REPO.bazel" | "WORKSPACE"
-            | "WORKSPACE.bazel" => Dialect::Bazel,
-            _ => match path.extension().and_then(|ext| ext.to_str()) {
-                Some("sky" | "star") => Dialect::Standard,
-                Some("bzl") => Dialect::Bazel,
-                _ => return,
-            },
-        };
-
         let file_id = self.path_interner.intern_path(path);
-        self.documents
-            .insert(file_id, Document::new(contents, dialect, Some(version)));
+        self.documents.insert(
+            file_id,
+            Document::new(contents, dialect, api_context, Some(version)),
+        );
         self.changed_file_ids
             .push((file_id, DocumentChangeKind::Create));
     }
@@ -229,15 +225,15 @@ impl FileLoader for DefaultFileLoader {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> anyhow::Result<Option<(FileId, Option<String>)>> {
-        let path = match dialect {
+    ) -> anyhow::Result<Option<(FileId, Dialect, Option<APIContext>, Option<String>)>> {
+        let (path, api_context) = match dialect {
             Dialect::Standard => {
                 // Find the importing file's directory.
                 let mut from_path = self.interner.lookup_by_file_id(from);
                 assert!(from_path.pop());
 
                 // Resolve the given path relative to the importing file's directory.
-                from_path.join(path).canonicalize()?
+                (from_path.join(path).canonicalize()?, None)
             }
             Dialect::Bazel => {
                 // Parse the load path as a Bazel label.
@@ -252,8 +248,7 @@ impl FileLoader for DefaultFileLoader {
                 }
 
                 let repo_kind = label.kind();
-
-                match self.read_cache_result(&repo_kind, path, from) {
+                let resolved_path = match self.read_cache_result(&repo_kind, path, from) {
                     Some(path) => path,
                     None => {
                         let (root, package) =
@@ -312,18 +307,28 @@ impl FileLoader for DefaultFileLoader {
                         self.record_cache_result(&repo_kind, path, from, resolved_path.clone());
                         resolved_path
                     }
-                }
+                };
+
+                (resolved_path, Some(APIContext::Bzl))
             }
         };
 
         Ok(Some({
             // If we've already interned this file, then simply return the file id.
             if let Some(file_id) = self.interner.lookup_by_path_buf(&path) {
-                (file_id, None)
+                (file_id, dialect, api_context, None)
             } else {
                 let contents = fs::read_to_string(&path)?;
                 let file_id = self.interner.intern_path(path);
-                (file_id, Some(contents))
+                (
+                    file_id,
+                    dialect,
+                    match dialect {
+                        Dialect::Standard => None,
+                        Dialect::Bazel => Some(APIContext::Bzl),
+                    },
+                    Some(contents),
+                )
             }
         }))
     }
@@ -478,4 +483,22 @@ fn read_dir_targets(path: impl AsRef<Path>) -> anyhow::Result<Vec<LoadItemCandid
             })
         })
         .collect())
+}
+
+pub(crate) fn dialect_and_api_context_for_path(
+    path: impl AsRef<Path>,
+) -> Option<(Dialect, Option<APIContext>)> {
+    // Create/update the document with the given contents.
+    let path = path.as_ref();
+    let basename = path.file_name().and_then(|name| name.to_str())?;
+    Some(match basename {
+        "BUILD" | "BUILD.bazel" | "REPO.bazel" => (Dialect::Bazel, Some(APIContext::Bzl)),
+        "MODULE.bazel" => (Dialect::Bazel, Some(APIContext::Module)),
+        "WORKSPACE" | "WORKSPACE.bazel" => (Dialect::Bazel, Some(APIContext::Workspace)),
+        _ => match path.extension().and_then(|ext| ext.to_str()) {
+            Some("sky" | "star") => (Dialect::Standard, None),
+            Some("bzl") => (Dialect::Bazel, Some(APIContext::Bzl)),
+            _ => return None,
+        },
+    })
 }

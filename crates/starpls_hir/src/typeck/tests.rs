@@ -1,6 +1,7 @@
 use crate::{source_map, test_database::TestDatabase, Db as _, DisplayWithDb};
 use expect_test::{expect, Expect};
 use itertools::Itertools;
+use starpls_bazel::APIContext;
 use starpls_common::{parse, Db as _, Dialect, FileId};
 use starpls_syntax::ast::AstNode;
 use std::{cmp::Ordering, fmt::Write};
@@ -8,7 +9,12 @@ use std::{cmp::Ordering, fmt::Write};
 fn check_infer(input: &str, expect: Expect) {
     let mut db = TestDatabase::with_catch_all_functions(&["provider", "struct"]);
     let file_id = FileId(0);
-    let file = db.create_file(file_id, Dialect::Bazel, input.to_string());
+    let file = db.create_file(
+        file_id,
+        Dialect::Bazel,
+        Some(APIContext::Bzl),
+        input.to_string(),
+    );
     let root = parse(&db, file).syntax(&db);
     let source_map = source_map(&db, file);
     let mut res = String::new();

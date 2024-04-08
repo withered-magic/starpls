@@ -1,11 +1,11 @@
 use crate::{
-    document::{DefaultFileLoader, PathInterner},
+    document::{self, DefaultFileLoader, PathInterner},
     server::{load_bazel_build_language, load_bazel_builtins},
 };
 use anyhow::anyhow;
 use rustc_hash::FxHashMap;
 use starpls_bazel::client::{BazelCLI, BazelClient};
-use starpls_common::{Dialect, Severity};
+use starpls_common::Severity;
 use starpls_ide::{Analysis, Change};
 use std::{fmt::Write, fs, path::PathBuf, process, sync::Arc};
 
@@ -59,22 +59,14 @@ pub(crate) fn run_check(paths: Vec<String>, output_base: Option<String>) -> anyh
         }
 
         let contents = fs::read_to_string(&resolved).map_err(|_| err())?;
-        let dialect = match resolved.extension().and_then(|ext| ext.to_str()) {
-            Some("bzl" | "bazel") => Dialect::Bazel,
-            Some("sky" | "star") => Dialect::Standard,
-            None if matches!(
-                resolved.file_name().and_then(|name| name.to_str()),
-                Some("WORKSPACE | BUILD")
-            ) =>
-            {
-                Dialect::Bazel
-            }
-            _ => return Err(err()),
+        let (dialect, api_context) = match document::dialect_and_api_context_for_path(&resolved) {
+            Some(res) => res,
+            None => return Err(err()),
         };
 
         let file_id = interner.intern_path(resolved);
         original_paths.insert(file_id, path);
-        change.create_file(file_id, dialect, contents);
+        change.create_file(file_id, dialect, api_context, contents);
         file_ids.push(file_id);
     }
 

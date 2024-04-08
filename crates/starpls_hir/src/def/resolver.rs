@@ -4,10 +4,14 @@ use crate::{
         ExprId, Function, ModuleSourceMap,
     },
     source_map,
-    typeck::{builtins::builtin_globals, intrinsics::intrinsic_functions},
+    typeck::{
+        builtins::{builtin_globals, APIGlobals},
+        intrinsics::intrinsic_functions,
+    },
     Db, Name,
 };
 use rustc_hash::FxHashMap;
+use starpls_bazel::APIContext;
 use starpls_common::File;
 use starpls_syntax::{TextRange, TextSize};
 use std::collections::hash_map::Entry;
@@ -76,24 +80,34 @@ impl<'a> Resolver<'a> {
 
     fn resolve_name_in_builtin_globals(&self, name: &Name) -> Option<Vec<ScopeDef>> {
         let globals = builtin_globals(self.db, self.file.dialect(self.db));
-        let all_contexts_globals = globals.all_contexts_globals(self.db);
-        all_contexts_globals
-            .functions
-            .get(name.as_str())
-            .copied()
-            .map(|func| vec![ScopeDef::BuiltinFunction(func)])
-            .or_else(|| {
-                all_contexts_globals
-                    .variables
-                    .get(name.as_str())
-                    .cloned()
-                    .map(|type_ref| vec![ScopeDef::BuiltinVariable(type_ref)])
-            })
+        let resolve_in_api_globals = |api_globals: &APIGlobals| {
+            api_globals
+                .functions
+                .get(name.as_str())
+                .copied()
+                .map(|func| vec![ScopeDef::BuiltinFunction(func)])
+                .or_else(|| {
+                    api_globals
+                        .variables
+                        .get(name.as_str())
+                        .cloned()
+                        .map(|type_ref| vec![ScopeDef::BuiltinVariable(type_ref)])
+                })
+        };
+
+        resolve_in_api_globals(globals.bzl_globals(self.db)).or_else(|| {
+            match self.file.api_context(self.db) {
+                Some(APIContext::Module) => resolve_in_api_globals(globals.bzlmod_globals(self.db)),
+                Some(APIContext::Workspace) => {
+                    resolve_in_api_globals(globals.workspace_globals(self.db))
+                }
+                _ => None,
+            }
+        })
     }
 
     pub(crate) fn names(&self) -> FxHashMap<Name, ScopeDef> {
         let builtin_globals = builtin_globals(self.db, self.file.dialect(self.db));
-        let all_contexts_globals = builtin_globals.all_contexts_globals(self.db);
 
         // Add names from this module.
         let mut names = self.module_names();
@@ -103,17 +117,24 @@ impl<'a> Resolver<'a> {
             names.insert(key.clone(), ScopeDef::IntrinsicFunction(*func));
         }
 
-        // Add global functions from third-party builtins (e.g. Bazel builtins).
-        for (name, func) in all_contexts_globals.functions.iter() {
-            names.insert(Name::from_str(&name), ScopeDef::BuiltinFunction(*func));
-        }
+        // Add names from builtins, taking the current Bazel API context into account.
+        let mut add_builtins = |api_globals: &APIGlobals| {
+            for (name, func) in api_globals.functions.iter() {
+                names.insert(Name::from_str(&name), ScopeDef::BuiltinFunction(*func));
+            }
+            for (name, type_ref) in api_globals.variables.iter() {
+                names.insert(
+                    Name::from_str(&name),
+                    ScopeDef::BuiltinVariable(type_ref.clone()),
+                );
+            }
+        };
 
-        // Add global variables from third-party builtins (e.g. Bazel builtins).
-        for (name, type_ref) in all_contexts_globals.variables.iter() {
-            names.insert(
-                Name::from_str(&name),
-                ScopeDef::BuiltinVariable(type_ref.clone()),
-            );
+        add_builtins(builtin_globals.bzl_globals(self.db));
+        match self.file.api_context(self.db) {
+            Some(APIContext::Module) => add_builtins(builtin_globals.bzlmod_globals(self.db)),
+            Some(APIContext::Workspace) => add_builtins(builtin_globals.workspace_globals(self.db)),
+            _ => {}
         }
 
         names

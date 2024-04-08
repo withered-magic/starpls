@@ -1,6 +1,6 @@
 use crate::{def::ExprId, BuiltinDefs, Db, Dialect, GlobalCtxt, LoadItemId, ParamId, Ty};
 use dashmap::{mapref::entry::Entry, DashMap};
-use starpls_bazel::Builtins;
+use starpls_bazel::{APIContext, Builtins};
 use starpls_common::{File, FileId, LoadItemCandidate};
 use starpls_test_util::builtins_with_catch_all_functions;
 use std::sync::Arc;
@@ -40,8 +40,14 @@ impl TestDatabase {
 impl salsa::Database for TestDatabase {}
 
 impl starpls_common::Db for TestDatabase {
-    fn create_file(&mut self, file_id: FileId, dialect: Dialect, contents: String) -> File {
-        let file = File::new(self, file_id, dialect, contents);
+    fn create_file(
+        &mut self,
+        file_id: FileId,
+        dialect: Dialect,
+        api_context: Option<APIContext>,
+        contents: String,
+    ) -> File {
+        let file = File::new(self, file_id, dialect, api_context, contents);
         self.files.insert(file_id, file);
         file
     }
@@ -62,6 +68,7 @@ impl starpls_common::Db for TestDatabase {
             self,
             FileId(0),
             Dialect::Standard,
+            None,
             String::new(),
         )))
     }

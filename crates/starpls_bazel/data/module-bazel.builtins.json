@@ -316,6 +316,60 @@
             }
         },
         {
+            "name": "register_execution_platforms",
+            "doc": "Specifies already-defined execution platforms to be registered when this module is selected. Should be absolute target patterns (ie. beginning with either `@` or `//`). See toolchain resolution for more information.",
+            "callable": {
+                "params": [
+                    {
+                        "name": "dev_dependency",
+                        "type": "boolean",
+                        "doc": "If true, the execution platforms will not be registered if the current module is not the root module or `--ignore_dev_dependency` is enabled.",
+                        "default_value": "False",
+                        "is_mandatory": false,
+                        "is_star_arg": false,
+                        "is_star_star_arg": false
+                    },
+                    {
+                        "name": "platform_labels",
+                        "type": "sequence of strings",
+                        "doc": "The labels of the platforms to register.",
+                        "default_value": "",
+                        "is_mandatory": false,
+                        "is_star_arg": true,
+                        "is_star_star_arg": false
+                    }
+                ],
+                "return_type": "None"
+            }
+        },
+        {
+            "name": "register_toolchains",
+            "doc": "Specifies already-defined toolchains to be registered when this module is selected. Should be absolute target patterns (ie. beginning with either `@` or `//`). See toolchain resolution for more information.",
+            "callable": {
+                "params": [
+                    {
+                        "name": "dev_dependency",
+                        "type": "boolean",
+                        "doc": "If true, the toolchains will not be registered if the current module is not the root module or `--ignore_dev_dependency` is enabled.",
+                        "default_value": "False",
+                        "is_mandatory": false,
+                        "is_star_arg": false,
+                        "is_star_star_arg": false
+                    },
+                    {
+                        "name": "toolchain_labels",
+                        "type": "sequence of strings",
+                        "doc": "The labels of the toolchains to register. Labels can include `:all`, in which case, all toolchain-providing targets in the package will be registered in lexicographical order by name.",
+                        "default_value": "",
+                        "is_mandatory": false,
+                        "is_star_arg": true,
+                        "is_star_star_arg": false
+                    }
+                ],
+                "return_type": "None"
+            }
+        },
+        {
             "name": "single_version_override",
             "doc": "Specifies that a dependency should still come from a registry, but its version should be pinned, or its registry overridden, or a list of patches applied. This directive only takes effect in the root module; in other words, if a module is used as a dependency by others, its own overrides are ignored.",
             "callable": {

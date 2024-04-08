@@ -1,0 +1,229 @@
+{
+  "cc_common": [
+    {
+      "name": "compile",
+      "doc": "Should be used for C++ compilation. Returns tuple of (`CompilationContext`, `CcCompilationOutputs`).",
+      "callable": {
+        "params": [
+          {
+            "name": "actions",
+            "type": "Unknown",
+            "doc": "`actions` object.",
+            "default_value": "",
+            "is_mandatory": true,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "feature_configuration",
+            "type": "Unknown",
+            "doc": "`feature_configuration` to be queried.",
+            "default_value": "",
+            "is_mandatory": true,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "cc_toolchain",
+            "type": "Unknown",
+            "doc": "`CcToolchainInfo` provider to be used.",
+            "default_value": "",
+            "is_mandatory": true,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "srcs",
+            "type": "Unknown",
+            "doc": "The list of source files to be compiled.",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "public_hdrs",
+            "type": "Unknown",
+            "doc": "List of headers needed for compilation of srcs and may be included by dependent rules transitively.",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "private_hdrs",
+            "type": "Unknown",
+            "doc": "List of headers needed for compilation of srcs and NOT to be included by dependent rules.",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "includes",
+            "type": "Unknown",
+            "doc": "Search paths for header files referenced both by angle bracket and quotes. Usually passed with -I. Propagated to dependents transitively.",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "quote_includes",
+            "type": "Unknown",
+            "doc": "Search paths for header files referenced by quotes, e.g. #include \"foo/bar/header.h\". They can be either relative to the exec root or absolute. Usually passed with -iquote. Propagated to dependents transitively.",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "system_includes",
+            "type": "Unknown",
+            "doc": "Search paths for header files referenced by angle brackets, e.g. #include <foo/bar/header.h>. They can be either relative to the exec root or absolute. Usually passed with -isystem. Propagated to dependents transitively.",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "framework_includes",
+            "type": "Unknown",
+            "doc": "Search paths for header files from Apple frameworks. They can be either relative to the exec root or absolute. Usually passed with -F. Propagated to dependents transitively.",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "defines",
+            "type": "Unknown",
+            "doc": "Set of defines needed to compile this target. Each define is a string. Propagated to dependents transitively.",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "local_defines",
+            "type": "Unknown",
+            "doc": "Set of defines needed to compile this target. Each define is a string. Not propagated to dependents transitively.",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "include_prefix",
+            "type": "Unknown",
+            "doc": "The prefix to add to the paths of the headers of this rule. When set, the headers in the hdrs attribute of this rule are accessible at is the value of this attribute prepended to their repository-relative path. The prefix in the strip_include_prefix attribute is removed before this prefix is added.",
+            "default_value": "\"\"",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "strip_include_prefix",
+            "type": "Unknown",
+            "doc": "The prefix to strip from the paths of the headers of this rule. When set, the headers in the hdrs attribute of this rule are accessible at their path with this prefix cut off. If it's a relative path, it's taken as a package-relative one. If it's an absolute one, it's understood as a repository-relative path. The prefix in the include_prefix attribute is added after this prefix is stripped.",
+            "default_value": "\"\"",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "user_compile_flags",
+            "type": "Unknown",
+            "doc": "Additional list of compilation options.",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "compilation_contexts",
+            "type": "Unknown",
+            "doc": "Headers from dependencies used for compilation.",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "name",
+            "type": "Unknown",
+            "doc": "This is used for naming the output artifacts of actions created by this method. See also the `main_output` arg.",
+            "default_value": "[]",
+            "is_mandatory": true,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "disallow_pic_outputs",
+            "type": "Unknown",
+            "doc": "Whether PIC outputs should be created",
+            "default_value": "False",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "disallow_nopic_outputs",
+            "type": "Unknown",
+            "doc": "Whether NOPIC outputs should be created",
+            "default_value": "False",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "additional_inputs",
+            "type": "Unknown",
+            "doc": "List of additional files needed for compilation of srcs",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "grep_includes",
+            "type": "File; or None",
+            "doc": "",
+            "default_value": "None",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          }
+        ],
+        "return_type": "Unknown"
+      }
+    },
+    {
+      "name": "merge_cc_infos",
+      "doc": "Merges multiple `CcInfo`s into one.",
+      "callable": {
+        "params": [
+          {
+            "name": "direct_cc_infos",
+            "type": "Unknown",
+            "doc": "List of `CcInfos` to be merged, whose headers will be exported by the direct fields in the returned provider.",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "cc_infos",
+            "type": "Unknown",
+            "doc": "List of `CcInfos` to be merged, whose headers will not be exported by the direct fields in the returned provider.",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          }
+        ],
+        "return_type": "CcInfo"
+      }
+    }
+  ]
+}

@@ -780,6 +780,10 @@ impl Param {
     pub fn default_value(&self, db: &dyn Db) -> Option<String> {
         let common = common_attributes_query(db);
         let attr = match &self.0 {
+            ParamInner::BuiltinParam { parent, index } => match &parent.params(db)[*index] {
+                BuiltinFunctionParam::Simple { default_value, .. } => return default_value.clone(),
+                _ => return None,
+            },
             ParamInner::RuleParam(RuleParam::Keyword { attr, .. }) => attr.as_attribute(),
             ParamInner::RuleParam(RuleParam::BuiltinKeyword(kind, index)) => {
                 common.get(db, kind.clone(), *index).1

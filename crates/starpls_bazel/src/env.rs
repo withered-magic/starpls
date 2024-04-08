@@ -1,9 +1,9 @@
-use serde::{Deserialize, Serialize};
-
 use crate::{
     builtin::{Callable, Param, Value},
     Builtins,
 };
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct BuiltinsJson {
@@ -16,27 +16,7 @@ impl From<BuiltinsJson> for Builtins {
             global: value
                 .builtins
                 .into_iter()
-                .map(|value| Value {
-                    name: value.name,
-                    doc: value.doc,
-                    callable: value.callable.map(|callable| Callable {
-                        param: callable
-                            .params
-                            .into_iter()
-                            .map(|param| Param {
-                                name: param.name,
-                                r#type: param.r#type,
-                                doc: param.doc,
-                                default_value: param.default_value,
-                                is_mandatory: param.is_mandatory,
-                                is_star_arg: param.is_star_arg,
-                                is_star_star_arg: param.is_star_star_arg,
-                            })
-                            .collect(),
-                        return_type: callable.return_type,
-                    }),
-                    ..Default::default()
-                })
+                .map(|value| value.into())
                 .collect(),
             ..Default::default()
         }
@@ -48,6 +28,32 @@ struct ValueJson {
     name: String,
     doc: String,
     callable: Option<CallableJson>,
+}
+
+impl Into<Value> for ValueJson {
+    fn into(self) -> Value {
+        Value {
+            name: self.name,
+            doc: self.doc,
+            callable: self.callable.map(|callable| Callable {
+                param: callable
+                    .params
+                    .into_iter()
+                    .map(|param| Param {
+                        name: param.name,
+                        r#type: param.r#type,
+                        doc: param.doc,
+                        default_value: param.default_value,
+                        is_mandatory: param.is_mandatory,
+                        is_star_arg: param.is_star_arg,
+                        is_star_star_arg: param.is_star_star_arg,
+                    })
+                    .collect(),
+                return_type: callable.return_type,
+            }),
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -90,4 +96,14 @@ pub fn make_workspace_builtins() -> Builtins {
     serde_json::from_str::<BuiltinsJson>(include_str!("../data/workspace.builtins.json"))
         .expect("bug: invalid workspace.builtins.json")
         .into()
+}
+
+pub fn make_missing_module_members() -> HashMap<String, Vec<Value>> {
+    serde_json::from_str::<HashMap<String, Vec<ValueJson>>>(include_str!(
+        "../data/missingModuleFields.json"
+    ))
+    .expect("bug: invalid missingModuleFields.json")
+    .into_iter()
+    .map(|(name, fields)| (name, fields.into_iter().map(|field| field.into()).collect()))
+    .collect()
 }

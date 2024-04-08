@@ -98,6 +98,12 @@ pub fn make_workspace_builtins() -> Builtins {
         .into()
 }
 
+pub fn make_repo_builtins() -> Builtins {
+    serde_json::from_str::<BuiltinsJson>(include_str!("../data/repo.builtins.json"))
+        .expect("bug: invalid repo.builtins.json")
+        .into()
+}
+
 pub fn make_missing_module_members() -> HashMap<String, Vec<Value>> {
     serde_json::from_str::<HashMap<String, Vec<ValueJson>>>(include_str!(
         "../data/missingModuleFields.json"

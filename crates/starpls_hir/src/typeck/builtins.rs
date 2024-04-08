@@ -10,7 +10,9 @@ use either::Either;
 use rustc_hash::FxHashMap;
 use smallvec::smallvec;
 use starpls_bazel::{
-    attr, builtin::Callable, env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
+    attr,
+    builtin::{Callable, Value},
+    env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
 };
 use starpls_common::{parse, Dialect, File, InFile};
 use starpls_syntax::ast::{self, AstNode};
@@ -45,9 +47,51 @@ pub struct BuiltinField {
 #[salsa::tracked]
 pub struct BuiltinGlobals {
     #[return_ref]
-    pub functions: FxHashMap<String, BuiltinFunction>,
+    pub bzl_globals: APIGlobals,
     #[return_ref]
+    pub bzlmod_globals: APIGlobals,
+    #[return_ref]
+    pub repo_globals: APIGlobals,
+    #[return_ref]
+    pub workspace_globals: APIGlobals,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct APIGlobals {
+    pub functions: FxHashMap<String, BuiltinFunction>,
     pub variables: FxHashMap<String, TypeRef>,
+}
+
+impl APIGlobals {
+    fn from_values<'a, I>(db: &dyn Db, values: I) -> Self
+    where
+        I: Iterator<Item = &'a Value>,
+    {
+        let mut functions = FxHashMap::default();
+        let mut variables = FxHashMap::default();
+
+        for value in values {
+            // Skip deny-listed globals, which are handled directly by the
+            // language server.
+            if value.name.is_empty() || BUILTINS_VALUES_DENY_LIST.contains(&value.name.as_str()) {
+                continue;
+            }
+
+            if let Some(callable) = &value.callable {
+                functions.insert(
+                    value.name.clone(),
+                    builtin_function(db, &value.name, callable, &value.doc, None),
+                );
+            } else {
+                variables.insert(value.name.clone(), normalize_type_ref(&value.r#type));
+            }
+        }
+
+        Self {
+            functions,
+            variables,
+        }
+    }
 }
 
 #[salsa::tracked]
@@ -367,37 +411,30 @@ pub(crate) fn builtin_globals(db: &dyn Db, dialect: Dialect) -> BuiltinGlobals {
 
 #[salsa::tracked]
 pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGlobals {
-    let mut functions = FxHashMap::default();
-    let mut variables = FxHashMap::default();
     let builtins = defs.builtins(db);
     let rules = defs.rules(db);
+    let bzl_globals = APIGlobals::from_values(
+        db,
+        env::make_bzl_builtins()
+            .global
+            .iter()
+            .chain(env::make_build_builtins().global.iter())
+            .chain(builtins.global.iter())
+            .chain(rules.global.iter()),
+    );
+    let bzlmod_globals =
+        APIGlobals::from_values(db, env::make_module_bazel_builtins().global.iter());
+    let repo_globals = APIGlobals::from_values(db, env::make_repo_builtins().global.iter());
+    let workspace_globals =
+        APIGlobals::from_values(db, env::make_workspace_builtins().global.iter());
 
-    for value in env::make_bzl_builtins()
-        .global
-        .iter()
-        .chain(env::make_build_builtins().global.iter())
-        .chain(env::make_module_bazel_builtins().global.iter())
-        .chain(env::make_workspace_builtins().global.iter())
-        .chain(builtins.global.iter())
-        .chain(rules.global.iter())
-    {
-        // Skip deny-listed globals, which are handled directly by the
-        // language server.
-        if value.name.is_empty() || BUILTINS_VALUES_DENY_LIST.contains(&value.name.as_str()) {
-            continue;
-        }
-
-        if let Some(callable) = &value.callable {
-            functions.insert(
-                value.name.clone(),
-                builtin_function(db, &value.name, callable, &value.doc, None),
-            );
-        } else {
-            variables.insert(value.name.clone(), normalize_type_ref(&value.r#type));
-        }
-    }
-
-    BuiltinGlobals::new(db, functions, variables)
+    BuiltinGlobals::new(
+        db,
+        bzl_globals,
+        bzlmod_globals,
+        repo_globals,
+        workspace_globals,
+    )
 }
 
 pub(crate) fn builtin_types(db: &dyn Db, dialect: Dialect) -> BuiltinTypes {

@@ -4,10 +4,14 @@ use crate::{
         ExprId, Function, ModuleSourceMap,
     },
     source_map,
-    typeck::{builtins::builtin_globals, intrinsics::intrinsic_functions},
+    typeck::{
+        builtins::{builtin_globals, APIGlobals},
+        intrinsics::intrinsic_functions,
+    },
     Db, Name,
 };
 use rustc_hash::FxHashMap;
+use starpls_bazel::APIContext;
 use starpls_common::File;
 use starpls_syntax::{TextRange, TextSize};
 use std::collections::hash_map::Entry;
@@ -75,22 +79,37 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_name_in_builtin_globals(&self, name: &Name) -> Option<Vec<ScopeDef>> {
+        let api_context = self.file.api_context(self.db)?;
         let globals = builtin_globals(self.db, self.file.dialect(self.db));
-        globals
-            .functions(self.db)
-            .get(name.as_str())
-            .copied()
-            .map(|func| vec![ScopeDef::BuiltinFunction(func)])
-            .or_else(|| {
-                globals
-                    .variables(self.db)
-                    .get(name.as_str())
-                    .cloned()
-                    .map(|type_ref| vec![ScopeDef::BuiltinVariable(type_ref)])
-            })
+        let resolve_in_api_globals = |api_globals: &APIGlobals| {
+            api_globals
+                .functions
+                .get(name.as_str())
+                .copied()
+                .map(|func| vec![ScopeDef::BuiltinFunction(func)])
+                .or_else(|| {
+                    api_globals
+                        .variables
+                        .get(name.as_str())
+                        .cloned()
+                        .map(|type_ref| vec![ScopeDef::BuiltinVariable(type_ref)])
+                })
+        };
+
+        if api_context == APIContext::Repo {
+            return resolve_in_api_globals(globals.repo_globals(self.db));
+        }
+
+        resolve_in_api_globals(globals.bzl_globals(self.db)).or_else(|| match api_context {
+            APIContext::Module => resolve_in_api_globals(globals.bzlmod_globals(self.db)),
+            APIContext::Workspace => resolve_in_api_globals(globals.workspace_globals(self.db)),
+            _ => None,
+        })
     }
 
     pub(crate) fn names(&self) -> FxHashMap<Name, ScopeDef> {
+        let builtin_globals = builtin_globals(self.db, self.file.dialect(self.db));
+
         // Add names from this module.
         let mut names = self.module_names();
 
@@ -99,18 +118,33 @@ impl<'a> Resolver<'a> {
             names.insert(key.clone(), ScopeDef::IntrinsicFunction(*func));
         }
 
-        // Add global functions from third-party builtins (e.g. Bazel builtins).
-        let globals = builtin_globals(self.db, self.file.dialect(self.db));
-        for (name, func) in globals.functions(self.db).iter() {
-            names.insert(Name::from_str(&name), ScopeDef::BuiltinFunction(*func));
-        }
+        let api_context = match self.file.api_context(self.db) {
+            Some(api_context) => api_context,
+            None => return Default::default(),
+        };
 
-        // Add global variables from third-party builtins (e.g. Bazel builtins).
-        for (name, type_ref) in globals.variables(self.db).iter() {
-            names.insert(
-                Name::from_str(&name),
-                ScopeDef::BuiltinVariable(type_ref.clone()),
-            );
+        // Add names from builtins, taking the current Bazel API context into account.
+        let mut add_builtins = |api_globals: &APIGlobals| {
+            for (name, func) in api_globals.functions.iter() {
+                names.insert(Name::from_str(&name), ScopeDef::BuiltinFunction(*func));
+            }
+            for (name, type_ref) in api_globals.variables.iter() {
+                names.insert(
+                    Name::from_str(&name),
+                    ScopeDef::BuiltinVariable(type_ref.clone()),
+                );
+            }
+        };
+
+        if api_context == APIContext::Repo {
+            add_builtins(builtin_globals.repo_globals(self.db));
+        } else {
+            add_builtins(builtin_globals.bzl_globals(self.db));
+            match api_context {
+                APIContext::Module => add_builtins(builtin_globals.bzlmod_globals(self.db)),
+                APIContext::Workspace => add_builtins(builtin_globals.workspace_globals(self.db)),
+                _ => {}
+            }
         }
 
         names

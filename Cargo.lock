@@ -1421,6 +1421,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "salsa-2022",
+ "starpls_bazel",
  "starpls_syntax",
 ]
 

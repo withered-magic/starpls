@@ -35,6 +35,7 @@ rust_library(
         ":data/commonAttributes.json",
         ":data/missingModuleFields.json",
         ":data/module-bazel.builtins.json",
+        ":data/repo.builtins.json",
         ":data/workspace.builtins.json",
     ],
     rustc_flags = ["--cfg=bazel"],

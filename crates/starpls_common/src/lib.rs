@@ -1,8 +1,8 @@
-use std::fmt::Debug;
-
+use starpls_bazel::APIContext;
 use starpls_syntax::{
     line_index as syntax_line_index, parse_module, LineIndex, Module, ParseTree, SyntaxNode,
 };
+use std::fmt::Debug;
 
 pub use crate::diagnostics::{Diagnostic, Diagnostics, FileRange, Severity};
 
@@ -45,7 +45,13 @@ pub struct FileId(pub u32);
 pub trait Db: salsa::DbWithJar<Jar> {
     /// Creates a `File` in the database. This will overwrite the currently active
     /// `File` for the given `FileId`, if it exists.
-    fn create_file(&mut self, file_id: FileId, dialect: Dialect, contents: String) -> File;
+    fn create_file(
+        &mut self,
+        file_id: FileId,
+        dialect: Dialect,
+        api_context: Option<APIContext>,
+        contents: String,
+    ) -> File;
 
     /// Sets the contents the `File` identified by the given `FileId`. Has no affect
     /// if the file doesn't exist.
@@ -69,6 +75,7 @@ pub trait Db: salsa::DbWithJar<Jar> {
 pub struct File {
     pub id: FileId,
     pub dialect: Dialect,
+    pub api_context: Option<APIContext>,
     #[return_ref]
     pub contents: String,
 }

@@ -147,7 +147,12 @@ impl Server {
             };
             match change_kind {
                 DocumentChangeKind::Create => {
-                    change.create_file(file_id, document.dialect, document.contents.clone());
+                    change.create_file(
+                        file_id,
+                        document.dialect,
+                        document.api_context.clone(),
+                        document.contents.clone(),
+                    );
                 }
                 DocumentChangeKind::Update => {
                     change.update_file(file_id, document.contents.clone());

@@ -247,7 +247,7 @@ impl TyCtxt<'_> {
                             return self.unknown_ty();
                         }
 
-                        self.add_expr_diagnostic_ty_warning(
+                        self.add_expr_diagnostic_warning_ty(
                             file,
                             expr,
                             format!(
@@ -272,7 +272,7 @@ impl TyCtxt<'_> {
                         let return_ty = match index_ty.kind() {
                             TyKind::Int(Some(x)) => match tys.get(*x as usize) {
                                 Some(ty) => ty.clone(),
-                                None => self.add_expr_diagnostic_ty_error(
+                                None => self.add_expr_diagnostic_error_ty(
                                     file,
                                     expr,
                                     format!(
@@ -283,7 +283,7 @@ impl TyCtxt<'_> {
                                 ),
                             },
                             TyKind::Int(None) => Ty::union(tys.iter().cloned()),
-                            _ => self.add_expr_diagnostic_ty_error(
+                            _ => self.add_expr_diagnostic_error_ty(
                                 file,
                                 expr,
                                 format!(
@@ -314,7 +314,7 @@ impl TyCtxt<'_> {
                             _ => None,
                         }
                         .unwrap_or_else(|| {
-                            self.add_expr_diagnostic_ty_warning(
+                            self.add_expr_diagnostic_warning_ty(
                                 file,
                                 expr,
                                 format!("Type \"{}\" is not indexable", lhs_ty.display(db).alt()),
@@ -328,7 +328,7 @@ impl TyCtxt<'_> {
                 if assign_tys(db, &index_ty, target) {
                     value.clone()
                 } else {
-                    self.add_expr_diagnostic_ty_warning(
+                    self.add_expr_diagnostic_warning_ty(
                         file,
                         *lhs,
                         format!(
@@ -639,7 +639,7 @@ impl TyCtxt<'_> {
                         TyKind::ProviderInstance(provider.clone()).intern()
                     }
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.unknown_ty(),
-                    _ => self.add_expr_diagnostic_ty_warning(
+                    _ => self.add_expr_diagnostic_warning_ty(
                         file,
                         expr,
                         format!("Type \"{}\" is not callable", callee_ty.display(db).alt()),
@@ -676,7 +676,7 @@ impl TyCtxt<'_> {
         let ty = self.infer_expr(file, expr);
         match self.check_unary_expr(&ty, op) {
             Ok(ty) => ty,
-            Err(()) => self.add_expr_diagnostic_ty_error(
+            Err(()) => self.add_expr_diagnostic_error_ty(
                 file,
                 parent,
                 format!(
@@ -719,7 +719,7 @@ impl TyCtxt<'_> {
         let lhs_kind = lhs.kind();
         let rhs_kind = rhs.kind();
         let mut unknown = || {
-            self.add_expr_diagnostic_ty_warning(
+            self.add_expr_diagnostic_warning_ty(
                 file,
                 parent,
                 format!(
@@ -1052,7 +1052,7 @@ impl TyCtxt<'_> {
         self.add_diagnostic_for_range(file, severity, range, message);
     }
 
-    fn add_expr_diagnostic_ty_error<T: Into<String>>(
+    fn add_expr_diagnostic_error_ty<T: Into<String>>(
         &mut self,
         file: File,
         expr: ExprId,
@@ -1062,7 +1062,7 @@ impl TyCtxt<'_> {
         self.unknown_ty()
     }
 
-    fn add_expr_diagnostic_ty_warning<T: Into<String>>(
+    fn add_expr_diagnostic_warning_ty<T: Into<String>>(
         &mut self,
         file: File,
         expr: ExprId,

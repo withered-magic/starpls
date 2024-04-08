@@ -116,7 +116,7 @@ pub fn resolve_workspace(from: impl AsRef<Path>) -> io::Result<Option<(PathBuf, 
                 .as_ref()
                 .and_then(|file_name| file_name.to_str())
             {
-                Some("WORKSPACE" | "WORKSPACE.bazel" | "MODULE.bazel") => {
+                Some("WORKSPACE" | "WORKSPACE.bazel" | "MODULE.bazel" | "REPO.bazel") => {
                     return Ok(Some((
                         ancestor.to_path_buf(),
                         package.unwrap_or_else(|| ancestor.to_path_buf()),

@@ -321,15 +321,7 @@ impl FileLoader for DefaultFileLoader {
             } else {
                 let contents = fs::read_to_string(&path)?;
                 let file_id = self.interner.intern_path(path);
-                (
-                    file_id,
-                    dialect,
-                    match dialect {
-                        Dialect::Standard => None,
-                        Dialect::Bazel => Some(APIContext::Bzl),
-                    },
-                    Some(contents),
-                )
+                (file_id, dialect, api_context, Some(contents))
             }
         }))
     }

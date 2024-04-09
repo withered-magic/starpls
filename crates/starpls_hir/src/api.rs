@@ -90,6 +90,15 @@ impl<'a> Semantics<'a> {
         self.db.resolve_load_stmt(file, load_stmt)
     }
 
+    pub fn resolve_load_item(&self, file: File, load_item: &ast::LoadItem) -> Option<LoadItem> {
+        let ptr = AstPtr::new(load_item);
+        let load_item = source_map(self.db, file).load_item_map.get(&ptr)?;
+        Some(LoadItem {
+            file,
+            id: *load_item,
+        })
+    }
+
     pub fn scope_for_module(&self, file: File) -> SemanticsScope {
         let resolver = Resolver::new_for_module(self.db, file);
         SemanticsScope { resolver }
@@ -156,7 +165,7 @@ impl LoadItem {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ScopeDef {
     Callable(Callable),
     Variable(Variable),

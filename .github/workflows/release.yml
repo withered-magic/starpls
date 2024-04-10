@@ -76,6 +76,7 @@ jobs:
           mv artifacts/starpls-linux-amd64/starpls release/starpls-linux-amd64
           mv artifacts/starpls-darwin-arm64/starpls release/starpls-darwin-arm64
           mv artifacts/starpls-windows-amd64/starpls.exe release/starpls-windows-amd64.exe
+          chmod +x release/starpls-*
 
           # Also create archives for usage by installation methods like Homebrew.
           # Eventually, we'll remove the non-zipped binaries above.

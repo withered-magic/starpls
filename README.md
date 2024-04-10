@@ -124,7 +124,8 @@ Steps to get up and running:
 
 - Type guards are not supported.
 - Type checker shows some false positives, especially when the definitions from the builtins proto are incorrect.
-    - Because of these two issues, some type checking diagnostics are current set to display as warnings.
+    - Because of these two issues, some type checking diagnostics are currently set to display as warnings.
+- Type checking + goto definition for symbols loaded from external dependencies will only work if those dependencies have already been fetched. If you see `Could not resolve module` warnings in `load` statements, make sure to run `bazel fetch //...` to make sure the external output base is up-to-date.
 - When `--enable-bzlmod` is set, type checking/goto definition may be slow for a given file the first time it is loaded. This is because resolution of repo mappings, done with `bazel mod dump_repo_mappings`, is done lazily.
     - Additionally, when new dependencies are added, the language server needs to be restarted to refresh the mappings. This is due to the fact that repo mappings are cached, which is necessary to avoid slow type checking.
 

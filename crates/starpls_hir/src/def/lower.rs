@@ -287,10 +287,16 @@ impl<'a> LoweringContext<'a> {
                 Expr::Index { lhs, index }
             }
             ast::Expression::Slice(node) => {
+                let lhs = self.lower_expr_opt(node.expr());
                 let start = self.lower_expr_maybe(node.start());
                 let end = self.lower_expr_maybe(node.end());
                 let step = self.lower_expr_maybe(node.step());
-                Expr::Slice { start, end, step }
+                Expr::Slice {
+                    lhs,
+                    start,
+                    end,
+                    step,
+                }
             }
         };
         self.alloc_expr(expr, ptr)

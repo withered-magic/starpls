@@ -142,7 +142,7 @@ h, i = [4, 5, 6]
             17..18 "3": Literal[3]
             14..18 "2, 3": tuple[Literal[2], Literal[3]]
             20..21 "d": Literal[True]
-            19..22 "(d)": Any
+            19..22 "(d)": Literal[True]
             25..29 "True": Literal[True]
             32..33 "e": Literal[1]
             35..36 "f": Literal["a"]
@@ -901,6 +901,117 @@ fn test_tuple_assignments() {
             56..84 "\"abc\".startswith((\"abc\", 1))": bool
 
             73..83 Argument of type "tuple[Literal["abc"], Literal[1]]" cannot be assigned to parameter of type "string | tuple[string, ...]"
+        "#]],
+    )
+}
+
+#[test]
+fn test_slice_expr() {
+    check_infer(
+        r#"
+x = [1, 2, 3]
+x[:]
+x[1:]
+x[:1]
+x[::2]
+x[0:2:2]
+x["a":None:x]
+
+a = "abc"[:]
+b = b"abc"[:]
+c = ("a", 1, [])[:]
+d = range(10)[:]
+e = [1, 2, 3] # type: Sequence[int]
+f = e[:]
+g = {}[:]
+
+def foo(*nums):
+    # type: (*int) -> None
+    nums[:]
+"#,
+        expect![[r#"
+            1..2 "x": list[int]
+            6..7 "1": Literal[1]
+            9..10 "2": Literal[2]
+            12..13 "3": Literal[3]
+            5..14 "[1, 2, 3]": list[int]
+            15..16 "x": list[int]
+            15..19 "x[:]": list[int]
+            20..21 "x": list[int]
+            22..23 "1": Literal[1]
+            20..25 "x[1:]": list[int]
+            26..27 "x": list[int]
+            29..30 "1": Literal[1]
+            26..31 "x[:1]": list[int]
+            32..33 "x": list[int]
+            36..37 "2": Literal[2]
+            32..38 "x[::2]": list[int]
+            39..40 "x": list[int]
+            41..42 "0": Literal[0]
+            43..44 "2": Literal[2]
+            45..46 "2": Literal[2]
+            39..47 "x[0:2:2]": list[int]
+            48..49 "x": list[int]
+            50..53 "\"a\"": Literal["a"]
+            54..58 "None": None
+            59..60 "x": list[int]
+            48..61 "x[\"a\":None:x]": list[int]
+            63..64 "a": string
+            67..72 "\"abc\"": Literal["abc"]
+            67..75 "\"abc\"[:]": string
+            76..77 "b": bytes
+            80..86 "b\"abc\"": bytes
+            80..89 "b\"abc\"[:]": bytes
+            90..91 "c": string | int | list[Unknown]
+            95..98 "\"a\"": Literal["a"]
+            100..101 "1": Literal[1]
+            103..105 "[]": list[Unknown]
+            94..106 "(\"a\", 1, [])": tuple[Literal["a"], Literal[1], list[Unknown]]
+            94..109 "(\"a\", 1, [])[:]": string | int | list[Unknown]
+            110..111 "d": list[int]
+            114..119 "range": def range(x0: int, x1: int = None, x2: int = None) -> range
+            120..122 "10": Literal[10]
+            114..123 "range(10)": range
+            114..126 "range(10)[:]": list[int]
+            127..128 "e": Sequence[int]
+            132..133 "1": Literal[1]
+            135..136 "2": Literal[2]
+            138..139 "3": Literal[3]
+            131..140 "[1, 2, 3]": list[int]
+            163..164 "f": list[int]
+            167..168 "e": Sequence[int]
+            167..171 "e[:]": list[int]
+            172..173 "g": Unknown
+            176..178 "{}": dict[Any, Unknown]
+            176..181 "{}[:]": Unknown
+            230..234 "nums": tuple[Unknown, ...]
+            230..237 "nums[:]": list[Unknown]
+
+            50..53 `start`, `stop`, and `step` operands must be integers or `None`
+            59..60 `start`, `stop`, and `step` operands must be integers or `None`
+            176..181 Cannot slice expression of type "dict[Any, Unknown]"
+        "#]],
+    )
+}
+
+#[test]
+fn test_paren_expr() {
+    check_infer(
+        r#"
+()
+(1)
+(1,)
+(1, 2)
+"#,
+        expect![[r#"
+            1..3 "()": tuple[]
+            5..6 "1": Literal[1]
+            4..7 "(1)": Literal[1]
+            9..10 "1": Literal[1]
+            8..12 "(1,)": tuple[Literal[1]]
+            14..15 "1": Literal[1]
+            17..18 "2": Literal[2]
+            13..19 "(1, 2)": tuple[Literal[1], Literal[2]]
         "#]],
     )
 }

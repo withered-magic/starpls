@@ -159,6 +159,7 @@ pub enum Expr {
         index: ExprId,
     },
     Slice {
+        lhs: ExprId,
         start: Option<ExprId>,
         end: Option<ExprId>,
         step: Option<ExprId>,
@@ -220,7 +221,13 @@ impl Expr {
                 f(*lhs);
                 f(*index);
             }
-            Expr::Slice { start, end, step } => {
+            Expr::Slice {
+                lhs,
+                start,
+                end,
+                step,
+            } => {
+                f(*lhs);
                 start.map(&mut f);
                 end.map(&mut f);
                 step.map(&mut f);

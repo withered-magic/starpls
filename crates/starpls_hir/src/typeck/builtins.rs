@@ -1,11 +1,14 @@
 use crate::{
-    def::Argument,
+    def::{
+        resolver::{Export, Resolver},
+        Argument,
+    },
     source_map,
     typeck::{
-        Attribute, AttributeKind, Provider, ProviderField, Rule as TyRule, RuleKind, Struct,
-        TagClass, Tuple,
+        Attribute, AttributeKind, ModuleExtension, Provider, ProviderField, Rule as TyRule,
+        RuleKind, Struct, TagClass, Tuple,
     },
-    Db, ExprId, Name, Ty, TyKind, TypeRef,
+    Db, ExprId, Name, Ty, TyCtxt, TyKind, TypeRef,
 };
 use either::Either;
 use rustc_hash::FxHashMap;
@@ -111,14 +114,15 @@ pub struct BuiltinFunction {
 impl BuiltinFunction {
     pub(crate) fn maybe_unique_ret_type<'a, I>(
         &'a self,
-        db: &'a dyn Db,
+        tcx: &'a mut TyCtxt,
         file: File,
         call_expr: ExprId,
-        args: I,
+        mut args: I,
     ) -> Option<Ty>
     where
         I: Iterator<Item = (&'a Argument, &'a Ty)>,
     {
+        let db = tcx.db;
         let ret_kind = match (
             self.parent_type(db)
                 .as_ref()
@@ -381,6 +385,73 @@ impl BuiltinFunction {
                 }
 
                 TyKind::TagClass(Arc::new(TagClass { attrs, doc }))
+            }
+
+            (None, "module_extension") => {
+                let mut doc = None;
+                let mut tag_classes = None;
+                for (arg, ty) in args {
+                    if let Argument::Keyword { name, .. } = arg {
+                        match name.as_str() {
+                            "doc" => {
+                                if let TyKind::String(Some(s)) = ty.kind() {
+                                    doc = Some(s.value(db).clone());
+                                }
+                            }
+                            "tag_classes" => {
+                                let lit = match ty.kind() {
+                                    TyKind::Dict(_, _, Some(lit)) => lit,
+                                    _ => continue,
+                                };
+
+                                tag_classes = Some(
+                                    lit.known_keys
+                                        .iter()
+                                        .filter_map(|(name, ty)| match ty.kind() {
+                                            TyKind::TagClass(tag_class) => Some((
+                                                Name::from_str(&name.value(db)),
+                                                tag_class.clone(),
+                                            )),
+                                            _ => None,
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .into_boxed_slice(),
+                                );
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                TyKind::ModuleExtension(Arc::new(ModuleExtension { doc, tag_classes }))
+            }
+
+            (None, "use_extension") => {
+                let mut next_string_arg = || {
+                    args.next().and_then(|(arg, ty)| match (arg, ty.kind()) {
+                        (Argument::Simple { .. }, TyKind::String(Some(s))) => Some(s.value(db)),
+                        _ => None,
+                    })
+                };
+
+                let path = next_string_arg()?;
+                let name = next_string_arg()?;
+                let loaded_file = db.load_file(&path, file.dialect(db), file.id(db)).ok()??;
+                let expr = match Resolver::resolve_export_in_file(
+                    db,
+                    loaded_file,
+                    &Name::from_str(&name),
+                )? {
+                    Export::Variable(expr) => expr,
+                    _ => return None,
+                };
+
+                let module_extension = match tcx.infer_expr(loaded_file, expr).kind() {
+                    TyKind::ModuleExtension(module_extension) => module_extension.clone(),
+                    _ => return None,
+                };
+
+                TyKind::ModuleExtensionProxy(module_extension)
             }
 
             _ => return None,

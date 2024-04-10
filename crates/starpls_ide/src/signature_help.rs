@@ -101,13 +101,13 @@ pub(crate) fn signature_help(
     label.push_str(func.name(db).as_str());
     label.push('(');
 
-    let is_rule = func.is_rule();
-    if is_rule {
+    let is_rule_or_tag = func.is_rule() || func.is_tag();
+    if is_rule_or_tag {
         label.push_str("*");
     }
 
     for (index, param_label) in param_labels.iter().enumerate() {
-        if index > 0 || is_rule {
+        if index > 0 || is_rule_or_tag {
             label.push_str(", ");
         }
         label.push_str(&param_label);

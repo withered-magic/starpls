@@ -587,7 +587,7 @@ impl TyCtxt<'_> {
                             self.add_expr_diagnostic_error(file, expr, message);
                         }
 
-                        func.maybe_unique_ret_type(db, file, expr, args_with_ty)
+                        func.maybe_unique_ret_type(self, file, expr, args_with_ty)
                             .unwrap_or_else(|| resolve_type_ref(db, &func.ret_type_ref(db)).0)
                     }
                     TyKind::Rule(rule) => {
@@ -637,6 +637,57 @@ impl TyCtxt<'_> {
                     }
                     TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
                         TyKind::ProviderInstance(provider.clone()).intern()
+                    }
+                    TyKind::Tag(tag_class) => {
+                        // TODO(withered-magic): Much of this logic is duplicated from handling `TyKind::Rule` above.
+                        let mut slots = Slots::from_tag_class(tag_class);
+                        slots.assign_args(&args, None);
+
+                        let mut missing_attrs = Vec::new();
+
+                        // Validate argument types.
+                        for ((name, attr), slot) in tag_class
+                            .attrs
+                            .iter()
+                            .flat_map(|attrs| attrs.iter())
+                            .zip(slots.into_inner())
+                        {
+                            let expected_ty = attr.expected_ty();
+                            match slot {
+                                Slot::Keyword { provider, .. } => match provider {
+                                    SlotProvider::Single(expr, index) => {
+                                        let ty = &arg_tys[index];
+                                        if !assign_tys(db, ty, &expected_ty) {
+                                            self.add_expr_diagnostic_error(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), expected_ty.display(self.db).alt()));
+                                        }
+                                    }
+                                    SlotProvider::Missing => {
+                                        if attr.mandatory {
+                                            missing_attrs.push(name);
+                                        }
+                                    }
+                                    _ => {}
+                                },
+                                _ => {}
+                            }
+                        }
+
+                        // Emit diagnostic for missing parameters.
+                        if !missing_attrs.is_empty() {
+                            let mut message = String::from("Argument missing for attribute(s) ");
+                            for (i, name) in missing_attrs.iter().enumerate() {
+                                if i > 0 {
+                                    message.push_str(", ");
+                                }
+                                message.push('"');
+                                message.push_str(name.as_str());
+                                message.push('"');
+                            }
+
+                            self.add_expr_diagnostic_error(file, expr, message);
+                        }
+
+                        self.none_ty()
                     }
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.unknown_ty(),
                     _ => self.add_expr_diagnostic_warning_ty(
@@ -1385,6 +1436,7 @@ impl TyCtxt<'_> {
                     TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
                         Slots::from_provider(&provider)
                     }
+                    TyKind::Tag(tag_class) => Slots::from_tag_class(tag_class),
                     _ => return None,
                 };
 

@@ -2,7 +2,8 @@ use crate::{
     def::Argument,
     source_map,
     typeck::{
-        Attribute, AttributeKind, Provider, ProviderField, Rule as TyRule, RuleKind, Struct, Tuple,
+        Attribute, AttributeKind, Provider, ProviderField, Rule as TyRule, RuleKind, Struct,
+        TagClass, Tuple,
     },
     Db, ExprId, Name, Ty, TyKind, TypeRef,
 };
@@ -269,9 +270,12 @@ impl BuiltinFunction {
                                     attrs = Some(
                                         lit.known_keys
                                             .iter()
-                                            .filter(|(_, ty)| ty.is_attribute())
-                                            .map(|(name, ty)| {
-                                                (Name::from_str(&name.value(db)), ty.clone())
+                                            .filter_map(|(name, ty)| match ty.kind() {
+                                                TyKind::Attribute(attr) => Some((
+                                                    Name::from_str(&name.value(db)),
+                                                    attr.clone(),
+                                                )),
+                                                _ => None,
                                             })
                                             .collect::<Vec<_>>()
                                             .into_boxed_slice(),
@@ -321,7 +325,7 @@ impl BuiltinFunction {
                     }
                 }
 
-                TyKind::Attribute(Attribute::new(
+                TyKind::Attribute(Arc::new(Attribute::new(
                     match attr {
                         "bool" => AttributeKind::Bool,
                         "int" => AttributeKind::Int,
@@ -340,7 +344,43 @@ impl BuiltinFunction {
                     doc,
                     mandatory,
                     default_ptr.map(|text_range| Either::Left((file, text_range))),
-                ))
+                )))
+            }
+
+            (None, "tag_class") => {
+                let mut attrs = None;
+                let mut doc = None;
+                for (arg, ty) in args {
+                    if let Argument::Keyword { name, .. } = arg {
+                        match name.as_str() {
+                            "attrs" => {
+                                if let TyKind::Dict(_, _, Some(lit)) = ty.kind() {
+                                    attrs = Some(
+                                        lit.known_keys
+                                            .iter()
+                                            .filter_map(|(name, ty)| match ty.kind() {
+                                                TyKind::Attribute(attr) => Some((
+                                                    Name::from_str(&name.value(db)),
+                                                    attr.clone(),
+                                                )),
+                                                _ => None,
+                                            })
+                                            .collect::<Vec<_>>()
+                                            .into_boxed_slice(),
+                                    )
+                                }
+                            }
+                            "doc" => {
+                                if let TyKind::String(Some(s)) = ty.kind() {
+                                    doc = Some(s.value(db).clone());
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                TyKind::TagClass(Arc::new(TagClass { attrs, doc }))
             }
 
             _ => return None,

@@ -379,16 +379,16 @@ impl Ty {
                     common_attrs
                         .next()
                         .into_iter()
-                        .chain(attrs.iter().map(|(name, ty)| {
+                        .chain(attrs.iter().map(|(name, attr)| {
                             (
                                 Param(
                                     RuleParam::Keyword {
                                         name: name.clone(),
-                                        attr: ty.clone(),
+                                        attr: attr.clone(),
                                     }
                                     .into(),
                                 ),
-                                ty.as_attribute().expected_ty(),
+                                attr.expected_ty(),
                             )
                         }))
                         .chain(common_attrs)
@@ -531,17 +531,6 @@ impl Ty {
         }
     }
 
-    fn is_attribute(&self) -> bool {
-        matches!(self.kind(), TyKind::Attribute(_))
-    }
-
-    fn as_attribute(&self) -> &Attribute {
-        match self.kind() {
-            TyKind::Attribute(attr) => attr,
-            _ => panic!("attribute() called on invalid TyKind"),
-        }
-    }
-
     fn eq(ty1: &Ty, ty2: &Ty) -> bool {
         match (ty1.kind(), ty2.kind()) {
             (TyKind::Dict(key_ty1, value_ty1, _), TyKind::Dict(key_ty2, value_ty2, _)) => {
@@ -600,7 +589,7 @@ pub(crate) enum ParamInner {
 
 #[derive(Clone, Debug)]
 pub(crate) enum RuleParam {
-    Keyword { name: Name, attr: Ty },
+    Keyword { name: Name, attr: Arc<Attribute> },
     BuiltinKeyword(RuleKind, usize),
     Kwargs,
 }
@@ -677,7 +666,7 @@ impl Param {
             },
             ParamInner::IntrinsicParam { .. } => return None,
             ParamInner::RuleParam(RuleParam::Keyword { attr, .. }) => {
-                return attr.as_attribute().doc.as_ref().map(Box::to_string)
+                return attr.doc.as_ref().map(Box::to_string)
             }
             ParamInner::RuleParam(RuleParam::BuiltinKeyword(kind, index)) => {
                 return common_attributes_query(db)
@@ -784,7 +773,7 @@ impl Param {
                 BuiltinFunctionParam::Simple { default_value, .. } => return default_value.clone(),
                 _ => return None,
             },
-            ParamInner::RuleParam(RuleParam::Keyword { attr, .. }) => attr.as_attribute(),
+            ParamInner::RuleParam(RuleParam::Keyword { attr, .. }) => attr,
             ParamInner::RuleParam(RuleParam::BuiltinKeyword(kind, index)) => {
                 common.get(db, kind.clone(), *index).1
             }
@@ -985,17 +974,23 @@ pub(crate) enum TyKind {
     Struct(Option<Struct>),
     /// A Bazel attribute (https://bazel.build/rules/lib/builtins/Attribute.html).
     /// Use this instead of the `Attribute` type defined in `builtin.pb`.
-    Attribute(Attribute),
+    Attribute(Arc<Attribute>),
     /// A Bazel rule (https://bazel.build/rules/lib/builtins/rule).
     /// The `Ty`s contained in the boxed slice must have kind `TyKind::Attribute`.
     Rule(Rule),
     /// A Bazel provider (https://bazel.build/rules/lib/builtins/Provider.html).
     /// This is a callable the yields "provider instances".
     Provider(Arc<Provider>),
-    /// An instance of a provider. The contained `Ty` must have kind `TyKind::Provider`.
+    /// An instance of a Bazel provider. The contained `Ty` must have kind `TyKind::Provider`.
     ProviderInstance(Arc<Provider>),
-    /// The raw constructor for a provider.
+    /// The raw constructor for a Bazel provider.
     ProviderRawConstructor(Name, Arc<Provider>),
+    /// A Bazel tag class.
+    TagClass(Arc<TagClass>),
+    /// A Bazel module extension.
+    ModuleExtension(Arc<ModuleExtension>),
+    /// A Bazel module extension proxy.
+    ModuleExtensionProxy(Arc<ModuleExtension>),
 }
 
 impl_internable!(TyKind);
@@ -1072,7 +1067,7 @@ pub enum RuleKind {
 pub(crate) struct Rule {
     pub(crate) kind: RuleKind,
     pub(crate) doc: Option<Box<str>>,
-    attrs: Box<[(Name, Ty)]>,
+    attrs: Box<[(Name, Arc<Attribute>)]>,
 }
 
 impl Rule {
@@ -1089,11 +1084,7 @@ impl Rule {
         common_attrs
             .next()
             .into_iter()
-            .chain(
-                self.attrs
-                    .iter()
-                    .map(|(name, ty)| (name, ty.as_attribute())),
-            )
+            .chain(self.attrs.iter().map(|(name, attr)| (name, &**attr)))
             .chain(common_attrs)
     }
 }
@@ -1109,6 +1100,17 @@ pub(crate) struct Provider {
 pub(crate) struct Struct {
     pub(crate) call_expr: InFile<ExprId>,
     pub(crate) fields: Box<[(Name, Ty)]>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct ModuleExtension {
+    pub(crate) tag_classes: Option<Box<[(Name, Arc<TagClass>)]>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct TagClass {
+    attrs: Option<Box<[(Name, Arc<Attribute>)]>>,
+    doc: Option<Box<str>>,
 }
 
 impl TyKind {

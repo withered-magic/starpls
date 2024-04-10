@@ -667,7 +667,47 @@ impl TyCtxt<'_> {
                     .into_iter(),
                 )
             }
-            _ => self.any_ty(),
+            Expr::Slice {
+                lhs,
+                start,
+                end,
+                step,
+            } => {
+                let mut check_slice_component = |expr| {
+                    let ty = self.infer_expr(file, expr);
+                    if !assign_tys(db, &ty, &self.int_ty()) && !assign_tys(db, &ty, &self.none_ty())
+                    {
+                        self.add_expr_diagnostic_error(
+                            file,
+                            expr,
+                            "`start`, `stop`, and `step` operands must be integers or `None`",
+                        )
+                    }
+                };
+
+                start.map(&mut check_slice_component);
+                end.map(&mut check_slice_component);
+                step.map(&mut check_slice_component);
+
+                let lhs_ty = self.infer_expr(file, *lhs);
+                match lhs_ty.kind() {
+                    TyKind::String(_) => self.string_ty(),
+                    TyKind::Bytes => self.bytes_ty(),
+                    TyKind::Tuple(Tuple::Simple(tys)) => Ty::union(tys.iter().cloned()),
+                    TyKind::Tuple(Tuple::Variable(ty)) => Ty::list(ty.clone()),
+                    TyKind::Range => Ty::list(self.int_ty()),
+                    TyKind::List(ty) | TyKind::Protocol(Protocol::Sequence(ty)) => {
+                        Ty::list(ty.clone())
+                    }
+                    _ => self.add_expr_diagnostic_warning_ty(
+                        file,
+                        expr,
+                        format!("Cannot slice expression of type \"{}\"", lhs_ty.display(db)),
+                    ),
+                }
+            }
+            Expr::Paren { expr } => self.infer_expr(file, *expr),
+            _ => self.unknown_ty(),
         };
         self.set_expr_type(file, expr, ty)
     }

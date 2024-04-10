@@ -284,6 +284,10 @@ impl DisplayWithDb for TyKind {
                 provider.name.as_ref().map_or("_", |name| name.as_str())
             }
             TyKind::ProviderRawConstructor(_, _) => "ProviderRawConstructor",
+            TyKind::TagClass(_) => "tag_class",
+            TyKind::ModuleExtension(_) => "module_extension",
+            TyKind::ModuleExtensionProxy(_) => "module_extension_proxy",
+            TyKind::Tag(_) => "tag",
         };
 
         f.write_str(text)

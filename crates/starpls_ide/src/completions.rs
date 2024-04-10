@@ -171,7 +171,7 @@ pub(crate) fn completions(
             for (name, ty) in receiver_ty.fields(db) {
                 items.push(CompletionItem {
                     label: name.name(db).to_string(),
-                    kind: if ty.is_function() {
+                    kind: if ty.is_callable() {
                         CompletionItemKind::Function
                     } else {
                         CompletionItemKind::Field

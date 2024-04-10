@@ -8,7 +8,7 @@ use crate::{
     module, source_map,
     typeck::{
         builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref, ParamInner,
-        Provider, Substitution, Tuple, Ty, TypeRef,
+        Provider, Substitution, TagClass, Tuple, Ty, TypeRef,
     },
     Db, ExprId, Name, TyKind,
 };
@@ -64,6 +64,7 @@ impl<'a> Semantics<'a> {
             TyKind::ProviderRawConstructor(name, provider) => Callable(
                 CallableInner::ProviderRawConstructor(name.clone(), provider.clone()),
             ),
+            TyKind::Tag(tag_class) => Callable(CallableInner::Tag(tag_class.clone())),
             _ => return None,
         })
     }
@@ -275,7 +276,10 @@ impl Type {
         self.is_function()
             || matches!(
                 self.ty.kind(),
-                TyKind::Rule(_) | TyKind::Provider(_) | TyKind::ProviderRawConstructor(_, _)
+                TyKind::Rule(_)
+                    | TyKind::Provider(_)
+                    | TyKind::ProviderRawConstructor(_, _)
+                    | TyKind::Tag(_)
             )
     }
 
@@ -302,6 +306,10 @@ impl Type {
             TyKind::IntrinsicFunction(func, _) => func.doc(db).clone(),
             TyKind::Rule(rule) => return rule.doc.as_ref().map(Box::to_string),
             TyKind::Provider(provider) => return provider.doc.map(|doc| doc.value(db).to_string()),
+            TyKind::ModuleExtension(module_extension)
+            | TyKind::ModuleExtensionProxy(module_extension) => {
+                return module_extension.doc.as_ref().map(Box::to_string)
+            }
             _ => return None,
         })
     }
@@ -392,6 +400,7 @@ impl Callable {
                 .cloned()
                 .unwrap_or_else(|| Name::new_inline("provider")),
             CallableInner::ProviderRawConstructor(ref name, _) => name.clone(),
+            CallableInner::Tag(_) => Name::new_inline("tag"),
         }
     }
 
@@ -415,6 +424,7 @@ impl Callable {
             CallableInner::ProviderRawConstructor(ref name, ref provider) => {
                 TyKind::ProviderRawConstructor(name.clone(), provider.clone()).intern()
             }
+            CallableInner::Tag(ref tag_class) => TyKind::Tag(tag_class.clone()).intern(),
         }
         .into()
     }
@@ -440,6 +450,7 @@ impl Callable {
             | CallableInner::ProviderRawConstructor(_, ref provider) => {
                 provider.doc.map(|doc| doc.value(db).to_string())
             }
+            CallableInner::Tag(ref tag_class) => tag_class.doc.as_ref().map(|doc| doc.to_string()),
         }
     }
 
@@ -449,6 +460,10 @@ impl Callable {
 
     pub fn is_rule(&self) -> bool {
         matches!(self.0, CallableInner::Rule(_))
+    }
+
+    pub fn is_tag(&self) -> bool {
+        matches!(self.0, CallableInner::Tag(_))
     }
 }
 
@@ -472,6 +487,7 @@ enum CallableInner {
     Rule(Ty),
     Provider(Arc<Provider>),
     ProviderRawConstructor(Name, Arc<Provider>),
+    Tag(Arc<TagClass>),
 }
 
 #[derive(Clone, Debug)]

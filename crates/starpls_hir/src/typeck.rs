@@ -275,6 +275,22 @@ impl Ty {
                     },
                 ))
             }
+            TyKind::ModuleExtensionProxy(module_extension) => Fields::ModuleExtensionProxy(
+                module_extension
+                    .tag_classes
+                    .iter()
+                    .flat_map(|tag_classes| tag_classes.iter())
+                    .enumerate()
+                    .map(|(index, (_, tag_class))| {
+                        (
+                            Field(FieldInner::ModuleExtensionProxyField {
+                                module_extension: module_extension.clone(),
+                                index,
+                            }),
+                            TyKind::Tag(tag_class.clone()).intern(),
+                        )
+                    }),
+            ),
             _ => return None,
         };
 
@@ -379,16 +395,16 @@ impl Ty {
                     common_attrs
                         .next()
                         .into_iter()
-                        .chain(attrs.iter().map(|(name, ty)| {
+                        .chain(attrs.iter().map(|(name, attr)| {
                             (
                                 Param(
                                     RuleParam::Keyword {
                                         name: name.clone(),
-                                        attr: ty.clone(),
+                                        attr: attr.clone(),
                                     }
                                     .into(),
                                 ),
-                                ty.as_attribute().expected_ty(),
+                                attr.expected_ty(),
                             )
                         }))
                         .chain(common_attrs)
@@ -411,6 +427,28 @@ impl Ty {
                     })
                 }))
             }
+            TyKind::Tag(tag_class) => Params::Tag(
+                tag_class
+                    .attrs
+                    .iter()
+                    .flat_map(|attrs| attrs.iter())
+                    .map(|(name, attr)| {
+                        (
+                            Param(
+                                TagParam::Keyword {
+                                    name: name.clone(),
+                                    attr: attr.clone(),
+                                }
+                                .into(),
+                            ),
+                            attr.expected_ty(),
+                        )
+                    })
+                    .chain(iter::once((
+                        Param(TagParam::Kwargs.into()),
+                        TyKind::Dict(Ty::string(), Ty::any(), None).intern(),
+                    ))),
+            ),
             _ => return None,
         })
     }
@@ -424,6 +462,7 @@ impl Ty {
             TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
                 TyKind::ProviderInstance(provider.clone()).intern()
             }
+            TyKind::Tag(_) => Ty::none(),
             _ => return None,
         })
     }
@@ -531,17 +570,6 @@ impl Ty {
         }
     }
 
-    fn is_attribute(&self) -> bool {
-        matches!(self.kind(), TyKind::Attribute(_))
-    }
-
-    fn as_attribute(&self) -> &Attribute {
-        match self.kind() {
-            TyKind::Attribute(attr) => attr,
-            _ => panic!("attribute() called on invalid TyKind"),
-        }
-    }
-
     fn eq(ty1: &Ty, ty2: &Ty) -> bool {
         match (ty1.kind(), ty2.kind()) {
             (TyKind::Dict(key_ty1, value_ty1, _), TyKind::Dict(key_ty2, value_ty2, _)) => {
@@ -596,11 +624,12 @@ pub(crate) enum ParamInner {
         provider: Arc<Provider>,
         index: usize,
     },
+    TagParam(TagParam),
 }
 
 #[derive(Clone, Debug)]
 pub(crate) enum RuleParam {
-    Keyword { name: Name, attr: Ty },
+    Keyword { name: Name, attr: Arc<Attribute> },
     BuiltinKeyword(RuleKind, usize),
     Kwargs,
 }
@@ -608,6 +637,18 @@ pub(crate) enum RuleParam {
 impl From<RuleParam> for ParamInner {
     fn from(value: RuleParam) -> Self {
         Self::RuleParam(value)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum TagParam {
+    Keyword { name: Name, attr: Arc<Attribute> },
+    Kwargs,
+}
+
+impl From<TagParam> for ParamInner {
+    fn from(value: TagParam) -> Self {
+        Self::TagParam(value)
     }
 }
 
@@ -658,6 +699,8 @@ impl Param {
                     .name
                     .clone(),
             ),
+            ParamInner::TagParam(TagParam::Keyword { ref name, .. }) => Some(name.clone()),
+            ParamInner::TagParam(TagParam::Kwargs) => Some(Name::new_inline("kwargs")),
         }
     }
 
@@ -677,7 +720,7 @@ impl Param {
             },
             ParamInner::IntrinsicParam { .. } => return None,
             ParamInner::RuleParam(RuleParam::Keyword { attr, .. }) => {
-                return attr.as_attribute().doc.as_ref().map(Box::to_string)
+                return attr.doc.as_ref().map(Box::to_string)
             }
             ParamInner::RuleParam(RuleParam::BuiltinKeyword(kind, index)) => {
                 return common_attributes_query(db)
@@ -696,6 +739,9 @@ impl Param {
                     .doc
                     .as_ref()
                     .map(Box::to_string)
+            }
+            ParamInner::TagParam(TagParam::Keyword { attr, .. }) => {
+                return attr.doc.as_ref().map(Box::to_string)
             }
             _ => return None,
         })
@@ -750,6 +796,7 @@ impl Param {
                 BuiltinFunctionParam::KwargsDict { .. }
             ),
             ParamInner::RuleParam(RuleParam::Kwargs) => true,
+            ParamInner::TagParam(TagParam::Kwargs) => true,
             _ => false,
         }
     }
@@ -784,7 +831,7 @@ impl Param {
                 BuiltinFunctionParam::Simple { default_value, .. } => return default_value.clone(),
                 _ => return None,
             },
-            ParamInner::RuleParam(RuleParam::Keyword { attr, .. }) => attr.as_attribute(),
+            ParamInner::RuleParam(RuleParam::Keyword { attr, .. }) => attr,
             ParamInner::RuleParam(RuleParam::BuiltinKeyword(kind, index)) => {
                 common.get(db, kind.clone(), *index).1
             }
@@ -803,21 +850,23 @@ impl Param {
     }
 }
 
-enum Params<I1, I2, I3, I4, I5> {
+enum Params<I1, I2, I3, I4, I5, I6> {
     Simple(I1),
     Intrinsic(I2),
     Builtin(I3),
     Rule(I4),
     Provider(I5),
+    Tag(I6),
 }
 
-impl<I1, I2, I3, I4, I5> Iterator for Params<I1, I2, I3, I4, I5>
+impl<I1, I2, I3, I4, I5, I6> Iterator for Params<I1, I2, I3, I4, I5, I6>
 where
     I1: Iterator<Item = (Param, Ty)>,
     I2: Iterator<Item = (Param, Ty)>,
     I3: Iterator<Item = (Param, Ty)>,
     I4: Iterator<Item = (Param, Ty)>,
     I5: Iterator<Item = (Param, Ty)>,
+    I6: Iterator<Item = (Param, Ty)>,
 {
     type Item = (Param, Ty);
 
@@ -828,6 +877,7 @@ where
             Params::Builtin(iter) => iter.next(),
             Params::Rule(iter) => iter.next(),
             Params::Provider(iter) => iter.next(),
+            Params::Tag(iter) => iter.next(),
         }
     }
 }
@@ -851,6 +901,15 @@ impl Field {
                 .1[index]
                 .name
                 .clone(),
+            FieldInner::ModuleExtensionProxyField {
+                ref module_extension,
+                index,
+            } => module_extension
+                .tag_classes
+                .as_ref()
+                .expect("expected module_extension tag classes")[index]
+                .0
+                .clone(),
         }
     }
 
@@ -868,6 +927,18 @@ impl Field {
                 .as_ref()
                 .expect("expected provider fields")
                 .1[index]
+                .doc
+                .as_ref()
+                .map(|doc| doc.to_string())
+                .unwrap_or_default(),
+            FieldInner::ModuleExtensionProxyField {
+                ref module_extension,
+                index,
+            } => module_extension
+                .tag_classes
+                .as_ref()
+                .expect("expected module_extension tag classes")[index]
+                .1
                 .doc
                 .as_ref()
                 .map(|doc| doc.to_string())
@@ -895,23 +966,29 @@ enum FieldInner {
         provider: Arc<Provider>,
         index: usize,
     },
+    ModuleExtensionProxyField {
+        module_extension: Arc<ModuleExtension>,
+        index: usize,
+    },
 }
 
-enum Fields<I1, I2, I3, I4, I5> {
+enum Fields<I1, I2, I3, I4, I5, I6> {
     Intrinsic(I1),
     Builtin(I2),
     Union(I3),
     Struct(I4),
     Provider(I5),
+    ModuleExtensionProxy(I6),
 }
 
-impl<I1, I2, I3, I4, I5> Iterator for Fields<I1, I2, I3, I4, I5>
+impl<I1, I2, I3, I4, I5, I6> Iterator for Fields<I1, I2, I3, I4, I5, I6>
 where
     I1: Iterator<Item = (Field, Ty)>,
     I2: Iterator<Item = (Field, Ty)>,
     I3: Iterator<Item = (Field, Ty)>,
     I4: Iterator<Item = (Field, Ty)>,
     I5: Iterator<Item = (Field, Ty)>,
+    I6: Iterator<Item = (Field, Ty)>,
 {
     type Item = (Field, Ty);
 
@@ -922,6 +999,7 @@ where
             Self::Union(iter) => iter.next(),
             Self::Struct(iter) => iter.next(),
             Self::Provider(iter) => iter.next(),
+            Self::ModuleExtensionProxy(iter) => iter.next(),
         }
     }
 }
@@ -985,17 +1063,25 @@ pub(crate) enum TyKind {
     Struct(Option<Struct>),
     /// A Bazel attribute (https://bazel.build/rules/lib/builtins/Attribute.html).
     /// Use this instead of the `Attribute` type defined in `builtin.pb`.
-    Attribute(Attribute),
+    Attribute(Arc<Attribute>),
     /// A Bazel rule (https://bazel.build/rules/lib/builtins/rule).
     /// The `Ty`s contained in the boxed slice must have kind `TyKind::Attribute`.
     Rule(Rule),
     /// A Bazel provider (https://bazel.build/rules/lib/builtins/Provider.html).
     /// This is a callable the yields "provider instances".
     Provider(Arc<Provider>),
-    /// An instance of a provider. The contained `Ty` must have kind `TyKind::Provider`.
+    /// An instance of a Bazel provider. The contained `Ty` must have kind `TyKind::Provider`.
     ProviderInstance(Arc<Provider>),
-    /// The raw constructor for a provider.
+    /// The raw constructor for a Bazel provider.
     ProviderRawConstructor(Name, Arc<Provider>),
+    /// A Bazel tag class.
+    TagClass(Arc<TagClass>),
+    /// A Bazel module extension.
+    ModuleExtension(Arc<ModuleExtension>),
+    /// A Bazel module extension proxy.
+    ModuleExtensionProxy(Arc<ModuleExtension>),
+    /// A Bazel tag (e.g. `maven.artifact()`)
+    Tag(Arc<TagClass>),
 }
 
 impl_internable!(TyKind);
@@ -1072,7 +1158,7 @@ pub enum RuleKind {
 pub(crate) struct Rule {
     pub(crate) kind: RuleKind,
     pub(crate) doc: Option<Box<str>>,
-    attrs: Box<[(Name, Ty)]>,
+    attrs: Box<[(Name, Arc<Attribute>)]>,
 }
 
 impl Rule {
@@ -1089,11 +1175,7 @@ impl Rule {
         common_attrs
             .next()
             .into_iter()
-            .chain(
-                self.attrs
-                    .iter()
-                    .map(|(name, ty)| (name, ty.as_attribute())),
-            )
+            .chain(self.attrs.iter().map(|(name, attr)| (name, &**attr)))
             .chain(common_attrs)
     }
 }
@@ -1109,6 +1191,18 @@ pub(crate) struct Provider {
 pub(crate) struct Struct {
     pub(crate) call_expr: InFile<ExprId>,
     pub(crate) fields: Box<[(Name, Ty)]>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct ModuleExtension {
+    pub(crate) doc: Option<Box<str>>,
+    pub(crate) tag_classes: Option<Box<[(Name, Arc<TagClass>)]>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct TagClass {
+    pub(crate) attrs: Option<Box<[(Name, Arc<Attribute>)]>>,
+    pub(crate) doc: Option<Box<str>>,
 }
 
 impl TyKind {

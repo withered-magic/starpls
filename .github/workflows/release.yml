@@ -81,9 +81,9 @@ jobs:
           # Also create archives for usage by installation methods like Homebrew.
           # Eventually, we'll remove the non-zipped binaries above.
           cd release
-          tar -czvf starpls-linux-amd64.tar.gz starpls-linux-amd64
-          tar -czvf starpls-darwin-arm64.tar.gz starpls-darwin-arm64
-          zip starpls-windows-amd64.zip starpls-windows-amd64.exe
+          cp starpls-linux-amd64 starpls && tar -czvf starpls-linux-amd64.tar.gz starpls && rm starpls
+          cp starpls-darwin-arm64 starpls && tar -czvf starpls-darwin-arm64.tar.gz starpls && rm starpls
+          cp starpls-windows-amd64.exe starpls.exe && zip starpls-windows-amd64.zip starpls.exe && rm starpls.exe
       - name: Show release artifacts
         run: find release
       - name: Create release

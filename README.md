@@ -7,7 +7,13 @@
 
 Make sure you have at least the [0.9.0](https://github.com/bazelbuild/vscode-bazel/releases/tag/0.9.0) version of the [vscode-bazel](https://github.com/bazelbuild/vscode-bazel) extension installed, as it adds support for launching a language server.
 
-You can grab a release from the [releases page](https://github.com/withered-magic/starpls/releases). Make sure to download the appropriate version for your OS and architecture! After downloading the binary, make sure to adjust its permissions to make it executable, e.g.
+If you're on a Mac with Apple Silicon, then you can install `starpls` with Homebrew and skip ahead to the section about configuring VSCode:
+
+```sh
+brew tap withered-magic/brew/starpls
+```
+
+Otherwise, you can grab a release from the [releases page](https://github.com/withered-magic/starpls/releases). Make sure to download the appropriate version for your OS and architecture! After downloading the binary, make sure to adjust its permissions to make it executable, e.g.
 
 ```sh
 chmod +x starpls-darwin-arm64

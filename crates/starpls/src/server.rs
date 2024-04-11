@@ -85,7 +85,15 @@ impl Server {
         let bzlmod_enabled = bzlmod_capability && {
             // Next, we check if bzlmod is enabled by default for the current Bazel version.
             // bzlmod is enabled by default for Bazel versions 7 and later.
-            let bzlmod_enabled_by_default = info.release.starts_with("release 7");
+            // TODO(withered-magic): Just hardcoding this for now since I'm lazy to parse the actual versions.
+            // This should last us pretty long since Bazel 9 isn't anywhere on the horizon.
+            let bzlmod_enabled_by_default = ["release 7", "release 8", "release 9"]
+                .iter()
+                .any(|release| info.release.starts_with(release));
+
+            if bzlmod_enabled_by_default {
+                eprintln!("server: Bazel 7 or later detected")
+            }
 
             // Finally, check starlark-semantics to determine whether bzlmod has been explicitly
             // enabled/disabled, e.g. in a .bazelrc file.

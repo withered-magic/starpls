@@ -146,20 +146,12 @@ impl TyCtxt<'_> {
                     return self.set_expr_type(
                         file,
                         expr,
-                        Ty::dict(Ty::any(), Ty::unknown(), None),
+                        Ty::dict(Ty::unknown(), Ty::unknown(), None),
                     );
                 }
 
-                // Determine the dict's key type. For now, if all specified entries have the key type `T`, then we also
-                // use the type `T` as the dict's key tpe. Otherwise, we use `Any` as the key type.
-                // TODO(withered-magic): Eventually, we should use a union type here.
-                let key_ty = self.get_common_type(
-                    file,
-                    entries.iter().map(|entry| entry.key),
-                    self.any_ty(),
-                );
-
-                // Similarly, determine the dict's value type.
+                let key_ty =
+                    Ty::union(entries.iter().map(|entry| self.infer_expr(file, entry.key)));
                 let value_ty = self.get_common_type(
                     file,
                     entries.iter().map(|entry| entry.value),
@@ -750,6 +742,7 @@ impl TyCtxt<'_> {
                     TyKind::List(ty) | TyKind::Protocol(Protocol::Sequence(ty)) => {
                         Ty::list(ty.clone())
                     }
+                    TyKind::Unknown | TyKind::Any => self.unknown_ty(),
                     _ => self.add_expr_diagnostic_warning_ty(
                         file,
                         expr,

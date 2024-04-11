@@ -475,7 +475,7 @@
                 "params": [
                     {
                         "name": "extension_proxy",
-                        "type": "string",
+                        "type": "Unknown",
                         "doc": "A module extension proxy object returned by a `use_extension` call.",
                         "default_value": "",
                         "is_mandatory": true,

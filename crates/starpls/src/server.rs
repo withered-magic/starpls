@@ -53,27 +53,21 @@ impl Server {
         };
 
         let bazel_client = Arc::new(BazelCLI::default());
+        let info = bazel_client.info()?;
 
-        // Determine the workspace root.
-        let workspace = bazel_client.workspace().unwrap_or_else(|err| {
-            eprintln!("server: failed to run `bazel info workspace`: {}", err);
-            Default::default()
-        });
-
-        eprintln!("server: workspace root: {:?}", workspace);
+        eprintln!("server: workspace root: {:?}", info.workspace);
 
         // Determine the output base for the purpose of resolving external repositories.
-        let external_output_base = bazel_client
-            .output_base()
-            .map(|output_base| output_base.join("external"))
-            .unwrap_or_else(|err| {
-                eprintln!("server: failed to run `bazel info output_base`: {}", err);
-                Default::default()
-            });
+        let external_output_base = info.output_base.join("external");
 
         eprintln!("server: external output base: {:?}", external_output_base);
+        eprintln!("server: starlark-semantics: {:?}", info.starlark_semantics);
 
-        let bzlmod_enabled = workspace.join("MODULE.bazel").try_exists().unwrap_or(false)
+        let bzlmod_enabled = info
+            .workspace
+            .join("MODULE.bazel")
+            .try_exists()
+            .unwrap_or(false)
             && {
                 eprintln!("server: checking for `bazel mod dump_repo_mapping` capability");
                 match bazel_client.dump_repo_mapping("") {
@@ -101,7 +95,7 @@ impl Server {
         let loader = DefaultFileLoader::new(
             bazel_client.clone(),
             path_interner.clone(),
-            workspace,
+            info.workspace,
             external_output_base,
             bzlmod_enabled,
         );

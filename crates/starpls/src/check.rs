@@ -11,19 +11,16 @@ use std::{fmt::Write, fs, path::PathBuf, process, sync::Arc};
 
 pub(crate) fn run_check(paths: Vec<String>, output_base: Option<String>) -> anyhow::Result<()> {
     let bazel_client = Arc::new(BazelCLI::default());
-    let external_output_base = match output_base {
-        Some(output_base) => PathBuf::from(output_base),
-        None => bazel_client
-            .output_base()
-            .map(|output_base| output_base.join("external"))
-            .map_err(|_| anyhow!("Failed to determine Bazel output base."))?,
-    };
+    let info = bazel_client.info()?;
+    let external_output_base = output_base
+        .map(PathBuf::from)
+        .unwrap_or_else(|| info.output_base.join("external"));
 
-    let workspace = bazel_client
-        .workspace()
-        .map_err(|_| anyhow!("Failed to determine Bazel workspace root."))?;
-
-    let bzlmod_enabled = workspace.join("MODULE.bazel").try_exists().unwrap_or(false)
+    let bzlmod_enabled = info
+        .workspace
+        .join("MODULE.bazel")
+        .try_exists()
+        .unwrap_or(false)
         && {
             eprintln!("server: checking for `bazel mod dump_repo_mapping` capability");
             match bazel_client.dump_repo_mapping("") {
@@ -41,7 +38,7 @@ pub(crate) fn run_check(paths: Vec<String>, output_base: Option<String>) -> anyh
     let loader = DefaultFileLoader::new(
         bazel_client,
         interner.clone(),
-        workspace,
+        info.workspace,
         external_output_base,
         bzlmod_enabled,
     );

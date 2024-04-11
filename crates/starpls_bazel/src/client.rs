@@ -5,12 +5,20 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     process::Command,
+    str,
 };
+
+#[derive(Default)]
+pub struct BazelInfo {
+    pub output_base: PathBuf,
+    pub release: String,
+    pub starlark_semantics: String,
+    pub workspace: PathBuf,
+}
 
 pub trait BazelClient: Send + Sync + 'static {
     fn build_language(&self) -> anyhow::Result<Vec<u8>>;
-    fn output_base(&self) -> anyhow::Result<PathBuf>;
-    fn workspace(&self) -> anyhow::Result<PathBuf>;
+    fn info(&self) -> anyhow::Result<BazelInfo>;
     fn resolve_repo_from_mapping(
         &self,
         apparent_repo: &str,
@@ -51,14 +59,48 @@ impl BazelClient for BazelCLI {
         self.run_command(&["info", "build-language"])
     }
 
-    fn output_base(&self) -> anyhow::Result<PathBuf> {
-        let output = self.run_command(&["info", "output_base"])?;
-        Ok(String::from_utf8(output)?.trim().into())
-    }
+    fn info(&self) -> anyhow::Result<BazelInfo> {
+        let output = self.run_command(&[
+            "info",
+            "output_base",
+            "release",
+            "starlark-semantics",
+            "workspace",
+        ])?;
 
-    fn workspace(&self) -> anyhow::Result<PathBuf> {
-        let output = self.run_command(&["info", "workspace"])?;
-        Ok(String::from_utf8(output)?.trim().into())
+        let output = str::from_utf8(&output)?;
+        let mut output_base = None;
+        let mut release = None;
+        let mut starlark_semantics = None;
+        let mut workspace = None;
+        for line in output.lines() {
+            let (key, value) = match line.split_once(": ") {
+                Some(pair) => pair,
+                None => continue,
+            };
+            match key {
+                "output_base" => output_base = Some(value),
+                "release" => release = Some(value),
+                "starlark-semantics" => starlark_semantics = Some(value),
+                "workspace" => workspace = Some(value),
+                _ => {}
+            }
+        }
+
+        Ok(BazelInfo {
+            output_base: output_base
+                .ok_or_else(|| anyhow!("failed to determine output_base from `bazel info`"))?
+                .into(),
+            release: release
+                .ok_or_else(|| anyhow!("failed to determine release from `bazel info`"))?
+                .into(),
+            starlark_semantics: starlark_semantics
+                .ok_or_else(|| anyhow!("failed to determine starlark-semantics from `bazel info`"))?
+                .into(),
+            workspace: workspace
+                .ok_or_else(|| anyhow!("failed to determine workspace from `bazel info`"))?
+                .into(),
+        })
     }
 
     fn resolve_repo_from_mapping(

@@ -53,27 +53,24 @@ impl Server {
         };
 
         let bazel_client = Arc::new(BazelCLI::default());
+        let info = bazel_client.info().unwrap_or_default();
 
-        // Determine the workspace root.
-        let workspace = bazel_client.workspace().unwrap_or_else(|err| {
-            eprintln!("server: failed to run `bazel info workspace`: {}", err);
-            Default::default()
-        });
-
-        eprintln!("server: workspace root: {:?}", workspace);
+        eprintln!("server: workspace root: {:?}", info.workspace);
 
         // Determine the output base for the purpose of resolving external repositories.
-        let external_output_base = bazel_client
-            .output_base()
-            .map(|output_base| output_base.join("external"))
-            .unwrap_or_else(|err| {
-                eprintln!("server: failed to run `bazel info output_base`: {}", err);
-                Default::default()
-            });
+        let external_output_base = info.output_base.join("external");
 
         eprintln!("server: external output base: {:?}", external_output_base);
+        eprintln!("server: starlark-semantics: {:?}", info.starlark_semantics);
 
-        let bzlmod_enabled = workspace.join("MODULE.bazel").try_exists().unwrap_or(false)
+        // We determine whether to use bzlmod in two steps. First, we check if `MODULE.bazel` exists at all,
+        // and if so, whether the `bazel mod dump_repo_mapping` command is supported. If either of these
+        // checks fails, then we can't use bzlmod anyways.
+        let bzlmod_capability = info
+            .workspace
+            .join("MODULE.bazel")
+            .try_exists()
+            .unwrap_or(false)
             && {
                 eprintln!("server: checking for `bazel mod dump_repo_mapping` capability");
                 match bazel_client.dump_repo_mapping("") {
@@ -84,6 +81,32 @@ impl Server {
                     }
                 }
             };
+
+        let bzlmod_enabled = bzlmod_capability && {
+            // Next, we check if bzlmod is enabled by default for the current Bazel version.
+            // bzlmod is enabled by default for Bazel versions 7 and later.
+            // TODO(withered-magic): Just hardcoding this for now since I'm lazy to parse the actual versions.
+            // This should last us pretty long since Bazel 9 isn't anywhere on the horizon.
+            let bzlmod_enabled_by_default = ["release 7", "release 8", "release 9"]
+                .iter()
+                .any(|release| info.release.starts_with(release));
+
+            if bzlmod_enabled_by_default {
+                eprintln!("server: Bazel 7 or later detected")
+            }
+
+            // Finally, check starlark-semantics to determine whether bzlmod has been explicitly
+            // enabled/disabled, e.g. in a .bazelrc file.
+            if info.starlark_semantics.contains("enable_bzlmod=true") {
+                eprintln!("server: found enable_bzlmod=true in starlark-semantics");
+                true
+            } else if info.starlark_semantics.contains("enable_bzlmod=false") {
+                eprintln!("server: found enable_bzlmod=false in starlark-semantics");
+                false
+            } else {
+                bzlmod_enabled_by_default
+            }
+        };
 
         eprintln!("server: bzlmod_enabled = {}", bzlmod_enabled);
 
@@ -101,7 +124,7 @@ impl Server {
         let loader = DefaultFileLoader::new(
             bazel_client.clone(),
             path_interner.clone(),
-            workspace,
+            info.workspace,
             external_output_base,
             bzlmod_enabled,
         );

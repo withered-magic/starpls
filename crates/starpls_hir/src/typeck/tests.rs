@@ -185,7 +185,7 @@ fn test_common_type() {
             12..13 "1": Literal[1]
             15..18 "\"a\"": Literal["a"]
             11..19 "[1, \"a\"]": list[Unknown]
-            20..22 "{}": dict[Any, Unknown]
+            20..22 "{}": dict[Unknown, Unknown]
             24..27 "\"a\"": Literal["a"]
             29..30 "1": Literal[1]
             23..31 "{\"a\": 1}": dict[string, int]
@@ -198,7 +198,7 @@ fn test_common_type() {
             57..58 "1": Literal[1]
             60..61 "1": Literal[1]
             63..66 "\"a\"": Literal["a"]
-            51..67 "{\"a\": 1, 1: \"a\"}": dict[Any, Unknown]
+            51..67 "{\"a\": 1, 1: \"a\"}": dict[string | int, Unknown]
         "#]],
     );
 }
@@ -445,14 +445,14 @@ foo(**kwargs, *args)
         expect![[r#"
             26..30 "args": list[Unknown]
             33..35 "[]": list[Unknown]
-            36..42 "kwargs": dict[Any, Unknown]
-            45..47 "{}": dict[Any, Unknown]
+            36..42 "kwargs": dict[Unknown, Unknown]
+            45..47 "{}": dict[Unknown, Unknown]
             48..51 "foo": def foo(x, y) -> Unknown
             54..55 "1": Literal[1]
             57..58 "2": Literal[2]
             48..59 "foo(y=1, 2)": Unknown
             60..63 "foo": def foo(x, y) -> Unknown
-            66..72 "kwargs": dict[Any, Unknown]
+            66..72 "kwargs": dict[Unknown, Unknown]
             74..75 "2": Literal[2]
             60..76 "foo(**kwargs, 2)": Unknown
             77..80 "foo": def foo(x, y) -> Unknown
@@ -460,7 +460,7 @@ foo(**kwargs, *args)
             87..91 "args": list[Unknown]
             77..92 "foo(y=1, *args)": Unknown
             93..96 "foo": def foo(x, y) -> Unknown
-            99..105 "kwargs": dict[Any, Unknown]
+            99..105 "kwargs": dict[Unknown, Unknown]
             108..112 "args": list[Unknown]
             93..113 "foo(**kwargs, *args)": Unknown
 
@@ -982,14 +982,14 @@ def foo(*nums):
             167..168 "e": Sequence[int]
             167..171 "e[:]": list[int]
             172..173 "g": Unknown
-            176..178 "{}": dict[Any, Unknown]
+            176..178 "{}": dict[Unknown, Unknown]
             176..181 "{}[:]": Unknown
             230..234 "nums": tuple[Unknown, ...]
             230..237 "nums[:]": list[Unknown]
 
             50..53 `start`, `stop`, and `step` operands must be integers or `None`
             59..60 `start`, `stop`, and `step` operands must be integers or `None`
-            176..181 Cannot slice expression of type "dict[Any, Unknown]"
+            176..181 Cannot slice expression of type "dict[Unknown, Unknown]"
         "#]],
     )
 }

@@ -8,6 +8,7 @@ use std::{
     str,
 };
 
+#[derive(Default)]
 pub struct BazelInfo {
     pub output_base: PathBuf,
     pub release: String,

@@ -53,7 +53,7 @@ impl Server {
         };
 
         let bazel_client = Arc::new(BazelCLI::default());
-        let info = bazel_client.info()?;
+        let info = bazel_client.info().unwrap_or_default();
 
         eprintln!("server: workspace root: {:?}", info.workspace);
 
@@ -63,7 +63,10 @@ impl Server {
         eprintln!("server: external output base: {:?}", external_output_base);
         eprintln!("server: starlark-semantics: {:?}", info.starlark_semantics);
 
-        let bzlmod_enabled = info
+        // We determine whether to use bzlmod in two steps. First, we check if `MODULE.bazel` exists at all,
+        // and if so, whether the `bazel mod dump_repo_mapping` command is supported. If either of these
+        // checks fails, then we can't use bzlmod anyways.
+        let bzlmod_capability = info
             .workspace
             .join("MODULE.bazel")
             .try_exists()
@@ -78,6 +81,24 @@ impl Server {
                     }
                 }
             };
+
+        let bzlmod_enabled = bzlmod_capability && {
+            // Next, we check if bzlmod is enabled by default for the current Bazel version.
+            // bzlmod is enabled by default for Bazel versions 7 and later.
+            let bzlmod_enabled_by_default = info.release.starts_with("release 7");
+
+            // Finally, check starlark-semantics to determine whether bzlmod has been explicitly
+            // enabled/disabled, e.g. in a .bazelrc file.
+            if info.starlark_semantics.contains("enable_bzlmod=true") {
+                eprintln!("server: found enable_bzlmod=true in starlark-semantics");
+                true
+            } else if info.starlark_semantics.contains("enable_bzlmod=false") {
+                eprintln!("server: found enable_bzlmod=false in starlark-semantics");
+                false
+            } else {
+                bzlmod_enabled_by_default
+            }
+        };
 
         eprintln!("server: bzlmod_enabled = {}", bzlmod_enabled);
 

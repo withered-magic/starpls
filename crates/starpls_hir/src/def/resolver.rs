@@ -120,7 +120,7 @@ impl<'a> Resolver<'a> {
 
         let api_context = match self.file.api_context(self.db) {
             Some(api_context) => api_context,
-            None => return Default::default(),
+            None => return names,
         };
 
         // Add names from builtins, taking the current Bazel API context into account.

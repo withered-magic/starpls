@@ -107,13 +107,29 @@ pub(crate) fn goto_definition(
         }]);
     }
 
-    if let Some(load_item) = ast::LoadItem::cast(parent) {
+    if let Some(load_item) = ast::LoadItem::cast(parent.clone()) {
         let load_item = sema.resolve_load_item(file, &load_item)?;
         let def = scope_def_for_load_item(db, &sema, file, &load_item)?;
         return Some(vec![Location::Local {
             file_id: def.file.id(db),
             range: def.value.syntax_node_ptr(db, def.file)?.text_range(),
         }]);
+    }
+
+    if let Some(lit) = ast::LiteralExpr::cast(parent) {
+        let value = match lit.kind() {
+            ast::LiteralKind::String(s) => s.value()?,
+            _ => return None,
+        };
+        let path = db
+            .loader
+            .resolve_path(&value, file.dialect(db), file_id)
+            .ok()??;
+        return if path.try_exists().unwrap_or(false) {
+            Some(vec![Location::External { path }])
+        } else {
+            None
+        };
     }
 
     None

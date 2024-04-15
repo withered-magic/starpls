@@ -32,12 +32,12 @@ pub(crate) fn goto_definition(
                 .flat_map(|def| match def {
                     ScopeDef::LoadItem(load_item) => {
                         let def = scope_def_for_load_item(db, &sema, file, &load_item)?;
-                        Some(Location {
+                        Some(Location::Local {
                             file_id: def.file.id(db),
                             range: def.value.syntax_node_ptr(db, def.file)?.text_range(),
                         })
                     }
-                    _ => def.syntax_node_ptr(db, file).map(|ptr| Location {
+                    _ => def.syntax_node_ptr(db, file).map(|ptr| Location::Local {
                         file_id,
                         range: ptr.text_range(),
                     }),
@@ -62,7 +62,7 @@ pub(crate) fn goto_definition(
                     ast::Argument::Keyword(kwarg) => {
                         let name = kwarg.name()?;
                         (name.name()?.text() == token.text()).then(|| {
-                            vec![Location {
+                            vec![Location::Local {
                                 file_id: struct_call_expr.file.id(db),
                                 range: name.syntax().text_range(),
                             }]
@@ -87,7 +87,7 @@ pub(crate) fn goto_definition(
                         ast::LiteralKind::String(s)
                             if s.value().as_deref() == Some(token.text()) =>
                         {
-                            Some(vec![Location {
+                            Some(vec![Location::Local {
                                 file_id: provider_fields.file.id(db),
                                 range: syntax.text_range(),
                             }])
@@ -101,7 +101,7 @@ pub(crate) fn goto_definition(
     if let Some(load_module) = ast::LoadModule::cast(parent.clone()) {
         let load_stmt = ast::LoadStmt::cast(load_module.syntax().parent()?)?;
         let file = sema.resolve_load_stmt(file, &load_stmt)?;
-        return Some(vec![Location {
+        return Some(vec![Location::Local {
             file_id: file.id(db),
             range: TextRange::new(TextSize::new(0), TextSize::new(1)),
         }]);
@@ -110,7 +110,7 @@ pub(crate) fn goto_definition(
     if let Some(load_item) = ast::LoadItem::cast(parent) {
         let load_item = sema.resolve_load_item(file, &load_item)?;
         let def = scope_def_for_load_item(db, &sema, file, &load_item)?;
-        return Some(vec![Location {
+        return Some(vec![Location::Local {
             file_id: def.file.id(db),
             range: def.value.syntax_node_ptr(db, def.file)?.text_range(),
         }]);
@@ -139,7 +139,7 @@ fn scope_def_for_load_item(
 
 #[cfg(test)]
 mod tests {
-    use crate::{AnalysisSnapshot, FilePosition};
+    use crate::{AnalysisSnapshot, FilePosition, Location};
     use starpls_test_util::parse_fixture;
 
     fn check_goto_definition(fixture: &str) {
@@ -150,7 +150,10 @@ mod tests {
             .unwrap()
             .unwrap()
             .into_iter()
-            .map(|loc| loc.range)
+            .map(|loc| match loc {
+                Location::Local { range, .. } => range,
+                _ => panic!("expected local location"),
+            })
             .collect::<Vec<_>>();
         assert_eq!(expected, actual);
     }

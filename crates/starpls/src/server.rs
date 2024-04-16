@@ -1,4 +1,5 @@
 use crate::{
+    config::ServerConfig,
     debouncer::AnalysisDebouncer,
     diagnostics::DiagnosticsManager,
     document::{DefaultFileLoader, DocumentChangeKind, DocumentManager, PathInterner},
@@ -19,6 +20,7 @@ use std::{panic, sync::Arc, time::Duration};
 const DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
 
 pub(crate) struct Server {
+    pub(crate) config: Arc<ServerConfig>,
     pub(crate) connection: Connection,
     pub(crate) req_queue: ReqQueue<(), ()>,
     pub(crate) task_pool_handle: TaskPoolHandle<Task>,
@@ -32,12 +34,13 @@ pub(crate) struct Server {
 }
 
 pub(crate) struct ServerSnapshot {
+    pub(crate) config: Arc<ServerConfig>,
     pub(crate) analysis_snapshot: AnalysisSnapshot,
     pub(crate) document_manager: Arc<RwLock<DocumentManager>>,
 }
 
 impl Server {
-    pub(crate) fn new(connection: Connection) -> anyhow::Result<Self> {
+    pub(crate) fn new(connection: Connection, config: ServerConfig) -> anyhow::Result<Self> {
         // Create the task pool for processin incoming requests.
         let (sender, receiver) = crossbeam_channel::unbounded();
         let task_pool = TaskPool::with_num_threads(sender.clone(), 4)?;
@@ -133,6 +136,7 @@ impl Server {
         analysis.set_builtin_defs(builtins, rules);
 
         Ok(Server {
+            config: Arc::new(config),
             connection,
             req_queue: Default::default(),
             task_pool_handle,
@@ -148,6 +152,7 @@ impl Server {
 
     pub(crate) fn snapshot(&self) -> ServerSnapshot {
         ServerSnapshot {
+            config: self.config.clone(),
             analysis_snapshot: self.analysis.snapshot(),
             document_manager: Arc::clone(&self.document_manager),
         }

@@ -10,7 +10,7 @@ use crate::{
 use crossbeam_channel::select;
 use lsp_server::Connection;
 use lsp_types::{InitializeParams, WorkDoneProgressCreateParams};
-use starpls_bazel::Builtins;
+use rustc_hash::FxHashSet;
 use starpls_common::FileId;
 
 #[macro_export]
@@ -27,9 +27,9 @@ macro_rules! match_notification {
 }
 
 #[derive(Debug)]
-pub(crate) enum FetchBazelExternalReposProgress {
-    Begin,
-    End(anyhow::Result<Builtins>),
+pub(crate) enum FetchExternalReposProgress {
+    Begin(FxHashSet<String>),
+    End,
 }
 
 #[derive(Debug)]
@@ -41,8 +41,10 @@ pub(crate) enum Task {
     ResponseReady(lsp_server::Response),
     /// Retry a previously failed request (e.g. due to Salsa cancellation).
     Retry(lsp_server::Request),
-    /// Fetch Bazel external repositories.
-    FetchBazelExternalRepos(FetchBazelExternalReposProgress),
+    /// Events from fetching external repositories.
+    FetchExternalRepos(FetchExternalReposProgress),
+    /// A request to fetch an external repository.
+    FetchExternalRepoRequest(String),
 }
 
 #[derive(Debug)]
@@ -79,6 +81,7 @@ impl Server {
         let event = select! {
             recv(self.connection.receiver) -> req => req.ok().map(Event::Message),
             recv(self.task_pool_handle.receiver) -> task => Some(Event::Task(task.unwrap())),
+            recv(self.fetch_repo_receiver) -> repo => Some(Event::Task(Task::FetchExternalRepoRequest(repo.unwrap())))
         };
         event
     }
@@ -204,23 +207,36 @@ impl Server {
                 self.respond(resp);
             }
             Task::Retry(req) => self.handle_request(req),
-            Task::FetchBazelExternalRepos(progress) => {
-                let token = "Fetching Bazel external repositories".to_string();
+            Task::FetchExternalRepos(progress) => {
+                let token = "FetchExternalRepos".to_string();
                 let work_done = match progress {
-                    FetchBazelExternalReposProgress::Begin => {
+                    FetchExternalReposProgress::Begin(repos) => {
                         self.send_request::<lsp_types::request::WorkDoneProgressCreate>(
                             WorkDoneProgressCreateParams {
                                 token: lsp_types::NumberOrString::String(token.clone()),
                             },
                         );
 
+                        let mut repos = repos.into_iter().collect::<Vec<_>>();
+                        repos.sort();
+
+                        let mut title = "Fetching external repositories: ".to_string();
+                        for (i, repo) in repos.into_iter().enumerate() {
+                            if i > 0 {
+                                title.push_str(", ");
+                            }
+                            title.push('"');
+                            title.push_str(&repo);
+                            title.push('"');
+                        }
+
                         lsp_types::WorkDoneProgress::Begin(lsp_types::WorkDoneProgressBegin {
-                            title: token.clone(),
+                            title,
                             ..Default::default()
                         })
                     }
-                    FetchBazelExternalReposProgress::End(_) => {
-                        self.fetch_bazel_external_repos_requested = false;
+                    FetchExternalReposProgress::End => {
+                        self.is_fetching_repos = false;
                         lsp_types::WorkDoneProgress::End(lsp_types::WorkDoneProgressEnd {
                             message: None,
                         })
@@ -233,6 +249,12 @@ impl Server {
                         value: lsp_types::ProgressParamsValue::WorkDone(work_done),
                     },
                 );
+            }
+            Task::FetchExternalRepoRequest(repo) => {
+                if !self.fetched_repos.contains(&repo) {
+                    self.pending_repos.insert(repo);
+                    self.fetch_bazel_external_repos();
+                }
             }
         }
     }

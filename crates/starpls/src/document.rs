@@ -1,4 +1,5 @@
 use anyhow::{anyhow, bail, Ok};
+use crossbeam_channel::Sender;
 use dashmap::DashMap;
 use indexmap::IndexSet;
 use parking_lot::RwLock;
@@ -167,6 +168,7 @@ pub(crate) struct DefaultFileLoader {
     workspace: PathBuf,
     external_output_base: PathBuf,
     cached_load_results: DashMap<String, PathBuf>,
+    fetch_repo_sender: Sender<String>,
     bzlmod_enabled: bool,
 }
 
@@ -176,6 +178,7 @@ impl DefaultFileLoader {
         interner: Arc<PathInterner>,
         workspace: PathBuf,
         external_output_base: PathBuf,
+        fetch_repo_sender: Sender<String>,
         bzlmod_enabled: bool,
     ) -> Self {
         Self {
@@ -184,6 +187,7 @@ impl DefaultFileLoader {
             workspace,
             external_output_base,
             cached_load_results: Default::default(),
+            fetch_repo_sender,
             bzlmod_enabled,
         }
     }
@@ -211,6 +215,11 @@ impl DefaultFileLoader {
     }
 }
 
+struct ResolvedLabel {
+    resolved_path: PathBuf,
+    canonical_repo: Option<String>,
+}
+
 impl DefaultFileLoader {
     fn dirname(&self, file_id: FileId) -> PathBuf {
         // Find the importing file's directory.
@@ -219,8 +228,9 @@ impl DefaultFileLoader {
         from_path
     }
 
-    fn resolve_bazel_label(&self, label: &Label, from: FileId) -> anyhow::Result<Option<PathBuf>> {
+    fn resolve_label(&self, label: &Label, from: FileId) -> anyhow::Result<Option<ResolvedLabel>> {
         let repo_kind = label.kind();
+        let mut canonical_repo_res = None;
         let (root, package) = match &repo_kind {
             RepoKind::Apparent if self.bzlmod_enabled => {
                 let from_path = self.interner.lookup_by_file_id(from);
@@ -248,6 +258,7 @@ impl DefaultFileLoader {
                         if canonical_repo.is_empty() {
                             self.workspace.clone()
                         } else {
+                            canonical_repo_res = Some(canonical_repo.clone());
                             self.external_output_base.join(canonical_repo)
                         },
                         PathBuf::new(),
@@ -278,7 +289,10 @@ impl DefaultFileLoader {
         }
         .join(label.target());
 
-        Ok(Some(resolved_path))
+        Ok(Some(ResolvedLabel {
+            resolved_path,
+            canonical_repo: canonical_repo_res,
+        }))
     }
 }
 
@@ -299,7 +313,8 @@ impl FileLoader for DefaultFileLoader {
             Err(err) => return Err(anyhow!("error parsing label: {}", err.err)),
         };
 
-        self.resolve_bazel_label(&label, from)
+        self.resolve_label(&label, from)
+            .map(|res| res.map(|res| res.resolved_path))
     }
 
     fn load_file(
@@ -308,14 +323,14 @@ impl FileLoader for DefaultFileLoader {
         dialect: Dialect,
         from: FileId,
     ) -> anyhow::Result<Option<(FileId, Dialect, Option<APIContext>, Option<String>)>> {
-        let (path, api_context) = match dialect {
+        let (path, api_context, canonical_repo) = match dialect {
             Dialect::Standard => {
                 // Find the importing file's directory.
                 let mut from_path = self.interner.lookup_by_file_id(from);
                 assert!(from_path.pop());
 
                 // Resolve the given path relative to the importing file's directory.
-                (from_path.join(path).canonicalize()?, None)
+                (from_path.join(path).canonicalize()?, None, None)
             }
             Dialect::Bazel => {
                 // Parse the load path as a Bazel label.
@@ -330,19 +345,21 @@ impl FileLoader for DefaultFileLoader {
                 }
 
                 let repo_kind = label.kind();
-                let resolved_path = match self.read_cache_result(&repo_kind, path, from) {
-                    Some(path) => path,
+                let (resolved_path, canonical_repo) = match self
+                    .read_cache_result(&repo_kind, path, from)
+                {
+                    Some(path) => (path, None),
                     None => {
-                        let resolved_path = match self.resolve_bazel_label(&label, from)? {
-                            Some(resolved_path) => resolved_path,
+                        let res = match self.resolve_label(&label, from)? {
+                            Some(res) => res,
                             None => return Ok(None),
                         };
-                        self.record_cache_result(&repo_kind, path, from, resolved_path.clone());
-                        resolved_path
+                        self.record_cache_result(&repo_kind, path, from, res.resolved_path.clone());
+                        (res.resolved_path, res.canonical_repo)
                     }
                 };
 
-                (resolved_path, Some(APIContext::Bzl))
+                (resolved_path, Some(APIContext::Bzl), canonical_repo)
             }
         };
 
@@ -351,7 +368,29 @@ impl FileLoader for DefaultFileLoader {
             if let Some(file_id) = self.interner.lookup_by_path_buf(&path) {
                 (file_id, dialect, api_context, None)
             } else {
-                let contents = fs::read_to_string(&path)?;
+                let contents = match fs::read_to_string(&path) {
+                    Result::Ok(contents) => contents,
+                    Err(err) => {
+                        eprintln!(
+                            "failed to read, checking canonical repo: {:?}",
+                            canonical_repo
+                        );
+                        if let Some(canonical_repo) = canonical_repo {
+                            if !self
+                                .external_output_base
+                                .join(&canonical_repo)
+                                .try_exists()
+                                .ok()
+                                .unwrap_or_default()
+                            {
+                                eprintln!("fetching");
+                                let _ = self.fetch_repo_sender.send(canonical_repo);
+                            }
+                        }
+
+                        return Err(err.into());
+                    }
+                };
                 let file_id = self.interner.intern_path(path);
                 (file_id, dialect, api_context, Some(contents))
             }

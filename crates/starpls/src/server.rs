@@ -3,11 +3,13 @@ use crate::{
     debouncer::AnalysisDebouncer,
     diagnostics::DiagnosticsManager,
     document::{DefaultFileLoader, DocumentChangeKind, DocumentManager, PathInterner},
-    event_loop::{FetchBazelExternalReposProgress, Task},
+    event_loop::{FetchExternalReposProgress, Task},
     task_pool::{TaskPool, TaskPoolHandle},
 };
+use crossbeam_channel::Receiver;
 use lsp_server::{Connection, ReqQueue};
 use parking_lot::RwLock;
+use rustc_hash::FxHashSet;
 use starpls_bazel::{
     build_language::decode_rules,
     client::{BazelCLI, BazelClient},
@@ -29,8 +31,11 @@ pub(crate) struct Server {
     pub(crate) analysis: Analysis,
     pub(crate) analysis_debouncer: AnalysisDebouncer,
     pub(crate) analysis_requested_for_files: Option<Vec<FileId>>,
-    pub(crate) fetch_bazel_external_repos_requested: bool,
     pub(crate) bazel_client: Arc<dyn BazelClient>,
+    pub(crate) fetch_repo_receiver: Receiver<String>,
+    pub(crate) pending_repos: FxHashSet<String>,
+    pub(crate) fetched_repos: FxHashSet<String>,
+    pub(crate) is_fetching_repos: bool,
 }
 
 pub(crate) struct ServerSnapshot {
@@ -123,19 +128,21 @@ impl Server {
             }
         };
 
+        let (fetch_repo_sender, fetch_repo_receiver) = crossbeam_channel::unbounded();
         let path_interner = Arc::new(PathInterner::default());
         let loader = DefaultFileLoader::new(
             bazel_client.clone(),
             path_interner.clone(),
             info.workspace,
             external_output_base,
+            fetch_repo_sender,
             bzlmod_enabled,
         );
 
         let mut analysis = Analysis::new(Arc::new(loader));
         analysis.set_builtin_defs(builtins, rules);
 
-        Ok(Server {
+        let server = Server {
             config: Arc::new(config),
             connection,
             req_queue: Default::default(),
@@ -145,9 +152,14 @@ impl Server {
             analysis,
             analysis_debouncer: AnalysisDebouncer::new(DEBOUNCE_INTERVAL, sender),
             analysis_requested_for_files: None,
-            fetch_bazel_external_repos_requested: false,
             bazel_client,
-        })
+            fetch_repo_receiver,
+            pending_repos: Default::default(),
+            fetched_repos: Default::default(),
+            is_fetching_repos: false,
+        };
+
+        Ok(server)
     }
 
     pub(crate) fn snapshot(&self) -> ServerSnapshot {
@@ -222,19 +234,20 @@ impl Server {
     #[allow(unused)]
     pub(crate) fn fetch_bazel_external_repos(&mut self) {
         let bazel_client = self.bazel_client.clone();
-        self.fetch_bazel_external_repos_requested = true;
+        self.is_fetching_repos = true;
+        let pending_repos = self.pending_repos.drain().collect();
         self.task_pool_handle.spawn_with_sender(move |sender| {
             sender
-                .send(Task::FetchBazelExternalRepos(
-                    FetchBazelExternalReposProgress::Begin,
-                ))
+                .send(Task::FetchExternalRepos(FetchExternalReposProgress::Begin(
+                    pending_repos,
+                )))
                 .unwrap();
 
-            let res = load_bazel_build_language(&*bazel_client);
+            std::thread::sleep(std::time::Duration::from_secs(10));
+
+            // let res = load_bazel_build_language(&*bazel_client);
             sender
-                .send(Task::FetchBazelExternalRepos(
-                    FetchBazelExternalReposProgress::End(res),
-                ))
+                .send(Task::FetchExternalRepos(FetchExternalReposProgress::End))
                 .unwrap();
         });
     }

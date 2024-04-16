@@ -6,7 +6,7 @@ use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate};
 use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, LoadItemId, LoadStmt, ParamId, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use starpls_test_util::builtins_with_catch_all_functions;
-use std::{fmt::Debug, panic, sync::Arc};
+use std::{fmt::Debug, panic, path::PathBuf, sync::Arc};
 
 pub use crate::{
     completions::{CompletionItem, CompletionItemKind, CompletionMode},
@@ -336,9 +336,9 @@ impl AnalysisSnapshot {
 impl panic::RefUnwindSafe for AnalysisSnapshot {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Location {
-    pub file_id: FileId,
-    pub range: TextRange,
+pub enum Location {
+    Local { file_id: FileId, range: TextRange },
+    External { path: PathBuf },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -349,6 +349,13 @@ pub struct FilePosition {
 
 /// A trait for loading a path and listing its exported symbols.
 pub trait FileLoader: Send + Sync + 'static {
+    fn resolve_path(
+        &self,
+        path: &str,
+        dialect: Dialect,
+        from: FileId,
+    ) -> anyhow::Result<Option<PathBuf>>;
+
     /// Open the Starlark file corresponding to the given `path` and of the given `Dialect`.
     fn load_file(
         &self,
@@ -397,6 +404,15 @@ impl FileLoader for SimpleFileLoader {
         _dialect: Dialect,
         _from: FileId,
     ) -> anyhow::Result<Option<Vec<LoadItemCandidate>>> {
+        Ok(None)
+    }
+
+    fn resolve_path(
+        &self,
+        _path: &str,
+        _dialect: Dialect,
+        _from: FileId,
+    ) -> anyhow::Result<Option<PathBuf>> {
         Ok(None)
     }
 }

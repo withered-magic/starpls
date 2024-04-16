@@ -56,21 +56,25 @@ pub(crate) fn goto_definition(
     };
 
     let to_lsp_location = |location: Location| -> Option<lsp_types::Location> {
-        let line_index = snapshot
-            .analysis_snapshot
-            .line_index(location.file_id)
-            .ok()??;
-        let range = convert::lsp_range_from_text_range(location.range, line_index);
-        Some(lsp_types::Location {
-            uri: lsp_types::Url::from_file_path(
-                snapshot
-                    .document_manager
-                    .read()
-                    .lookup_by_file_id(location.file_id),
-            )
-            .ok()?,
-            range: range?,
-        })
+        let location = match location {
+            Location::Local { file_id, range } => {
+                let line_index = snapshot.analysis_snapshot.line_index(file_id).ok()??;
+                let range = convert::lsp_range_from_text_range(range, line_index);
+                lsp_types::Location {
+                    uri: lsp_types::Url::from_file_path(
+                        snapshot.document_manager.read().lookup_by_file_id(file_id),
+                    )
+                    .ok()?,
+                    range: range?,
+                }
+            }
+            Location::External { path } => lsp_types::Location {
+                uri: lsp_types::Url::from_file_path(path).ok()?,
+                range: Default::default(),
+            },
+        };
+
+        Some(location)
     };
 
     Ok(Some(

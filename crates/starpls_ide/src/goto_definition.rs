@@ -1,4 +1,4 @@
-use crate::{util::pick_best_token, Database, FilePosition, Location};
+use crate::{util::pick_best_token, Database, FilePosition, LocationLink};
 use starpls_common::{parse, Db, File, InFile};
 use starpls_hir::{LoadItem, Name, ScopeDef, Semantics};
 use starpls_syntax::{
@@ -9,7 +9,7 @@ use starpls_syntax::{
 pub(crate) fn goto_definition(
     db: &Database,
     FilePosition { file_id, pos }: FilePosition,
-) -> Option<Vec<Location>> {
+) -> Option<Vec<LocationLink>> {
     let sema = Semantics::new(db);
     let file = db.get_file(file_id)?;
     let parse = parse(db, file);
@@ -32,15 +32,22 @@ pub(crate) fn goto_definition(
                 .flat_map(|def| match def {
                     ScopeDef::LoadItem(load_item) => {
                         let def = scope_def_for_load_item(db, &sema, file, &load_item)?;
-                        Some(Location::Local {
-                            file_id: def.file.id(db),
-                            range: def.value.syntax_node_ptr(db, def.file)?.text_range(),
+                        let range = def.value.syntax_node_ptr(db, def.file)?.text_range();
+                        Some(LocationLink::Local {
+                            origin_selection_range: None,
+                            target_range: range.clone(),
+                            target_selection_range: range.clone(),
+                            target_file_id: def.file.id(db),
                         })
                     }
-                    _ => def.syntax_node_ptr(db, file).map(|ptr| Location::Local {
-                        file_id,
-                        range: ptr.text_range(),
-                    }),
+                    _ => def
+                        .syntax_node_ptr(db, file)
+                        .map(|ptr| LocationLink::Local {
+                            origin_selection_range: None,
+                            target_range: ptr.text_range(),
+                            target_selection_range: ptr.text_range(),
+                            target_file_id: file_id,
+                        }),
                 })
                 .collect(),
         );
@@ -62,9 +69,12 @@ pub(crate) fn goto_definition(
                     ast::Argument::Keyword(kwarg) => {
                         let name = kwarg.name()?;
                         (name.name()?.text() == token.text()).then(|| {
-                            vec![Location::Local {
-                                file_id: struct_call_expr.file.id(db),
-                                range: name.syntax().text_range(),
+                            let range = name.syntax().text_range();
+                            vec![LocationLink::Local {
+                                origin_selection_range: None,
+                                target_range: range.clone(),
+                                target_selection_range: range,
+                                target_file_id: struct_call_expr.file.id(db),
                             }]
                         })
                     }
@@ -87,9 +97,11 @@ pub(crate) fn goto_definition(
                         ast::LiteralKind::String(s)
                             if s.value().as_deref() == Some(token.text()) =>
                         {
-                            Some(vec![Location::Local {
-                                file_id: provider_fields.file.id(db),
-                                range: syntax.text_range(),
+                            Some(vec![LocationLink::Local {
+                                origin_selection_range: None,
+                                target_range: syntax.text_range(),
+                                target_selection_range: syntax.text_range(),
+                                target_file_id: provider_fields.file.id(db),
                             }])
                         }
                         _ => None,
@@ -101,18 +113,23 @@ pub(crate) fn goto_definition(
     if let Some(load_module) = ast::LoadModule::cast(parent.clone()) {
         let load_stmt = ast::LoadStmt::cast(load_module.syntax().parent()?)?;
         let file = sema.resolve_load_stmt(file, &load_stmt)?;
-        return Some(vec![Location::Local {
-            file_id: file.id(db),
-            range: TextRange::new(TextSize::new(0), TextSize::new(1)),
+        return Some(vec![LocationLink::Local {
+            origin_selection_range: Some(token.text_range()),
+            target_range: Default::default(),
+            target_selection_range: Default::default(),
+            target_file_id: file.id(db),
         }]);
     }
 
     if let Some(load_item) = ast::LoadItem::cast(parent.clone()) {
         let load_item = sema.resolve_load_item(file, &load_item)?;
         let def = scope_def_for_load_item(db, &sema, file, &load_item)?;
-        return Some(vec![Location::Local {
-            file_id: def.file.id(db),
-            range: def.value.syntax_node_ptr(db, def.file)?.text_range(),
+        let range = def.value.syntax_node_ptr(db, def.file)?.text_range();
+        return Some(vec![LocationLink::Local {
+            origin_selection_range: None,
+            target_range: range.clone(),
+            target_selection_range: range,
+            target_file_id: def.file.id(db),
         }]);
     }
 
@@ -121,12 +138,15 @@ pub(crate) fn goto_definition(
             ast::LiteralKind::String(s) => s.value()?,
             _ => return None,
         };
-        let path = db
+        let target_path = db
             .loader
             .resolve_path(&value, file.dialect(db), file_id)
             .ok()??;
-        return if path.try_exists().unwrap_or(false) {
-            Some(vec![Location::External { path }])
+        return if target_path.try_exists().unwrap_or(false) {
+            Some(vec![LocationLink::External {
+                origin_selection_range: Some(token.text_range()),
+                target_path,
+            }])
         } else {
             None
         };
@@ -155,7 +175,7 @@ fn scope_def_for_load_item(
 
 #[cfg(test)]
 mod tests {
-    use crate::{AnalysisSnapshot, FilePosition, Location};
+    use crate::{AnalysisSnapshot, FilePosition, LocationLink};
     use starpls_test_util::parse_fixture;
 
     fn check_goto_definition(fixture: &str) {
@@ -167,7 +187,7 @@ mod tests {
             .unwrap()
             .into_iter()
             .map(|loc| match loc {
-                Location::Local { range, .. } => range,
+                LocationLink::Local { target_range, .. } => target_range,
                 _ => panic!("expected local location"),
             })
             .collect::<Vec<_>>();

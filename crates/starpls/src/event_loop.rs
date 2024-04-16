@@ -1,4 +1,5 @@
 use crate::{
+    config::ServerConfig,
     convert,
     dispatcher::RequestDispatcher,
     document::DocumentSource,
@@ -52,10 +53,11 @@ pub(crate) enum Event {
 
 pub fn process_connection(
     connection: Connection,
-    _initialize_params: InitializeParams,
+    initialize_params: InitializeParams,
 ) -> anyhow::Result<()> {
     eprintln!("server: initializing state and starting event loop");
-    let server = Server::new(connection)?;
+    let config = ServerConfig::new(initialize_params.capabilities);
+    let server = Server::new(connection, config)?;
     server.run()
 }
 

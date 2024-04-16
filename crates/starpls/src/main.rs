@@ -7,6 +7,7 @@ use lsp_types::{
 };
 
 mod check;
+mod config;
 mod convert;
 mod debouncer;
 mod diagnostics;
@@ -50,7 +51,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn run_server() -> anyhow::Result<()> {
-    eprintln!("server: starpls, v0.1.11");
+    eprintln!("server: starpls, v0.1.12");
 
     // Create the transport over stdio.
     let (connection, io_threads) = Connection::stdio();

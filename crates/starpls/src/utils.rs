@@ -1,5 +1,8 @@
+use crate::{convert, server::ServerSnapshot};
 use anyhow::format_err;
 use line_index::{LineIndex, WideEncoding, WideLineCol};
+use starpls_common::FileId;
+use starpls_ide::LocationLink;
 use std::ops::Range;
 
 pub(crate) fn text_offset(
@@ -46,4 +49,107 @@ pub(crate) fn apply_document_content_changes(
     }
 
     current_document_contents
+}
+
+pub(crate) fn response_from_locations<T, U>(
+    snapshot: &ServerSnapshot,
+    source_file_id: FileId,
+    locations: T,
+) -> U
+where
+    T: Iterator<Item = LocationLink>,
+    U: From<Vec<lsp_types::Location>> + From<Vec<lsp_types::LocationLink>>,
+{
+    let source_line_index = match snapshot.analysis_snapshot.line_index(source_file_id) {
+        Ok(Some(source_line_index)) => source_line_index,
+        _ => return Vec::<lsp_types::Location>::new().into(),
+    };
+
+    // let get_line_index = |file_id| snapshot.analysis_snapshot.line_index(file_id);
+    let to_lsp_location = |location: LocationLink| -> Option<lsp_types::Location> {
+        let location = match location {
+            LocationLink::Local {
+                target_range,
+                target_file_id,
+                ..
+            } => {
+                let target_line_index = snapshot
+                    .analysis_snapshot
+                    .line_index(target_file_id)
+                    .ok()??;
+                let range = convert::lsp_range_from_text_range(target_range, target_line_index);
+                lsp_types::Location {
+                    uri: lsp_types::Url::from_file_path(
+                        snapshot
+                            .document_manager
+                            .read()
+                            .lookup_by_file_id(target_file_id),
+                    )
+                    .ok()?,
+                    range: range?,
+                }
+            }
+            LocationLink::External { target_path, .. } => lsp_types::Location {
+                uri: lsp_types::Url::from_file_path(target_path).ok()?,
+                range: Default::default(),
+            },
+        };
+
+        Some(location)
+    };
+
+    let to_lsp_location_link = |location: LocationLink| -> Option<lsp_types::LocationLink> {
+        let location_link = match location {
+            LocationLink::Local {
+                origin_selection_range,
+                target_range,
+                target_file_id,
+                ..
+            } => {
+                let target_line_index = snapshot
+                    .analysis_snapshot
+                    .line_index(target_file_id)
+                    .ok()??;
+                let range = convert::lsp_range_from_text_range(target_range, target_line_index);
+                lsp_types::LocationLink {
+                    origin_selection_range: origin_selection_range.and_then(|range| {
+                        convert::lsp_range_from_text_range(range, source_line_index)
+                    }),
+                    target_range: range.clone()?,
+                    target_selection_range: range?,
+                    target_uri: lsp_types::Url::from_file_path(
+                        snapshot
+                            .document_manager
+                            .read()
+                            .lookup_by_file_id(target_file_id),
+                    )
+                    .ok()?,
+                }
+            }
+            LocationLink::External {
+                origin_selection_range,
+                target_path,
+            } => lsp_types::LocationLink {
+                origin_selection_range: origin_selection_range
+                    .and_then(|range| convert::lsp_range_from_text_range(range, source_line_index)),
+                target_range: Default::default(),
+                target_selection_range: Default::default(),
+                target_uri: lsp_types::Url::from_file_path(target_path).ok()?,
+            },
+        };
+
+        Some(location_link)
+    };
+
+    if snapshot.config.has_text_document_definition_link_support() {
+        locations
+            .flat_map(to_lsp_location_link)
+            .collect::<Vec<_>>()
+            .into()
+    } else {
+        locations
+            .flat_map(to_lsp_location)
+            .collect::<Vec<_>>()
+            .into()
+    }
 }

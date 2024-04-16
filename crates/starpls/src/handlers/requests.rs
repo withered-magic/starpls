@@ -1,15 +1,24 @@
-use anyhow::Ok;
-use starpls_ide::{
-    CompletionItemKind,
-    CompletionMode::{InsertText, TextEdit},
-    FilePosition, Location,
-};
-
 use crate::{
     convert::{self, path_buf_from_url},
     extensions::{ShowHirParams, ShowSyntaxTreeParams},
     server::ServerSnapshot,
+    utils::response_from_locations,
 };
+use anyhow::Ok;
+use starpls_ide::{
+    CompletionItemKind,
+    CompletionMode::{InsertText, TextEdit},
+    FilePosition,
+};
+
+macro_rules! try_opt {
+    ($expr:expr) => {
+        match { $expr } {
+            Some(res) => res,
+            None => return Ok(None),
+        }
+    };
+}
 
 pub(crate) fn show_hir(snapshot: &ServerSnapshot, params: ShowHirParams) -> anyhow::Result<String> {
     let document_manager = snapshot.document_manager.read();
@@ -40,53 +49,22 @@ pub(crate) fn goto_definition(
     params: lsp_types::GotoDefinitionParams,
 ) -> anyhow::Result<Option<lsp_types::GotoDefinitionResponse>> {
     let path = path_buf_from_url(&params.text_document_position_params.text_document.uri)?;
-
-    let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
-        Some(file_id) => file_id,
-        None => return Ok(None),
-    };
-
-    let pos = match convert::text_size_from_lsp_position(
+    let file_id = try_opt!(snapshot.document_manager.read().lookup_by_path_buf(&path));
+    let pos = try_opt!(convert::text_size_from_lsp_position(
         snapshot,
         file_id,
         params.text_document_position_params.position,
-    )? {
-        Some(pos) => pos,
-        None => return Ok(None),
-    };
-
-    let to_lsp_location = |location: Location| -> Option<lsp_types::Location> {
-        let location = match location {
-            Location::Local { file_id, range } => {
-                let line_index = snapshot.analysis_snapshot.line_index(file_id).ok()??;
-                let range = convert::lsp_range_from_text_range(range, line_index);
-                lsp_types::Location {
-                    uri: lsp_types::Url::from_file_path(
-                        snapshot.document_manager.read().lookup_by_file_id(file_id),
-                    )
-                    .ok()?,
-                    range: range?,
-                }
-            }
-            Location::External { path } => lsp_types::Location {
-                uri: lsp_types::Url::from_file_path(path).ok()?,
-                range: Default::default(),
-            },
-        };
-
-        Some(location)
-    };
-
-    Ok(Some(
+    )?);
+    let resp = response_from_locations(
+        snapshot,
+        file_id,
         snapshot
             .analysis_snapshot
             .goto_definition(FilePosition { file_id, pos })?
             .unwrap_or_else(|| Vec::new())
-            .into_iter()
-            .flat_map(to_lsp_location)
-            .collect::<Vec<_>>()
-            .into(),
-    ))
+            .into_iter(),
+    );
+    Ok(Some(resp))
 }
 
 pub(crate) fn completion(
@@ -94,25 +72,13 @@ pub(crate) fn completion(
     params: lsp_types::CompletionParams,
 ) -> anyhow::Result<Option<lsp_types::CompletionResponse>> {
     let path = path_buf_from_url(&params.text_document_position.text_document.uri)?;
-
-    let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
-        Some(file_id) => file_id,
-        None => return Ok(None),
-    };
-
-    let line_index = match snapshot.analysis_snapshot.line_index(file_id)? {
-        Some(line_index) => line_index,
-        None => return Ok(None),
-    };
-
-    let pos = match convert::text_size_from_lsp_position(
+    let file_id = try_opt!(snapshot.document_manager.read().lookup_by_path_buf(&path));
+    let line_index = try_opt!(snapshot.analysis_snapshot.line_index(file_id)?);
+    let pos = try_opt!(convert::text_size_from_lsp_position(
         snapshot,
         file_id,
         params.text_document_position.position,
-    )? {
-        Some(pos) => pos,
-        None => return Ok(None),
-    };
+    )?);
 
     Ok(Some(
         snapshot
@@ -167,19 +133,12 @@ pub(crate) fn hover(
     params: lsp_types::HoverParams,
 ) -> anyhow::Result<Option<lsp_types::Hover>> {
     let path = path_buf_from_url(&params.text_document_position_params.text_document.uri)?;
-    let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
-        Some(file_id) => file_id,
-        None => return Ok(None),
-    };
-    let pos = match convert::text_size_from_lsp_position(
+    let file_id = try_opt!(snapshot.document_manager.read().lookup_by_path_buf(&path));
+    let pos = try_opt!(convert::text_size_from_lsp_position(
         snapshot,
         file_id,
         params.text_document_position_params.position,
-    )? {
-        Some(pos) => pos,
-        None => return Ok(None),
-    };
-
+    )?);
     Ok(snapshot
         .analysis_snapshot
         .hover(FilePosition { file_id, pos })?
@@ -197,19 +156,12 @@ pub(crate) fn signature_help(
     params: lsp_types::SignatureHelpParams,
 ) -> anyhow::Result<Option<lsp_types::SignatureHelp>> {
     let path = path_buf_from_url(&params.text_document_position_params.text_document.uri)?;
-    let file_id = match snapshot.document_manager.read().lookup_by_path_buf(&path) {
-        Some(file_id) => file_id,
-        None => return Ok(None),
-    };
-    let pos = match convert::text_size_from_lsp_position(
+    let file_id = try_opt!(snapshot.document_manager.read().lookup_by_path_buf(&path));
+    let pos = try_opt!(convert::text_size_from_lsp_position(
         snapshot,
         file_id,
         params.text_document_position_params.position,
-    )? {
-        Some(pos) => pos,
-        None => return Ok(None),
-    };
-
+    )?);
     Ok(snapshot
         .analysis_snapshot
         .signature_help(FilePosition { file_id, pos })?

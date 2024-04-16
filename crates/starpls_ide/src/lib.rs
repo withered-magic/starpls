@@ -297,7 +297,7 @@ impl AnalysisSnapshot {
         self.query(|db| diagnostics::diagnostics(db, file_id))
     }
 
-    pub fn goto_definition(&self, pos: FilePosition) -> Cancellable<Option<Vec<Location>>> {
+    pub fn goto_definition(&self, pos: FilePosition) -> Cancellable<Option<Vec<LocationLink>>> {
         self.query(|db| {
             let res = goto_definition::goto_definition(db, pos);
             res
@@ -336,9 +336,17 @@ impl AnalysisSnapshot {
 impl panic::RefUnwindSafe for AnalysisSnapshot {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Location {
-    Local { file_id: FileId, range: TextRange },
-    External { path: PathBuf },
+pub enum LocationLink {
+    Local {
+        origin_selection_range: Option<TextRange>,
+        target_range: TextRange,
+        target_selection_range: TextRange,
+        target_file_id: FileId,
+    },
+    External {
+        origin_selection_range: Option<TextRange>,
+        target_path: PathBuf,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

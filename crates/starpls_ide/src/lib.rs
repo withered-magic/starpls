@@ -148,7 +148,7 @@ impl starpls_common::Db for Database {
         {
             match self.files.entry(build_file) {
                 Entry::Vacant(entry) => {
-                    *entry.insert(File::new(
+                    entry.insert(File::new(
                         self,
                         build_file,
                         Dialect::Bazel,

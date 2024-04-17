@@ -3,7 +3,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use starpls_bazel::{APIContext, Builtins};
 use starpls_common::{File, FileId, LoadItemCandidate, ResolvedPath};
 use starpls_test_util::builtins_with_catch_all_functions;
-use std::{any, sync::Arc};
+use std::sync::Arc;
 
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, crate::Jar)]

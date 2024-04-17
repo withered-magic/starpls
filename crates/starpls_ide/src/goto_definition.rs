@@ -153,41 +153,35 @@ pub(crate) fn goto_definition(
             } => {
                 let build_file = db.get_file(build_file_id)?;
                 let parse = parse_query(db, build_file).syntax(db);
-                let target_name_range =
-                    parse
-                        .children()
-                        .filter_map(ast::CallExpr::cast)
-                        .find_map(|expr| {
-                            expr.arguments()
-                                .into_iter()
-                                .flat_map(|args| args.arguments())
-                                .find_map(|arg| match arg {
-                                    ast::Argument::Keyword(arg) => arg
-                                        .expr()
-                                        .and_then(|expr| match expr {
-                                            ast::Expression::Literal(expr) => Some(expr),
-                                            _ => None,
-                                        })
-                                        .and_then(|expr| match expr.kind() {
-                                            ast::LiteralKind::String(s) => s
-                                                .value()
-                                                .map(|value| (expr.syntax().text_range(), value)),
-                                            _ => None,
-                                        })
-                                        .and_then(|(range, value)| {
-                                            if target == &*value {
-                                                Some(range)
-                                            } else {
-                                                None
-                                            }
-                                        }),
-                                    _ => None,
-                                })
-                        })?;
+                let call_expr = parse
+                    .children()
+                    .filter_map(ast::CallExpr::cast)
+                    .find(|expr| {
+                        expr.arguments()
+                            .into_iter()
+                            .flat_map(|args| args.arguments())
+                            .any(|arg| match arg {
+                                ast::Argument::Keyword(arg) => arg
+                                    .expr()
+                                    .and_then(|expr| match expr {
+                                        ast::Expression::Literal(expr) => Some(expr),
+                                        _ => None,
+                                    })
+                                    .and_then(|expr| match expr.kind() {
+                                        ast::LiteralKind::String(s) => {
+                                            s.value().map(|value| &*value == target)
+                                        }
+                                        _ => None,
+                                    })
+                                    .unwrap_or_default(),
+                                _ => false,
+                            })
+                    })?;
+                let range = call_expr.syntax().text_range();
                 Some(vec![LocationLink::Local {
                     origin_selection_range: Some(token.text_range()),
-                    target_range: target_name_range.clone(),
-                    target_selection_range: target_name_range,
+                    target_range: range.clone(),
+                    target_selection_range: range,
                     target_file_id: build_file_id,
                 }])
             }

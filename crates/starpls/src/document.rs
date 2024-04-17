@@ -267,6 +267,9 @@ impl DefaultFileLoader {
                 }
             }
             RepoKind::Canonical | RepoKind::Apparent => {
+                if !label.repo().is_empty() {
+                    canonical_repo_res = Some(label.repo().to_string());
+                }
                 (self.external_output_base.join(label.repo()), PathBuf::new())
             }
             RepoKind::Current => {
@@ -371,10 +374,6 @@ impl FileLoader for DefaultFileLoader {
                 let contents = match fs::read_to_string(&path) {
                     Result::Ok(contents) => contents,
                     Err(err) => {
-                        eprintln!(
-                            "failed to read, checking canonical repo: {:?}",
-                            canonical_repo
-                        );
                         if let Some(canonical_repo) = canonical_repo {
                             if !self
                                 .external_output_base
@@ -383,7 +382,6 @@ impl FileLoader for DefaultFileLoader {
                                 .ok()
                                 .unwrap_or_default()
                             {
-                                eprintln!("fetching");
                                 let _ = self.fetch_repo_sender.send(canonical_repo);
                             }
                         }

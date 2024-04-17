@@ -100,6 +100,10 @@ impl Server {
             Event::Task(task) => self.handle_task(task),
         };
 
+        if !self.pending_repos.is_empty() && !self.is_fetching_repos {
+            self.fetch_bazel_external_repos();
+        }
+
         // Update our diagnostics if a triggering event (e.g. document open/close/change) occured.
         // This is done asynchronously, so any new diagnostics resulting from this won't be seen until the next turn
         // of the event loop.
@@ -253,7 +257,6 @@ impl Server {
             Task::FetchExternalRepoRequest(repo) => {
                 if !self.fetched_repos.contains(&repo) {
                     self.pending_repos.insert(repo);
-                    self.fetch_bazel_external_repos();
                 }
             }
         }

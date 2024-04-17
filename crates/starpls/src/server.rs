@@ -231,21 +231,23 @@ impl Server {
         self.connection.sender.send(message).unwrap();
     }
 
-    #[allow(unused)]
     pub(crate) fn fetch_bazel_external_repos(&mut self) {
+        let repos: FxHashSet<_> = self.pending_repos.drain().collect();
         let bazel_client = self.bazel_client.clone();
         self.is_fetching_repos = true;
-        let pending_repos = self.pending_repos.drain().collect();
+        self.fetched_repos.extend(repos.clone().into_iter());
         self.task_pool_handle.spawn_with_sender(move |sender| {
             sender
                 .send(Task::FetchExternalRepos(FetchExternalReposProgress::Begin(
-                    pending_repos,
+                    repos.clone(),
                 )))
                 .unwrap();
 
-            std::thread::sleep(std::time::Duration::from_secs(10));
+            for repo in &repos {
+                eprintln!("server: fetching external repository \"@@{}\"", repo);
+                let _ = bazel_client.null_query_external_repo_targets(repo);
+            }
 
-            // let res = load_bazel_build_language(&*bazel_client);
             sender
                 .send(Task::FetchExternalRepos(FetchExternalReposProgress::End))
                 .unwrap();

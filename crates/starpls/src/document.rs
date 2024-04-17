@@ -325,7 +325,11 @@ impl FileLoader for DefaultFileLoader {
             None => return Ok(None),
         };
 
-        let res = if resolved_path.try_exists().unwrap_or_default() {
+        let res = if fs::metadata(&resolved_path)
+            .ok()
+            .map(|metadata| metadata.is_file())
+            .unwrap_or_default()
+        {
             ResolvedPath::Source {
                 path: resolved_path,
             }

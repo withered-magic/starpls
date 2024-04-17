@@ -1,5 +1,5 @@
-use crate::{util::pick_best_token, Database, FilePosition, LocationLink};
-use starpls_common::{parse, Db, File, InFile};
+use crate::{util::pick_best_token, Database, FilePosition, LocationLink, ResolvedPath};
+use starpls_common::{parse as parse_query, Db, File, InFile};
 use starpls_hir::{LoadItem, Name, ScopeDef, Semantics};
 use starpls_syntax::{
     ast::{self, AstNode},
@@ -12,7 +12,7 @@ pub(crate) fn goto_definition(
 ) -> Option<Vec<LocationLink>> {
     let sema = Semantics::new(db);
     let file = db.get_file(file_id)?;
-    let parse = parse(db, file);
+    let parse = parse_query(db, file);
     let token = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
         T![ident] => 2,
         T!['('] | T![')'] | T!['['] | T![']'] | T!['{'] | T!['}'] => 0,
@@ -138,17 +138,52 @@ pub(crate) fn goto_definition(
             ast::LiteralKind::String(s) => s.value()?,
             _ => return None,
         };
-        let target_path = db
-            .loader
-            .resolve_path(&value, file.dialect(db), file_id)
-            .ok()??;
-        return if target_path.try_exists().unwrap_or(false) {
-            Some(vec![LocationLink::External {
-                origin_selection_range: Some(token.text_range()),
-                target_path,
-            }])
-        } else {
-            None
+        let resolved_path = db.resolve_path(&value, file.dialect(db), file_id).ok()??;
+        return match resolved_path {
+            ResolvedPath::Source { path } => path.try_exists().ok()?.then(|| {
+                vec![LocationLink::External {
+                    origin_selection_range: Some(token.text_range()),
+                    target_path: path,
+                }]
+            }),
+            ResolvedPath::BuildTarget {
+                build_file: build_file_id,
+                target,
+                ..
+            } => {
+                let build_file = db.get_file(build_file_id)?;
+                let parse = parse_query(db, build_file).syntax(db);
+                let call_expr = parse
+                    .children()
+                    .filter_map(ast::CallExpr::cast)
+                    .find(|expr| {
+                        expr.arguments()
+                            .into_iter()
+                            .flat_map(|args| args.arguments())
+                            .any(|arg| match arg {
+                                ast::Argument::Keyword(arg) => arg
+                                    .expr()
+                                    .and_then(|expr| match expr {
+                                        ast::Expression::Literal(expr) => Some(expr),
+                                        _ => None,
+                                    })
+                                    .and_then(|expr| match expr.kind() {
+                                        ast::LiteralKind::String(s) => s.value(),
+                                        _ => None,
+                                    })
+                                    .map(|s| target == &*s)
+                                    .unwrap_or_default(),
+                                _ => false,
+                            })
+                    })?;
+                let range = call_expr.syntax().text_range();
+                Some(vec![LocationLink::Local {
+                    origin_selection_range: Some(token.text_range()),
+                    target_range: range.clone(),
+                    target_selection_range: range,
+                    target_file_id: build_file_id,
+                }])
+            }
         };
     }
 

@@ -11,7 +11,7 @@ use starpls_bazel::{
     label::{PartialParse, RepoKind},
     APIContext, Label, ParseError,
 };
-use starpls_common::{Dialect, FileId, LoadItemCandidate, LoadItemCandidateKind};
+use starpls_common::{Dialect, FileId, LoadItemCandidate, LoadItemCandidateKind, ResolvedPath};
 use starpls_ide::FileLoader;
 use std::{
     collections::HashMap,
@@ -306,7 +306,7 @@ impl FileLoader for DefaultFileLoader {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> anyhow::Result<Option<PathBuf>> {
+    ) -> anyhow::Result<Option<ResolvedPath>> {
         if dialect != Dialect::Bazel {
             return Ok(None);
         }
@@ -317,8 +317,56 @@ impl FileLoader for DefaultFileLoader {
             Err(err) => return Err(anyhow!("error parsing label: {}", err.err)),
         };
 
-        self.resolve_label(&label, from)
-            .map(|res| res.map(|res| res.resolved_path))
+        let resolved_path = match self
+            .resolve_label(&label, from)
+            .map(|res| res.map(|res| res.resolved_path))?
+        {
+            Some(resolved_path) => resolved_path,
+            None => return Ok(None),
+        };
+
+        let res = if resolved_path.try_exists().unwrap_or_default() {
+            ResolvedPath::Source {
+                path: resolved_path,
+            }
+        } else {
+            if label.target().is_empty() {
+                return Ok(None);
+            }
+            let parent = match resolved_path.parent() {
+                Some(parent) => parent,
+                None => return Ok(None),
+            };
+            let build_file = match fs::read_dir(parent)
+                .into_iter()
+                .flat_map(|entries| entries.into_iter())
+                .find_map(|entry| match entry.ok()?.file_name().to_str()? {
+                    file_name @ ("BUILD" | "BUILD.bazel") => Some(file_name.to_string()),
+                    _ => None,
+                }) {
+                Some(build_file) => build_file,
+                None => return Ok(None),
+            };
+            let path = parent.join(build_file);
+
+            // If we've already interned this file, then simply return the file id.
+            let (build_file, contents) =
+                if let Some(file_id) = self.interner.lookup_by_path_buf(&path) {
+                    (file_id, None)
+                } else {
+                    let contents = fs::read_to_string(&path)?;
+                    let file_id = self.interner.intern_path(path);
+                    (file_id, Some(contents))
+                };
+
+            ResolvedPath::BuildTarget {
+                build_file,
+                target: label.target().to_string(),
+                contents,
+            }
+        };
+
+        Ok(Some(res))
     }
 
     fn load_file(

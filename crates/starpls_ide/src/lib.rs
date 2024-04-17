@@ -2,7 +2,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use rustc_hash::FxHashMap;
 use salsa::ParallelDatabase;
 use starpls_bazel::{APIContext, Builtins};
-use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate};
+use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate, ResolvedPath};
 use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, LoadItemId, LoadStmt, ParamId, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use starpls_test_util::builtins_with_catch_all_functions;
@@ -127,6 +127,40 @@ impl starpls_common::Db for Database {
             None => return Ok(None),
         };
         self.loader.list_load_candidates(path, dialect, from)
+    }
+
+    fn resolve_path(
+        &self,
+        path: &str,
+        dialect: Dialect,
+        from: FileId,
+    ) -> anyhow::Result<Option<ResolvedPath>> {
+        let mut resolved_path = match self.loader.resolve_path(path, dialect, from)? {
+            Some(resolved_path) => resolved_path,
+            None => return Ok(None),
+        };
+
+        if let ResolvedPath::BuildTarget {
+            build_file,
+            ref mut contents,
+            ..
+        } = resolved_path
+        {
+            match self.files.entry(build_file) {
+                Entry::Vacant(entry) => {
+                    *entry.insert(File::new(
+                        self,
+                        build_file,
+                        Dialect::Bazel,
+                        Some(APIContext::Bzl),
+                        contents.take().unwrap_or_default(),
+                    ));
+                }
+                _ => {}
+            };
+        }
+
+        Ok(Some(resolved_path))
     }
 }
 
@@ -355,16 +389,6 @@ pub struct FilePosition {
     pub pos: TextSize,
 }
 
-pub enum ResolvedPath {
-    Source {
-        path: PathBuf,
-    },
-    BuildTarget {
-        build_file_path: PathBuf,
-        target: String,
-    },
-}
-
 /// A trait for loading a path and listing its exported symbols.
 pub trait FileLoader: Send + Sync + 'static {
     fn resolve_path(
@@ -372,7 +396,7 @@ pub trait FileLoader: Send + Sync + 'static {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> anyhow::Result<Option<PathBuf>>;
+    ) -> anyhow::Result<Option<ResolvedPath>>;
 
     /// Open the Starlark file corresponding to the given `path` and of the given `Dialect`.
     fn load_file(
@@ -430,7 +454,7 @@ impl FileLoader for SimpleFileLoader {
         _path: &str,
         _dialect: Dialect,
         _from: FileId,
-    ) -> anyhow::Result<Option<PathBuf>> {
+    ) -> anyhow::Result<Option<ResolvedPath>> {
         Ok(None)
     }
 }

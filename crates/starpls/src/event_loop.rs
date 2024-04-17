@@ -87,7 +87,6 @@ impl Server {
         let event = select! {
             recv(self.connection.receiver) -> req => req.ok().map(Event::Message),
             recv(self.task_pool_handle.receiver) -> task => Some(Event::Task(task.unwrap())),
-            recv(self.fetch_repo_receiver) -> repo => Some(Event::Task(Task::FetchExternalRepoRequest(repo.unwrap())))
         };
         event
     }
@@ -103,7 +102,13 @@ impl Server {
             Event::Message(lsp_server::Message::Response(resp)) => {
                 self.complete_request(resp);
             }
-            Event::Task(task) => self.handle_task(task),
+            Event::Task(task) => {
+                self.handle_task(task);
+
+                while let Ok(task) = self.task_pool_handle.receiver.try_recv() {
+                    self.handle_task(task);
+                }
+            }
         };
 
         if !self.pending_repos.is_empty() && !self.is_fetching_repos {

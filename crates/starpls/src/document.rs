@@ -1,4 +1,4 @@
-use crate::event_loop::FetchExternalRepoRequest;
+use crate::event_loop::{FetchExternalRepoRequest, Task};
 use anyhow::{anyhow, bail, Ok};
 use crossbeam_channel::Sender;
 use dashmap::DashMap;
@@ -169,7 +169,7 @@ pub(crate) struct DefaultFileLoader {
     workspace: PathBuf,
     external_output_base: PathBuf,
     cached_load_results: DashMap<String, PathBuf>,
-    fetch_repo_sender: Sender<FetchExternalRepoRequest>,
+    fetch_repo_sender: Sender<Task>,
     bzlmod_enabled: bool,
 }
 
@@ -179,7 +179,7 @@ impl DefaultFileLoader {
         interner: Arc<PathInterner>,
         workspace: PathBuf,
         external_output_base: PathBuf,
-        fetch_repo_sender: Sender<FetchExternalRepoRequest>,
+        fetch_repo_sender: Sender<Task>,
         bzlmod_enabled: bool,
     ) -> Self {
         Self {
@@ -383,10 +383,12 @@ impl FileLoader for DefaultFileLoader {
                                 .ok()
                                 .unwrap_or_default()
                             {
-                                let _ = self.fetch_repo_sender.send(FetchExternalRepoRequest {
-                                    file_id: from,
-                                    repo: canonical_repo,
-                                });
+                                let _ = self.fetch_repo_sender.send(
+                                    Task::FetchExternalRepoRequest(FetchExternalRepoRequest {
+                                        file_id: from,
+                                        repo: canonical_repo,
+                                    }),
+                                );
                             }
                         }
 

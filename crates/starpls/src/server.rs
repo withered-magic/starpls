@@ -3,10 +3,9 @@ use crate::{
     debouncer::AnalysisDebouncer,
     diagnostics::DiagnosticsManager,
     document::{DefaultFileLoader, DocumentChangeKind, DocumentManager, PathInterner},
-    event_loop::{FetchExternalRepoRequest, FetchExternalReposProgress, Task},
+    event_loop::{FetchExternalReposProgress, Task},
     task_pool::{TaskPool, TaskPoolHandle},
 };
-use crossbeam_channel::Receiver;
 use lsp_server::{Connection, ReqQueue};
 use parking_lot::RwLock;
 use rustc_hash::FxHashSet;
@@ -32,7 +31,6 @@ pub(crate) struct Server {
     pub(crate) analysis_debouncer: AnalysisDebouncer,
     pub(crate) analysis_requested_for_files: Option<Vec<FileId>>,
     pub(crate) bazel_client: Arc<dyn BazelClient>,
-    pub(crate) fetch_repo_receiver: Receiver<FetchExternalRepoRequest>,
     pub(crate) pending_repos: FxHashSet<String>,
     pub(crate) pending_files: FxHashSet<FileId>,
     pub(crate) force_analysis_for_files: FxHashSet<FileId>,
@@ -49,9 +47,9 @@ pub(crate) struct ServerSnapshot {
 impl Server {
     pub(crate) fn new(connection: Connection, config: ServerConfig) -> anyhow::Result<Self> {
         // Create the task pool for processin incoming requests.
-        let (sender, receiver) = crossbeam_channel::unbounded();
-        let task_pool = TaskPool::with_num_threads(sender.clone(), 4)?;
-        let task_pool_handle = TaskPoolHandle::new(receiver, task_pool);
+        let (task_pool_sender, task_pool_receiver) = crossbeam_channel::unbounded();
+        let task_pool = TaskPool::with_num_threads(task_pool_sender.clone(), 4)?;
+        let task_pool_handle = TaskPoolHandle::new(task_pool_receiver, task_pool);
 
         // Load Bazel builtins from the specified file.
         let builtins = match load_bazel_builtins() {
@@ -123,21 +121,23 @@ impl Server {
         // Additionally, load builtin rules.
         eprintln!("server: fetching builtin rules via `bazel info build-language`");
         let rules = match load_bazel_build_language(&*bazel_client) {
-            Ok(builtins) => builtins,
+            Ok(builtins) => {
+                eprintln!("server: successfully fetched builtin rules");
+                builtins
+            }
             Err(err) => {
                 eprintln!("server: failed to run `bazel info build-language`: {}", err);
                 Default::default()
             }
         };
 
-        let (fetch_repo_sender, fetch_repo_receiver) = crossbeam_channel::unbounded();
         let path_interner = Arc::new(PathInterner::default());
         let loader = DefaultFileLoader::new(
             bazel_client.clone(),
             path_interner.clone(),
             info.workspace,
             external_output_base,
-            fetch_repo_sender,
+            task_pool_sender.clone(),
             bzlmod_enabled,
         );
 
@@ -152,10 +152,9 @@ impl Server {
             document_manager: Arc::new(RwLock::new(DocumentManager::new(path_interner))),
             diagnostics_manager: Default::default(),
             analysis,
-            analysis_debouncer: AnalysisDebouncer::new(DEBOUNCE_INTERVAL, sender),
+            analysis_debouncer: AnalysisDebouncer::new(DEBOUNCE_INTERVAL, task_pool_sender),
             analysis_requested_for_files: None,
             bazel_client,
-            fetch_repo_receiver,
             pending_repos: Default::default(),
             pending_files: Default::default(),
             force_analysis_for_files: Default::default(),

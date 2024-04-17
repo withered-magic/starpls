@@ -4,7 +4,7 @@ use serde_json::Deserializer;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
     str,
 };
 
@@ -24,6 +24,8 @@ pub trait BazelClient: Send + Sync + 'static {
         apparent_repo: &str,
         from_repo: &str,
     ) -> anyhow::Result<Option<String>>;
+    fn clear_repo_mappings(&self);
+    fn null_query_external_repo_targets(&self, repo: &str) -> anyhow::Result<()>;
 }
 
 pub struct BazelCLI {
@@ -122,6 +124,19 @@ impl BazelClient for BazelCLI {
             .write()
             .insert(from_repo.to_string(), mapping);
         Ok(canonical_repo)
+    }
+
+    fn clear_repo_mappings(&self) {
+        self.repo_mappings.write().clear();
+    }
+
+    fn null_query_external_repo_targets(&self, repo: &str) -> anyhow::Result<()> {
+        Command::new(&self.executable)
+            .args(["query", "--keep_going", &format!("@@{}//...", repo)])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()?;
+        Ok(())
     }
 }
 

@@ -10,7 +10,7 @@ use crate::{
 use crossbeam_channel::select;
 use lsp_server::Connection;
 use lsp_types::{InitializeParams, WorkDoneProgressCreateParams};
-use starpls_bazel::Builtins;
+use rustc_hash::FxHashSet;
 use starpls_common::FileId;
 
 #[macro_export]
@@ -27,9 +27,15 @@ macro_rules! match_notification {
 }
 
 #[derive(Debug)]
-pub(crate) enum FetchBazelExternalReposProgress {
-    Begin,
-    End(anyhow::Result<Builtins>),
+pub(crate) enum FetchExternalReposProgress {
+    Begin(FxHashSet<String>),
+    End(FxHashSet<FileId>),
+}
+
+#[derive(Debug)]
+pub(crate) struct FetchExternalRepoRequest {
+    pub(crate) file_id: FileId,
+    pub(crate) repo: String,
 }
 
 #[derive(Debug)]
@@ -41,8 +47,10 @@ pub(crate) enum Task {
     ResponseReady(lsp_server::Response),
     /// Retry a previously failed request (e.g. due to Salsa cancellation).
     Retry(lsp_server::Request),
-    /// Fetch Bazel external repositories.
-    FetchBazelExternalRepos(FetchBazelExternalReposProgress),
+    /// Events from fetching external repositories.
+    FetchExternalRepos(FetchExternalReposProgress),
+    /// A request to fetch an external repository.
+    FetchExternalRepoRequest(FetchExternalRepoRequest),
 }
 
 #[derive(Debug)]
@@ -94,13 +102,24 @@ impl Server {
             Event::Message(lsp_server::Message::Response(resp)) => {
                 self.complete_request(resp);
             }
-            Event::Task(task) => self.handle_task(task),
+            Event::Task(task) => {
+                self.handle_task(task);
+
+                while let Ok(task) = self.task_pool_handle.receiver.try_recv() {
+                    self.handle_task(task);
+                }
+            }
         };
+
+        if !self.pending_repos.is_empty() && !self.is_fetching_repos {
+            self.fetch_bazel_external_repos();
+        }
 
         // Update our diagnostics if a triggering event (e.g. document open/close/change) occured.
         // This is done asynchronously, so any new diagnostics resulting from this won't be seen until the next turn
         // of the event loop.
         let (changed_file_ids, should_request_analysis) = self.process_changes();
+        let mut files_to_update = Vec::new();
         if should_request_analysis {
             self.analysis_requested_for_files = None;
             self.analysis_debouncer
@@ -108,7 +127,11 @@ impl Server {
                 .send(changed_file_ids)
                 .unwrap();
         } else if let Some(file_ids) = self.analysis_requested_for_files.take() {
-            self.update_diagnostics(file_ids);
+            files_to_update.extend(file_ids);
+        }
+        files_to_update.extend(self.force_analysis_for_files.drain());
+        if !files_to_update.is_empty() {
+            self.update_diagnostics(files_to_update);
         }
 
         let changed_file_ids = self.diagnostics_manager.take_changes();
@@ -161,7 +184,6 @@ impl Server {
 
             Task::DiagnosticsReady(res)
         });
-        self.analysis_requested_for_files = None;
     }
 
     fn register_and_handle_request(&mut self, req: lsp_server::Request) {
@@ -186,6 +208,7 @@ impl Server {
                 if lsp_types::notification::DidOpenTextDocument as params => notifications::did_open_text_document(self, params),
                 if lsp_types::notification::DidCloseTextDocument as params => notifications::did_close_text_document(self, params),
                 if lsp_types::notification::DidChangeTextDocument as params => notifications::did_change_text_document(self, params),
+                if lsp_types::notification::DidSaveTextDocument as params => notifications::did_save_text_document(self, params),
                 _ => Ok(())
             }
         }
@@ -204,23 +227,37 @@ impl Server {
                 self.respond(resp);
             }
             Task::Retry(req) => self.handle_request(req),
-            Task::FetchBazelExternalRepos(progress) => {
-                let token = "Fetching Bazel external repositories".to_string();
+            Task::FetchExternalRepos(progress) => {
+                let token = "FetchExternalRepos".to_string();
                 let work_done = match progress {
-                    FetchBazelExternalReposProgress::Begin => {
+                    FetchExternalReposProgress::Begin(repos) => {
                         self.send_request::<lsp_types::request::WorkDoneProgressCreate>(
                             WorkDoneProgressCreateParams {
                                 token: lsp_types::NumberOrString::String(token.clone()),
                             },
                         );
 
+                        let mut repos = repos.into_iter().collect::<Vec<_>>();
+                        repos.sort();
+
+                        let mut title = "Fetching external repositories: ".to_string();
+                        for (i, repo) in repos.into_iter().enumerate() {
+                            if i > 0 {
+                                title.push_str(", ");
+                            }
+                            title.push('"');
+                            title.push_str(&repo);
+                            title.push('"');
+                        }
+
                         lsp_types::WorkDoneProgress::Begin(lsp_types::WorkDoneProgressBegin {
-                            title: token.clone(),
+                            title,
                             ..Default::default()
                         })
                     }
-                    FetchBazelExternalReposProgress::End(_) => {
-                        self.fetch_bazel_external_repos_requested = false;
+                    FetchExternalReposProgress::End(files) => {
+                        self.is_fetching_repos = false;
+                        self.force_analysis_for_files.extend(files);
                         lsp_types::WorkDoneProgress::End(lsp_types::WorkDoneProgressEnd {
                             message: None,
                         })
@@ -233,6 +270,12 @@ impl Server {
                         value: lsp_types::ProgressParamsValue::WorkDone(work_done),
                     },
                 );
+            }
+            Task::FetchExternalRepoRequest(FetchExternalRepoRequest { file_id, repo }) => {
+                if !self.fetched_repos.contains(&repo) {
+                    self.pending_repos.insert(repo);
+                    self.pending_files.insert(file_id);
+                }
             }
         }
     }

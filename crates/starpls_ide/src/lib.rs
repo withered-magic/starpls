@@ -355,6 +355,16 @@ pub struct FilePosition {
     pub pos: TextSize,
 }
 
+pub enum ResolvedPath {
+    Source {
+        path: PathBuf,
+    },
+    BuildTarget {
+        build_file_path: PathBuf,
+        target: String,
+    },
+}
+
 /// A trait for loading a path and listing its exported symbols.
 pub trait FileLoader: Send + Sync + 'static {
     fn resolve_path(

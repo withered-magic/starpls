@@ -91,7 +91,7 @@ pub(crate) fn def_stmt(p: &mut Parser) {
 
 /// Parses an `if` statement.
 ///
-/// Gramar: `IfStmt = 'if' Test ':' Suite {'elif' Test ':' Suite} ['else' ':' Suite] .`
+/// Grammar: `IfStmt = 'if' Test ':' Suite {'elif' Test ':' Suite} ['else' ':' Suite] .`
 pub(crate) fn if_stmt(p: &mut Parser, if_or_elif: SyntaxKind) {
     let m = p.start();
     p.bump(if_or_elif);

@@ -32,6 +32,7 @@ pub(crate) fn run_check(paths: Vec<String>, output_base: Option<String>) -> anyh
             }
         };
 
+    let (fetch_repo_sender, _) = crossbeam_channel::unbounded();
     let builtins = load_bazel_builtins()?;
     let rules = load_bazel_build_language(&*bazel_client)?;
     let interner = Arc::new(PathInterner::default());
@@ -40,6 +41,7 @@ pub(crate) fn run_check(paths: Vec<String>, output_base: Option<String>) -> anyh
         interner.clone(),
         info.workspace,
         external_output_base,
+        fetch_repo_sender,
         bzlmod_enabled,
     );
     let mut analysis = Analysis::new(Arc::new(loader));

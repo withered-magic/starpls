@@ -3,7 +3,7 @@ use starpls_common::{parse, Db, File, InFile};
 use starpls_hir::{LoadItem, Name, ScopeDef, Semantics};
 use starpls_syntax::{
     ast::{self, AstNode},
-    TextRange, TextSize, T,
+    T,
 };
 
 pub(crate) fn goto_definition(

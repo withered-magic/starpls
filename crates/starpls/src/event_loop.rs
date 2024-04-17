@@ -29,7 +29,13 @@ macro_rules! match_notification {
 #[derive(Debug)]
 pub(crate) enum FetchExternalReposProgress {
     Begin(FxHashSet<String>),
-    End,
+    End(FxHashSet<FileId>),
+}
+
+#[derive(Debug)]
+pub(crate) struct FetchExternalRepoRequest {
+    pub(crate) file_id: FileId,
+    pub(crate) repo: String,
 }
 
 #[derive(Debug)]
@@ -44,7 +50,7 @@ pub(crate) enum Task {
     /// Events from fetching external repositories.
     FetchExternalRepos(FetchExternalReposProgress),
     /// A request to fetch an external repository.
-    FetchExternalRepoRequest(String),
+    FetchExternalRepoRequest(FetchExternalRepoRequest),
 }
 
 #[derive(Debug)]
@@ -108,6 +114,7 @@ impl Server {
         // This is done asynchronously, so any new diagnostics resulting from this won't be seen until the next turn
         // of the event loop.
         let (changed_file_ids, should_request_analysis) = self.process_changes();
+        let mut files_to_update = Vec::new();
         if should_request_analysis {
             self.analysis_requested_for_files = None;
             self.analysis_debouncer
@@ -115,7 +122,11 @@ impl Server {
                 .send(changed_file_ids)
                 .unwrap();
         } else if let Some(file_ids) = self.analysis_requested_for_files.take() {
-            self.update_diagnostics(file_ids);
+            files_to_update.extend(file_ids);
+        }
+        files_to_update.extend(self.force_analysis_for_files.drain());
+        if !files_to_update.is_empty() {
+            self.update_diagnostics(files_to_update);
         }
 
         let changed_file_ids = self.diagnostics_manager.take_changes();
@@ -168,7 +179,6 @@ impl Server {
 
             Task::DiagnosticsReady(res)
         });
-        self.analysis_requested_for_files = None;
     }
 
     fn register_and_handle_request(&mut self, req: lsp_server::Request) {
@@ -239,8 +249,9 @@ impl Server {
                             ..Default::default()
                         })
                     }
-                    FetchExternalReposProgress::End => {
+                    FetchExternalReposProgress::End(files) => {
                         self.is_fetching_repos = false;
+                        self.force_analysis_for_files.extend(files);
                         lsp_types::WorkDoneProgress::End(lsp_types::WorkDoneProgressEnd {
                             message: None,
                         })
@@ -254,9 +265,10 @@ impl Server {
                     },
                 );
             }
-            Task::FetchExternalRepoRequest(repo) => {
+            Task::FetchExternalRepoRequest(FetchExternalRepoRequest { file_id, repo }) => {
                 if !self.fetched_repos.contains(&repo) {
                     self.pending_repos.insert(repo);
+                    self.pending_files.insert(file_id);
                 }
             }
         }

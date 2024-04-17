@@ -3,7 +3,7 @@ use crate::{
     debouncer::AnalysisDebouncer,
     diagnostics::DiagnosticsManager,
     document::{DefaultFileLoader, DocumentChangeKind, DocumentManager, PathInterner},
-    event_loop::{FetchExternalReposProgress, Task},
+    event_loop::{FetchExternalRepoRequest, FetchExternalReposProgress, Task},
     task_pool::{TaskPool, TaskPoolHandle},
 };
 use crossbeam_channel::Receiver;
@@ -17,7 +17,7 @@ use starpls_bazel::{
 };
 use starpls_common::FileId;
 use starpls_ide::{Analysis, AnalysisSnapshot, Change};
-use std::{panic, sync::Arc, time::Duration};
+use std::{mem, panic, sync::Arc, time::Duration};
 
 const DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -32,8 +32,10 @@ pub(crate) struct Server {
     pub(crate) analysis_debouncer: AnalysisDebouncer,
     pub(crate) analysis_requested_for_files: Option<Vec<FileId>>,
     pub(crate) bazel_client: Arc<dyn BazelClient>,
-    pub(crate) fetch_repo_receiver: Receiver<String>,
+    pub(crate) fetch_repo_receiver: Receiver<FetchExternalRepoRequest>,
     pub(crate) pending_repos: FxHashSet<String>,
+    pub(crate) pending_files: FxHashSet<FileId>,
+    pub(crate) force_analysis_for_files: FxHashSet<FileId>,
     pub(crate) fetched_repos: FxHashSet<String>,
     pub(crate) is_fetching_repos: bool,
 }
@@ -155,6 +157,8 @@ impl Server {
             bazel_client,
             fetch_repo_receiver,
             pending_repos: Default::default(),
+            pending_files: Default::default(),
+            force_analysis_for_files: Default::default(),
             fetched_repos: Default::default(),
             is_fetching_repos: false,
         };
@@ -176,7 +180,7 @@ impl Server {
         let (has_opened_or_closed_documents, changes) = document_manager.take_changes();
         let changed_file_ids = changes.iter().map(|(file_id, _)| *file_id).collect();
 
-        if changes.is_empty() {
+        if changes.is_empty() && self.force_analysis_for_files.is_empty() {
             return (changed_file_ids, has_opened_or_closed_documents);
         }
 
@@ -232,7 +236,8 @@ impl Server {
     }
 
     pub(crate) fn fetch_bazel_external_repos(&mut self) {
-        let repos: FxHashSet<_> = self.pending_repos.drain().collect();
+        let repos = mem::take(&mut self.pending_repos);
+        let files = mem::take(&mut self.pending_files);
         let bazel_client = self.bazel_client.clone();
         self.is_fetching_repos = true;
         self.fetched_repos.extend(repos.clone().into_iter());
@@ -249,7 +254,9 @@ impl Server {
             }
 
             sender
-                .send(Task::FetchExternalRepos(FetchExternalReposProgress::End))
+                .send(Task::FetchExternalRepos(FetchExternalReposProgress::End(
+                    files,
+                )))
                 .unwrap();
         });
     }

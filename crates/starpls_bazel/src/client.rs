@@ -24,6 +24,7 @@ pub trait BazelClient: Send + Sync + 'static {
         apparent_repo: &str,
         from_repo: &str,
     ) -> anyhow::Result<Option<String>>;
+    fn clear_repo_mappings(&self);
     fn null_query_external_repo_targets(&self, repo: &str) -> anyhow::Result<()>;
 }
 
@@ -123,6 +124,10 @@ impl BazelClient for BazelCLI {
             .write()
             .insert(from_repo.to_string(), mapping);
         Ok(canonical_repo)
+    }
+
+    fn clear_repo_mappings(&self) {
+        self.repo_mappings.write().clear();
     }
 
     fn null_query_external_repo_targets(&self, repo: &str) -> anyhow::Result<()> {

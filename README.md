@@ -111,6 +111,7 @@ then you'll get autocomplete suggestions for the attributes on `ctx`, like `ctx.
         - [x] Relative paths
         - [x] Bazel workspace
     - [x] Bazel external repositories
+    - [ ] Nested local repositories
 
 ## Development
 

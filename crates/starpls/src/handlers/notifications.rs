@@ -36,6 +36,26 @@ pub(crate) fn did_change_text_document(
         let contents = apply_document_content_changes(contents, params.content_changes);
         document_manager.modify(file_id, contents, Some(params.text_document.version))
     }
+    Ok(())
+}
 
+pub(crate) fn did_save_text_document(
+    server: &mut Server,
+    params: lsp_types::DidSaveTextDocumentParams,
+) -> anyhow::Result<()> {
+    let path = convert::path_buf_from_url(&params.text_document.uri)?;
+    if server
+        .document_manager
+        .read()
+        .lookup_by_path_buf(&path)
+        .is_some()
+    {
+        if let Some("MODULE.bazel" | "WORKSPACE" | "WORKSPACE.bazel") =
+            path.file_name().and_then(|file_name| file_name.to_str())
+        {
+            server.bazel_client.clear_repo_mappings();
+            server.fetched_repos.clear();
+        }
+    }
     Ok(())
 }

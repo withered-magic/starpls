@@ -208,6 +208,7 @@ impl Server {
                 if lsp_types::notification::DidOpenTextDocument as params => notifications::did_open_text_document(self, params),
                 if lsp_types::notification::DidCloseTextDocument as params => notifications::did_close_text_document(self, params),
                 if lsp_types::notification::DidChangeTextDocument as params => notifications::did_change_text_document(self, params),
+                if lsp_types::notification::DidSaveTextDocument as params => notifications::did_save_text_document(self, params),
                 _ => Ok(())
             }
         }

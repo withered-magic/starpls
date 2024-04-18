@@ -214,6 +214,7 @@ impl ScopeDef {
             ScopeDef::Variable(Variable {
                 id: Some((file, expr)),
             }) => db.infer_expr(*file, *expr),
+            ScopeDef::Callable(callable) => return callable.ty(db),
             ScopeDef::LoadItem(LoadItem { file, id }) => db.infer_load_item(*file, *id),
             _ => Ty::unknown(),
         }

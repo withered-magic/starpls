@@ -342,7 +342,7 @@ impl BuiltinFunction {
                         "string" => AttributeKind::String,
                         "string_dict" => AttributeKind::StringDict,
                         "string_list" => AttributeKind::StringList,
-                        "strict_list_dict" => AttributeKind::StringListDict,
+                        "string_list_dict" => AttributeKind::StringListDict,
                         _ => return None,
                     },
                     doc,

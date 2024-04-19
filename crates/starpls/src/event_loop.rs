@@ -6,6 +6,7 @@ use crate::{
     extensions,
     handlers::{notifications, requests},
     server::{Server, ServerSnapshot},
+    ServerArgs,
 };
 use crossbeam_channel::select;
 use lsp_server::Connection;
@@ -61,10 +62,14 @@ pub(crate) enum Event {
 
 pub fn process_connection(
     connection: Connection,
+    args: ServerArgs,
     initialize_params: InitializeParams,
 ) -> anyhow::Result<()> {
     eprintln!("server: initializing state and starting event loop");
-    let config = ServerConfig::new(initialize_params.capabilities);
+    let config = ServerConfig {
+        args,
+        caps: initialize_params.capabilities,
+    };
     let server = Server::new(connection, config)?;
     server.run()
 }

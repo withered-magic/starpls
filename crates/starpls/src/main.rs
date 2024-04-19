@@ -1,5 +1,5 @@
 use check::run_check;
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use lsp_server::Connection;
 use lsp_types::{
     CompletionOptions, HoverProviderCapability, OneOf, ServerCapabilities, SignatureHelpOptions,
@@ -38,7 +38,13 @@ enum Commands {
         #[clap(long = "output_base")]
         output_base: Option<String>,
     },
-    Server,
+    Server(ServerArgs),
+}
+
+#[derive(Args, Default)]
+pub(crate) struct ServerArgs {
+    #[clap(long = "bazel_path")]
+    bazel_path: Option<String>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -46,11 +52,12 @@ fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Some(Commands::Check { paths, output_base }) => run_check(paths, output_base),
-        Some(Commands::Server) | None => run_server(),
+        Some(Commands::Server(args)) => run_server(args),
+        None => run_server(Default::default()),
     }
 }
 
-fn run_server() -> anyhow::Result<()> {
+fn run_server(args: ServerArgs) -> anyhow::Result<()> {
     eprintln!("server: starpls, v0.1.12");
 
     // Create the transport over stdio.
@@ -75,7 +82,7 @@ fn run_server() -> anyhow::Result<()> {
         ..Default::default()
     })?;
     let initialize_params = serde_json::from_value(connection.initialize(server_capabilities)?)?;
-    event_loop::process_connection(connection, initialize_params)?;
+    event_loop::process_connection(connection, args, initialize_params)?;
 
     // Graceful shutdown.
     eprintln!("server: connection closed, exiting");

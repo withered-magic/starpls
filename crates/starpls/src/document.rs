@@ -253,7 +253,6 @@ impl DefaultFileLoader {
                 let canonical_repo = self
                     .bazel_client
                     .resolve_repo_from_mapping(label.repo(), from_repo)?;
-
                 match canonical_repo {
                     Some(canonical_repo) => (
                         if canonical_repo.is_empty() {
@@ -264,7 +263,16 @@ impl DefaultFileLoader {
                         },
                         PathBuf::new(),
                     ),
-                    None => return Ok(None),
+                    None => {
+                        bail!(
+                            "Could not resolve repository \"{}{}\" from current repository mapping",
+                            match label.kind() {
+                                RepoKind::Canonical => "@@",
+                                _ => "@",
+                            },
+                            label.repo()
+                        )
+                    }
                 }
             }
             RepoKind::Canonical | RepoKind::Apparent => {
@@ -464,7 +472,6 @@ impl FileLoader for DefaultFileLoader {
                 let from_dir = self.dirname(from);
                 let has_trailing_slash = path.ends_with(MAIN_SEPARATOR);
                 let mut path = from_dir.join(path);
-
                 if !has_trailing_slash {
                     if !path.pop() {
                         return Ok(None);

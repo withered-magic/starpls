@@ -230,6 +230,11 @@ impl<'a, 'b> Parser<'a, 'b> {
         if has_target_only_chars {
             return Err(ParseError::InvalidPackage);
         }
+        if let Some(last_slash) = last_slash {
+            if last_slash + 1 == end {
+                return Err(ParseError::InvalidPackage);
+            }
+        }
         self.label.package_start = start;
         self.label.package_end = end;
         Ok(last_slash)
@@ -469,5 +474,10 @@ mod tests {
     #[test]
     fn test_missing_package() {
         check_err("@a//", ParseError::EmptyPackage);
+    }
+
+    #[test]
+    fn test_invalid_package_ends_with_slash() {
+        check_err("@a//abc/", ParseError::InvalidPackage);
     }
 }

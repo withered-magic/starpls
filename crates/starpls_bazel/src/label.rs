@@ -167,11 +167,13 @@ impl<'a, 'b> Parser<'a, 'b> {
             assert_eq!(self.bump(), Some(':'));
         } else if self.pos == 0 {
         } else {
-            self.parse_package()?;
+            let last_slash = self.parse_package()?;
             return if self.label.package_start == self.label.package_end {
                 Err(ParseError::EmptyPackage)
             } else {
-                self.label.target_start = self.label.package_start;
+                self.label.target_start = last_slash
+                    .map(|pos| pos + 1)
+                    .unwrap_or(self.label.package_start);
                 self.label.target_end = self.label.package_end;
                 Ok(())
             };
@@ -219,21 +221,27 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(())
     }
 
-    fn parse_package(&mut self) -> Result<(), ParseError> {
-        let (start, end, has_target_only_chars) = match self.parse_package_or_target(true) {
-            Ok(res) => res,
-            Err(_) => return Err(ParseError::InvalidPackage),
-        };
+    fn parse_package(&mut self) -> Result<Option<u32>, ParseError> {
+        let (start, end, last_slash, has_target_only_chars) =
+            match self.parse_package_or_target(true) {
+                Ok(res) => res,
+                Err(_) => return Err(ParseError::InvalidPackage),
+            };
         if has_target_only_chars {
             return Err(ParseError::InvalidPackage);
         }
+        if let Some(last_slash) = last_slash {
+            if last_slash + 1 == end {
+                return Err(ParseError::InvalidPackage);
+            }
+        }
         self.label.package_start = start;
         self.label.package_end = end;
-        Ok(())
+        Ok(last_slash)
     }
 
     fn parse_target(&mut self) -> Result<(), ParseError> {
-        let (start, end, _) = match self.parse_package_or_target(false) {
+        let (start, end, _, _) = match self.parse_package_or_target(false) {
             Ok(res) => res,
             Err(_) => return Err(ParseError::InvalidTarget),
         };
@@ -245,12 +253,20 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(())
     }
 
-    fn parse_package_or_target(&mut self, allow_colon: bool) -> Result<(u32, u32, bool), ()> {
+    fn parse_package_or_target(
+        &mut self,
+        allow_colon: bool,
+    ) -> Result<(u32, u32, Option<u32>, bool), ()> {
         let start = self.pos;
         let mut has_target_only_chars = false;
+        let mut last_slash = None;
         while let Some(c) = self.first() {
             match c {
-                'A'..='Z' | 'a'..='z' | '0'..='9' | '/' | '-' | '.' | '@' | '_' => {
+                '/' => {
+                    last_slash = Some(self.pos);
+                    self.bump();
+                }
+                'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '.' | '@' | '_' => {
                     self.bump();
                 }
                 '!' | '%' | '^' | '"' | '#' | '$' | '&' | '\'' | '(' | ')' | '*' | '+' | ','
@@ -262,7 +278,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                 _ => return Err(()),
             }
         }
-        Ok((start, self.pos, has_target_only_chars))
+        Ok((start, self.pos, last_slash, has_target_only_chars))
     }
 
     fn bump(&mut self) -> Option<char> {
@@ -329,7 +345,15 @@ mod tests {
 
     #[test]
     fn test_implicit_target() {
-        check("//a", Current, false, "", "a", "a")
+        check("//a", Current, false, "", "a", "a");
+        check(
+            "//crates/starpls_bazel",
+            Current,
+            false,
+            "",
+            "crates/starpls_bazel",
+            "starpls_bazel",
+        )
     }
 
     #[test]
@@ -450,5 +474,10 @@ mod tests {
     #[test]
     fn test_missing_package() {
         check_err("@a//", ParseError::EmptyPackage);
+    }
+
+    #[test]
+    fn test_invalid_package_ends_with_slash() {
+        check_err("@a//abc/", ParseError::InvalidPackage);
     }
 }

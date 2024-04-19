@@ -90,7 +90,7 @@ then you'll get autocomplete suggestions for the attributes on `ctx`, like `ctx.
     - [x] Function definitions
     - [x] Struct fields
     - [x] Provider fields
-    - [x] Labels in `load` statements
+    - [x] Labels and targets
     - [ ] Rule attributes
 - Type inference
     - [x] Basic type inference

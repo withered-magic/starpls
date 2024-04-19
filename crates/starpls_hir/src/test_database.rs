@@ -1,7 +1,7 @@
 use crate::{def::ExprId, BuiltinDefs, Db, Dialect, GlobalCtxt, LoadItemId, ParamId, Ty};
 use dashmap::{mapref::entry::Entry, DashMap};
 use starpls_bazel::{APIContext, Builtins};
-use starpls_common::{File, FileId, LoadItemCandidate};
+use starpls_common::{File, FileId, LoadItemCandidate, ResolvedPath};
 use starpls_test_util::builtins_with_catch_all_functions;
 use std::sync::Arc;
 
@@ -82,6 +82,15 @@ impl starpls_common::Db for TestDatabase {
         _path: &str,
         _from: FileId,
     ) -> anyhow::Result<Option<Vec<LoadItemCandidate>>> {
+        Ok(None)
+    }
+
+    fn resolve_path(
+        &self,
+        _path: &str,
+        _dialect: Dialect,
+        _from: FileId,
+    ) -> anyhow::Result<Option<ResolvedPath>> {
         Ok(None)
     }
 }

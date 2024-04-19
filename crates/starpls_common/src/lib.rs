@@ -2,7 +2,7 @@ use starpls_bazel::APIContext;
 use starpls_syntax::{
     line_index as syntax_line_index, parse_module, LineIndex, Module, ParseTree, SyntaxNode,
 };
-use std::fmt::Debug;
+use std::{fmt::Debug, path::PathBuf};
 
 pub use crate::diagnostics::{Diagnostic, Diagnostics, FileRange, Severity};
 
@@ -41,6 +41,17 @@ pub struct LoadItemCandidate {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileId(pub u32);
 
+pub enum ResolvedPath {
+    Source {
+        path: PathBuf,
+    },
+    BuildTarget {
+        build_file: FileId,
+        target: String,
+        contents: Option<String>,
+    },
+}
+
 /// The base Salsa database. Supports file-related operations, like getting/setting file contents.
 pub trait Db: salsa::DbWithJar<Jar> {
     /// Creates a `File` in the database. This will overwrite the currently active
@@ -69,6 +80,13 @@ pub trait Db: salsa::DbWithJar<Jar> {
         path: &str,
         from: FileId,
     ) -> anyhow::Result<Option<Vec<LoadItemCandidate>>>;
+
+    fn resolve_path(
+        &self,
+        path: &str,
+        dialect: Dialect,
+        from: FileId,
+    ) -> anyhow::Result<Option<ResolvedPath>>;
 }
 
 #[salsa::input]

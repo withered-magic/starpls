@@ -62,7 +62,15 @@ impl Server {
 
         eprintln!("server: fetching Bazel configuration");
 
-        let bazel_client = Arc::new(BazelCLI::default());
+        let bazel_path = config
+            .args
+            .bazel_path
+            .clone()
+            .unwrap_or("bazel".to_string());
+
+        eprintln!("server: using Bazel executable at {:?}", bazel_path);
+
+        let bazel_client = Arc::new(BazelCLI::new(&bazel_path));
         let info = bazel_client.info().unwrap_or_default();
 
         eprintln!("server: workspace root: {:?}", info.workspace);

@@ -1,7 +1,10 @@
+use crate::ServerArgs;
 use lsp_types::ClientCapabilities;
 
+#[derive(Default)]
 pub(crate) struct ServerConfig {
-    caps: ClientCapabilities,
+    pub(crate) args: ServerArgs,
+    pub(crate) caps: ClientCapabilities,
 }
 
 macro_rules! try_or_default {
@@ -11,10 +14,6 @@ macro_rules! try_or_default {
 }
 
 impl ServerConfig {
-    pub(crate) fn new(caps: ClientCapabilities) -> Self {
-        Self { caps }
-    }
-
     pub(crate) fn has_text_document_definition_link_support(&self) -> bool {
         try_or_default!(self.caps.text_document.as_ref()?.definition?.link_support)
     }

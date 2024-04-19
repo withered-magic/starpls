@@ -60,6 +60,8 @@ impl Server {
             }
         };
 
+        eprintln!("server: fetching Bazel configuration");
+
         let bazel_client = Arc::new(BazelCLI::default());
         let info = bazel_client.info().unwrap_or_default();
 

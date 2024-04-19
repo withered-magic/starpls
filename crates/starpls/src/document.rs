@@ -306,6 +306,46 @@ impl DefaultFileLoader {
             canonical_repo: canonical_repo_res,
         }))
     }
+
+    fn maybe_intern_file(
+        &self,
+        path: PathBuf,
+        from: FileId,
+        fetch_repo_on_err: Option<String>,
+    ) -> anyhow::Result<(FileId, Option<String>)> {
+        // If we've already interned this file, then simply return the file id.
+        let (file_id, contents) = match self.interner.lookup_by_path_buf(&path) {
+            Some(file_id) => (file_id, None),
+            None => {
+                let contents = match fs::read_to_string(&path) {
+                    Result::Ok(contents) => contents,
+                    Err(err) => {
+                        if let Some(canonical_repo) = fetch_repo_on_err {
+                            if !self
+                                .external_output_base
+                                .join(&canonical_repo)
+                                .try_exists()
+                                .ok()
+                                .unwrap_or_default()
+                            {
+                                let _ = self.fetch_repo_sender.send(
+                                    Task::FetchExternalRepoRequest(FetchExternalRepoRequest {
+                                        file_id: from,
+                                        repo: canonical_repo,
+                                    }),
+                                );
+                            }
+                        }
+                        return Err(err.into());
+                    }
+                };
+
+                (self.interner.intern_path(path), Some(contents))
+            }
+        };
+
+        Ok((file_id, contents))
+    }
 }
 
 impl FileLoader for DefaultFileLoader {
@@ -325,27 +365,25 @@ impl FileLoader for DefaultFileLoader {
             Err(err) => return Err(anyhow!("error parsing label: {}", err.err)),
         };
 
-        let resolved_path = match self
-            .resolve_label(&label, from)
-            .map(|res| res.map(|res| res.resolved_path))?
-        {
-            Some(resolved_path) => resolved_path,
+        let resolved_label = match self.resolve_label(&label, from)? {
+            Some(resolved_label) => resolved_label,
             None => return Ok(None),
         };
 
-        let res = if fs::metadata(&resolved_path)
+        let res = if fs::metadata(&resolved_label.resolved_path)
             .ok()
             .map(|metadata| metadata.is_file())
             .unwrap_or_default()
         {
             ResolvedPath::Source {
-                path: resolved_path,
+                path: resolved_label.resolved_path,
             }
         } else {
             if label.target().is_empty() {
                 return Ok(None);
             }
-            let parent = match resolved_path.parent() {
+
+            let parent = match resolved_label.resolved_path.parent() {
                 Some(parent) => parent,
                 None => return Ok(None),
             };
@@ -363,13 +401,7 @@ impl FileLoader for DefaultFileLoader {
 
             // If we've already interned this file, then simply return the file id.
             let (build_file, contents) =
-                if let Some(file_id) = self.interner.lookup_by_path_buf(&path) {
-                    (file_id, None)
-                } else {
-                    let contents = fs::read_to_string(&path)?;
-                    let file_id = self.interner.intern_path(path);
-                    (file_id, Some(contents))
-                };
+                self.maybe_intern_file(path, from, resolved_label.canonical_repo)?;
 
             ResolvedPath::BuildTarget {
                 build_file,
@@ -427,38 +459,8 @@ impl FileLoader for DefaultFileLoader {
             }
         };
 
-        Ok(Some({
-            // If we've already interned this file, then simply return the file id.
-            if let Some(file_id) = self.interner.lookup_by_path_buf(&path) {
-                (file_id, dialect, api_context, None)
-            } else {
-                let contents = match fs::read_to_string(&path) {
-                    Result::Ok(contents) => contents,
-                    Err(err) => {
-                        if let Some(canonical_repo) = canonical_repo {
-                            if !self
-                                .external_output_base
-                                .join(&canonical_repo)
-                                .try_exists()
-                                .ok()
-                                .unwrap_or_default()
-                            {
-                                let _ = self.fetch_repo_sender.send(
-                                    Task::FetchExternalRepoRequest(FetchExternalRepoRequest {
-                                        file_id: from,
-                                        repo: canonical_repo,
-                                    }),
-                                );
-                            }
-                        }
-
-                        return Err(err.into());
-                    }
-                };
-                let file_id = self.interner.intern_path(path);
-                (file_id, dialect, api_context, Some(contents))
-            }
-        }))
+        let (file_id, contents) = self.maybe_intern_file(path, from, canonical_repo)?;
+        Ok(Some((file_id, dialect, api_context, contents)))
     }
 
     fn list_load_candidates(

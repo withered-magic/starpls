@@ -20,6 +20,8 @@ use std::{mem, panic, sync::Arc, time::Duration};
 
 const DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
 
+const BAZEL_INIT_ERR_MESSAGE: &str = "Failed to fetch Bazel configuration! Please check the language server logs for more details. Certain features may not work correctly until the underlying issue is fixed.";
+
 pub(crate) struct Server {
     pub(crate) config: Arc<ServerConfig>,
     pub(crate) connection: Connection,
@@ -50,6 +52,7 @@ impl Server {
         let (task_pool_sender, task_pool_receiver) = crossbeam_channel::unbounded();
         let task_pool = TaskPool::with_num_threads(task_pool_sender.clone(), 4)?;
         let task_pool_handle = TaskPoolHandle::new(task_pool_receiver, task_pool);
+        let mut has_bazel_init_err = false;
 
         // Load Bazel builtins from the specified file.
         let builtins = match load_bazel_builtins() {
@@ -71,7 +74,14 @@ impl Server {
         eprintln!("server: using Bazel executable at {:?}", bazel_path);
 
         let bazel_client = Arc::new(BazelCLI::new(&bazel_path));
-        let info = bazel_client.info().unwrap_or_default();
+        let info = match bazel_client.info() {
+            Ok(info) => info,
+            Err(err) => {
+                eprintln!("server: failed to run fetch Bazel configuration: {}", err);
+                has_bazel_init_err = true;
+                Default::default()
+            }
+        };
 
         eprintln!("server: workspace root: {:?}", info.workspace);
 
@@ -137,6 +147,7 @@ impl Server {
             }
             Err(err) => {
                 eprintln!("server: failed to run `bazel info build-language`: {}", err);
+                has_bazel_init_err = true;
                 Default::default()
             }
         };
@@ -171,6 +182,10 @@ impl Server {
             fetched_repos: Default::default(),
             is_fetching_repos: false,
         };
+
+        if has_bazel_init_err {
+            server.send_error_message(BAZEL_INIT_ERR_MESSAGE);
+        }
 
         Ok(server)
     }
@@ -242,6 +257,15 @@ impl Server {
 
     pub(crate) fn send(&self, message: lsp_server::Message) {
         self.connection.sender.send(message).unwrap();
+    }
+
+    pub(crate) fn send_error_message(&self, message: &str) {
+        self.send_notification::<lsp_types::notification::ShowMessage>(
+            lsp_types::ShowMessageParams {
+                message: message.to_string(),
+                typ: lsp_types::MessageType::ERROR,
+            },
+        )
     }
 
     pub(crate) fn fetch_bazel_external_repos(&mut self) {

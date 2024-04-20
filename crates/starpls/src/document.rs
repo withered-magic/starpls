@@ -235,11 +235,8 @@ impl DefaultFileLoader {
         let (root, package) = match &repo_kind {
             RepoKind::Apparent if self.bzlmod_enabled => {
                 let from_path = self.interner.lookup_by_file_id(from);
-                let from_repo = if from_path.starts_with(&self.workspace) {
-                    ""
-                } else {
-                    let from_path = from_path.strip_prefix(&self.external_output_base)?;
-                    match from_path
+                let from_repo = match from_path.strip_prefix(&self.external_output_base) {
+                    Result::Ok(stripped) => match stripped
                         .components()
                         .next()
                         .as_ref()
@@ -247,6 +244,13 @@ impl DefaultFileLoader {
                     {
                         Some(from_repo) => from_repo,
                         None => return Ok(None),
+                    },
+                    Err(_) => {
+                        if from_path.starts_with(&self.workspace) {
+                            ""
+                        } else {
+                            return Ok(None);
+                        }
                     }
                 };
 

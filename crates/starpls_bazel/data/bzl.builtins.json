@@ -1,6 +1,24 @@
 {
     "builtins": [
         {
+            "name": "licenses",
+            "doc": "`licenses()` specifies the default license type (or types) of the build rules in a `BUILD` file. The `licenses()` directive should appear close to the beginning of the `BUILD` file, before any build rules, as it sets the `BUILD`-file scope default for build rule license types.",
+            "callable": {
+                "params": [
+                    {
+                        "name": "license_types",
+                        "type": "List of strings",
+                        "doc": "The argument, `license_types`, is a list of license-type strings.\n\nValid license types include:\n\n- `restricted` - Requires mandatory source distribution.\n\n- `reciprocal` - Allows usage of software freely in unmodified form. Any modifications must be made freely available.\n\n- `notice` - Original or modified third-party software may be shipped without danger nor encumbering other sources. All of the licenses in this category do, however, have an \"original Copyright notice\" or \"advertising clause\", wherein any external distributions must include the notice or clause specified in the license.\n\n- `permissive` - Code that is under a license but does not require a notice.\n\n- `unencumbered` - Public domain, free for any use.\n\n```python\nlicenses([\"notice\"]) # MIT license exports_files([\"jquery-2.1.1.js\"])\n```\n",
+                        "default_value": "",
+                        "is_mandatory": true,
+                        "is_star_arg": false,
+                        "is_star_star_arg": false
+                    }
+                ],
+                "return_type": "None"
+            }
+        },
+        {
             "name": "module_extension",
             "doc": "Creates a new module extension. Store it in a global value, so that it can be exported and used in a MODULE.bazel file with `use_extension`.",
             "callable": {

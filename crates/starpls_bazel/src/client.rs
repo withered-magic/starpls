@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use parking_lot::RwLock;
 use serde_json::Deserializer;
 use std::{
@@ -43,6 +43,13 @@ impl BazelCLI {
 
     fn run_command(&self, args: &[&str]) -> anyhow::Result<Vec<u8>> {
         let output = Command::new(&self.executable).args(args).output()?;
+        if !output.status.success() {
+            bail!(
+                "failed to run Bazel command with exit status {}, stderr={:?}",
+                output.status,
+                str::from_utf8(&output.stderr)?,
+            );
+        }
         Ok(output.stdout)
     }
 

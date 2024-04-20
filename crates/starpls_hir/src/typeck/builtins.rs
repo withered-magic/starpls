@@ -671,12 +671,19 @@ fn builtin_function(
         });
     }
 
+    // Apply overrides for function return types known to be incorrect. For now, this
+    // consists only of the `Label()` constructor.
+    let ret_type_ref = match name {
+        "Label" => "Label",
+        _ => callable.return_type.as_str(),
+    };
+
     BuiltinFunction::new(
         db,
         Name::from_str(name),
         parent_name.map(|parent_name| parent_name.to_string()),
         params,
-        normalize_type_ref(&callable.return_type),
+        normalize_type_ref(ret_type_ref),
         if doc.is_empty() {
             DEFAULT_DOC.to_string()
         } else {

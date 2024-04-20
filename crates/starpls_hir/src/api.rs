@@ -128,6 +128,19 @@ impl<'a> Semantics<'a> {
         self.db
             .resolve_call_expr_active_param(file, *expr, active_arg)
     }
+
+    pub fn def_for_load_item(&self, load_item: &LoadItem) -> Option<InFile<ScopeDef>> {
+        let load_stmt = load_item.load_stmt(self.db)?;
+        let loaded_file = self.resolve_load_stmt(load_item.file, &load_stmt)?;
+        self.scope_for_module(loaded_file)
+            .resolve_name(&load_item.name(self.db))?
+            .into_iter()
+            .next()
+            .map(|def| InFile {
+                file: loaded_file,
+                value: def,
+            })
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -201,6 +214,7 @@ impl ScopeDef {
             ScopeDef::Variable(Variable {
                 id: Some((file, expr)),
             }) => db.infer_expr(*file, *expr),
+            ScopeDef::Callable(callable) => return callable.ty(db),
             ScopeDef::LoadItem(LoadItem { file, id }) => db.infer_load_item(*file, *id),
             _ => Ty::unknown(),
         }

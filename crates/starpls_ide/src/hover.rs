@@ -3,7 +3,7 @@ use crate::{
     Database, FilePosition,
 };
 use starpls_common::{parse, Db as _};
-use starpls_hir::{DisplayWithDb, Semantics};
+use starpls_hir::{DisplayWithDb, Semantics, Type};
 use starpls_syntax::{
     ast::{self, AstNode},
     SyntaxKind::*,
@@ -62,26 +62,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
     let parent = token.parent()?;
     if let Some(expr) = ast::NameRef::cast(parent.clone()) {
         let ty = sema.type_of_expr(file, &expr.clone().into())?;
-        let mut text = String::from("```python\n");
-
-        // Handle special `def` formatting for function types.
-        if ty.is_function() {
-            text.push_str("(function) ");
-        } else {
-            text.push_str("(variable) ");
-            text.push_str(expr.name()?.text());
-            text.push_str(": ");
-        }
-
-        write!(&mut text, "{}", ty.display(db)).unwrap();
-        text.push_str("\n```\n");
-
-        if let Some(doc) = ty.doc(db) {
-            text.push_str(&unindent_doc(&doc));
-            text.push('\n');
-        }
-
-        return Some(text.into());
+        return Some(format_for_name(db, expr.name()?.text(), &ty).into());
     } else if let Some(name) = ast::Name::cast(parent.clone()) {
         let parent = name.syntax().parent()?;
         let name_token = name.name()?;
@@ -166,7 +147,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             }
             return Some(text.into());
         }
-    } else if let Some(type_) = ast::NamedType::cast(parent) {
+    } else if let Some(type_) = ast::NamedType::cast(parent.clone()) {
         let ty = sema.resolve_type(&type_)?;
         let mut text = format!("```python\n(type) {}\n```\n", ty.display(db));
         if let Some(doc) = ty.doc(db) {
@@ -174,7 +155,34 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             text.push('\n');
         }
         return Some(text.into());
+    } else if let Some(load_item) = ast::LoadItem::cast(parent) {
+        let load_item = sema.resolve_load_item(file, &load_item)?;
+        let def = sema.def_for_load_item(&load_item)?;
+        return Some(format_for_name(db, load_item.name(db).as_str(), &def.value.ty(db)).into());
     }
 
     None
+}
+
+fn format_for_name(db: &Database, name: &str, ty: &Type) -> String {
+    let mut text = String::from("```python\n");
+
+    // Handle special `def` formatting for function types.
+    if ty.is_function() {
+        text.push_str("(function) ");
+    } else {
+        text.push_str("(variable) ");
+        text.push_str(name);
+        text.push_str(": ");
+    }
+
+    write!(&mut text, "{}", ty.display(db)).unwrap();
+    text.push_str("\n```\n");
+
+    if let Some(doc) = ty.doc(db) {
+        text.push_str(&unindent_doc(&doc));
+        text.push('\n');
+    }
+
+    text
 }

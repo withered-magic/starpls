@@ -1,6 +1,6 @@
 use crate::{util::pick_best_token, Database, FilePosition, LocationLink, ResolvedPath};
-use starpls_common::{parse as parse_query, Db, File, InFile};
-use starpls_hir::{LoadItem, Name, ScopeDef, Semantics};
+use starpls_common::{parse as parse_query, Db};
+use starpls_hir::{Name, ScopeDef, Semantics};
 use starpls_syntax::{
     ast::{self, AstNode},
     T,
@@ -31,7 +31,7 @@ pub(crate) fn goto_definition(
                 .into_iter()
                 .flat_map(|def| match def {
                     ScopeDef::LoadItem(load_item) => {
-                        let def = scope_def_for_load_item(db, &sema, file, &load_item)?;
+                        let def = sema.def_for_load_item(&load_item)?;
                         let range = def.value.syntax_node_ptr(db, def.file)?.text_range();
                         Some(LocationLink::Local {
                             origin_selection_range: None,
@@ -123,7 +123,7 @@ pub(crate) fn goto_definition(
 
     if let Some(load_item) = ast::LoadItem::cast(parent.clone()) {
         let load_item = sema.resolve_load_item(file, &load_item)?;
-        let def = scope_def_for_load_item(db, &sema, file, &load_item)?;
+        let def = sema.def_for_load_item(&load_item)?;
         let range = def.value.syntax_node_ptr(db, def.file)?.text_range();
         return Some(vec![LocationLink::Local {
             origin_selection_range: None,
@@ -189,24 +189,6 @@ pub(crate) fn goto_definition(
     }
 
     None
-}
-
-fn scope_def_for_load_item(
-    db: &Database,
-    sema: &Semantics,
-    file: File,
-    load_item: &LoadItem,
-) -> Option<InFile<ScopeDef>> {
-    let load_stmt = load_item.load_stmt(db)?;
-    let loaded_file = sema.resolve_load_stmt(file, &load_stmt)?;
-    sema.scope_for_module(loaded_file)
-        .resolve_name(&load_item.name(db))?
-        .into_iter()
-        .next()
-        .map(|def| InFile {
-            file: loaded_file,
-            value: def,
-        })
 }
 
 #[cfg(test)]

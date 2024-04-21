@@ -10,6 +10,7 @@ use std::{fmt::Debug, panic, path::PathBuf, sync::Arc};
 
 pub use crate::{
     completions::{CompletionItem, CompletionItemKind, CompletionMode},
+    document_symbols::{DocumentSymbol, SymbolKind, SymbolTag},
     hover::{Hover, Markup},
     signature_help::{ParameterInfo, SignatureHelp, SignatureInfo},
 };
@@ -17,6 +18,7 @@ pub use starpls_hir::Cancelled;
 
 mod completions;
 mod diagnostics;
+mod document_symbols;
 mod goto_definition;
 mod hover;
 mod line_index;
@@ -329,6 +331,10 @@ impl AnalysisSnapshot {
 
     pub fn diagnostics(&self, file_id: FileId) -> Cancellable<Vec<Diagnostic>> {
         self.query(|db| diagnostics::diagnostics(db, file_id))
+    }
+
+    pub fn document_symbols(&self, file_id: FileId) -> Cancellable<Option<Vec<DocumentSymbol>>> {
+        self.query(|db| document_symbols::document_symbols(db, file_id))
     }
 
     pub fn goto_definition(&self, pos: FilePosition) -> Cancellable<Option<Vec<LocationLink>>> {

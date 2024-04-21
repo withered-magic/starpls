@@ -87,6 +87,7 @@ pub const BUILTINS_VALUES_DENY_LIST: &[&str] = &[
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum APIContext {
     Bzl,
+    Build,
     Module,
     Repo,
     Workspace,

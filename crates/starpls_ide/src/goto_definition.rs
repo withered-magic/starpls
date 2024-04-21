@@ -161,19 +161,25 @@ pub(crate) fn goto_definition(
                             .into_iter()
                             .flat_map(|args| args.arguments())
                             .any(|arg| match arg {
-                                ast::Argument::Keyword(arg) => arg
-                                    .expr()
-                                    .and_then(|expr| match expr {
-                                        ast::Expression::Literal(expr) => Some(expr),
-                                        _ => None,
-                                    })
-                                    .and_then(|expr| match expr.kind() {
-                                        ast::LiteralKind::String(s) => {
-                                            s.value().map(|value| &*value == target)
-                                        }
-                                        _ => None,
-                                    })
-                                    .unwrap_or_default(),
+                                ast::Argument::Keyword(arg) => {
+                                    arg.name()
+                                        .and_then(|name| name.name())
+                                        .map(|name| name.text() == "name")
+                                        .unwrap_or_default()
+                                        && arg
+                                            .expr()
+                                            .and_then(|expr| match expr {
+                                                ast::Expression::Literal(expr) => Some(expr),
+                                                _ => None,
+                                            })
+                                            .and_then(|expr| match expr.kind() {
+                                                ast::LiteralKind::String(s) => {
+                                                    s.value().map(|value| &*value == target)
+                                                }
+                                                _ => None,
+                                            })
+                                            .unwrap_or_default()
+                                }
                                 _ => false,
                             })
                     })?;

@@ -8,7 +8,6 @@ use starpls_syntax::{
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[allow(unused)]
 pub enum SymbolKind {
     File,
     Module,
@@ -39,7 +38,6 @@ pub enum SymbolKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[allow(unused)]
 pub enum SymbolTag {
     Deprecated,
 }
@@ -110,7 +108,7 @@ fn add_target_symbols(db: &Database, file: File, acc: &mut Vec<DocumentSymbol>) 
                 _ => None,
             })?;
         Some(DocumentSymbol {
-            name: name.to_string(),
+            name: format!(":{}", name),
             detail: None,
             kind: SymbolKind::Variable,
             tags: None,

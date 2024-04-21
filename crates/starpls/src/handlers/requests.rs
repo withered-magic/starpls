@@ -189,6 +189,25 @@ pub(crate) fn signature_help(
         }))
 }
 
+pub(crate) fn document_symbols(
+    snapshot: &ServerSnapshot,
+    params: lsp_types::DocumentSymbolParams,
+) -> anyhow::Result<Option<lsp_types::DocumentSymbolResponse>> {
+    let path = path_buf_from_url(&params.text_document.uri)?;
+    let file_id = try_opt!(snapshot.document_manager.read().lookup_by_path_buf(&path));
+    let line_index = try_opt!(snapshot.analysis_snapshot.line_index(file_id)?);
+    Ok(snapshot
+        .analysis_snapshot
+        .document_symbols(file_id)?
+        .map(|symbols| {
+            symbols
+                .into_iter()
+                .filter_map(|symbol| convert::lsp_document_symbol_from_native(symbol, line_index))
+                .collect::<Vec<_>>()
+                .into()
+        }))
+}
+
 fn to_markup_doc(doc: String) -> lsp_types::Documentation {
     lsp_types::Documentation::MarkupContent(lsp_types::MarkupContent {
         kind: lsp_types::MarkupKind::Markdown,

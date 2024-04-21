@@ -10,6 +10,7 @@ use std::{fmt::Debug, panic, path::PathBuf, sync::Arc};
 
 pub use crate::{
     completions::{CompletionItem, CompletionItemKind, CompletionMode},
+    document_symbols::{DocumentSymbol, SymbolKind, SymbolTag},
     hover::{Hover, Markup},
     signature_help::{ParameterInfo, SignatureHelp, SignatureInfo},
 };
@@ -17,6 +18,7 @@ pub use starpls_hir::Cancelled;
 
 mod completions;
 mod diagnostics;
+mod document_symbols;
 mod goto_definition;
 mod hover;
 mod line_index;
@@ -298,17 +300,16 @@ pub struct AnalysisSnapshot {
 }
 
 impl AnalysisSnapshot {
-    pub fn from_single_file(contents: &str) -> (Self, FileId) {
+    pub fn from_single_file(
+        contents: &str,
+        dialect: Dialect,
+        api_context: Option<APIContext>,
+    ) -> (Self, FileId) {
         let mut file_set = FxHashMap::default();
         let file_id = FileId(0);
         file_set.insert("main.star".to_string(), (file_id, contents.to_string()));
         let mut change = Change::default();
-        change.create_file(
-            file_id,
-            Dialect::Bazel,
-            Some(APIContext::Bzl),
-            contents.to_string(),
-        );
+        change.create_file(file_id, dialect, api_context, contents.to_string());
         let mut analysis = Analysis::new(Arc::new(SimpleFileLoader::from_file_set(file_set)));
         analysis.db.set_builtin_defs(
             Dialect::Bazel,
@@ -329,6 +330,10 @@ impl AnalysisSnapshot {
 
     pub fn diagnostics(&self, file_id: FileId) -> Cancellable<Vec<Diagnostic>> {
         self.query(|db| diagnostics::diagnostics(db, file_id))
+    }
+
+    pub fn document_symbols(&self, file_id: FileId) -> Cancellable<Option<Vec<DocumentSymbol>>> {
+        self.query(|db| document_symbols::document_symbols(db, file_id))
     }
 
     pub fn goto_definition(&self, pos: FilePosition) -> Cancellable<Option<Vec<LocationLink>>> {

@@ -200,8 +200,9 @@ impl Server {
         RequestDispatcher::new(req, self)
             .on::<extensions::ShowSyntaxTree>(requests::show_syntax_tree)
             .on::<extensions::ShowHir>(requests::show_hir)
-            .on::<lsp_types::request::GotoDefinition>(requests::goto_definition)
             .on::<lsp_types::request::Completion>(requests::completion)
+            .on::<lsp_types::request::DocumentSymbolRequest>(requests::document_symbols)
+            .on::<lsp_types::request::GotoDefinition>(requests::goto_definition)
             .on::<lsp_types::request::HoverRequest>(requests::hover)
             .on::<lsp_types::request::SignatureHelpRequest>(requests::signature_help)
             .finish();

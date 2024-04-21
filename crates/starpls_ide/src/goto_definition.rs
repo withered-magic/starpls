@@ -161,19 +161,25 @@ pub(crate) fn goto_definition(
                             .into_iter()
                             .flat_map(|args| args.arguments())
                             .any(|arg| match arg {
-                                ast::Argument::Keyword(arg) => arg
-                                    .expr()
-                                    .and_then(|expr| match expr {
-                                        ast::Expression::Literal(expr) => Some(expr),
-                                        _ => None,
-                                    })
-                                    .and_then(|expr| match expr.kind() {
-                                        ast::LiteralKind::String(s) => {
-                                            s.value().map(|value| &*value == target)
-                                        }
-                                        _ => None,
-                                    })
-                                    .unwrap_or_default(),
+                                ast::Argument::Keyword(arg) => {
+                                    arg.name()
+                                        .and_then(|name| name.name())
+                                        .map(|name| name.text() == "name")
+                                        .unwrap_or_default()
+                                        && arg
+                                            .expr()
+                                            .and_then(|expr| match expr {
+                                                ast::Expression::Literal(expr) => Some(expr),
+                                                _ => None,
+                                            })
+                                            .and_then(|expr| match expr.kind() {
+                                                ast::LiteralKind::String(s) => {
+                                                    s.value().map(|value| &*value == target)
+                                                }
+                                                _ => None,
+                                            })
+                                            .unwrap_or_default()
+                                }
                                 _ => false,
                             })
                     })?;
@@ -194,11 +200,14 @@ pub(crate) fn goto_definition(
 #[cfg(test)]
 mod tests {
     use crate::{AnalysisSnapshot, FilePosition, LocationLink};
+    use starpls_bazel::APIContext;
+    use starpls_common::Dialect;
     use starpls_test_util::parse_fixture;
 
     fn check_goto_definition(fixture: &str) {
         let (contents, pos, expected) = parse_fixture(fixture);
-        let (snap, file_id) = AnalysisSnapshot::from_single_file(&contents);
+        let (snap, file_id) =
+            AnalysisSnapshot::from_single_file(&contents, Dialect::Bazel, Some(APIContext::Bzl));
         let actual = snap
             .goto_definition(FilePosition { file_id, pos })
             .unwrap()

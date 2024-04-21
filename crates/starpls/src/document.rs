@@ -624,7 +624,7 @@ pub(crate) fn dialect_and_api_context_for_path(
     let path = path.as_ref();
     let basename = path.file_name().and_then(|name| name.to_str())?;
     Some(match basename {
-        "BUILD" | "BUILD.bazel" => (Dialect::Bazel, Some(APIContext::Bzl)),
+        "BUILD" | "BUILD.bazel" => (Dialect::Bazel, Some(APIContext::Build)),
         "REPO.bazel" => (Dialect::Bazel, Some(APIContext::Repo)),
         "MODULE.bazel" => (Dialect::Bazel, Some(APIContext::Module)),
         "WORKSPACE" | "WORKSPACE.bazel" | "WORKSPACE.bzlmod" => {

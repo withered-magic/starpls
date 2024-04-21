@@ -79,6 +79,8 @@ pub(crate) fn document_symbols(db: &Database, file_id: FileId) -> Option<Vec<Doc
     if file.api_context(db) == Some(APIContext::Build) {
         add_target_symbols(db, file, &mut symbols);
     }
+
+    symbols.sort_by(|s1, s2| s1.range.start().cmp(&s2.range.start()));
     Some(symbols)
 }
 
@@ -130,8 +132,7 @@ mod tests {
     fn check(input: &str, expect: Expect) {
         let (snap, file_id) =
             AnalysisSnapshot::from_single_file(input, Dialect::Bazel, Some(APIContext::Build));
-        let mut symbols = snap.document_symbols(file_id).unwrap().unwrap();
-        symbols.sort_by(|a, b| a.name.cmp(&b.name));
+        let symbols = snap.document_symbols(file_id).unwrap().unwrap();
         let mut actual = String::new();
         for symbol in symbols {
             actual.push_str(&format!("{:?}", symbol));
@@ -154,8 +155,8 @@ def foo():
     pass
 "#,
             expect![[r#"
-                DocumentSymbol { name: "foo", detail: None, kind: Function, tags: None, range: 11..31, selection_range: 11..31, children: None }
                 DocumentSymbol { name: "s", detail: None, kind: Variable, tags: None, range: 0..1, selection_range: 0..1, children: None }
+                DocumentSymbol { name: "foo", detail: None, kind: Function, tags: None, range: 11..31, selection_range: 11..31, children: None }
             "#]],
         );
     }
@@ -164,13 +165,13 @@ def foo():
     fn test_use_last_assignment() {
         check(
             r#"
-x = 123
 y = "abc"
+x = 123
 x = "123"
 "#,
             expect![[r#"
+                DocumentSymbol { name: "y", detail: None, kind: Variable, tags: None, range: 1..2, selection_range: 1..2, children: None }
                 DocumentSymbol { name: "x", detail: None, kind: Variable, tags: None, range: 19..20, selection_range: 19..20, children: None }
-                DocumentSymbol { name: "y", detail: None, kind: Variable, tags: None, range: 9..10, selection_range: 9..10, children: None }
             "#]],
         );
     }
@@ -205,7 +206,11 @@ rust_library_test(
     crates = ":starpls_ide",
 )
 "#,
-            expect![],
+            expect![[r#"
+                DocumentSymbol { name: "NUMS", detail: None, kind: Variable, tags: None, range: 1..5, selection_range: 1..5, children: None }
+                DocumentSymbol { name: ":starpls_ide", detail: None, kind: Variable, tags: None, range: 19..94, selection_range: 19..94, children: None }
+                DocumentSymbol { name: ":starpls_ide_test", detail: None, kind: Variable, tags: None, range: 96..176, selection_range: 96..176, children: None }
+            "#]],
         )
     }
 }

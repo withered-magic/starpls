@@ -12,7 +12,7 @@ use starpls_bazel::{
     APIContext, Label, ParseError,
 };
 use starpls_common::{Dialect, FileId, LoadItemCandidate, LoadItemCandidateKind, ResolvedPath};
-use starpls_ide::FileLoader;
+use starpls_ide::{FileLoader, LoadFileResult};
 use std::{
     collections::HashMap,
     fs,
@@ -423,8 +423,7 @@ impl FileLoader for DefaultFileLoader {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> anyhow::Result<Option<(FileId, Dialect, Option<APIContext>, Option<String>, PathBuf)>>
-    {
+    ) -> anyhow::Result<Option<LoadFileResult>> {
         let (path, api_context, canonical_repo) = match dialect {
             Dialect::Standard => {
                 // Find the importing file's directory.
@@ -466,13 +465,14 @@ impl FileLoader for DefaultFileLoader {
         };
 
         let (file_id, contents) = self.maybe_intern_file(path.clone(), from, canonical_repo)?;
-        Ok(Some((
+        let res = LoadFileResult {
             file_id,
+            path: path.clone(),
             dialect,
             api_context,
             contents,
-            path.clone(),
-        )))
+        };
+        Ok(Some(res))
     }
 
     fn list_load_candidates(

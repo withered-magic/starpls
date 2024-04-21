@@ -92,6 +92,9 @@ then you'll get autocomplete suggestions for the attributes on `ctx`, like `ctx.
     - [x] Provider fields
     - [x] Labels and targets
     - [ ] Rule attributes
+- Document symbols
+    - [x] Variables, functions
+    - [x] Bazel targets
 - Type inference
     - [x] Basic type inference
     - [ ] Dataflow analysis

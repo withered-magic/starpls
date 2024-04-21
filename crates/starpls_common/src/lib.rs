@@ -46,6 +46,7 @@ pub enum ResolvedPath {
         path: PathBuf,
     },
     BuildTarget {
+        path: PathBuf,
         build_file: FileId,
         target: String,
         contents: Option<String>,
@@ -62,6 +63,7 @@ pub trait Db: salsa::DbWithJar<Jar> {
         dialect: Dialect,
         api_context: Option<APIContext>,
         contents: String,
+        path: PathBuf,
     ) -> File;
 
     /// Sets the contents the `File` identified by the given `FileId`. Has no affect
@@ -96,6 +98,8 @@ pub struct File {
     pub api_context: Option<APIContext>,
     #[return_ref]
     pub contents: String,
+    #[return_ref]
+    pub path: PathBuf,
 }
 
 #[salsa::tracked]

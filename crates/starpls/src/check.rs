@@ -63,9 +63,9 @@ pub(crate) fn run_check(paths: Vec<String>, output_base: Option<String>) -> anyh
             None => return Err(err()),
         };
 
-        let file_id = interner.intern_path(resolved);
+        let file_id = interner.intern_path(resolved.clone());
         original_paths.insert(file_id, path);
-        change.create_file(file_id, dialect, api_context, contents);
+        change.create_file(file_id, dialect, api_context, contents, resolved.clone());
         file_ids.push(file_id);
     }
 

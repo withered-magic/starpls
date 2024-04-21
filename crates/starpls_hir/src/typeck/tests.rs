@@ -4,7 +4,7 @@ use itertools::Itertools;
 use starpls_bazel::APIContext;
 use starpls_common::{parse, Db as _, Dialect, FileId};
 use starpls_syntax::ast::AstNode;
-use std::{cmp::Ordering, fmt::Write};
+use std::{cmp::Ordering, fmt::Write, path::PathBuf};
 
 fn check_infer(input: &str, expect: Expect) {
     let mut db = TestDatabase::with_catch_all_functions(&["provider", "struct"]);
@@ -14,6 +14,7 @@ fn check_infer(input: &str, expect: Expect) {
         Dialect::Bazel,
         Some(APIContext::Bzl),
         input.to_string(),
+        PathBuf::new(),
     );
     let root = parse(&db, file).syntax(&db);
     let source_map = source_map(&db, file);

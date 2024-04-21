@@ -3,7 +3,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use starpls_bazel::{APIContext, Builtins};
 use starpls_common::{File, FileId, LoadItemCandidate, ResolvedPath};
 use starpls_test_util::builtins_with_catch_all_functions;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, crate::Jar)]
@@ -46,8 +46,9 @@ impl starpls_common::Db for TestDatabase {
         dialect: Dialect,
         api_context: Option<APIContext>,
         contents: String,
+        path: PathBuf,
     ) -> File {
-        let file = File::new(self, file_id, dialect, api_context, contents);
+        let file = File::new(self, file_id, dialect, api_context, contents, path);
         self.files.insert(file_id, file);
         file
     }
@@ -70,6 +71,7 @@ impl starpls_common::Db for TestDatabase {
             Dialect::Standard,
             None,
             String::new(),
+            PathBuf::new(),
         )))
     }
 

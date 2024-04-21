@@ -220,6 +220,7 @@ impl Server {
                         document.dialect,
                         document.api_context.clone(),
                         document.contents.clone(),
+                        document_manager.lookup_by_file_id(file_id),
                     );
                 }
                 DocumentChangeKind::Update => {

@@ -46,8 +46,9 @@ impl Database {
                     dialect,
                     api_context,
                     contents,
+                    path,
                 } => {
-                    self.create_file(file_id, dialect, api_context, contents);
+                    self.create_file(file_id, dialect, api_context, contents, path);
                 }
                 FileChange::Update { contents } => {
                     self.update_file(file_id, contents);
@@ -78,8 +79,9 @@ impl starpls_common::Db for Database {
         dialect: Dialect,
         api_context: Option<APIContext>,
         contents: String,
+        path: PathBuf,
     ) -> File {
-        let file = File::new(self, file_id, dialect, api_context, contents);
+        let file = File::new(self, file_id, dialect, api_context, contents, path);
         self.files.insert(file_id, file);
         file
     }
@@ -96,7 +98,7 @@ impl starpls_common::Db for Database {
         dialect: Dialect,
         from: FileId,
     ) -> anyhow::Result<Option<File>> {
-        let (file_id, dialect, api_context, contents) =
+        let (file_id, dialect, api_context, contents, path) =
             match self.loader.load_file(path, dialect, from)? {
                 Some(res) => res,
                 None => return Ok(None),
@@ -109,6 +111,7 @@ impl starpls_common::Db for Database {
                 dialect,
                 api_context,
                 contents.unwrap_or_default(),
+                path,
             )),
         }))
     }
@@ -141,6 +144,7 @@ impl starpls_common::Db for Database {
         };
 
         if let ResolvedPath::BuildTarget {
+            ref path,
             build_file,
             ref mut contents,
             ..
@@ -154,6 +158,7 @@ impl starpls_common::Db for Database {
                         Dialect::Bazel,
                         Some(APIContext::Bzl),
                         contents.take().unwrap_or_default(),
+                        path.clone(),
                     ));
                 }
                 _ => {}
@@ -223,6 +228,7 @@ enum FileChange {
         dialect: Dialect,
         api_context: Option<APIContext>,
         contents: String,
+        path: PathBuf,
     },
     Update {
         contents: String,
@@ -243,6 +249,7 @@ impl Change {
         dialect: Dialect,
         api_context: Option<APIContext>,
         contents: String,
+        path: PathBuf,
     ) {
         self.changed_files.push((
             file_id,
@@ -250,6 +257,7 @@ impl Change {
                 dialect,
                 api_context,
                 contents,
+                path,
             },
         ))
     }
@@ -308,6 +316,7 @@ impl AnalysisSnapshot {
             Dialect::Bazel,
             Some(APIContext::Bzl),
             contents.to_string(),
+            "main.star".into(),
         );
         let mut analysis = Analysis::new(Arc::new(SimpleFileLoader::from_file_set(file_set)));
         analysis.db.set_builtin_defs(
@@ -404,7 +413,7 @@ pub trait FileLoader: Send + Sync + 'static {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> anyhow::Result<Option<(FileId, Dialect, Option<APIContext>, Option<String>)>>;
+    ) -> anyhow::Result<Option<(FileId, Dialect, Option<APIContext>, Option<String>, PathBuf)>>;
 
     /// Returns a list of Starlark modules that can be loaded from the given `path`.
     fn list_load_candidates(
@@ -433,11 +442,11 @@ impl FileLoader for SimpleFileLoader {
         path: &str,
         dialect: Dialect,
         _from: FileId,
-    ) -> anyhow::Result<Option<(FileId, Dialect, Option<APIContext>, Option<String>)>> {
-        Ok(self
-            .file_set
-            .get(path)
-            .map(|(file_id, contents)| (*file_id, dialect, None, Some(contents.clone()))))
+    ) -> anyhow::Result<Option<(FileId, Dialect, Option<APIContext>, Option<String>, PathBuf)>>
+    {
+        Ok(self.file_set.get(path).map(|(file_id, contents)| {
+            (*file_id, dialect, None, Some(contents.clone()), path.into())
+        }))
     }
 
     fn list_load_candidates(

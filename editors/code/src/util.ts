@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-export type StarlarkDocument = vscode.TextDocument & { languageId: 'starlark '};
+export type StarlarkDocument = vscode.TextDocument & { languageId: 'starlark ' };
 export type StarlarkTextEditor = vscode.TextEditor & { document: StarlarkDocument };
 
 export function isStarlarkDocument(document: vscode.TextDocument): document is StarlarkDocument {
@@ -10,4 +10,3 @@ export function isStarlarkDocument(document: vscode.TextDocument): document is S
 export function isStarlarkTextEditor(textEditor: vscode.TextEditor): textEditor is StarlarkTextEditor {
   return isStarlarkDocument(textEditor.document);
 }
-

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{def::resolver::Resolver, test_database::TestDatabase};
 use starpls_bazel::APIContext;
 use starpls_common::{Dialect, File, FileId};
@@ -14,6 +16,7 @@ fn check_scope(fixture: &str, expected: &[&str]) {
         Dialect::Bazel,
         Some(APIContext::Bzl),
         text,
+        PathBuf::new(),
     );
     let resolver = Resolver::new_for_offset(&test_db, file, offset);
     let names = resolver.module_names();

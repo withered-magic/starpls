@@ -405,12 +405,13 @@ impl FileLoader for DefaultFileLoader {
 
             // If we've already interned this file, then simply return the file id.
             let (build_file, contents) =
-                self.maybe_intern_file(path, from, resolved_label.canonical_repo)?;
+                self.maybe_intern_file(path.clone(), from, resolved_label.canonical_repo)?;
 
             ResolvedPath::BuildTarget {
                 build_file,
                 target: label.target().to_string(),
                 contents,
+                path,
             }
         };
 
@@ -422,7 +423,8 @@ impl FileLoader for DefaultFileLoader {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> anyhow::Result<Option<(FileId, Dialect, Option<APIContext>, Option<String>)>> {
+    ) -> anyhow::Result<Option<(FileId, Dialect, Option<APIContext>, Option<String>, PathBuf)>>
+    {
         let (path, api_context, canonical_repo) = match dialect {
             Dialect::Standard => {
                 // Find the importing file's directory.
@@ -463,8 +465,14 @@ impl FileLoader for DefaultFileLoader {
             }
         };
 
-        let (file_id, contents) = self.maybe_intern_file(path, from, canonical_repo)?;
-        Ok(Some((file_id, dialect, api_context, contents)))
+        let (file_id, contents) = self.maybe_intern_file(path.clone(), from, canonical_repo)?;
+        Ok(Some((
+            file_id,
+            dialect,
+            api_context,
+            contents,
+            path.clone(),
+        )))
     }
 
     fn list_load_candidates(

@@ -166,6 +166,17 @@ ast_node! {
 }
 
 impl Module {
+    pub fn doc(&self) -> Option<String> {
+        self.syntax()
+            .children()
+            .next()
+            .and_then(LiteralExpr::cast)
+            .and_then(|expr| match expr.kind() {
+                LiteralKind::String(s) => Some(s),
+                _ => None,
+            })
+    }
+
     pub fn type_ignore_comment_positions(&self) -> impl Iterator<Item = TextSize> {
         self.syntax()
             .descendants()
@@ -264,12 +275,7 @@ impl DefStmt {
 
     pub fn doc(&self) -> Option<String> {
         self.suite()
-            .and_then(|suite| {
-                suite
-                    .syntax()
-                    .children()
-                    .find_map(|node| LiteralExpr::cast(node))
-            })
+            .and_then(|suite| suite.syntax().children().find_map(LiteralExpr::cast))
             .and_then(|expr| match expr.kind() {
                 LiteralKind::String(token) => Some(token),
                 _ => None,

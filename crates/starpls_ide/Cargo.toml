@@ -16,3 +16,6 @@ starpls_hir = { path = "../starpls_hir" }
 starpls_syntax = { path = "../starpls_syntax" }
 starpls_test_util = { path = "../starpls_test_util" }
 unindent = "0.2.3"
+
+[dev-dependencies]
+expect-test = "1.5.0"

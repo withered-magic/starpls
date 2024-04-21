@@ -300,17 +300,16 @@ pub struct AnalysisSnapshot {
 }
 
 impl AnalysisSnapshot {
-    pub fn from_single_file(contents: &str) -> (Self, FileId) {
+    pub fn from_single_file(
+        contents: &str,
+        dialect: Dialect,
+        api_context: Option<APIContext>,
+    ) -> (Self, FileId) {
         let mut file_set = FxHashMap::default();
         let file_id = FileId(0);
         file_set.insert("main.star".to_string(), (file_id, contents.to_string()));
         let mut change = Change::default();
-        change.create_file(
-            file_id,
-            Dialect::Bazel,
-            Some(APIContext::Bzl),
-            contents.to_string(),
-        );
+        change.create_file(file_id, dialect, api_context, contents.to_string());
         let mut analysis = Analysis::new(Arc::new(SimpleFileLoader::from_file_set(file_set)));
         analysis.db.set_builtin_defs(
             Dialect::Bazel,

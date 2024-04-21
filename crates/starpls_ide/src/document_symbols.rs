@@ -119,3 +119,93 @@ fn add_target_symbols(db: &Database, file: File, acc: &mut Vec<DocumentSymbol>) 
     });
     acc.extend(targets);
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::AnalysisSnapshot;
+    use expect_test::{expect, Expect};
+    use starpls_bazel::APIContext;
+    use starpls_common::Dialect;
+
+    fn check(input: &str, expect: Expect) {
+        let (snap, file_id) =
+            AnalysisSnapshot::from_single_file(input, Dialect::Bazel, Some(APIContext::Build));
+        let mut symbols = snap.document_symbols(file_id).unwrap().unwrap();
+        symbols.sort_by(|a, b| a.name.cmp(&b.name));
+        let mut actual = String::new();
+        for symbol in symbols {
+            actual.push_str(&format!("{:?}", symbol));
+            actual.push('\n');
+        }
+        expect.assert_eq(&actual);
+    }
+
+    #[test]
+    fn test_none() {
+        check(r#""#, expect![]);
+    }
+
+    #[test]
+    fn test_variables_and_functions() {
+        check(
+            r#"s = "abc"
+
+def foo():
+    pass
+"#,
+            expect![[r#"
+                DocumentSymbol { name: "foo", detail: None, kind: Function, tags: None, range: 11..31, selection_range: 11..31, children: None }
+                DocumentSymbol { name: "s", detail: None, kind: Variable, tags: None, range: 0..1, selection_range: 0..1, children: None }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_use_last_assignment() {
+        check(
+            r#"
+x = 123
+y = "abc"
+x = "123"
+"#,
+            expect![[r#"
+                DocumentSymbol { name: "x", detail: None, kind: Variable, tags: None, range: 19..20, selection_range: 19..20, children: None }
+                DocumentSymbol { name: "y", detail: None, kind: Variable, tags: None, range: 9..10, selection_range: 9..10, children: None }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_skip_load_items() {
+        check(
+            r#"
+load("foo.star", "foo")
+
+bar = 1
+"#,
+            expect![[r#"
+                DocumentSymbol { name: "bar", detail: None, kind: Variable, tags: None, range: 26..29, selection_range: 26..29, children: None }
+            "#]],
+        )
+    }
+
+    #[test]
+    fn test_targets() {
+        check(
+            r#"
+NUMS = [1, 2, 3]
+
+rust_library(
+    name = "starpls_ide",
+    srcs = glob(["src/**/*.rs"]),
+)
+
+rust_library_test(
+    name = "starpls_ide_test",
+    crates = ":starpls_ide",
+)
+"#,
+            expect![],
+        )
+    }
+}

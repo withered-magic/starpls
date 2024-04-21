@@ -1,5 +1,5 @@
 {
-  "checksum": "d8545dd84ef3db468910b709a38f2843c9b5c4901099673baf675679a896cf3e",
+  "checksum": "30349ebbd3ab310155393b92a5126b5d549227d35ee9339332003d2b85164ae4",
   "crates": {
     "addr2line 0.21.0": {
       "name": "addr2line",
@@ -2150,13 +2150,13 @@
       },
       "license": "MIT OR Apache-2.0"
     },
-    "expect-test 1.4.1": {
+    "expect-test 1.5.0": {
       "name": "expect-test",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/expect-test/1.4.1/download",
-          "sha256": "30d9eafeadd538e68fb28016364c9732d78e420b9ff8853fa5e4058861e9f8d3"
+          "url": "https://static.crates.io/crates/expect-test/1.5.0/download",
+          "sha256": "9e0be0a561335815e06dab7c62e50353134c796e7a6155402a64bcff66b6a5e0"
         }
       },
       "targets": [
@@ -2189,7 +2189,7 @@
           "selects": {}
         },
         "edition": "2018",
-        "version": "1.4.1"
+        "version": "1.5.0"
       },
       "license": "MIT OR Apache-2.0"
     },
@@ -3854,149 +3854,85 @@
           "**"
         ],
         "crate_features": {
-          "common": [],
+          "common": [
+            "extra_traits",
+            "std"
+          ],
           "selects": {
             "aarch64-apple-darwin": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "aarch64-apple-ios": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "aarch64-apple-ios-sim": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "aarch64-fuchsia": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "aarch64-linux-android": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "aarch64-unknown-linux-gnu": [
-              "default",
-              "std"
+              "default"
             ],
             "aarch64-unknown-nixos-gnu": [
-              "default",
-              "std"
+              "default"
             ],
             "aarch64-unknown-nto-qnx710": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "arm-unknown-linux-gnueabi": [
-              "default",
-              "std"
+              "default"
             ],
             "armv7-linux-androideabi": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "armv7-unknown-linux-gnueabi": [
-              "default",
-              "std"
+              "default"
             ],
             "i686-apple-darwin": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "i686-linux-android": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "i686-unknown-freebsd": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "i686-unknown-linux-gnu": [
-              "default",
-              "std"
+              "default"
             ],
             "powerpc-unknown-linux-gnu": [
-              "default",
-              "extra_traits",
-              "std"
-            ],
-            "riscv32imc-unknown-none-elf": [
-              "extra_traits",
-              "std"
-            ],
-            "riscv64gc-unknown-none-elf": [
-              "extra_traits",
-              "std"
+              "default"
             ],
             "s390x-unknown-linux-gnu": [
-              "default",
-              "extra_traits",
-              "std"
-            ],
-            "thumbv7em-none-eabi": [
-              "extra_traits",
-              "std"
-            ],
-            "thumbv8m.main-none-eabi": [
-              "extra_traits",
-              "std"
-            ],
-            "wasm32-unknown-unknown": [
-              "extra_traits",
-              "std"
+              "default"
             ],
             "wasm32-wasi": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "x86_64-apple-darwin": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "x86_64-apple-ios": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "x86_64-fuchsia": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "x86_64-linux-android": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "x86_64-unknown-freebsd": [
-              "default",
-              "extra_traits",
-              "std"
+              "default"
             ],
             "x86_64-unknown-linux-gnu": [
-              "default",
-              "std"
+              "default"
             ],
             "x86_64-unknown-nixos-gnu": [
-              "default",
-              "std"
-            ],
-            "x86_64-unknown-none": [
-              "extra_traits",
-              "std"
+              "default"
             ]
           }
         },
@@ -4089,13 +4025,40 @@
         ],
         "crate_features": {
           "common": [
-            "elf",
-            "errno",
             "general",
             "ioctl",
             "no_std"
           ],
-          "selects": {}
+          "selects": {
+            "aarch64-unknown-linux-gnu": [
+              "elf",
+              "errno"
+            ],
+            "aarch64-unknown-nixos-gnu": [
+              "elf",
+              "errno"
+            ],
+            "arm-unknown-linux-gnueabi": [
+              "elf",
+              "errno"
+            ],
+            "armv7-unknown-linux-gnueabi": [
+              "elf",
+              "errno"
+            ],
+            "i686-unknown-linux-gnu": [
+              "elf",
+              "errno"
+            ],
+            "x86_64-unknown-linux-gnu": [
+              "elf",
+              "errno"
+            ],
+            "x86_64-unknown-nixos-gnu": [
+              "elf",
+              "errno"
+            ]
+          }
         },
         "edition": "2021",
         "version": "0.4.13"
@@ -7809,7 +7772,7 @@
         "deps_dev": {
           "common": [
             {
-              "id": "expect-test 1.4.1",
+              "id": "expect-test 1.5.0",
               "target": "expect_test"
             },
             {
@@ -7866,6 +7829,15 @@
             {
               "id": "unindent 0.2.3",
               "target": "unindent"
+            }
+          ],
+          "selects": {}
+        },
+        "deps_dev": {
+          "common": [
+            {
+              "id": "expect-test 1.5.0",
+              "target": "expect_test"
             }
           ],
           "selects": {}
@@ -7944,7 +7916,7 @@
         "deps_dev": {
           "common": [
             {
-              "id": "expect-test 1.4.1",
+              "id": "expect-test 1.5.0",
               "target": "expect_test"
             }
           ],
@@ -7987,7 +7959,7 @@
         "deps_dev": {
           "common": [
             {
-              "id": "expect-test 1.4.1",
+              "id": "expect-test 1.5.0",
               "target": "expect_test"
             }
           ],
@@ -11234,7 +11206,7 @@
     "unindent 0.2.3"
   ],
   "direct_dev_deps": [
-    "expect-test 1.4.1",
+    "expect-test 1.5.0",
     "itertools 0.12.1",
     "prost-types 0.12.3",
     "protoc-gen-prost 0.2.3",

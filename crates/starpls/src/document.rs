@@ -627,7 +627,9 @@ pub(crate) fn dialect_and_api_context_for_path(
         "BUILD" | "BUILD.bazel" => (Dialect::Bazel, Some(APIContext::Bzl)),
         "REPO.bazel" => (Dialect::Bazel, Some(APIContext::Repo)),
         "MODULE.bazel" => (Dialect::Bazel, Some(APIContext::Module)),
-        "WORKSPACE" | "WORKSPACE.bazel" => (Dialect::Bazel, Some(APIContext::Workspace)),
+        "WORKSPACE" | "WORKSPACE.bazel" | "WORKSPACE.bzlmod" => {
+            (Dialect::Bazel, Some(APIContext::Workspace))
+        }
         _ => match path.extension().and_then(|ext| ext.to_str()) {
             Some("sky" | "star") => (Dialect::Standard, None),
             Some("bzl") => (Dialect::Bazel, Some(APIContext::Bzl)),

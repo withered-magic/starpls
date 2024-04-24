@@ -1,6 +1,8 @@
-use super::*;
-use expect_test::{expect, Expect};
 use std::{fmt::Write, str};
+
+use expect_test::{expect, Expect};
+
+use super::*;
 
 #[test]
 fn test_unescape_string() {}

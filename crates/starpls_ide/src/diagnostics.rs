@@ -1,6 +1,7 @@
-use crate::Database;
 use starpls_common::{Db, Diagnostic, FileId};
 use starpls_hir::diagnostics_for_file;
+
+use crate::Database;
 
 pub(crate) fn diagnostics(db: &Database, file_id: FileId) -> Vec<Diagnostic> {
     let file = match db.get_file(file_id) {

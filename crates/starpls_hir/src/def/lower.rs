@@ -1,3 +1,9 @@
+use starpls_common::{line_index, Diagnostic, Diagnostics, File, FileRange, Severity};
+use starpls_syntax::{
+    ast::{self, AstNode, AstPtr, AstToken, SyntaxNodePtr},
+    SyntaxToken, TextRange,
+};
+
 use crate::{
     def::{
         Argument, CompClause, DictEntry, Expr, ExprId, ExprPtr, Function, Literal, LoadItem,
@@ -6,11 +12,6 @@ use crate::{
     },
     typeck::FunctionTypeRef,
     Db, TypeRef,
-};
-use starpls_common::{line_index, Diagnostic, Diagnostics, File, FileRange, Severity};
-use starpls_syntax::{
-    ast::{self, AstNode, AstPtr, AstToken, SyntaxNodePtr},
-    SyntaxToken, TextRange,
 };
 
 pub(super) fn lower_module(

@@ -1,14 +1,16 @@
-use crate::{
-    util::{pick_best_token, unindent_doc},
-    Database, FilePosition,
-};
+use std::fmt::Write;
+
 use starpls_common::{parse, Db as _};
 use starpls_hir::{DisplayWithDb, Semantics};
 use starpls_syntax::{
     ast::{self, AstNode, Direction},
     T,
 };
-use std::fmt::Write;
+
+use crate::{
+    util::{pick_best_token, unindent_doc},
+    Database, FilePosition,
+};
 
 const DEFAULT_ACTIVE_PARAMETER_INDEX: usize = 100;
 

@@ -1,5 +1,6 @@
-use crate::{step::StepEvent, Parser, SyntaxKind};
 use drop_bomb::DropBomb;
+
+use crate::{step::StepEvent, Parser, SyntaxKind};
 
 pub(crate) struct Marker {
     pos: u32,

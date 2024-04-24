@@ -1,11 +1,5 @@
-use crate::{
-    config::ServerConfig,
-    debouncer::AnalysisDebouncer,
-    diagnostics::DiagnosticsManager,
-    document::{DefaultFileLoader, DocumentChangeKind, DocumentManager, PathInterner},
-    event_loop::{FetchExternalReposProgress, Task},
-    task_pool::{TaskPool, TaskPoolHandle},
-};
+use std::{mem, panic, sync::Arc, time::Duration};
+
 use lsp_server::{Connection, ReqQueue};
 use parking_lot::RwLock;
 use rustc_hash::FxHashSet;
@@ -16,7 +10,15 @@ use starpls_bazel::{
 };
 use starpls_common::FileId;
 use starpls_ide::{Analysis, AnalysisSnapshot, Change};
-use std::{mem, panic, sync::Arc, time::Duration};
+
+use crate::{
+    config::ServerConfig,
+    debouncer::AnalysisDebouncer,
+    diagnostics::DiagnosticsManager,
+    document::{DefaultFileLoader, DocumentChangeKind, DocumentManager, PathInterner},
+    event_loop::{FetchExternalReposProgress, Task},
+    task_pool::{TaskPool, TaskPoolHandle},
+};
 
 const DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
 

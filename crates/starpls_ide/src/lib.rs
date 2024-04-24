@@ -1,12 +1,14 @@
+use std::{fmt::Debug, panic, path::PathBuf, sync::Arc};
+
 use dashmap::{mapref::entry::Entry, DashMap};
 use rustc_hash::FxHashMap;
 use salsa::ParallelDatabase;
 use starpls_bazel::{APIContext, Builtins};
 use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate, ResolvedPath};
+pub use starpls_hir::Cancelled;
 use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, LoadItemId, LoadStmt, ParamId, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use starpls_test_util::make_test_builtins;
-use std::{fmt::Debug, panic, path::PathBuf, sync::Arc};
 
 pub use crate::{
     completions::{CompletionItem, CompletionItemKind, CompletionMode},
@@ -14,7 +16,6 @@ pub use crate::{
     hover::{Hover, Markup},
     signature_help::{ParameterInfo, SignatureHelp, SignatureInfo},
 };
-pub use starpls_hir::Cancelled;
 
 mod completions;
 mod diagnostics;

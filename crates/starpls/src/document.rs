@@ -1,4 +1,12 @@
-use crate::event_loop::{FetchExternalRepoRequest, Task};
+use std::{
+    collections::HashMap,
+    fs,
+    hash::BuildHasherDefault,
+    mem,
+    path::{Path, PathBuf, MAIN_SEPARATOR},
+    sync::Arc,
+};
+
 use anyhow::{anyhow, bail, Ok};
 use crossbeam_channel::Sender;
 use dashmap::DashMap;
@@ -13,14 +21,8 @@ use starpls_bazel::{
 };
 use starpls_common::{Dialect, FileId, LoadItemCandidate, LoadItemCandidateKind, ResolvedPath};
 use starpls_ide::FileLoader;
-use std::{
-    collections::HashMap,
-    fs,
-    hash::BuildHasherDefault,
-    mem,
-    path::{Path, PathBuf, MAIN_SEPARATOR},
-    sync::Arc,
-};
+
+use crate::event_loop::{FetchExternalRepoRequest, Task};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum DocumentSource {

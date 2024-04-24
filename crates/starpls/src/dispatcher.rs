@@ -1,9 +1,11 @@
+use std::panic;
+
+use starpls_ide::Cancelled;
+
 use crate::{
     event_loop::Task,
     server::{Server, ServerSnapshot},
 };
-use starpls_ide::Cancelled;
-use std::panic;
 
 pub(crate) struct RequestDispatcher<'a> {
     req: Option<lsp_server::Request>,

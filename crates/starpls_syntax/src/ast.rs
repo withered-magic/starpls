@@ -1,8 +1,3 @@
-use crate::{
-    StarlarkLanguage,
-    SyntaxKind::{self, *},
-    SyntaxNode, SyntaxNodeChildren, SyntaxToken, TextSize, T,
-};
 use std::{
     fmt::{Debug, Write},
     marker::PhantomData,
@@ -12,6 +7,12 @@ use std::{
 pub use rowan::{
     ast::{AstNode, AstPtr},
     Direction,
+};
+
+use crate::{
+    StarlarkLanguage,
+    SyntaxKind::{self, *},
+    SyntaxNode, SyntaxNodeChildren, SyntaxToken, TextSize, T,
 };
 
 pub type SyntaxNodePtr = rowan::ast::SyntaxNodePtr<StarlarkLanguage>;

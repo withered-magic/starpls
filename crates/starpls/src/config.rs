@@ -1,5 +1,6 @@
-use crate::ServerArgs;
 use lsp_types::ClientCapabilities;
+
+use crate::ServerArgs;
 
 #[derive(Default)]
 pub(crate) struct ServerConfig {

@@ -1,7 +1,5 @@
-use crate::{
-    util::{pick_best_token, unindent_doc},
-    Database, FilePosition,
-};
+use std::fmt::Write;
+
 use starpls_common::{parse, Db as _};
 use starpls_hir::{DisplayWithDb, Semantics, Type};
 use starpls_syntax::{
@@ -9,7 +7,11 @@ use starpls_syntax::{
     SyntaxKind::*,
     TextRange, T,
 };
-use std::fmt::Write;
+
+use crate::{
+    util::{pick_best_token, unindent_doc},
+    Database, FilePosition,
+};
 
 mod docs;
 

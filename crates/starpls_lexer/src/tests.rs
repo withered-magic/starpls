@@ -1,5 +1,6 @@
-use super::*;
 use expect_test::{expect, Expect};
+
+use super::*;
 
 fn check_lexing(input: &str, expect: Expect) {
     let actual: String = tokenize(input)

@@ -1,9 +1,11 @@
-use crate::{def::ExprId, BuiltinDefs, Db, Dialect, GlobalCtxt, LoadItemId, ParamId, Ty};
+use std::sync::Arc;
+
 use dashmap::{mapref::entry::Entry, DashMap};
 use starpls_bazel::{APIContext, Builtins};
 use starpls_common::{File, FileId, LoadItemCandidate, ResolvedPath};
 use starpls_test_util::{make_test_builtins, FixtureType};
-use std::sync::Arc;
+
+use crate::{def::ExprId, BuiltinDefs, Db, Dialect, GlobalCtxt, LoadItemId, ParamId, Ty};
 
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, crate::Jar)]

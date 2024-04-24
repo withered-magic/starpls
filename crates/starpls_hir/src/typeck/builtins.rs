@@ -1,3 +1,16 @@
+use std::{collections::HashSet, sync::Arc};
+
+use either::Either;
+use rustc_hash::FxHashMap;
+use smallvec::smallvec;
+use starpls_bazel::{
+    attr,
+    builtin::{Callable, Value},
+    env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
+};
+use starpls_common::{parse, Dialect, File, InFile};
+use starpls_syntax::ast::{self, AstNode};
+
 use crate::{
     def::{
         resolver::{Export, Resolver},
@@ -10,17 +23,6 @@ use crate::{
     },
     Db, ExprId, Name, Ty, TyCtxt, TyKind, TypeRef,
 };
-use either::Either;
-use rustc_hash::FxHashMap;
-use smallvec::smallvec;
-use starpls_bazel::{
-    attr,
-    builtin::{Callable, Value},
-    env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
-};
-use starpls_common::{parse, Dialect, File, InFile};
-use starpls_syntax::ast::{self, AstNode};
-use std::{collections::HashSet, sync::Arc};
 
 const DEFAULT_DOC: &str = "See the [Bazel Build Encyclopedia](https://bazel.build/reference/be/overview) for more details.";
 

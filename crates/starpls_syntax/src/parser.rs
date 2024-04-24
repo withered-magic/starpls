@@ -1,7 +1,9 @@
-use crate::{LineIndex, Module, StarlarkLanguage, SyntaxNode};
+use std::marker::PhantomData;
+
 use rowan::{ast::AstNode, GreenNode, GreenNodeBuilder, Language, TextRange, TextSize};
 use starpls_parser::{parse, parse_type_list, StrStep, StrWithTokens, SyntaxKind::*};
-use std::marker::PhantomData;
+
+use crate::{LineIndex, Module, StarlarkLanguage, SyntaxNode};
 
 const TYPE_COMMENT_PREFIX_STR: &'static str = "# type: ";
 

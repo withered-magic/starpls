@@ -1,11 +1,13 @@
+use std::sync::Arc;
+
+use rustc_hash::FxHashMap;
+use smallvec::smallvec;
+
 use crate::{
     def::{Argument, LiteralString},
     typeck::{self, Binders, DictLiteral, Substitution, Tuple as TupleVariants, Ty, TyKind},
     Db, Name,
 };
-use rustc_hash::FxHashMap;
-use smallvec::smallvec;
-use std::sync::Arc;
 
 #[salsa::tracked]
 pub(crate) struct Intrinsics {

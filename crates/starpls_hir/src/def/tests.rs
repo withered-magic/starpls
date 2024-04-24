@@ -1,7 +1,8 @@
-use crate::{def::resolver::Resolver, test_database::TestDatabase};
 use starpls_bazel::APIContext;
 use starpls_common::{Dialect, File, FileId};
 use starpls_test_util::parse_fixture;
+
+use crate::{def::resolver::Resolver, test_database::TestDatabase};
 
 fn check_scope(fixture: &str, expected: &[&str]) {
     let test_db: TestDatabase = Default::default();

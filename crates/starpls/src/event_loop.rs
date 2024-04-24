@@ -1,3 +1,9 @@
+use crossbeam_channel::select;
+use lsp_server::Connection;
+use lsp_types::{InitializeParams, WorkDoneProgressCreateParams};
+use rustc_hash::FxHashSet;
+use starpls_common::FileId;
+
 use crate::{
     config::ServerConfig,
     convert,
@@ -8,11 +14,6 @@ use crate::{
     server::{Server, ServerSnapshot},
     ServerArgs,
 };
-use crossbeam_channel::select;
-use lsp_server::Connection;
-use lsp_types::{InitializeParams, WorkDoneProgressCreateParams};
-use rustc_hash::FxHashSet;
-use starpls_common::FileId;
 
 #[macro_export]
 macro_rules! match_notification {

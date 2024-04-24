@@ -1,3 +1,11 @@
+use std::sync::Arc;
+
+use starpls_common::{line_index, parse, Diagnostic, File, FileRange, InFile, Severity};
+use starpls_syntax::{
+    ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, BitwiseOp, UnaryOp},
+    TextRange,
+};
+
 use crate::{
     def::{
         resolver::{Export, Resolver},
@@ -17,12 +25,6 @@ use crate::{
     },
     Name,
 };
-use starpls_common::{line_index, parse, Diagnostic, File, FileRange, InFile, Severity};
-use starpls_syntax::{
-    ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, BitwiseOp, UnaryOp},
-    TextRange,
-};
-use std::sync::Arc;
 
 impl TyCtxt<'_> {
     pub fn infer_all_exprs(&mut self, file: File) {

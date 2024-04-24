@@ -1,7 +1,8 @@
-use prost::Message;
 use std::io;
 use std::path::Path;
 use std::{fs, path::PathBuf};
+
+use prost::Message;
 
 pub use crate::{
     builtin::Builtins,

@@ -1,6 +1,5 @@
 use std::{collections::HashSet, ops::Index};
 
-use crate::{typeck::TypeRef, Db, Ty, TyKind};
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
@@ -9,6 +8,8 @@ use starpls_syntax::{
     ast::{self, AssignOp, AstPtr, BinaryOp, SyntaxNodePtr, UnaryOp},
     TextRange,
 };
+
+use crate::{typeck::TypeRef, Db, Ty, TyKind};
 
 mod lower;
 pub(crate) mod resolver;

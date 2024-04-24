@@ -1,3 +1,10 @@
+use std::collections::hash_map::Entry;
+
+use rustc_hash::FxHashMap;
+use starpls_bazel::APIContext;
+use starpls_common::File;
+use starpls_syntax::{TextRange, TextSize};
+
 use crate::{
     def::{
         scope::{module_scopes, Scope, ScopeDef, ScopeHirId, ScopeId, Scopes, VariableDef},
@@ -10,11 +17,6 @@ use crate::{
     },
     Db, Name,
 };
-use rustc_hash::FxHashMap;
-use starpls_bazel::APIContext;
-use starpls_common::File;
-use starpls_syntax::{TextRange, TextSize};
-use std::collections::hash_map::Entry;
 
 /// Resolves things like variables, function definition, etc. For now this is implemented as a simple list
 /// of "module" scopes that hold variable declarations, but will need to be updated later to support other

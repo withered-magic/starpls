@@ -9,7 +9,7 @@ use anyhow::{anyhow, bail};
 use parking_lot::RwLock;
 use serde_json::Deserializer;
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct BazelInfo {
     pub output_base: PathBuf,
     pub release: String,
@@ -29,21 +29,54 @@ pub trait BazelClient: Send + Sync + 'static {
     fn null_query_external_repo_targets(&self, repo: &str) -> anyhow::Result<()>;
 }
 
-pub struct BazelCLI {
+#[derive(Clone, Debug)]
+pub struct BazelCLIConfig {
     executable: PathBuf,
+    working_dir: Option<PathBuf>,
+}
+
+impl Default for BazelCLIConfig {
+    fn default() -> Self {
+        Self {
+            executable: "bazel".into(),
+            working_dir: None,
+        }
+    }
+}
+
+impl<T> From<T> for BazelCLIConfig
+where
+    T: AsRef<Path>,
+{
+    fn from(value: T) -> Self {
+        Self {
+            executable: value.as_ref().to_path_buf(),
+            working_dir: None,
+        }
+    }
+}
+
+pub struct BazelCLI {
+    config: BazelCLIConfig,
     repo_mappings: RwLock<HashMap<String, HashMap<String, String>>>,
 }
 
 impl BazelCLI {
-    pub fn new(executable: impl AsRef<Path>) -> Self {
+    pub fn new(config: impl Into<BazelCLIConfig>) -> Self {
         Self {
-            executable: executable.as_ref().to_path_buf(),
-            ..Default::default()
+            config: config.into(),
+            repo_mappings: Default::default(),
         }
     }
 
     fn run_command(&self, args: &[&str]) -> anyhow::Result<Vec<u8>> {
-        let output = Command::new(&self.executable).args(args).output()?;
+        let mut command = Command::new(&self.config.executable);
+        command.args(args);
+        if let Some(working_dir) = &self.config.working_dir {
+            command.current_dir(working_dir);
+        }
+
+        let output = command.output()?;
         if !output.status.success() {
             bail!(
                 "failed to run Bazel command with exit status {}, stderr={:?}",
@@ -51,6 +84,7 @@ impl BazelCLI {
                 str::from_utf8(&output.stderr)?,
             );
         }
+
         Ok(output.stdout)
     }
 
@@ -139,20 +173,11 @@ impl BazelClient for BazelCLI {
     }
 
     fn null_query_external_repo_targets(&self, repo: &str) -> anyhow::Result<()> {
-        Command::new(&self.executable)
+        Command::new(&self.config.executable)
             .args(["query", "--keep_going", &format!("@@{}//...", repo)])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()?;
         Ok(())
-    }
-}
-
-impl Default for BazelCLI {
-    fn default() -> Self {
-        Self {
-            executable: "bazel".into(),
-            repo_mappings: Default::default(),
-        }
     }
 }

@@ -2,7 +2,7 @@ use std::{fmt::Write, fs, path::PathBuf, process, sync::Arc};
 
 use anyhow::anyhow;
 use rustc_hash::FxHashMap;
-use starpls_bazel::client::{BazelCLI, BazelClient};
+use starpls_bazel::client::{BazelCLI, BazelCLIConfig, BazelClient};
 use starpls_common::Severity;
 use starpls_ide::{Analysis, Change};
 
@@ -12,7 +12,7 @@ use crate::{
 };
 
 pub(crate) fn run_check(paths: Vec<String>, output_base: Option<String>) -> anyhow::Result<()> {
-    let bazel_client = Arc::new(BazelCLI::default());
+    let bazel_client = Arc::new(BazelCLI::new(BazelCLIConfig::default()));
     let info = bazel_client.info()?;
     let external_output_base = output_base
         .map(PathBuf::from)

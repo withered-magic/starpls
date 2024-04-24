@@ -5,7 +5,7 @@
 
 ### VSCode
 
-Make sure you have at least the [0.9.0](https://github.com/bazelbuild/vscode-bazel/releases/tag/0.9.0) version of the [vscode-bazel](https://github.com/bazelbuild/vscode-bazel) extension installed, as it adds support for launching a language server.
+Make sure you have at least the [0.10.0](https://github.com/bazelbuild/vscode-bazel/releases/tag/0.10.0) version of the [vscode-bazel](https://github.com/bazelbuild/vscode-bazel) extension installed, as it adds support for launching a language server.
 
 If you're on a Mac with Apple Silicon, then you can install `starpls` with Homebrew and skip ahead to the section about configuring VSCode:
 
@@ -33,9 +33,7 @@ Once done, add the following to your VSCode configuration and reload VSCode for 
 
 ```json
 {
-  "bazel.lsp.enabled": true,
-  "bazel.lsp.command": "starpls",
-  "bazel.lsp.args": []
+  "bazel.lsp.command": "starpls"
 }
 ```
 
@@ -61,7 +59,7 @@ Make sure to use [PEP 484 type comments](https://peps.python.org/pep-0484/#type-
 def _impl(ctx):
     # type: (ctx) -> Unknown
     ctx.
-    #  ^ and this period was just typed... 
+    #  ^ and this period was just typed...
 ```
 
 then you'll get autocomplete suggestions for the attributes on `ctx`, like `ctx.actions`, `ctx.attr`, and so on!

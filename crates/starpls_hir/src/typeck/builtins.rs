@@ -87,7 +87,7 @@ impl APIGlobals {
                     builtin_function(db, &value.name, callable, &value.doc, None),
                 );
             } else {
-                variables.insert(value.name.clone(), normalize_type_ref(&value.r#type));
+                variables.insert(value.name.clone(), parse_type_ref(&value.r#type));
             }
         }
 
@@ -137,7 +137,7 @@ impl BuiltinFunction {
                     })
                     .collect::<Vec<_>>()
                     .into_boxed_slice();
-                TyKind::Struct(Some(Struct {
+                TyKind::Struct(Some(Struct::Inline {
                     call_expr: InFile {
                         file,
                         value: call_expr,
@@ -608,7 +608,8 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
             } else {
                 fields.push(BuiltinField {
                     name: Name::from_str(&field.name),
-                    type_ref: normalize_type_ref(&field.r#type),
+                    type_ref: maybe_field_type_ref_override(&type_.name, &field.name)
+                        .unwrap_or_else(|| parse_type_ref(&field.r#type)),
                     doc: normalize_doc_text(&field.doc),
                 });
             }
@@ -646,19 +647,19 @@ fn builtin_function(
         params.push(if param.is_star_arg {
             BuiltinFunctionParam::ArgsList {
                 name,
-                type_ref: maybe_strip_iterable_or_dict(normalize_type_ref(&param.r#type)),
+                type_ref: maybe_strip_iterable_or_dict(parse_type_ref(&param.r#type)),
                 doc: normalize_doc_text(&param.doc),
             }
         } else if param.is_star_star_arg {
             BuiltinFunctionParam::KwargsDict {
                 name,
-                type_ref: maybe_strip_iterable_or_dict(normalize_type_ref(&param.r#type)),
+                type_ref: maybe_strip_iterable_or_dict(parse_type_ref(&param.r#type)),
                 doc: normalize_doc_text(&param.doc),
             }
         } else {
             BuiltinFunctionParam::Simple {
                 name,
-                type_ref: normalize_type_ref(&param.r#type),
+                type_ref: parse_type_ref(&param.r#type),
                 doc: normalize_doc_text(&param.doc),
                 default_value: if !param.default_value.is_empty() {
                     Some(param.default_value.clone())
@@ -683,7 +684,7 @@ fn builtin_function(
         Name::from_str(name),
         parent_name.map(|parent_name| parent_name.to_string()),
         params,
-        normalize_type_ref(ret_type_ref),
+        parse_type_ref(ret_type_ref),
         if doc.is_empty() {
             DEFAULT_DOC.to_string()
         } else {
@@ -798,7 +799,7 @@ fn maybe_strip_iterable_or_dict(type_ref: TypeRef) -> TypeRef {
     }
 }
 
-fn normalize_type_ref(text: &str) -> TypeRef {
+fn parse_type_ref(text: &str) -> TypeRef {
     let text = normalize_doc(text, true);
     let mut type_refs = text
         .split("; or ")
@@ -826,7 +827,7 @@ fn normalize_type_ref(text: &str) -> TypeRef {
                     Some(
                         vec![
                             TypeRef::from_str_opt("string"),
-                            element.map_or(TypeRef::Unknown, |element| normalize_type_ref(element)),
+                            element.map_or(TypeRef::Unknown, |element| parse_type_ref(element)),
                         ]
                         .into_boxed_slice(),
                     ),
@@ -855,10 +856,33 @@ fn type_ref_with_single_arg(name: &str, element: Option<&str>) -> TypeRef {
     TypeRef::Name(
         Name::from_str(name),
         Some(
-            vec![element.map_or(TypeRef::Unknown, |element| normalize_type_ref(element))]
+            vec![element.map_or(TypeRef::Unknown, |element| parse_type_ref(element))]
                 .into_boxed_slice(),
         ),
     )
+}
+
+fn maybe_field_type_ref_override(typ: &str, field: &str) -> Option<TypeRef> {
+    let type_ref = match (typ, field) {
+        ("ctx", "executable" | "file" | "outputs") => TypeRef::Name(
+            Name::new_inline("struct"),
+            Some(vec![TypeRef::Name(Name::new_inline("File"), None)].into_boxed_slice()),
+        ),
+
+        ("ctx", "files") => TypeRef::Name(
+            Name::new_inline("struct"),
+            Some(
+                vec![TypeRef::Name(
+                    Name::new_inline("list"),
+                    Some(vec![TypeRef::Name(Name::new_inline("File"), None)].into_boxed_slice()),
+                )]
+                .into_boxed_slice(),
+            ),
+        ),
+        _ => return None,
+    };
+
+    Some(type_ref)
 }
 
 #[cfg(test)]

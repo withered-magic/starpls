@@ -12,8 +12,8 @@ use crate::{
         call::{Slot, SlotProvider, Slots},
         intrinsics::{IntrinsicFunctionParam, IntrinsicTypes},
         resolve_type_ref, resolve_type_ref_opt, DictLiteral, FileExprId, FileLoadItemId,
-        FileLoadStmt, FileParamId, Protocol, Substitution, Tuple, Ty, TyCtxt, TyKind, TypeRef,
-        TypecheckCancelled,
+        FileLoadStmt, FileParamId, Protocol, Struct, Substitution, Tuple, Ty, TyCtxt, TyKind,
+        TypeRef, TypecheckCancelled,
     },
     Name,
 };
@@ -235,8 +235,12 @@ impl TyCtxt<'_> {
                         })
                     })
                     .unwrap_or_else(|| {
-                        if matches!(receiver_ty.kind(), TyKind::Struct(_)) {
-                            return self.unknown_ty();
+                        match receiver_ty.kind() {
+                            TyKind::Struct(Some(Struct::FieldSignature { ty })) => {
+                                return ty.clone()
+                            }
+                            TyKind::Struct(_) => return self.unknown_ty(),
+                            _ => {}
                         }
 
                         self.add_expr_diagnostic_warning_ty(

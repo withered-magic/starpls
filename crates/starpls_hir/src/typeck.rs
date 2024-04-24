@@ -250,11 +250,15 @@ impl Ty {
                 });
                 Fields::Union(acc.into_iter())
             }
-            TyKind::Struct(struct_) => Fields::Struct(
-                struct_
+            TyKind::Struct(strukt) => Fields::Struct(
+                strukt
                     .as_ref()
+                    .and_then(|strukt| match strukt {
+                        Struct::Inline { fields, .. } => Some(fields),
+                        _ => None,
+                    })
                     .into_iter()
-                    .flat_map(|struct_| struct_.fields.iter())
+                    .flat_map(|fields| fields.iter())
                     .map(|(name, ty)| {
                         (
                             Field(FieldInner::StructField { name: name.clone() }),
@@ -1188,9 +1192,14 @@ pub(crate) struct Provider {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct Struct {
-    pub(crate) call_expr: InFile<ExprId>,
-    pub(crate) fields: Box<[(Name, Ty)]>,
+pub(crate) enum Struct {
+    Inline {
+        call_expr: InFile<ExprId>,
+        fields: Box<[(Name, Ty)]>,
+    },
+    FieldSignature {
+        ty: Ty,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1404,7 +1413,9 @@ impl<'a> TypeRefResolver<'a> {
                         .flatten()
                         .map(|type_ref| self.resolve_type_ref_inner(&type_ref)),
                 ),
-                "struct" | "structure" => TyKind::Struct(None).intern(),
+                "struct" | "structure" => self.resolve_single_arg_type_constructor(args, |ty| {
+                    TyKind::Struct(Some(Struct::FieldSignature { ty }))
+                }),
                 name => match builtin_types.types(self.db).get(name).cloned() {
                     Some(ty) => ty,
                     None => {

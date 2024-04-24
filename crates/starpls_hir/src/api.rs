@@ -7,8 +7,8 @@ use crate::{
     },
     module, source_map,
     typeck::{
-        builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref, ParamInner,
-        Provider, Substitution, TagClass, Tuple, Ty, TypeRef,
+        self, builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref,
+        ParamInner, Provider, Substitution, TagClass, Tuple, Ty, TypeRef,
     },
     Db, ExprId, Name, TyKind,
 };
@@ -382,10 +382,13 @@ impl Type {
         }
     }
 
-    pub fn try_as_struct(&self) -> Option<Struct> {
+    pub fn try_as_inline_struct(&self) -> Option<Struct> {
         match self.ty.kind() {
-            TyKind::Struct(struct_) => struct_.as_ref().map(|struct_| Struct {
-                call_expr: struct_.call_expr.clone(),
+            TyKind::Struct(strukt) => strukt.as_ref().and_then(|strukt| match strukt {
+                &typeck::Struct::Inline { ref call_expr, .. } => Some(Struct {
+                    call_expr: call_expr.clone(),
+                }),
+                _ => None,
             }),
             _ => None,
         }

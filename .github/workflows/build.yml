@@ -31,6 +31,8 @@ jobs:
     steps:
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v3
       - uses: actions/cache@v3
         with:

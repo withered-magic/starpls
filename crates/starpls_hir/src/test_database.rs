@@ -2,7 +2,7 @@ use crate::{def::ExprId, BuiltinDefs, Db, Dialect, GlobalCtxt, LoadItemId, Param
 use dashmap::{mapref::entry::Entry, DashMap};
 use starpls_bazel::{APIContext, Builtins};
 use starpls_common::{File, FileId, LoadItemCandidate, ResolvedPath};
-use starpls_test_util::builtins_with_catch_all_functions;
+use starpls_test_util::{make_test_builtins, FixtureType};
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -15,17 +15,6 @@ pub(crate) struct TestDatabase {
 }
 
 impl TestDatabase {
-    #[allow(unused)]
-    pub(crate) fn with_catch_all_functions(names: &[&str]) -> Self {
-        let mut db = Self::default();
-        db.set_builtin_defs(
-            Dialect::Bazel,
-            builtins_with_catch_all_functions(names),
-            Builtins::default(),
-        );
-        db
-    }
-
     #[allow(dead_code)]
     pub(crate) fn infer_all_exprs(&self, file: File) {
         self.gcx.with_tcx(self, |tcx| tcx.infer_all_exprs(file));
@@ -142,5 +131,33 @@ impl crate::Db for TestDatabase {
                 Builtins::default(),
                 Builtins::default(),
             ))
+    }
+}
+
+#[allow(unused)]
+#[derive(Default)]
+pub(crate) struct TestDatabaseBuilder {
+    functions: Vec<String>,
+    types: Vec<FixtureType>,
+}
+
+#[allow(unused)]
+impl TestDatabaseBuilder {
+    pub fn add_function(&mut self, name: impl Into<String>) {
+        self.functions.push(name.into());
+    }
+
+    pub fn add_type(&mut self, ty: FixtureType) {
+        self.types.push(ty);
+    }
+
+    pub fn build(self) -> TestDatabase {
+        let mut db = TestDatabase::default();
+        db.set_builtin_defs(
+            Dialect::Bazel,
+            make_test_builtins(self.functions, self.types),
+            Builtins::default(),
+        );
+        db
     }
 }

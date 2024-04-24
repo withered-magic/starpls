@@ -1,5 +1,5 @@
 use starpls_bazel::{
-    builtin::{Callable, Param, Value},
+    builtin::{Callable, Param, Type, Value},
     Builtins,
 };
 use starpls_syntax::{TextRange, TextSize};
@@ -33,9 +33,16 @@ fn find_selected_ranges(contents: &str) -> Vec<TextRange> {
     }
     ranges
 }
-pub fn builtins_with_catch_all_functions(names: &[&str]) -> Builtins {
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FixtureType {
+    pub name: String,
+    pub fields: Vec<(String, String)>,
+}
+
+pub fn make_test_builtins(functions: Vec<String>, types: Vec<FixtureType>) -> Builtins {
     Builtins {
-        global: names
+        global: functions
             .iter()
             .map(|name| Value {
                 name: name.to_string(),
@@ -57,6 +64,21 @@ pub fn builtins_with_catch_all_functions(names: &[&str]) -> Builtins {
                 ..Default::default()
             })
             .collect(),
-        ..Default::default()
+        r#type: types
+            .into_iter()
+            .map(|ty| Type {
+                name: ty.name,
+                field: ty
+                    .fields
+                    .into_iter()
+                    .map(|field| Value {
+                        name: field.0,
+                        r#type: field.1,
+                        ..Default::default()
+                    })
+                    .collect(),
+                ..Default::default()
+            })
+            .collect(),
     }
 }

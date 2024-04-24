@@ -5,7 +5,7 @@ use starpls_bazel::{APIContext, Builtins};
 use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate, ResolvedPath};
 use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, LoadItemId, LoadStmt, ParamId, Ty};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
-use starpls_test_util::builtins_with_catch_all_functions;
+use starpls_test_util::make_test_builtins;
 use std::{fmt::Debug, panic, path::PathBuf, sync::Arc};
 
 pub use crate::{
@@ -313,7 +313,7 @@ impl AnalysisSnapshot {
         let mut analysis = Analysis::new(Arc::new(SimpleFileLoader::from_file_set(file_set)));
         analysis.db.set_builtin_defs(
             Dialect::Bazel,
-            builtins_with_catch_all_functions(&["provider", "struct"]),
+            make_test_builtins(vec!["provider".to_string(), "struct".to_string()], vec![]),
             Builtins::default(),
         );
         analysis.apply_change(change);

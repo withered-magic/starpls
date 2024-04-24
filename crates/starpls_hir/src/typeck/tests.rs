@@ -1,13 +1,31 @@
-use crate::{source_map, test_database::TestDatabase, Db as _, DisplayWithDb};
+use crate::{source_map, test_database::TestDatabaseBuilder, Db as _, DisplayWithDb};
 use expect_test::{expect, Expect};
 use itertools::Itertools;
 use starpls_bazel::APIContext;
 use starpls_common::{parse, Db as _, Dialect, FileId};
 use starpls_syntax::ast::AstNode;
+use starpls_test_util::FixtureType;
 use std::{cmp::Ordering, fmt::Write};
 
 fn check_infer(input: &str, expect: Expect) {
-    let mut db = TestDatabase::with_catch_all_functions(&["provider", "struct"]);
+    let mut builder = TestDatabaseBuilder::default();
+    builder.add_function("provider");
+    builder.add_function("struct");
+    builder.add_type(FixtureType {
+        name: "File".to_string(),
+        fields: vec![],
+    });
+    builder.add_type(FixtureType {
+        name: "ctx".to_string(),
+        fields: vec![
+            ("executable".to_string(), "struct".to_string()),
+            ("file".to_string(), "struct".to_string()),
+            ("files".to_string(), "struct".to_string()),
+            ("outputs".to_string(), "struct".to_string()),
+        ],
+    });
+
+    let mut db = builder.build();
     let file_id = FileId(0);
     let file = db.create_file(
         file_id,
@@ -1013,5 +1031,33 @@ fn test_paren_expr() {
             17..18 "2": Literal[2]
             13..19 "(1, 2)": tuple[Literal[1], Literal[2]]
         "#]],
-    )
+    );
+}
+
+#[test]
+fn test_field_signature_struct() {
+    check_infer(
+        r#"
+def _impl(ctx):
+    # type: (ctx) -> Unknown
+    ctx.executable.foo
+    ctx.file.bar
+    ctx.files.baz
+    ctx.outputs.qux
+"#,
+        expect![[r#"
+            50..53 "ctx": ctx
+            50..64 "ctx.executable": struct
+            50..68 "ctx.executable.foo": File
+            73..76 "ctx": ctx
+            73..81 "ctx.file": struct
+            73..85 "ctx.file.bar": File
+            90..93 "ctx": ctx
+            90..99 "ctx.files": struct
+            90..103 "ctx.files.baz": list[File]
+            108..111 "ctx": ctx
+            108..119 "ctx.outputs": struct
+            108..123 "ctx.outputs.qux": File
+        "#]],
+    );
 }

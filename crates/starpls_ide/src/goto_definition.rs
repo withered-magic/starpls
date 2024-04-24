@@ -58,8 +58,8 @@ pub(crate) fn goto_definition(
         let ty = sema.type_of_expr(file, &dot_expr.expr()?)?;
 
         // Check for struct field definition.
-        if let Some(struct_) = ty.try_as_struct() {
-            let struct_call_expr = struct_.call_expr(db)?;
+        if let Some(strukt) = ty.try_as_inline_struct() {
+            let struct_call_expr = strukt.call_expr(db)?;
             return struct_call_expr
                 .value
                 .arguments()

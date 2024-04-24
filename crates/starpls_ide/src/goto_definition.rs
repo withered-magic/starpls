@@ -1,10 +1,11 @@
-use crate::{util::pick_best_token, Database, FilePosition, LocationLink, ResolvedPath};
 use starpls_common::{parse as parse_query, Db};
 use starpls_hir::{Name, ScopeDef, Semantics};
 use starpls_syntax::{
     ast::{self, AstNode},
     T,
 };
+
+use crate::{util::pick_best_token, Database, FilePosition, LocationLink, ResolvedPath};
 
 pub(crate) fn goto_definition(
     db: &Database,
@@ -199,10 +200,11 @@ pub(crate) fn goto_definition(
 
 #[cfg(test)]
 mod tests {
-    use crate::{AnalysisSnapshot, FilePosition, LocationLink};
     use starpls_bazel::APIContext;
     use starpls_common::Dialect;
     use starpls_test_util::parse_fixture;
+
+    use crate::{AnalysisSnapshot, FilePosition, LocationLink};
 
     fn check_goto_definition(fixture: &str) {
         let (contents, pos, expected) = parse_fixture(fixture);

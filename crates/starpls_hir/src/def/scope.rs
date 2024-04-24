@@ -1,13 +1,15 @@
+use std::collections::{hash_map::Entry, VecDeque};
+
+use id_arena::{Arena, Id};
+use rustc_hash::FxHashMap;
+use starpls_common::{Diagnostic, Diagnostics, File, FileRange, Severity};
+
 use crate::{
     def::{CompClause, Expr, ExprId, Function, LoadItem, LoadItemId, Param, ParamId, Stmt, StmtId},
     lower,
     typeck::{builtins::BuiltinFunction, intrinsics::IntrinsicFunction, TypeRef},
     Db, Module, ModuleInfo, ModuleSourceMap, Name,
 };
-use id_arena::{Arena, Id};
-use rustc_hash::FxHashMap;
-use starpls_common::{Diagnostic, Diagnostics, File, FileRange, Severity};
-use std::collections::{hash_map::Entry, VecDeque};
 
 pub(crate) type ScopeId = Id<Scope>;
 

@@ -1,6 +1,7 @@
-use crate::Database;
 use starpls_common::{Db as _, FileId};
 use starpls_syntax::LineIndex;
+
+use crate::Database;
 
 pub(crate) fn line_index<'a>(db: &'a Database, file_id: FileId) -> Option<&'a LineIndex> {
     let file = db.get_file(file_id)?;

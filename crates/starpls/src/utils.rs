@@ -1,9 +1,11 @@
-use crate::{convert, server::ServerSnapshot};
+use std::ops::Range;
+
 use anyhow::format_err;
 use line_index::{LineIndex, WideEncoding, WideLineCol};
 use starpls_common::FileId;
 use starpls_ide::LocationLink;
-use std::ops::Range;
+
+use crate::{convert, server::ServerSnapshot};
 
 pub(crate) fn text_offset(
     line_index: &LineIndex,

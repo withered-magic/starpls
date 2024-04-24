@@ -1,6 +1,10 @@
 //! A module providing facilities for validating arguments to function calls.
 //! The routine implemented here is based on PEP 3102 (https://peps.python.org/pep-3102),
 //! but with a couple of modifications for handling "*args" and "**kwargs" arguments.
+use std::iter;
+
+use smallvec::{smallvec, SmallVec};
+
 use crate::{
     def::{Argument, Param},
     typeck::{
@@ -9,8 +13,6 @@ use crate::{
     },
     Db, ExprId, Name,
 };
-use smallvec::{smallvec, SmallVec};
-use std::iter;
 
 pub(crate) struct ArgError {
     pub(crate) expr: ExprId,

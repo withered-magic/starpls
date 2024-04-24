@@ -1,3 +1,12 @@
+use std::sync::Arc;
+
+use starpls_common::{parse, Diagnostic, Diagnostics, File, InFile};
+use starpls_syntax::{
+    ast::{self, AstNode, AstPtr, SyntaxNodePtr},
+    TextSize,
+};
+
+pub use crate::typeck::{Field, Param};
 use crate::{
     def::{
         self,
@@ -12,14 +21,6 @@ use crate::{
     },
     Db, ExprId, Name, TyKind,
 };
-use starpls_common::{parse, Diagnostic, Diagnostics, File, InFile};
-use starpls_syntax::{
-    ast::{self, AstNode, AstPtr, SyntaxNodePtr},
-    TextSize,
-};
-use std::sync::Arc;
-
-pub use crate::typeck::{Field, Param};
 
 pub fn diagnostics_for_file(db: &dyn Db, file: File) -> impl Iterator<Item = Diagnostic> {
     module_scopes::accumulated::<Diagnostics>(db, file).into_iter()

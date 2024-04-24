@@ -1,3 +1,5 @@
+use std::fmt::{self, Display, Write};
+
 use crate::{
     def::Param as HirDefParam,
     module,
@@ -7,7 +9,6 @@ use crate::{
     },
     Db, Ty, Type,
 };
-use std::fmt::{self, Display, Write};
 
 pub trait DisplayWithDb {
     fn fmt(&self, db: &dyn Db, f: &mut fmt::Formatter<'_>) -> fmt::Result;

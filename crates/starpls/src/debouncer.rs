@@ -1,8 +1,10 @@
-use crate::event_loop::Task;
+use std::time::Duration;
+
 use crossbeam_channel::{RecvError, RecvTimeoutError, Sender};
 use rustc_hash::FxHashSet;
 use starpls_common::FileId;
-use std::time::Duration;
+
+use crate::event_loop::Task;
 
 pub(crate) struct AnalysisDebouncer {
     pub(crate) sender: Sender<Vec<FileId>>,

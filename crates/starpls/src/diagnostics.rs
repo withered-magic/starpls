@@ -1,6 +1,7 @@
+use std::{collections::HashMap, mem};
+
 use lsp_types::Diagnostic;
 use starpls_common::FileId;
-use std::{collections::HashMap, mem};
 
 #[derive(Default)]
 pub(crate) struct DiagnosticsManager {

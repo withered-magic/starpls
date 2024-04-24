@@ -1,3 +1,19 @@
+use std::{
+    fmt::Write,
+    iter,
+    panic::{self, UnwindSafe},
+    sync::Arc,
+};
+
+use crossbeam::atomic::AtomicCell;
+use either::Either;
+use parking_lot::Mutex;
+use rustc_hash::FxHashMap;
+use smallvec::{smallvec, SmallVec};
+use starpls_common::{parse, Diagnostic, Dialect, File, InFile};
+use starpls_intern::{impl_internable, Interned};
+use starpls_syntax::ast::SyntaxNodePtr;
+
 use crate::{
     def::{ExprId, Function, LiteralString, LoadItemId, LoadStmt, Param as HirDefParam, ParamId},
     module, source_map,
@@ -12,20 +28,6 @@ use crate::{
         },
     },
     Db, Name,
-};
-use crossbeam::atomic::AtomicCell;
-use either::Either;
-use parking_lot::Mutex;
-use rustc_hash::FxHashMap;
-use smallvec::{smallvec, SmallVec};
-use starpls_common::{parse, Diagnostic, Dialect, File, InFile};
-use starpls_intern::{impl_internable, Interned};
-use starpls_syntax::ast::SyntaxNodePtr;
-use std::{
-    fmt::Write,
-    iter,
-    panic::{self, UnwindSafe},
-    sync::Arc,
 };
 
 mod call;

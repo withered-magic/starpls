@@ -1,12 +1,13 @@
-use anyhow::{anyhow, bail};
-use parking_lot::RwLock;
-use serde_json::Deserializer;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str,
 };
+
+use anyhow::{anyhow, bail};
+use parking_lot::RwLock;
+use serde_json::Deserializer;
 
 #[derive(Default)]
 pub struct BazelInfo {

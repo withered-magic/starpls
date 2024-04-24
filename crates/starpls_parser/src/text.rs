@@ -1,9 +1,11 @@
-use crate::{step::Step, syntax_kind::SyntaxKind, Input, Output};
+use std::mem;
+
 use starpls_lexer::{
     unescape::{unescape_byte_string, unescape_string, EscapeError},
     LiteralKind, Token, TokenKind,
 };
-use std::mem;
+
+use crate::{step::Step, syntax_kind::SyntaxKind, Input, Output};
 
 pub enum StrStep<'a> {
     Start {

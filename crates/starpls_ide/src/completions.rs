@@ -1,6 +1,5 @@
 //! Partially replicates the "completions" API in the LSP specification.
 
-use crate::FilePosition;
 use rustc_hash::FxHashMap;
 use starpls_common::{parse, FileId, LoadItemCandidateKind};
 use starpls_hir::{Db, Name, Param, ScopeDef, Semantics, Type};
@@ -10,6 +9,8 @@ use starpls_syntax::{
     SyntaxKind::*,
     SyntaxNode, TextRange, TextSize,
 };
+
+use crate::FilePosition;
 
 const COMPLETION_MARKER: &'static str = "__STARPLS_COMPLETION_MARKER";
 

@@ -1,7 +1,3 @@
-use crate::{
-    def::ModuleSourceMap,
-    typeck::{TyKind, TypeRef},
-};
 use starpls_bazel::Builtins;
 use starpls_common::{parse, Dialect, File, Parse};
 
@@ -10,6 +6,10 @@ pub use crate::{
     def::{ExprId, LoadItemId, LoadStmt, Module, Name, ParamId},
     display::{DisplayWithDb, DisplayWithDbWrapper},
     typeck::{builtins::BuiltinDefs, Cancelled, GlobalCtxt, Ty, TyCtxt},
+};
+use crate::{
+    def::ModuleSourceMap,
+    typeck::{TyKind, TypeRef},
 };
 
 mod api;

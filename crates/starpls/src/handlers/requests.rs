@@ -1,14 +1,15 @@
-use crate::{
-    convert::{self, path_buf_from_url},
-    extensions::{ShowHirParams, ShowSyntaxTreeParams},
-    server::ServerSnapshot,
-    utils::response_from_locations,
-};
 use anyhow::Ok;
 use starpls_ide::{
     CompletionItemKind,
     CompletionMode::{InsertText, TextEdit},
     FilePosition,
+};
+
+use crate::{
+    convert::{self, path_buf_from_url},
+    extensions::{ShowHirParams, ShowSyntaxTreeParams},
+    server::ServerSnapshot,
+    utils::response_from_locations,
 };
 
 macro_rules! try_opt {

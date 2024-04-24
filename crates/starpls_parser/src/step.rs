@@ -1,5 +1,6 @@
-use crate::{Output, SyntaxKind};
 use std::mem;
+
+use crate::{Output, SyntaxKind};
 
 /// A step in the process of building a syntax tree.
 #[derive(Debug)]

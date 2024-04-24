@@ -1,13 +1,13 @@
-use crate::{
-    step::StepEvent,
-    syntax_kind::{SyntaxKind::*, SyntaxKindSet},
-};
 use marker::Marker;
 
 pub use crate::{
     step::Step,
     syntax_kind::SyntaxKind,
     text::{StrStep, StrWithTokens},
+};
+use crate::{
+    step::StepEvent,
+    syntax_kind::{SyntaxKind::*, SyntaxKindSet},
 };
 
 mod grammar;

@@ -1,4 +1,3 @@
-use crate::Database;
 use starpls_bazel::APIContext;
 use starpls_common::{parse, Db, File, FileId};
 use starpls_hir::{ScopeDef, Semantics};
@@ -6,6 +5,8 @@ use starpls_syntax::{
     ast::{self, AstNode},
     TextRange,
 };
+
+use crate::Database;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SymbolKind {
@@ -124,10 +125,11 @@ fn add_target_symbols(db: &Database, file: File, acc: &mut Vec<DocumentSymbol>) 
 
 #[cfg(test)]
 mod tests {
-    use crate::AnalysisSnapshot;
     use expect_test::{expect, Expect};
     use starpls_bazel::APIContext;
     use starpls_common::Dialect;
+
+    use crate::AnalysisSnapshot;
 
     fn check(input: &str, expect: Expect) {
         let (snap, file_id) =

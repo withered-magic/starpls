@@ -220,7 +220,7 @@ impl Ty {
         }
 
         let fields = match kind {
-            TyKind::BuiltinType(ty) => Fields::Builtin(
+            TyKind::BuiltinType(ty, _) => Fields::Builtin(
                 ty.fields(db)
                     .iter()
                     .enumerate()
@@ -594,6 +594,7 @@ impl Ty {
                     .all(|ty1| tys2.iter().any(|ty2| Ty::eq(ty1, ty2)))
             }
             (TyKind::Attribute(_), TyKind::Attribute(_)) => true,
+            (TyKind::BuiltinType(ty1, _), TyKind::BuiltinType(ty2, _)) => ty1 == ty2,
             _ => ty1 == ty2,
         }
     }
@@ -1011,6 +1012,11 @@ where
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum TyData {
+    Attributes(Arc<Vec<(Name, Arc<Attribute>)>>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum TyKind {
     /// An unbound variable, e.g. a variable without a corresponding
     /// declaration.
@@ -1056,7 +1062,7 @@ pub(crate) enum TyKind {
     BuiltinFunction(BuiltinFunction),
     /// A type defined outside of the Starlark specification.
     /// For example, common Bazel types like `Label`.
-    BuiltinType(BuiltinType),
+    BuiltinType(BuiltinType, Option<TyData>),
     /// A bound type variable, e.g. the argument to the `append()` method
     /// of the `list[int]` class.
     BoundVar(usize),
@@ -1164,7 +1170,7 @@ pub enum RuleKind {
 pub(crate) struct Rule {
     pub(crate) kind: RuleKind,
     pub(crate) doc: Option<Box<str>>,
-    attrs: Box<[(Name, Arc<Attribute>)]>,
+    pub(crate) attrs: Arc<Vec<(Name, Arc<Attribute>)>>,
 }
 
 impl Rule {
@@ -1201,6 +1207,9 @@ pub(crate) enum Struct {
     },
     FieldSignature {
         ty: Ty,
+    },
+    Attributes {
+        attrs: Arc<Vec<(Name, Arc<Attribute>)>>,
     },
 }
 
@@ -1516,8 +1525,8 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
         (TyKind::Dict(key_source, value_source, _), TyKind::Dict(key_target, value_target, _)) => {
             assign_tys(db, key_source, key_target) && assign_tys(db, value_source, value_target)
         }
-        (TyKind::String(_), TyKind::BuiltinType(ty))
-        | (TyKind::BuiltinType(ty), TyKind::String(_))
+        (TyKind::String(_), TyKind::BuiltinType(ty, _))
+        | (TyKind::BuiltinType(ty, _), TyKind::String(_))
             if ty.name(db).as_str() == "Label" =>
         {
             true

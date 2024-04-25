@@ -77,8 +77,9 @@ impl<'a> Semantics<'a> {
     }
 
     pub fn type_of_param(&self, file: File, param: &ast::Parameter) -> Option<Type> {
-        let ptr = AstPtr::new(param);
-        let param = source_map(self.db, file).param_map.get(&ptr)?;
+        let param = source_map(self.db, file)
+            .param_map
+            .get(&AstPtr::new(param))?;
         Some(self.db.infer_param(file, *param).into())
     }
 
@@ -316,7 +317,7 @@ impl Type {
     pub fn doc(&self, db: &dyn Db) -> Option<String> {
         Some(match self.ty.kind() {
             TyKind::BuiltinFunction(func) => func.doc(db).clone(),
-            TyKind::BuiltinType(type_) => type_.doc(db).clone(),
+            TyKind::BuiltinType(ty, _) => ty.doc(db).clone(),
             TyKind::Function(func) => return func.doc(db).map(|doc| doc.to_string()),
             TyKind::IntrinsicFunction(func, _) => func.doc(db).clone(),
             TyKind::Rule(rule) => return rule.doc.as_ref().map(Box::to_string),

@@ -6,6 +6,7 @@ use starpls_syntax::{
     TextRange,
 };
 
+use super::{builtins::builtin_types, RuleKind, TyData};
 use crate::{
     def::{
         resolver::{Export, Resolver},
@@ -210,51 +211,60 @@ impl TyCtxt<'_> {
                 field,
             } => {
                 let receiver_ty = self.infer_expr(file, *dot_expr);
-
-                // Special-casing for `Any`, `Unknown`, `Unbound`, `ProviderInstance`, and
-                // missing fields.
-                if receiver_ty.is_any() {
-                    return self.any_ty();
-                }
-
-                if matches!(
-                    receiver_ty.kind(),
-                    TyKind::Unknown | TyKind::ProviderInstance(_) | TyKind::Unbound
-                ) || field.is_missing()
-                {
-                    return self.unknown_ty();
-                }
-
-                receiver_ty
-                    .fields(db)
-                    .and_then(|mut fields| {
-                        fields.find_map(|(f, ty)| {
-                            if &f.name(db) == field {
-                                Some(ty.clone())
-                            } else {
-                                None
-                            }
-                        })
-                    })
-                    .unwrap_or_else(|| {
-                        match receiver_ty.kind() {
-                            TyKind::Struct(Some(Struct::FieldSignature { ty })) => {
-                                return ty.clone()
-                            }
-                            TyKind::Struct(_) => return self.unknown_ty(),
-                            _ => {}
+                match receiver_ty.kind() {
+                    TyKind::Unknown
+                    | TyKind::ProviderInstance(_)
+                    | TyKind::Unbound
+                    | TyKind::Any => self.unknown_ty(),
+                    _ => {
+                        if field.is_missing() {
+                            return self.unknown_ty();
                         }
 
-                        self.add_expr_diagnostic_warning_ty(
-                            file,
-                            expr,
-                            format!(
-                                "Cannot access field \"{}\" for type \"{}\"",
-                                field.as_str(),
-                                receiver_ty.display(db)
-                            ),
-                        )
-                    })
+                        receiver_ty
+                            .fields(db)
+                            .and_then(|mut fields| {
+                                fields.find_map(|(f, ty)| {
+                                    if &f.name(db) == field {
+                                        Some(ty.clone())
+                                    } else {
+                                        None
+                                    }
+                                })
+                            })
+                            .unwrap_or_else(|| {
+                                match receiver_ty.kind() {
+                                    TyKind::Struct(Some(Struct::FieldSignature { ty })) => {
+                                        return ty.clone()
+                                    }
+                                    TyKind::Struct(Some(Struct::Attributes { attrs })) => {
+                                        return attrs
+                                            .iter()
+                                            .find_map(|(name, attr)| {
+                                                if name == field {
+                                                    Some(attr.expected_ty())
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                            .unwrap_or_else(|| self.unknown_ty());
+                                    }
+                                    TyKind::Struct(_) => return self.unknown_ty(),
+                                    _ => {}
+                                }
+
+                                self.add_expr_diagnostic_warning_ty(
+                                    file,
+                                    expr,
+                                    format!(
+                                        "Cannot access field \"{}\" for type \"{}\"",
+                                        field.as_str(),
+                                        receiver_ty.display(db)
+                                    ),
+                                )
+                            })
+                    }
+                }
             }
             Expr::Index { lhs, index } => {
                 let lhs_ty = self.infer_expr(file, *lhs);
@@ -304,7 +314,7 @@ impl TyCtxt<'_> {
                                 Some(TyKind::ProviderInstance(provider.clone()).intern())
                             }
                             (TyKind::Any | TyKind::Unknown, _) => Some(Ty::unknown()),
-                            (TyKind::BuiltinType(builtin), TyKind::Provider(provider))
+                            (TyKind::BuiltinType(builtin, None), TyKind::Provider(provider))
                                 if builtin.name(db).as_str() == "Target" =>
                             {
                                 Some(TyKind::ProviderInstance(provider.clone()).intern())
@@ -1184,33 +1194,64 @@ impl TyCtxt<'_> {
             return ty.clone();
         }
 
-        let ty = match &module(self.db, file)[param] {
-            Param::Simple { type_ref, .. } => type_ref
-                .as_ref()
-                .map(|type_ref| self.lower_param_type_ref(file, param, &type_ref))
-                .unwrap_or_else(|| self.unknown_ty()),
-            Param::ArgsList { type_ref, .. } => TyKind::Tuple(Tuple::Variable(
-                type_ref
+        let ty = self
+            .infer_param_from_rule_usage(file, param)
+            .unwrap_or_else(|| match &module(self.db, file)[param] {
+                Param::Simple { type_ref, .. } => type_ref
                     .as_ref()
-                    .map(|type_ref| self.lower_param_type_ref(file, param, type_ref))
+                    .map(|type_ref| self.lower_param_type_ref(file, param, &type_ref))
                     .unwrap_or_else(|| self.unknown_ty()),
-            ))
-            .intern(),
-            Param::KwargsDict { type_ref, .. } => TyKind::Dict(
-                self.string_ty(),
-                type_ref
-                    .as_ref()
-                    .map(|type_ref| self.lower_param_type_ref(file, param, type_ref))
-                    .unwrap_or_else(|| self.unknown_ty()),
-                None,
-            )
-            .intern(),
-        };
+                Param::ArgsList { type_ref, .. } => TyKind::Tuple(Tuple::Variable(
+                    type_ref
+                        .as_ref()
+                        .map(|type_ref| self.lower_param_type_ref(file, param, type_ref))
+                        .unwrap_or_else(|| self.unknown_ty()),
+                ))
+                .intern(),
+                Param::KwargsDict { type_ref, .. } => TyKind::Dict(
+                    self.string_ty(),
+                    type_ref
+                        .as_ref()
+                        .map(|type_ref| self.lower_param_type_ref(file, param, type_ref))
+                        .unwrap_or_else(|| self.unknown_ty()),
+                    None,
+                )
+                .intern(),
+            });
 
         self.cx
             .type_of_param
             .insert(FileParamId::new(file, param), ty.clone());
         ty
+    }
+
+    fn infer_param_from_rule_usage(&mut self, file: File, param: ParamId) -> Option<Ty> {
+        let module = module(self.db, file);
+        let name = match module[*module.param_to_def_stmt.get(&param)?] {
+            Stmt::Def { func, .. } if func.params(self.db).len() == 1 => func.name(self.db),
+            _ => return None,
+        };
+        match self
+            .infer_expr(file, *module.call_expr_with_impl_fn.get(&name)?)
+            .kind()
+        {
+            TyKind::Rule(rule) => {
+                let ty = builtin_types(self.db, file.dialect(self.db))
+                    .types(self.db)
+                    .get(match rule.kind {
+                        RuleKind::Build => "ctx",
+                        RuleKind::Repository => "repository_ctx",
+                    })?;
+                match ty.kind() {
+                    TyKind::BuiltinType(ty, _) => Some(
+                        TyKind::BuiltinType(*ty, Some(TyData::Attributes(rule.attrs.clone())))
+                            .intern(),
+                    ),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
     }
 
     fn lower_param_type_ref(&mut self, file: File, param: ParamId, type_ref: &TypeRef) -> Ty {

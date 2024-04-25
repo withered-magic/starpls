@@ -67,23 +67,23 @@ fn check_infer(input: &str, expect: Expect) {
         .unwrap();
     }
 
-    for (ptr, _) in source_map
-        .param_map
-        .keys()
-        .map(|ptr| (ptr, ptr.syntax_node_ptr().text_range()))
-        .sorted_by(|(_, lhs), (_, rhs)| {
-            if lhs.contains_range(rhs.clone()) {
-                Ordering::Greater
-            } else if rhs.contains_range(lhs.clone()) {
-                Ordering::Less
-            } else {
-                lhs.start().cmp(&rhs.start())
-            }
-        })
-    {
-        let param = *source_map.param_map.get(&ptr).unwrap();
-        db.infer_param(file, param);
-    }
+    // for (ptr, _) in source_map
+    //     .param_map
+    //     .keys()
+    //     .map(|ptr| (ptr, ptr.syntax_node_ptr().text_range()))
+    //     .sorted_by(|(_, lhs), (_, rhs)| {
+    //         if lhs.contains_range(rhs.clone()) {
+    //             Ordering::Greater
+    //         } else if rhs.contains_range(lhs.clone()) {
+    //             Ordering::Less
+    //         } else {
+    //             lhs.start().cmp(&rhs.start())
+    //         }
+    //     })
+    // {
+    //     let param = *source_map.param_map.get(&ptr).unwrap();
+    //     db.infer_param(file, param);
+    // }
 
     let diagnostics = db.gcx.with_tcx(&db, |tcx| tcx.diagnostics_for_file(file));
     if !diagnostics.is_empty() {

@@ -19,16 +19,12 @@ pub(crate) mod scope;
 mod tests;
 
 pub type ModulePtr = AstPtr<ast::Module>;
-
 pub type ExprId = Id<Expr>;
 pub type ExprPtr = AstPtr<ast::Expression>;
-
 pub type StmtId = Id<Stmt>;
 pub type StmtPtr = AstPtr<ast::Statement>;
-
 pub type ParamId = Id<Param>;
 pub type ParamPtr = AstPtr<ast::Parameter>;
-
 pub type LoadItemId = Id<LoadItem>;
 pub type LoadItemPtr = AstPtr<ast::LoadItem>;
 
@@ -40,6 +36,8 @@ pub struct Module {
     pub(crate) load_items: Arena<LoadItem>,
     pub(crate) top_level: Box<[StmtId]>,
     pub(crate) type_ignore_comment_lines: HashSet<u32>,
+    pub(crate) call_expr_with_impl_fn: FxHashMap<Name, ExprId>,
+    pub(crate) param_to_def_stmt: FxHashMap<ParamId, StmtId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -304,9 +302,9 @@ pub(crate) enum Argument {
 pub enum Param {
     Simple {
         name: Name,
-        default: Option<ExprId>,
         type_ref: Option<TypeRef>,
         doc: Option<Box<str>>,
+        default: Option<ExprId>,
     },
     ArgsList {
         name: Name,
@@ -462,7 +460,7 @@ pub(crate) struct LiteralString {
 }
 
 #[salsa::tracked]
-pub(crate) struct Function {
+pub struct Function {
     pub(crate) file: File,
     pub(crate) name: Name,
     pub(crate) ret_type_ref: Option<TypeRef>,

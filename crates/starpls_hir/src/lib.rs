@@ -1,6 +1,8 @@
 use starpls_bazel::Builtins;
 use starpls_common::{parse, Dialect, File, Parse};
 
+// The symbols from `def` crate are only exported to facilitate implementing the `Db` interface.
+// Ideally, we should find a way to avoid needing this, as it breaks the API boundary of this crate.
 pub use crate::{
     api::*,
     def::{ExprId, LoadItemId, LoadStmt, Module, Name, ParamId},

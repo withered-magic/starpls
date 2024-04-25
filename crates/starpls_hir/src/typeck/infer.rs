@@ -242,7 +242,7 @@ impl TyCtxt<'_> {
                                             .iter()
                                             .find_map(|(name, attr)| {
                                                 if name == field {
-                                                    Some(attr.expected_ty())
+                                                    Some(attr.resolved_ty())
                                                 } else {
                                                     None
                                                 }
@@ -310,15 +310,11 @@ impl TyCtxt<'_> {
                     TyKind::Range => (&int_ty, &int_ty, "range"),
                     kind => {
                         let return_ty = match (kind, index_ty.kind()) {
-                            (TyKind::Any | TyKind::Unknown, TyKind::Provider(provider)) => {
-                                Some(TyKind::ProviderInstance(provider.clone()).intern())
-                            }
+                            (
+                                TyKind::Any | TyKind::Unknown | TyKind::Target,
+                                TyKind::Provider(provider),
+                            ) => Some(TyKind::ProviderInstance(provider.clone()).intern()),
                             (TyKind::Any | TyKind::Unknown, _) => Some(Ty::unknown()),
-                            (TyKind::BuiltinType(builtin, None), TyKind::Provider(provider))
-                                if builtin.name(db).as_str() == "Target" =>
-                            {
-                                Some(TyKind::ProviderInstance(provider.clone()).intern())
-                            }
                             _ => None,
                         }
                         .unwrap_or_else(|| {

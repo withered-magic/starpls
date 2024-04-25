@@ -318,6 +318,20 @@ impl Ty {
                         )
                     }),
             ),
+            TyKind::Target => {
+                let label_ty = builtin_types(db, Dialect::Bazel)
+                    .types(db)
+                    .get("Label")
+                    .cloned()
+                    .unwrap_or_else(|| Ty::unknown());
+                Fields::Static(iter::once((
+                    Field(FieldInner::StaticField {
+                        name: "label",
+                        doc: Some("The identifier of the target."),
+                    }),
+                    label_ty,
+                )))
+            }
             _ => return None,
         };
 
@@ -939,6 +953,7 @@ impl Field {
                 .expect("expected module_extension tag classes")[index]
                 .0
                 .clone(),
+            FieldInner::StaticField { name, .. } => Name::from_str(name),
         }
     }
 
@@ -972,6 +987,7 @@ impl Field {
                 .as_ref()
                 .map(|doc| doc.to_string())
                 .unwrap_or_default(),
+            FieldInner::StaticField { doc, .. } => doc.unwrap_or_default().to_string(),
         }
     }
 }
@@ -1000,18 +1016,23 @@ pub(crate) enum FieldInner {
         module_extension: Arc<ModuleExtension>,
         index: usize,
     },
+    StaticField {
+        name: &'static str,
+        doc: Option<&'static str>,
+    },
 }
 
-enum Fields<I1, I2, I3, I4, I5, I6> {
+enum Fields<I1, I2, I3, I4, I5, I6, I7> {
     Intrinsic(I1),
     Builtin(I2),
     Union(I3),
     Struct(I4),
     Provider(I5),
     ModuleExtensionProxy(I6),
+    Static(I7),
 }
 
-impl<I1, I2, I3, I4, I5, I6> Iterator for Fields<I1, I2, I3, I4, I5, I6>
+impl<I1, I2, I3, I4, I5, I6, I7> Iterator for Fields<I1, I2, I3, I4, I5, I6, I7>
 where
     I1: Iterator<Item = (Field, Ty)>,
     I2: Iterator<Item = (Field, Ty)>,
@@ -1019,6 +1040,7 @@ where
     I4: Iterator<Item = (Field, Ty)>,
     I5: Iterator<Item = (Field, Ty)>,
     I6: Iterator<Item = (Field, Ty)>,
+    I7: Iterator<Item = (Field, Ty)>,
 {
     type Item = (Field, Ty);
 
@@ -1030,6 +1052,7 @@ where
             Self::Struct(iter) => iter.next(),
             Self::Provider(iter) => iter.next(),
             Self::ModuleExtensionProxy(iter) => iter.next(),
+            Self::Static(iter) => iter.next(),
         }
     }
 }
@@ -1117,6 +1140,8 @@ pub(crate) enum TyKind {
     ModuleExtensionProxy(Arc<ModuleExtension>),
     /// A Bazel tag (e.g. `maven.artifact()`)
     Tag(Arc<TagClass>),
+    /// A Bazel target (https://bazel.build/rules/lib/builtins/Target).
+    Target,
 }
 
 impl_internable!(TyKind);
@@ -1178,6 +1203,24 @@ impl Attribute {
             AttributeKind::StringList | AttributeKind::LabelList | AttributeKind::OutputList => {
                 Ty::list(Ty::string())
             }
+            AttributeKind::StringListDict => Ty::dict(Ty::string(), Ty::list(Ty::string()), None),
+        }
+    }
+
+    pub fn resolved_ty(&self) -> Ty {
+        match self.kind {
+            AttributeKind::Bool => Ty::bool(),
+            AttributeKind::Int => Ty::int(),
+            AttributeKind::IntList => Ty::list(Ty::int()),
+            AttributeKind::String => Ty::string(),
+            AttributeKind::Label => TyKind::Target.intern(),
+            AttributeKind::Output => Ty::unknown(),
+            AttributeKind::StringDict | AttributeKind::LabelKeyedStringDict => {
+                Ty::dict(Ty::string(), Ty::string(), None)
+            }
+            AttributeKind::StringList => Ty::list(Ty::string()),
+            AttributeKind::LabelList => Ty::list(TyKind::Target.intern()),
+            AttributeKind::OutputList => Ty::list(Ty::unknown()),
             AttributeKind::StringListDict => Ty::dict(Ty::string(), Ty::list(Ty::string()), None),
         }
     }

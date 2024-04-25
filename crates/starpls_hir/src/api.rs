@@ -23,6 +23,8 @@ use crate::{
     Db, ExprId, Name, TyKind,
 };
 
+const TARGET_DOC: &str = "The BUILD target for a dependency. Appears in the fields of `ctx.attr` corresponding to dependency attributes (`label` or `label_list`).";
+
 pub fn diagnostics_for_file(db: &dyn Db, file: File) -> impl Iterator<Item = Diagnostic> {
     module_scopes::accumulated::<Diagnostics>(db, file).into_iter()
 }
@@ -327,6 +329,7 @@ impl Type {
             | TyKind::ModuleExtensionProxy(module_extension) => {
                 return module_extension.doc.as_ref().map(Box::to_string)
             }
+            TyKind::Target => TARGET_DOC.into(),
             _ => return None,
         })
     }
@@ -349,7 +352,7 @@ impl Type {
                         name: name.clone(),
                         doc: attr.doc.as_ref().map(|doc| doc.to_string()),
                     }),
-                    attr.expected_ty().into(),
+                    attr.resolved_ty().into(),
                 )
             }));
         }

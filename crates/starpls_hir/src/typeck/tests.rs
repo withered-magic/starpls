@@ -1108,10 +1108,10 @@ my_rule = repository_rule(
             32..35 "ctx": ctx
             32..40 "ctx.file": struct
             32..44 "ctx.file.foo": File
-            49..53 "srcs": list[string]
+            49..53 "srcs": list[Target]
             56..59 "ctx": ctx
             56..64 "ctx.attr": struct
-            56..69 "ctx.attr.srcs": list[string]
+            56..69 "ctx.attr.srcs": list[Target]
             71..78 "my_rule": rule
             81..85 "rule": def rule(*args, **kwargs) -> Unknown
             108..118 "_rule_impl": def _rule_impl(ctx) -> Unknown
@@ -1121,10 +1121,10 @@ my_rule = repository_rule(
             150..167 "attr.label_list()": Attribute
             132..174 "{\n        \"srcs\": attr.label_list(),\n    }": dict[string, Attribute]
             81..177 "rule(\n    implementation = _rule_impl,\n    attrs = {\n        \"srcs\": attr.label_list(),\n    },\n)": rule
-            226..230 "srcs": list[string]
+            226..230 "srcs": list[Target]
             233..247 "repository_ctx": repository_ctx
             233..252 "repository_ctx.attr": struct
-            233..257 "repository_ctx.attr.srcs": list[string]
+            233..257 "repository_ctx.attr.srcs": list[Target]
             259..266 "my_rule": repository_rule
             269..284 "repository_rule": def repository_rule(implementation: Unknown, attrs: dict[string, Unknown] | None = None, local: bool = None, environ: Sequence[string] = [], configure: bool = False, remotable: bool = False, doc: string | None = None) -> callable
             307..328 "_repository_rule_impl": def _repository_rule_impl(repository_ctx) -> Unknown

@@ -289,6 +289,7 @@ impl DisplayWithDb for TyKind {
             TyKind::ModuleExtension(_) => "module_extension",
             TyKind::ModuleExtensionProxy(_) => "module_extension_proxy",
             TyKind::Tag(_) => "tag",
+            TyKind::Target => "Target",
         };
 
         f.write_str(text)

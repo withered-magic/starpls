@@ -43,8 +43,12 @@ enum Commands {
 
 #[derive(Args, Default)]
 pub(crate) struct ServerArgs {
+    /// Path to the Bazel binary.
     #[clap(long = "bazel_path")]
     bazel_path: Option<String>,
+    /// Infer attributes on a rule implementation function's context parameter.
+    #[clap(long = "experimental_infer_ctx_attributes", default_value_t = false)]
+    experimental_infer_ctx_attributes: bool,
 }
 
 fn main() -> anyhow::Result<()> {

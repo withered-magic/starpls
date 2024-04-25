@@ -46,7 +46,7 @@ pub(crate) fn run_check(paths: Vec<String>, output_base: Option<String>) -> anyh
         fetch_repo_sender,
         bzlmod_enabled,
     );
-    let mut analysis = Analysis::new(Arc::new(loader));
+    let mut analysis = Analysis::new(Arc::new(loader), Default::default());
     let mut change = Change::default();
     let mut file_ids = Vec::new();
     let mut original_paths = FxHashMap::default();

@@ -5,7 +5,9 @@ use starpls_bazel::{APIContext, Builtins};
 use starpls_common::{File, FileId, LoadItemCandidate, ResolvedPath};
 use starpls_test_util::{make_test_builtins, FixtureType};
 
-use crate::{def::ExprId, BuiltinDefs, Db, Dialect, GlobalCtxt, LoadItemId, ParamId, Ty};
+use crate::{
+    def::ExprId, BuiltinDefs, Db, Dialect, GlobalCtxt, InferenceOptions, LoadItemId, ParamId, Ty,
+};
 
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, crate::Jar)]
@@ -139,7 +141,9 @@ impl crate::Db for TestDatabase {
 #[allow(unused)]
 #[derive(Default)]
 pub(crate) struct TestDatabaseBuilder {
+    options: InferenceOptions,
     functions: Vec<String>,
+    globals: Vec<(String, String)>,
     types: Vec<FixtureType>,
 }
 
@@ -149,15 +153,26 @@ impl TestDatabaseBuilder {
         self.functions.push(name.into());
     }
 
+    pub fn add_global(&mut self, name: impl Into<String>, ty: impl Into<String>) {
+        self.globals.push((name.into(), ty.into()));
+    }
+
     pub fn add_type(&mut self, ty: FixtureType) {
         self.types.push(ty);
     }
 
+    pub fn set_inference_options(&mut self, options: InferenceOptions) {
+        self.options = options;
+    }
+
     pub fn build(self) -> TestDatabase {
-        let mut db = TestDatabase::default();
+        let mut db = TestDatabase {
+            gcx: Arc::new(GlobalCtxt::new(self.options)),
+            ..Default::default()
+        };
         db.set_builtin_defs(
             Dialect::Bazel,
-            make_test_builtins(self.functions, self.types),
+            make_test_builtins(self.functions, self.globals, self.types),
             Builtins::default(),
         );
         db

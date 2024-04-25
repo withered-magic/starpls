@@ -5,8 +5,8 @@ use rustc_hash::FxHashMap;
 use salsa::ParallelDatabase;
 use starpls_bazel::{APIContext, Builtins};
 use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate, ResolvedPath};
-pub use starpls_hir::Cancelled;
 use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, LoadItemId, LoadStmt, ParamId, Ty};
+pub use starpls_hir::{Cancelled, InferenceOptions};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use starpls_test_util::make_test_builtins;
 
@@ -269,12 +269,12 @@ pub struct Analysis {
 }
 
 impl Analysis {
-    pub fn new(loader: Arc<dyn FileLoader>) -> Self {
+    pub fn new(loader: Arc<dyn FileLoader>, options: InferenceOptions) -> Self {
         Self {
             db: Database {
                 builtin_defs: Default::default(),
                 files: Default::default(),
-                gcx: Default::default(),
+                gcx: Arc::new(GlobalCtxt::new(options)),
                 storage: Default::default(),
                 loader,
             },
@@ -311,10 +311,17 @@ impl AnalysisSnapshot {
         file_set.insert("main.star".to_string(), (file_id, contents.to_string()));
         let mut change = Change::default();
         change.create_file(file_id, dialect, api_context, contents.to_string());
-        let mut analysis = Analysis::new(Arc::new(SimpleFileLoader::from_file_set(file_set)));
+        let mut analysis = Analysis::new(
+            Arc::new(SimpleFileLoader::from_file_set(file_set)),
+            Default::default(),
+        );
         analysis.db.set_builtin_defs(
             Dialect::Bazel,
-            make_test_builtins(vec!["provider".to_string(), "struct".to_string()], vec![]),
+            make_test_builtins(
+                vec!["provider".to_string(), "struct".to_string()],
+                vec![],
+                vec![],
+            ),
             Builtins::default(),
         );
         analysis.apply_change(change);

@@ -139,9 +139,15 @@ impl std::fmt::Display for TypecheckCancelled {
 
 impl std::error::Error for Cancelled {}
 
+#[derive(Clone, Debug, Default)]
+pub struct InferenceOptions {
+    pub infer_ctx_attrs: bool,
+}
+
 #[derive(Default)]
 struct SharedState {
     cancelled: AtomicCell<bool>,
+    options: InferenceOptions,
 }
 
 /// A reference to a type in a source file.
@@ -227,7 +233,11 @@ impl Ty {
                     .map(move |(index, field)| {
                         let resolved = resolve_type_ref(db, &field.type_ref).0;
                         let resolved = match (resolved.kind(), data) {
-                            (TyKind::Struct(_), Some(TyData::Attributes(attrs))) => {
+                            // If `TyData` is set, this means the current type is either `ctx` or `repository_ctx`.
+                            // Override the `attr` field for both of these types.
+                            (TyKind::Struct(_), Some(TyData::Attributes(attrs)))
+                                if field.name.as_str() == "attr" =>
+                            {
                                 TyKind::Struct(Some(Struct::Attributes {
                                     attrs: attrs.clone(),
                                 }))
@@ -1325,6 +1335,16 @@ pub struct GlobalCtxt {
 }
 
 impl GlobalCtxt {
+    pub fn new(options: InferenceOptions) -> Self {
+        Self {
+            shared_state: Arc::new(SharedState {
+                options,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
     pub fn cancel(&self) -> CancelGuard {
         CancelGuard::new(self)
     }

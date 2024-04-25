@@ -1195,7 +1195,11 @@ impl TyCtxt<'_> {
         }
 
         let ty = self
-            .infer_param_from_rule_usage(file, param)
+            .shared_state
+            .options
+            .infer_ctx_attrs
+            .then(|| self.infer_param_from_rule_usage(file, param))
+            .and_then(|ty| ty)
             .unwrap_or_else(|| match &module(self.db, file)[param] {
                 Param::Simple { type_ref, .. } => type_ref
                     .as_ref()

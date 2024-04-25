@@ -7,7 +7,7 @@ pub use crate::{
     api::*,
     def::{ExprId, LoadItemId, LoadStmt, Module, Name, ParamId},
     display::{DisplayWithDb, DisplayWithDbWrapper},
-    typeck::{builtins::BuiltinDefs, Cancelled, GlobalCtxt, Ty, TyCtxt},
+    typeck::{builtins::BuiltinDefs, Cancelled, GlobalCtxt, InferenceOptions, Ty, TyCtxt},
 };
 use crate::{
     def::ModuleSourceMap,

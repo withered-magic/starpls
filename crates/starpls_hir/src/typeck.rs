@@ -220,15 +220,24 @@ impl Ty {
         }
 
         let fields = match kind {
-            TyKind::BuiltinType(ty, _) => Fields::Builtin(
+            TyKind::BuiltinType(ty, Some(data)) => Fields::Builtin(
                 ty.fields(db)
                     .iter()
                     .enumerate()
-                    .map(|(index, field)| {
-                        (
-                            Field(FieldInner::BuiltinField { parent: *ty, index }),
-                            resolve_type_ref(db, &field.type_ref).0,
-                        )
+                    .map(move |(index, field)| {
+                        let resolved = resolve_type_ref(db, &field.type_ref).0;
+                        let resolved = match (resolved.kind(), data) {
+                            (TyKind::Struct(_), TyData::Attributes(attrs)) => {
+                                eprintln!("whoa");
+                                TyKind::Struct(Some(Struct::Attributes {
+                                    attrs: attrs.clone(),
+                                }))
+                                .intern()
+                            }
+                            _ => resolved,
+                        };
+                        let field = Field(FieldInner::BuiltinField { parent: *ty, index });
+                        (field, resolved)
                     })
                     .chain(ty.methods(db).iter().map(|func| {
                         (

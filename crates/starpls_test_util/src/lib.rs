@@ -38,12 +38,30 @@ fn find_selected_ranges(contents: &str) -> Vec<TextRange> {
 pub struct FixtureType {
     pub name: String,
     pub fields: Vec<(String, String)>,
+    pub methods: Vec<String>,
 }
 
-pub fn make_test_builtins(functions: Vec<String>, types: Vec<FixtureType>) -> Builtins {
+impl FixtureType {
+    pub fn new(name: &str, fields: Vec<(&str, &str)>, methods: Vec<&str>) -> Self {
+        FixtureType {
+            name: name.into(),
+            fields: fields
+                .into_iter()
+                .map(|(name, ty)| (name.into(), ty.into()))
+                .collect(),
+            methods: methods.into_iter().map(|method| method.into()).collect(),
+        }
+    }
+}
+
+pub fn make_test_builtins(
+    functions: Vec<String>,
+    globals: Vec<(String, String)>,
+    types: Vec<FixtureType>,
+) -> Builtins {
     Builtins {
         global: functions
-            .iter()
+            .into_iter()
             .map(|name| Value {
                 name: name.to_string(),
                 callable: Some(Callable {
@@ -63,6 +81,11 @@ pub fn make_test_builtins(functions: Vec<String>, types: Vec<FixtureType>) -> Bu
                 }),
                 ..Default::default()
             })
+            .chain(globals.into_iter().map(|(name, ty)| Value {
+                name,
+                r#type: ty,
+                ..Default::default()
+            }))
             .collect(),
         r#type: types
             .into_iter()
@@ -76,6 +99,25 @@ pub fn make_test_builtins(functions: Vec<String>, types: Vec<FixtureType>) -> Bu
                         r#type: field.1,
                         ..Default::default()
                     })
+                    .chain(ty.methods.into_iter().map(|name| Value {
+                        name,
+                        callable: Some(Callable {
+                            param: vec![
+                                Param {
+                                    name: "args".to_string(),
+                                    is_star_arg: true,
+                                    ..Default::default()
+                                },
+                                Param {
+                                    name: "kwargs".to_string(),
+                                    is_star_star_arg: true,
+                                    ..Default::default()
+                                },
+                            ],
+                            return_type: "Unknown".to_string(),
+                        }),
+                        ..Default::default()
+                    }))
                     .collect(),
                 ..Default::default()
             })

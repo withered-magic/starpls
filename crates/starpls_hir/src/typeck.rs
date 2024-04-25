@@ -139,9 +139,15 @@ impl std::fmt::Display for TypecheckCancelled {
 
 impl std::error::Error for Cancelled {}
 
+#[derive(Clone, Debug, Default)]
+pub struct InferenceOptions {
+    pub infer_ctx_attrs: bool,
+}
+
 #[derive(Default)]
 struct SharedState {
     cancelled: AtomicCell<bool>,
+    options: InferenceOptions,
 }
 
 /// A reference to a type in a source file.
@@ -220,15 +226,27 @@ impl Ty {
         }
 
         let fields = match kind {
-            TyKind::BuiltinType(ty) => Fields::Builtin(
+            TyKind::BuiltinType(ty, data) => Fields::Builtin(
                 ty.fields(db)
                     .iter()
                     .enumerate()
-                    .map(|(index, field)| {
-                        (
-                            Field(FieldInner::BuiltinField { parent: *ty, index }),
-                            resolve_type_ref(db, &field.type_ref).0,
-                        )
+                    .map(move |(index, field)| {
+                        let resolved = resolve_type_ref(db, &field.type_ref).0;
+                        let resolved = match (resolved.kind(), data) {
+                            // If `TyData` is set, this means the current type is either `ctx` or `repository_ctx`.
+                            // Override the `attr` field for both of these types.
+                            (TyKind::Struct(_), Some(TyData::Attributes(attrs)))
+                                if field.name.as_str() == "attr" =>
+                            {
+                                TyKind::Struct(Some(Struct::Attributes {
+                                    attrs: attrs.clone(),
+                                }))
+                                .intern()
+                            }
+                            _ => resolved,
+                        };
+                        let field = Field(FieldInner::BuiltinField { parent: *ty, index });
+                        (field, resolved)
                     })
                     .chain(ty.methods(db).iter().map(|func| {
                         (
@@ -263,7 +281,10 @@ impl Ty {
                     .flat_map(|fields| fields.iter())
                     .map(|(name, ty)| {
                         (
-                            Field(FieldInner::StructField { name: name.clone() }),
+                            Field(FieldInner::StructField {
+                                name: name.clone(),
+                                doc: None,
+                            }),
                             ty.clone(),
                         )
                     }),
@@ -297,6 +318,20 @@ impl Ty {
                         )
                     }),
             ),
+            TyKind::Target => {
+                let label_ty = builtin_types(db, Dialect::Bazel)
+                    .types(db)
+                    .get("Label")
+                    .cloned()
+                    .unwrap_or_else(|| Ty::unknown());
+                Fields::Static(iter::once((
+                    Field(FieldInner::StaticField {
+                        name: "label",
+                        doc: Some("The identifier of the target."),
+                    }),
+                    label_ty,
+                )))
+            }
             _ => return None,
         };
 
@@ -537,6 +572,7 @@ impl Ty {
         }
     }
 
+    #[allow(unused)]
     fn is_any(&self) -> bool {
         self.kind() == &TyKind::Any
     }
@@ -594,6 +630,7 @@ impl Ty {
                     .all(|ty1| tys2.iter().any(|ty2| Ty::eq(ty1, ty2)))
             }
             (TyKind::Attribute(_), TyKind::Attribute(_)) => true,
+            (TyKind::BuiltinType(ty1, _), TyKind::BuiltinType(ty2, _)) => ty1 == ty2,
             _ => ty1 == ty2,
         }
     }
@@ -888,7 +925,7 @@ where
     }
 }
 
-pub struct Field(FieldInner);
+pub struct Field(pub(crate) FieldInner);
 
 impl Field {
     pub fn name(&self, db: &dyn Db) -> Name {
@@ -916,6 +953,7 @@ impl Field {
                 .expect("expected module_extension tag classes")[index]
                 .0
                 .clone(),
+            FieldInner::StaticField { name, .. } => Name::from_str(name),
         }
     }
 
@@ -924,7 +962,7 @@ impl Field {
             FieldInner::BuiltinField { parent, index } => parent.fields(db)[index].doc.clone(),
             FieldInner::BuiltinMethod { func } => func.doc(db).clone(),
             FieldInner::IntrinsicField { parent, index } => parent.fields(db)[index].doc.clone(),
-            FieldInner::StructField { .. } => String::new(),
+            FieldInner::StructField { ref doc, .. } => doc.as_ref().cloned().unwrap_or_default(),
             FieldInner::ProviderField {
                 ref provider,
                 index,
@@ -949,11 +987,12 @@ impl Field {
                 .as_ref()
                 .map(|doc| doc.to_string())
                 .unwrap_or_default(),
+            FieldInner::StaticField { doc, .. } => doc.unwrap_or_default().to_string(),
         }
     }
 }
 
-enum FieldInner {
+pub(crate) enum FieldInner {
     BuiltinField {
         parent: BuiltinType,
         index: usize,
@@ -967,6 +1006,7 @@ enum FieldInner {
     },
     StructField {
         name: Name,
+        doc: Option<String>,
     },
     ProviderField {
         provider: Arc<Provider>,
@@ -976,18 +1016,23 @@ enum FieldInner {
         module_extension: Arc<ModuleExtension>,
         index: usize,
     },
+    StaticField {
+        name: &'static str,
+        doc: Option<&'static str>,
+    },
 }
 
-enum Fields<I1, I2, I3, I4, I5, I6> {
+enum Fields<I1, I2, I3, I4, I5, I6, I7> {
     Intrinsic(I1),
     Builtin(I2),
     Union(I3),
     Struct(I4),
     Provider(I5),
     ModuleExtensionProxy(I6),
+    Static(I7),
 }
 
-impl<I1, I2, I3, I4, I5, I6> Iterator for Fields<I1, I2, I3, I4, I5, I6>
+impl<I1, I2, I3, I4, I5, I6, I7> Iterator for Fields<I1, I2, I3, I4, I5, I6, I7>
 where
     I1: Iterator<Item = (Field, Ty)>,
     I2: Iterator<Item = (Field, Ty)>,
@@ -995,6 +1040,7 @@ where
     I4: Iterator<Item = (Field, Ty)>,
     I5: Iterator<Item = (Field, Ty)>,
     I6: Iterator<Item = (Field, Ty)>,
+    I7: Iterator<Item = (Field, Ty)>,
 {
     type Item = (Field, Ty);
 
@@ -1006,8 +1052,14 @@ where
             Self::Struct(iter) => iter.next(),
             Self::Provider(iter) => iter.next(),
             Self::ModuleExtensionProxy(iter) => iter.next(),
+            Self::Static(iter) => iter.next(),
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum TyData {
+    Attributes(Arc<Vec<(Name, Arc<Attribute>)>>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1056,7 +1108,7 @@ pub(crate) enum TyKind {
     BuiltinFunction(BuiltinFunction),
     /// A type defined outside of the Starlark specification.
     /// For example, common Bazel types like `Label`.
-    BuiltinType(BuiltinType),
+    BuiltinType(BuiltinType, Option<TyData>),
     /// A bound type variable, e.g. the argument to the `append()` method
     /// of the `list[int]` class.
     BoundVar(usize),
@@ -1088,6 +1140,8 @@ pub(crate) enum TyKind {
     ModuleExtensionProxy(Arc<ModuleExtension>),
     /// A Bazel tag (e.g. `maven.artifact()`)
     Tag(Arc<TagClass>),
+    /// A Bazel target (https://bazel.build/rules/lib/builtins/Target).
+    Target,
 }
 
 impl_internable!(TyKind);
@@ -1152,6 +1206,24 @@ impl Attribute {
             AttributeKind::StringListDict => Ty::dict(Ty::string(), Ty::list(Ty::string()), None),
         }
     }
+
+    pub fn resolved_ty(&self) -> Ty {
+        match self.kind {
+            AttributeKind::Bool => Ty::bool(),
+            AttributeKind::Int => Ty::int(),
+            AttributeKind::IntList => Ty::list(Ty::int()),
+            AttributeKind::String => Ty::string(),
+            AttributeKind::Label => TyKind::Target.intern(),
+            AttributeKind::Output => Ty::unknown(),
+            AttributeKind::StringDict | AttributeKind::LabelKeyedStringDict => {
+                Ty::dict(Ty::string(), Ty::string(), None)
+            }
+            AttributeKind::StringList => Ty::list(Ty::string()),
+            AttributeKind::LabelList => Ty::list(TyKind::Target.intern()),
+            AttributeKind::OutputList => Ty::list(Ty::unknown()),
+            AttributeKind::StringListDict => Ty::dict(Ty::string(), Ty::list(Ty::string()), None),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1164,7 +1236,7 @@ pub enum RuleKind {
 pub(crate) struct Rule {
     pub(crate) kind: RuleKind,
     pub(crate) doc: Option<Box<str>>,
-    attrs: Box<[(Name, Arc<Attribute>)]>,
+    pub(crate) attrs: Arc<Vec<(Name, Arc<Attribute>)>>,
 }
 
 impl Rule {
@@ -1201,6 +1273,9 @@ pub(crate) enum Struct {
     },
     FieldSignature {
         ty: Ty,
+    },
+    Attributes {
+        attrs: Arc<Vec<(Name, Arc<Attribute>)>>,
     },
 }
 
@@ -1303,6 +1378,16 @@ pub struct GlobalCtxt {
 }
 
 impl GlobalCtxt {
+    pub fn new(options: InferenceOptions) -> Self {
+        Self {
+            shared_state: Arc::new(SharedState {
+                options,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
     pub fn cancel(&self) -> CancelGuard {
         CancelGuard::new(self)
     }
@@ -1516,8 +1601,8 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
         (TyKind::Dict(key_source, value_source, _), TyKind::Dict(key_target, value_target, _)) => {
             assign_tys(db, key_source, key_target) && assign_tys(db, value_source, value_target)
         }
-        (TyKind::String(_), TyKind::BuiltinType(ty))
-        | (TyKind::BuiltinType(ty), TyKind::String(_))
+        (TyKind::String(_), TyKind::BuiltinType(ty, _))
+        | (TyKind::BuiltinType(ty, _), TyKind::String(_))
             if ty.name(db).as_str() == "Label" =>
         {
             true

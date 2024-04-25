@@ -256,7 +256,7 @@ impl DisplayWithDb for TyKind {
                 f.write_str(") -> ")?;
                 return func.ret_type_ref(db).fmt(f);
             }
-            TyKind::BuiltinType(type_) => return f.write_str(type_.name(db).as_str()),
+            TyKind::BuiltinType(ty, _) => return f.write_str(ty.name(db).as_str()),
             TyKind::BoundVar(index) => return write!(f, "'{}", index),
             TyKind::Protocol(proto) => {
                 let (name, ty) = match proto {
@@ -289,6 +289,7 @@ impl DisplayWithDb for TyKind {
             TyKind::ModuleExtension(_) => "module_extension",
             TyKind::ModuleExtensionProxy(_) => "module_extension_proxy",
             TyKind::Tag(_) => "tag",
+            TyKind::Target => "Target",
         };
 
         f.write_str(text)

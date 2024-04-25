@@ -101,18 +101,20 @@ impl<'a> LoweringContext<'a> {
                     &doc,
                 );
                 let stmts = self.lower_suite_opt(node.suite());
-                Stmt::Def {
-                    func: Function::new(
-                        self.db,
-                        self.file,
-                        name,
-                        spec.map(|spec| spec.1),
-                        doc,
-                        ptr.syntax_node_ptr(),
-                        params,
-                    ),
-                    stmts,
+                let func = Function::new(
+                    self.db,
+                    self.file,
+                    name,
+                    spec.map(|spec| spec.1),
+                    doc,
+                    ptr.syntax_node_ptr(),
+                    params,
+                );
+                let stmt = self.alloc_stmt(Stmt::Def { func, stmts }, ptr);
+                for param in func.params(self.db).iter() {
+                    self.module.param_to_def_stmt.insert(*param, stmt);
                 }
+                return stmt;
             }
             ast::Statement::If(stmt) => {
                 let test = self.lower_expr_opt(stmt.test());
@@ -280,7 +282,20 @@ impl<'a> LoweringContext<'a> {
             ast::Expression::Call(node) => {
                 let callee = self.lower_expr_opt(node.callee());
                 let args = self.lower_args_opt(node.arguments());
-                Expr::Call { callee, args }
+                let impl_fn_name = args.iter().find_map(|arg| match arg {
+                    Argument::Keyword { name, expr } if name.as_str() == "implementation" => {
+                        match &self.module.exprs[*expr] {
+                            Expr::Name { name } => Some(name.clone()),
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                });
+                let expr = self.alloc_expr(Expr::Call { callee, args }, ptr);
+                if let Some(name) = impl_fn_name {
+                    self.module.call_expr_with_impl_fn.insert(name, expr);
+                }
+                return expr;
             }
             ast::Expression::Index(node) => {
                 let lhs = self.lower_expr_opt(node.lhs());

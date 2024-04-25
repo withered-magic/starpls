@@ -7,25 +7,39 @@ use starpls_common::{parse, Db as _, Dialect, FileId};
 use starpls_syntax::ast::AstNode;
 use starpls_test_util::FixtureType;
 
-use crate::{source_map, test_database::TestDatabaseBuilder, Db as _, DisplayWithDb};
+use crate::{
+    source_map, test_database::TestDatabaseBuilder, Db as _, DisplayWithDb, InferenceOptions,
+};
 
 fn check_infer(input: &str, expect: Expect) {
+    check_infer_with_options(input, expect, Default::default())
+}
+
+fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptions) {
     let mut builder = TestDatabaseBuilder::default();
     builder.add_function("provider");
+    builder.add_function("rule");
     builder.add_function("struct");
-    builder.add_type(FixtureType {
-        name: "File".to_string(),
-        fields: vec![],
-    });
-    builder.add_type(FixtureType {
-        name: "ctx".to_string(),
-        fields: vec![
-            ("executable".to_string(), "struct".to_string()),
-            ("file".to_string(), "struct".to_string()),
-            ("files".to_string(), "struct".to_string()),
-            ("outputs".to_string(), "struct".to_string()),
+    builder.add_type(FixtureType::new("File", vec![], vec![]));
+    builder.add_type(FixtureType::new(
+        "ctx",
+        vec![
+            ("attr", "struct"),
+            ("executable", "struct"),
+            ("file", "struct"),
+            ("files", "struct"),
+            ("outputs", "struct"),
         ],
-    });
+        vec![],
+    ));
+    builder.add_type(FixtureType::new(
+        "repository_ctx",
+        vec![("attr", "struct")],
+        vec![],
+    ));
+    builder.add_type(FixtureType::new("attr", vec![], vec!["label_list"]));
+    builder.add_global("attr", "attr");
+    builder.set_inference_options(options);
 
     let mut db = builder.build();
     let file_id = FileId(0);
@@ -1060,6 +1074,106 @@ def _impl(ctx):
             108..111 "ctx": ctx
             108..119 "ctx.outputs": struct
             108..123 "ctx.outputs.qux": File
+        "#]],
+    );
+}
+
+#[test]
+fn test_infer_ctx_attrs() {
+    check_infer_with_options(
+        r#"
+def _rule_impl(ctx):
+    foo = ctx.file.foo
+    srcs = ctx.attr.srcs
+
+my_rule = rule(
+    implementation = _rule_impl,
+    attrs = {
+        "srcs": attr.label_list(),
+    },
+)
+
+def _repository_rule_impl(repository_ctx):
+    srcs = repository_ctx.attr.srcs
+
+my_rule = repository_rule(
+    implementation = _repository_rule_impl,
+    attrs = {
+        "srcs": attr.label_list(),
+    },
+)
+"#,
+        expect![[r#"
+            26..29 "foo": File
+            32..35 "ctx": ctx
+            32..40 "ctx.file": struct
+            32..44 "ctx.file.foo": File
+            49..53 "srcs": list[Target]
+            56..59 "ctx": ctx
+            56..64 "ctx.attr": struct
+            56..69 "ctx.attr.srcs": list[Target]
+            71..78 "my_rule": rule
+            81..85 "rule": def rule(*args, **kwargs) -> Unknown
+            108..118 "_rule_impl": def _rule_impl(ctx) -> Unknown
+            142..148 "\"srcs\"": Literal["srcs"]
+            150..154 "attr": attr
+            150..165 "attr.label_list": def label_list(*args, **kwargs) -> Unknown
+            150..167 "attr.label_list()": Attribute
+            132..174 "{\n        \"srcs\": attr.label_list(),\n    }": dict[string, Attribute]
+            81..177 "rule(\n    implementation = _rule_impl,\n    attrs = {\n        \"srcs\": attr.label_list(),\n    },\n)": rule
+            226..230 "srcs": list[Target]
+            233..247 "repository_ctx": repository_ctx
+            233..252 "repository_ctx.attr": struct
+            233..257 "repository_ctx.attr.srcs": list[Target]
+            259..266 "my_rule": repository_rule
+            269..284 "repository_rule": def repository_rule(implementation: Unknown, attrs: dict[string, Unknown] | None = None, local: bool = None, environ: Sequence[string] = [], configure: bool = False, remotable: bool = False, doc: string | None = None) -> callable
+            307..328 "_repository_rule_impl": def _repository_rule_impl(repository_ctx) -> Unknown
+            352..358 "\"srcs\"": Literal["srcs"]
+            360..364 "attr": attr
+            360..375 "attr.label_list": def label_list(*args, **kwargs) -> Unknown
+            360..377 "attr.label_list()": Attribute
+            342..384 "{\n        \"srcs\": attr.label_list(),\n    }": dict[string, Attribute]
+            269..387 "repository_rule(\n    implementation = _repository_rule_impl,\n    attrs = {\n        \"srcs\": attr.label_list(),\n    },\n)": repository_rule
+        "#]],
+        InferenceOptions {
+            infer_ctx_attrs: true,
+        },
+    );
+}
+
+#[test]
+fn test_infer_ctx_attrs_disabled() {
+    check_infer(
+        r#"
+def _rule_impl(ctx):
+    foo = ctx.file.foo
+    srcs = ctx.attr.srcs
+
+my_rule = rule(
+    implementation = _rule_impl,
+    attrs = {
+        "srcs": attr.label_list(),
+    },
+)    
+"#,
+        expect![[r#"
+            26..29 "foo": Unknown
+            32..35 "ctx": Unknown
+            32..40 "ctx.file": Unknown
+            32..44 "ctx.file.foo": Unknown
+            49..53 "srcs": Unknown
+            56..59 "ctx": Unknown
+            56..64 "ctx.attr": Unknown
+            56..69 "ctx.attr.srcs": Unknown
+            71..78 "my_rule": rule
+            81..85 "rule": def rule(*args, **kwargs) -> Unknown
+            108..118 "_rule_impl": def _rule_impl(ctx) -> Unknown
+            142..148 "\"srcs\"": Literal["srcs"]
+            150..154 "attr": attr
+            150..165 "attr.label_list": def label_list(*args, **kwargs) -> Unknown
+            150..167 "attr.label_list()": Attribute
+            132..174 "{\n        \"srcs\": attr.label_list(),\n    }": dict[string, Attribute]
+            81..177 "rule(\n    implementation = _rule_impl,\n    attrs = {\n        \"srcs\": attr.label_list(),\n    },\n)": rule
         "#]],
     );
 }

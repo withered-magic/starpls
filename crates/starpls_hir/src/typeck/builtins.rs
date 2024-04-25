@@ -283,8 +283,7 @@ impl BuiltinFunction {
                                                 )),
                                                 _ => None,
                                             })
-                                            .collect::<Vec<_>>()
-                                            .into_boxed_slice(),
+                                            .collect::<Vec<_>>(),
                                     )
                                 }
                             }
@@ -300,7 +299,7 @@ impl BuiltinFunction {
                         RuleKind::Repository
                     },
                     doc: doc.map(|doc| doc.value(db).clone()),
-                    attrs: attrs.unwrap_or_else(|| Vec::new().into_boxed_slice()),
+                    attrs: Arc::new(attrs.unwrap_or_default()),
                 })
             }
 
@@ -619,13 +618,16 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
 
         types.insert(
             type_.name.clone(),
-            TyKind::BuiltinType(BuiltinType::new(
-                db,
-                Name::from_str(&type_.name),
-                fields,
-                methods,
-                normalize_doc_text(&type_.doc),
-            ))
+            TyKind::BuiltinType(
+                BuiltinType::new(
+                    db,
+                    Name::from_str(&type_.name),
+                    fields,
+                    methods,
+                    normalize_doc_text(&type_.doc),
+                ),
+                None,
+            )
             .intern(),
         );
     }

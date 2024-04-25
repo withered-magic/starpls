@@ -17,10 +17,13 @@ use crate::{
     module, source_map,
     typeck::{
         self, builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref,
-        ParamInner, Provider, Substitution, TagClass, Tuple, Ty, TypeRef,
+        FieldInner, ParamInner, Provider, Struct as DefStruct, Substitution, TagClass, Tuple, Ty,
+        TypeRef,
     },
     Db, ExprId, Name, TyKind,
 };
+
+const TARGET_DOC: &str = "The BUILD target for a dependency. Appears in the fields of `ctx.attr` corresponding to dependency attributes (`label` or `label_list`).";
 
 pub fn diagnostics_for_file(db: &dyn Db, file: File) -> impl Iterator<Item = Diagnostic> {
     module_scopes::accumulated::<Diagnostics>(db, file).into_iter()
@@ -77,8 +80,9 @@ impl<'a> Semantics<'a> {
     }
 
     pub fn type_of_param(&self, file: File, param: &ast::Parameter) -> Option<Type> {
-        let ptr = AstPtr::new(param);
-        let param = source_map(self.db, file).param_map.get(&ptr)?;
+        let param = source_map(self.db, file)
+            .param_map
+            .get(&AstPtr::new(param))?;
         Some(self.db.infer_param(file, *param).into())
     }
 
@@ -316,7 +320,7 @@ impl Type {
     pub fn doc(&self, db: &dyn Db) -> Option<String> {
         Some(match self.ty.kind() {
             TyKind::BuiltinFunction(func) => func.doc(db).clone(),
-            TyKind::BuiltinType(type_) => type_.doc(db).clone(),
+            TyKind::BuiltinType(ty, _) => ty.doc(db).clone(),
             TyKind::Function(func) => return func.doc(db).map(|doc| doc.to_string()),
             TyKind::IntrinsicFunction(func, _) => func.doc(db).clone(),
             TyKind::Rule(rule) => return rule.doc.as_ref().map(Box::to_string),
@@ -325,6 +329,7 @@ impl Type {
             | TyKind::ModuleExtensionProxy(module_extension) => {
                 return module_extension.doc.as_ref().map(Box::to_string)
             }
+            TyKind::Target => TARGET_DOC.into(),
             _ => return None,
         })
     }
@@ -335,7 +340,24 @@ impl Type {
             None => return Vec::new(),
         };
 
-        fields.map(|(name, ty)| (name, ty.into())).collect()
+        let mut fields = fields
+            .map(|(name, ty)| (name, ty.into()))
+            .collect::<Vec<_>>();
+
+        // TODO(withered-magic): This ideally should be handled in `Ty::fields()` instead.
+        if let TyKind::Struct(Some(DefStruct::Attributes { attrs })) = self.ty.kind() {
+            fields.extend(attrs.iter().map(|(name, attr)| {
+                (
+                    Field(FieldInner::StructField {
+                        name: name.clone(),
+                        doc: attr.doc.as_ref().map(|doc| doc.to_string()),
+                    }),
+                    attr.resolved_ty().into(),
+                )
+            }));
+        }
+
+        fields
     }
 
     pub fn provider_fields_source(&self, db: &dyn Db) -> Option<InFile<ast::DictExpr>> {

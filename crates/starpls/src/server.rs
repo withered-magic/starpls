@@ -9,7 +9,7 @@ use starpls_bazel::{
     decode_builtins, Builtins,
 };
 use starpls_common::FileId;
-use starpls_ide::{Analysis, AnalysisSnapshot, Change};
+use starpls_ide::{Analysis, AnalysisSnapshot, Change, InferenceOptions};
 
 use crate::{
     config::ServerConfig,
@@ -164,7 +164,12 @@ impl Server {
             bzlmod_enabled,
         );
 
-        let mut analysis = Analysis::new(Arc::new(loader));
+        let mut analysis = Analysis::new(
+            Arc::new(loader),
+            InferenceOptions {
+                infer_ctx_attrs: config.args.experimental_infer_ctx_attributes,
+            },
+        );
         analysis.set_builtin_defs(builtins, rules);
 
         let server = Server {

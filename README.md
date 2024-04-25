@@ -37,6 +37,17 @@ Once done, add the following to your VSCode configuration and reload VSCode for 
 }
 ```
 
+Experimental features are enabled through flags on the `starpls server` subcommand. For example:
+
+```jsonc
+{
+    "bazel.lsp.command": "starpls",
+    // Note the first argument is "server", which is required because the flags exist only
+    // on the "starpls server" subcommand (and not the top-level "starpls" command).
+    "bazel.lsp.args": ["server", "--experimental_infer_ctx_attributes"]
+}
+```
+
 Note: If you don't put `starpls` directly on the `$PATH`, then for `bazel.lsp.command` you'll have to specify the absolute path to the `starpls` executable instead. Additionally, if your VSCode setup also has any tasks that run Bazel commands on open, those might temporarily block the server from starting up because of the Bazel lock; the server will still spin up once it is able to acquire the lock.
 
 Alternatively, you can build `starpls` with Bazel:

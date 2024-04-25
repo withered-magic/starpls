@@ -6,7 +6,6 @@ use starpls_syntax::{
     TextRange,
 };
 
-use super::{builtins::builtin_types, RuleKind, TyData};
 use crate::{
     def::{
         resolver::{Export, Resolver},
@@ -18,11 +17,12 @@ use crate::{
     module, source_map,
     typeck::{
         assign_tys,
+        builtins::builtin_types,
         call::{Slot, SlotProvider, Slots},
         intrinsics::{IntrinsicFunctionParam, IntrinsicTypes},
         resolve_type_ref, resolve_type_ref_opt, DictLiteral, FileExprId, FileLoadItemId,
-        FileLoadStmt, FileParamId, Protocol, Struct, Substitution, Tuple, Ty, TyCtxt, TyKind,
-        TypeRef, TypecheckCancelled,
+        FileLoadStmt, FileParamId, Protocol, RuleKind, Struct, Substitution, Tuple, Ty, TyCtxt,
+        TyData, TyKind, TypeRef, TypecheckCancelled,
     },
     Name,
 };

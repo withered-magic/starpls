@@ -5,10 +5,7 @@ use starpls_bazel::{APIContext, Builtins};
 use starpls_common::{File, FileId, LoadItemCandidate, ResolvedPath};
 use starpls_test_util::{make_test_builtins, FixtureType};
 
-use crate::{
-    def::{ExprId, Function},
-    BuiltinDefs, Db, Dialect, GlobalCtxt, LoadItemId, ParamId, Ty,
-};
+use crate::{def::ExprId, BuiltinDefs, Db, Dialect, GlobalCtxt, LoadItemId, ParamId, Ty};
 
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, crate::Jar)]

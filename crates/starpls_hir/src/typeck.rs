@@ -220,15 +220,14 @@ impl Ty {
         }
 
         let fields = match kind {
-            TyKind::BuiltinType(ty, Some(data)) => Fields::Builtin(
+            TyKind::BuiltinType(ty, data) => Fields::Builtin(
                 ty.fields(db)
                     .iter()
                     .enumerate()
                     .map(move |(index, field)| {
                         let resolved = resolve_type_ref(db, &field.type_ref).0;
                         let resolved = match (resolved.kind(), data) {
-                            (TyKind::Struct(_), TyData::Attributes(attrs)) => {
-                                eprintln!("whoa");
+                            (TyKind::Struct(_), Some(TyData::Attributes(attrs))) => {
                                 TyKind::Struct(Some(Struct::Attributes {
                                     attrs: attrs.clone(),
                                 }))
@@ -272,7 +271,10 @@ impl Ty {
                     .flat_map(|fields| fields.iter())
                     .map(|(name, ty)| {
                         (
-                            Field(FieldInner::StructField { name: name.clone() }),
+                            Field(FieldInner::StructField {
+                                name: name.clone(),
+                                doc: None,
+                            }),
                             ty.clone(),
                         )
                     }),
@@ -546,6 +548,7 @@ impl Ty {
         }
     }
 
+    #[allow(unused)]
     fn is_any(&self) -> bool {
         self.kind() == &TyKind::Any
     }
@@ -898,7 +901,7 @@ where
     }
 }
 
-pub struct Field(FieldInner);
+pub struct Field(pub(crate) FieldInner);
 
 impl Field {
     pub fn name(&self, db: &dyn Db) -> Name {
@@ -934,7 +937,7 @@ impl Field {
             FieldInner::BuiltinField { parent, index } => parent.fields(db)[index].doc.clone(),
             FieldInner::BuiltinMethod { func } => func.doc(db).clone(),
             FieldInner::IntrinsicField { parent, index } => parent.fields(db)[index].doc.clone(),
-            FieldInner::StructField { .. } => String::new(),
+            FieldInner::StructField { ref doc, .. } => doc.as_ref().cloned().unwrap_or_default(),
             FieldInner::ProviderField {
                 ref provider,
                 index,
@@ -963,7 +966,7 @@ impl Field {
     }
 }
 
-enum FieldInner {
+pub(crate) enum FieldInner {
     BuiltinField {
         parent: BuiltinType,
         index: usize,
@@ -977,6 +980,7 @@ enum FieldInner {
     },
     StructField {
         name: Name,
+        doc: Option<String>,
     },
     ProviderField {
         provider: Arc<Provider>,

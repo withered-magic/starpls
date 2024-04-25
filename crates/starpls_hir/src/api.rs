@@ -17,7 +17,8 @@ use crate::{
     module, source_map,
     typeck::{
         self, builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref,
-        ParamInner, Provider, Substitution, TagClass, Tuple, Ty, TypeRef,
+        FieldInner, ParamInner, Provider, Struct as DefStruct, Substitution, TagClass, Tuple, Ty,
+        TypeRef,
     },
     Db, ExprId, Name, TyKind,
 };
@@ -336,7 +337,24 @@ impl Type {
             None => return Vec::new(),
         };
 
-        fields.map(|(name, ty)| (name, ty.into())).collect()
+        let mut fields = fields
+            .map(|(name, ty)| (name, ty.into()))
+            .collect::<Vec<_>>();
+
+        // TODO(withered-magic): This ideally should be handled in `Ty::fields()` instead.
+        if let TyKind::Struct(Some(DefStruct::Attributes { attrs })) = self.ty.kind() {
+            fields.extend(attrs.iter().map(|(name, attr)| {
+                (
+                    Field(FieldInner::StructField {
+                        name: name.clone(),
+                        doc: attr.doc.as_ref().map(|doc| doc.to_string()),
+                    }),
+                    attr.expected_ty().into(),
+                )
+            }));
+        }
+
+        fields
     }
 
     pub fn provider_fields_source(&self, db: &dyn Db) -> Option<InFile<ast::DictExpr>> {

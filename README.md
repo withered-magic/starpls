@@ -62,6 +62,16 @@ This builds the executable and copies it to `<repository_root>/editors/code/bin/
 
 Install the [zed-starlark](https://github.com/zaucy/zed-starlark) extension.
 
+### Neovim via nvim-lspconfig
+Make sure you've installed and configured [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig) in a way that works for you.
+
+Install using homebrew as described above, then do the following in your init.lua:
+```lua
+require("lspconfig").starpls.setup { }
+```
+
+You can see the config info [here](https://github.com/neovim/nvim-lspconfig/blob/master/lua/lspconfig/server_configurations/starpls.lua).
+
 ## Tips and Tricks
 
 Make sure to use [PEP 484 type comments](https://peps.python.org/pep-0484/#type-comments) to document your function signatures. This helps a ton with autocomplete for situations like `rule` implementation functions. For example, if you add a type comment as in the following...

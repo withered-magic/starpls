@@ -203,7 +203,7 @@ impl Server {
             task_pool_handle,
             document_manager: Arc::new(RwLock::new(DocumentManager::new(
                 path_interner,
-                external_output_base,
+                info.workspace,
             ))),
             diagnostics_manager: Default::default(),
             analysis,
@@ -242,6 +242,8 @@ impl Server {
             return (changed_file_ids, has_opened_or_closed_documents);
         }
 
+        let mut prelude_file = None;
+
         for (file_id, change_kind) in changes {
             let document = match document_manager.get(file_id) {
                 Some(document) => document,
@@ -249,6 +251,16 @@ impl Server {
             };
             match change_kind {
                 DocumentChangeKind::Create => {
+                    if matches!(
+                        document.info,
+                        Some(FileInfo::Bazel {
+                            api_context: APIContext::Prelude,
+                            ..
+                        })
+                    ) {
+                        prelude_file = Some(file_id)
+                    }
+
                     change.create_file(
                         file_id,
                         document.dialect,
@@ -266,6 +278,10 @@ impl Server {
 
         // Apply the change to our analyzer. This will cancel any affected active Salsa operations.
         self.analysis.apply_change(change);
+        if let Some(prelude_file) = prelude_file {
+            self.analysis.set_bazel_prelude_file(prelude_file);
+        }
+
         (changed_file_ids, true)
     }
 

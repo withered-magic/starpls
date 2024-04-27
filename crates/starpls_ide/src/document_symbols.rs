@@ -136,7 +136,7 @@ mod tests {
             input,
             Dialect::Bazel,
             Some(FileInfo::Bazel {
-                api_context: APIContext::Bzl,
+                api_context: APIContext::Build,
                 is_external: false,
             }),
         );

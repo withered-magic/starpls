@@ -41,7 +41,7 @@ pub(crate) fn run_check(paths: Vec<String>, output_base: Option<String>) -> anyh
     let loader = DefaultFileLoader::new(
         bazel_client,
         interner.clone(),
-        info.workspace,
+        info.workspace.clone(),
         external_output_base.clone(),
         fetch_repo_sender,
         bzlmod_enabled,
@@ -60,7 +60,10 @@ pub(crate) fn run_check(paths: Vec<String>, output_base: Option<String>) -> anyh
         }
 
         let contents = fs::read_to_string(&resolved).map_err(|_| err())?;
-        let (dialect, api_context) = match document::dialect_and_api_context_for_path(&resolved) {
+        let (dialect, api_context) = match document::dialect_and_api_context_for_workspace_path(
+            &info.workspace,
+            &resolved,
+        ) {
             Some(res) => res,
             None => return Err(err()),
         };

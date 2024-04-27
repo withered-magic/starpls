@@ -151,7 +151,7 @@ impl<'a> Resolver<'a> {
         };
 
         // If this is a BUILD file, add names from the prelude.
-        if api_context == APIContext::Build {
+        if api_context == APIContext::Build && self.file.is_external(self.db) == Some(false) {
             if let Some(prelude_file) = self
                 .db
                 .get_bazel_prelude_file()

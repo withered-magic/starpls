@@ -74,33 +74,34 @@ pub(crate) struct DocumentManager {
     has_closed_or_opened_documents: bool,
     changed_file_ids: Vec<(FileId, DocumentChangeKind)>,
     path_interner: Arc<PathInterner>,
-    external_output_base: PathBuf,
+    workspace: PathBuf,
 }
 
 impl DocumentManager {
-    pub(crate) fn new(path_interner: Arc<PathInterner>, external_output_base: PathBuf) -> Self {
+    pub(crate) fn new(path_interner: Arc<PathInterner>, workspace: PathBuf) -> Self {
         Self {
             documents: Default::default(),
             has_closed_or_opened_documents: false,
             changed_file_ids: Default::default(),
             path_interner,
-            external_output_base,
+            workspace,
         }
     }
 
     pub(crate) fn open(&mut self, path: PathBuf, version: i32, contents: String) {
         // Create/update the document with the given contents.
         self.has_closed_or_opened_documents = true;
-        let (dialect, info) = match dialect_and_api_context_for_path(&path) {
-            Some((dialect, api_context)) => (
-                dialect,
-                api_context.map(|api_context| FileInfo::Bazel {
-                    api_context,
-                    is_external: path.starts_with(&self.external_output_base),
-                }),
-            ),
-            None => return,
-        };
+        let (dialect, info) =
+            match dialect_and_api_context_for_workspace_path(&self.workspace, &path) {
+                Some((dialect, api_context)) => (
+                    dialect,
+                    api_context.map(|api_context| FileInfo::Bazel {
+                        api_context,
+                        is_external: !path.starts_with(&self.workspace),
+                    }),
+                ),
+                None => return,
+            };
         let file_id = self.path_interner.intern_path(path);
         self.documents.insert(
             file_id,
@@ -638,7 +639,8 @@ fn read_dir_targets(path: impl AsRef<Path>) -> anyhow::Result<Vec<LoadItemCandid
         .collect())
 }
 
-pub(crate) fn dialect_and_api_context_for_path(
+pub(crate) fn dialect_and_api_context_for_workspace_path(
+    workspace: impl AsRef<Path>,
     path: impl AsRef<Path>,
 ) -> Option<(Dialect, Option<APIContext>)> {
     let path = path.as_ref();
@@ -653,7 +655,7 @@ pub(crate) fn dialect_and_api_context_for_path(
         _ => match path.extension().and_then(|ext| ext.to_str()) {
             Some("bzl") => (Dialect::Bazel, Some(APIContext::Bzl)),
             _ => {
-                if path.ends_with("tools/build_rules/prelude_bazel") {
+                if path == workspace.as_ref().join("tools/build_rules/prelude_bazel") {
                     (Dialect::Bazel, Some(APIContext::Prelude))
                 } else {
                     (Dialect::Standard, None)

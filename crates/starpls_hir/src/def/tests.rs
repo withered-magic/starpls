@@ -1,8 +1,16 @@
-use starpls_bazel::APIContext;
+use std::collections::HashSet;
+
+use starpls_bazel::{
+    env::{make_build_builtins, make_bzl_builtins},
+    APIContext,
+};
 use starpls_common::{Db as _, Dialect, FileId, FileInfo};
 use starpls_test_util::parse_fixture;
 
-use crate::{def::resolver::Resolver, test_database::TestDatabase, Db as _};
+use crate::{
+    def::resolver::Resolver, test_database::TestDatabase, typeck::intrinsics::intrinsic_functions,
+    Db as _,
+};
 
 fn check_scope(fixture: &str, expected: &[&str]) {
     check_scope_full(fixture, expected, None)
@@ -36,9 +44,33 @@ fn check_scope_full(fixture: &str, expected: &[&str], prelude: Option<&str>) {
         test_db.set_bazel_prelude_file(prelude_file_id);
     }
 
+    // Filter out intrinsic function names as well as the hardcoded `BUILD.bazel` and `.bzl`
+    // builtins, which are always added when `APIContext::Build` is the current API context.
+    let names_to_filter = intrinsic_functions(&test_db)
+        .functions(&test_db)
+        .keys()
+        .map(|name| name.to_string())
+        .chain(
+            make_bzl_builtins()
+                .global
+                .into_iter()
+                .map(|global| global.name),
+        )
+        .chain(
+            make_build_builtins()
+                .global
+                .into_iter()
+                .map(|global| global.name),
+        )
+        .collect::<HashSet<_>>();
+
     let resolver = Resolver::new_for_offset(&test_db, file, offset);
-    let names = resolver.module_names();
-    let mut actual = names.keys().map(|name| name.as_str()).collect::<Vec<_>>();
+    let names = resolver.names();
+    let mut actual = names
+        .keys()
+        .filter(|name| !names_to_filter.contains(name.as_str()))
+        .map(|name| name.as_str())
+        .collect::<Vec<_>>();
     actual.sort();
     assert_eq!(expected, &actual[..]);
 }

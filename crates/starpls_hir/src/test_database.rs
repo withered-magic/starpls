@@ -15,6 +15,7 @@ pub(crate) struct TestDatabase {
     builtin_defs: Arc<DashMap<Dialect, BuiltinDefs>>,
     storage: salsa::Storage<Self>,
     files: Arc<DashMap<FileId, File>>,
+    prelude_file: Option<FileId>,
     pub(crate) gcx: Arc<GlobalCtxt>,
 }
 
@@ -137,10 +138,12 @@ impl crate::Db for TestDatabase {
             ))
     }
 
-    fn set_bazel_prelude_file(&mut self, _file: FileId) {}
+    fn set_bazel_prelude_file(&mut self, file_id: FileId) {
+        self.prelude_file = Some(file_id)
+    }
 
     fn get_bazel_prelude_file(&self) -> Option<FileId> {
-        None
+        self.prelude_file
     }
 }
 

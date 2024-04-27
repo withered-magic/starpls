@@ -472,7 +472,7 @@ impl FileLoader for DefaultFileLoader {
                     }
                 };
 
-                let is_external = resolved_path.starts_with(&self.external_output_base);
+                let is_external = !resolved_path.starts_with(&self.workspace);
                 (
                     resolved_path,
                     Some(FileInfo::Bazel {

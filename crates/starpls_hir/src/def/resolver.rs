@@ -59,7 +59,7 @@ impl<'a> Resolver<'a> {
 
         self.scopes().find_map(|scope| {
             scope
-                .declarations
+                .defs
                 .get(name)
                 .and_then(|decls| decls.last())
                 .and_then(|decl| {
@@ -75,7 +75,7 @@ impl<'a> Resolver<'a> {
     pub(crate) fn resolve_name(&self, name: &Name) -> Option<Vec<ScopeDef>> {
         // Check module scopes first.
         for scope in self.scopes() {
-            if let Some(declarations) = scope.declarations.get(&name) {
+            if let Some(declarations) = scope.defs.get(&name) {
                 return Some(declarations.clone());
             }
         }
@@ -198,12 +198,19 @@ impl<'a> Resolver<'a> {
     }
 
     pub(crate) fn module_names(&self) -> FxHashMap<Name, ScopeDef> {
+        self.module_defs(false)
+    }
+
+    pub(crate) fn module_defs(&self, filter_unexported: bool) -> FxHashMap<Name, ScopeDef> {
         let mut names = FxHashMap::default();
         for scope in self.scopes() {
-            for (name, decl) in scope.declarations.iter() {
+            for (name, def) in scope.defs.iter() {
+                if filter_unexported && name.as_str().starts_with('_') {
+                    continue;
+                }
                 if let Entry::Vacant(entry) = names.entry(name.clone()) {
-                    if let Some(decl) = decl.first().cloned() {
-                        entry.insert(decl);
+                    if let Some(def) = def.first().cloned() {
+                        entry.insert(def);
                     }
                 }
             }

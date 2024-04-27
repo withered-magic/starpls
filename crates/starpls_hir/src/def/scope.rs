@@ -63,7 +63,7 @@ pub(crate) struct LoadItemDef {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Scope {
-    pub(crate) declarations: FxHashMap<Name, Vec<ScopeDef>>,
+    pub(crate) defs: FxHashMap<Name, Vec<ScopeDef>>,
     pub(crate) parent: Option<ScopeId>,
 }
 
@@ -121,13 +121,13 @@ impl Scopes {
 
     fn alloc_scope(&mut self, parent: ScopeId) -> ScopeId {
         self.scopes.alloc(Scope {
-            declarations: Default::default(),
+            defs: Default::default(),
             parent: Some(parent),
         })
     }
 
     fn add_decl(&mut self, scope: ScopeId, name: Name, def: ScopeDef) {
-        match self.scopes[scope].declarations.entry(name) {
+        match self.scopes[scope].defs.entry(name) {
             Entry::Occupied(mut entry) => {
                 entry.get_mut().push(def);
             }
@@ -159,7 +159,7 @@ impl ScopeCollector<'_> {
     fn collect(mut self) -> Scopes {
         // Allocate the root module scope.
         let root = self.scopes.scopes.alloc(Scope {
-            declarations: Default::default(),
+            defs: Default::default(),
             parent: None,
         });
 

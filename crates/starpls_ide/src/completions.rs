@@ -221,18 +221,15 @@ pub(crate) fn completions(
             let file = db.get_file(file_id)?;
             let loaded_file = sema.resolve_load_stmt(file, &load_stmt)?;
             let scope = sema.scope_for_module(loaded_file);
-            for (name, decl) in scope
-                .names()
-                .filter(|(name, _)| !name.as_str().starts_with('_'))
-            {
+            for (name, def) in scope.exports() {
                 items.push(CompletionItem {
                     label: name.to_string(),
-                    kind: match &decl {
+                    kind: match &def {
                         ScopeDef::Callable(it) if it.is_user_defined() => {
                             CompletionItemKind::Function
                         }
                         ScopeDef::Variable(it) if it.is_user_defined() => {
-                            if decl.ty(db).is_callable() {
+                            if def.ty(db).is_callable() {
                                 CompletionItemKind::Function
                             } else {
                                 CompletionItemKind::Variable

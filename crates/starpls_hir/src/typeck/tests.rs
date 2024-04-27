@@ -3,7 +3,7 @@ use std::{cmp::Ordering, fmt::Write};
 use expect_test::{expect, Expect};
 use itertools::Itertools;
 use starpls_bazel::APIContext;
-use starpls_common::{parse, Db as _, Dialect, FileId};
+use starpls_common::{parse, Db as _, Dialect, FileId, FileInfo};
 use starpls_syntax::ast::AstNode;
 use starpls_test_util::FixtureType;
 
@@ -46,7 +46,10 @@ fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptio
     let file = db.create_file(
         file_id,
         Dialect::Bazel,
-        Some(APIContext::Bzl),
+        Some(FileInfo::Bazel {
+            api_context: APIContext::Bzl,
+            is_external: false,
+        }),
         input.to_string(),
     );
     let root = parse(&db, file).syntax(&db);

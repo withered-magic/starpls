@@ -53,6 +53,10 @@ impl<'a> Resolver<'a> {
     }
 
     pub(crate) fn resolve_export(&self, name: &Name) -> Option<Export> {
+        if name.as_str().starts_with('_') {
+            return None;
+        }
+
         self.scopes().find_map(|scope| {
             scope
                 .declarations
@@ -158,8 +162,9 @@ impl<'a> Resolver<'a> {
                     prelude_resolver
                         .module_names()
                         .into_iter()
-                        .filter(|(_, def)| {
-                            matches!(def, ScopeDef::Variable(_) | ScopeDef::Function(_))
+                        .filter(|(name, def)| {
+                            !name.as_str().starts_with('_')
+                                && matches!(def, ScopeDef::Variable(_) | ScopeDef::Function(_))
                         }),
                 );
             }

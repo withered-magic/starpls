@@ -19,7 +19,9 @@ use starpls_bazel::{
     label::{PartialParse, RepoKind},
     APIContext, Label, ParseError,
 };
-use starpls_common::{Dialect, FileId, LoadItemCandidate, LoadItemCandidateKind, ResolvedPath};
+use starpls_common::{
+    Dialect, FileId, FileInfo, LoadItemCandidate, LoadItemCandidateKind, ResolvedPath,
+};
 use starpls_ide::FileLoader;
 
 use crate::event_loop::{FetchExternalRepoRequest, Task};
@@ -41,7 +43,7 @@ impl From<Option<i32>> for DocumentSource {
 pub(crate) struct Document {
     pub(crate) contents: String,
     pub(crate) dialect: Dialect,
-    pub(crate) api_context: Option<APIContext>,
+    pub(crate) info: Option<FileInfo>,
     pub(crate) source: DocumentSource,
 }
 
@@ -49,13 +51,13 @@ impl Document {
     fn new(
         contents: String,
         dialect: Dialect,
-        api_context: Option<APIContext>,
+        info: Option<FileInfo>,
         version: Option<i32>,
     ) -> Self {
         Self {
             contents,
             dialect,
-            api_context,
+            info,
             source: version.into(),
         }
     }
@@ -72,29 +74,37 @@ pub(crate) struct DocumentManager {
     has_closed_or_opened_documents: bool,
     changed_file_ids: Vec<(FileId, DocumentChangeKind)>,
     path_interner: Arc<PathInterner>,
+    external_output_base: PathBuf,
 }
 
 impl DocumentManager {
-    pub(crate) fn new(path_interner: Arc<PathInterner>) -> Self {
+    pub(crate) fn new(path_interner: Arc<PathInterner>, external_output_base: PathBuf) -> Self {
         Self {
             documents: Default::default(),
             has_closed_or_opened_documents: false,
             changed_file_ids: Default::default(),
             path_interner,
+            external_output_base,
         }
     }
 
     pub(crate) fn open(&mut self, path: PathBuf, version: i32, contents: String) {
         // Create/update the document with the given contents.
         self.has_closed_or_opened_documents = true;
-        let (dialect, api_context) = match dialect_and_api_context_for_path(&path) {
-            Some(res) => res,
+        let (dialect, info) = match dialect_and_api_context_for_path(&path) {
+            Some((dialect, api_context)) => (
+                dialect,
+                api_context.map(|api_context| FileInfo::Bazel {
+                    api_context,
+                    is_external: path.starts_with(&self.external_output_base),
+                }),
+            ),
             None => return,
         };
         let file_id = self.path_interner.intern_path(path);
         self.documents.insert(
             file_id,
-            Document::new(contents, dialect, api_context, Some(version)),
+            Document::new(contents, dialect, info, Some(version)),
         );
         self.changed_file_ids
             .push((file_id, DocumentChangeKind::Create));
@@ -424,8 +434,8 @@ impl FileLoader for DefaultFileLoader {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> anyhow::Result<Option<(FileId, Dialect, Option<APIContext>, Option<String>)>> {
-        let (path, api_context, canonical_repo) = match dialect {
+    ) -> anyhow::Result<Option<(FileId, Dialect, Option<FileInfo>, Option<String>)>> {
+        let (path, info, canonical_repo) = match dialect {
             Dialect::Standard => {
                 // Find the importing file's directory.
                 let mut from_path = self.interner.lookup_by_file_id(from);
@@ -461,12 +471,20 @@ impl FileLoader for DefaultFileLoader {
                     }
                 };
 
-                (resolved_path, Some(APIContext::Bzl), canonical_repo)
+                let is_external = resolved_path.starts_with(&self.external_output_base);
+                (
+                    resolved_path,
+                    Some(FileInfo::Bazel {
+                        api_context: APIContext::Bzl,
+                        is_external,
+                    }),
+                    canonical_repo,
+                )
             }
         };
 
         let (file_id, contents) = self.maybe_intern_file(path, from, canonical_repo)?;
-        Ok(Some((file_id, dialect, api_context, contents)))
+        Ok(Some((file_id, dialect, info, contents)))
     }
 
     fn list_load_candidates(

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use dashmap::{mapref::entry::Entry, DashMap};
-use starpls_bazel::{APIContext, Builtins};
-use starpls_common::{File, FileId, LoadItemCandidate, ResolvedPath};
+use starpls_bazel::Builtins;
+use starpls_common::{File, FileId, FileInfo, LoadItemCandidate, ResolvedPath};
 use starpls_test_util::{make_test_builtins, FixtureType};
 
 use crate::{
@@ -37,10 +37,10 @@ impl starpls_common::Db for TestDatabase {
         &mut self,
         file_id: FileId,
         dialect: Dialect,
-        api_context: Option<APIContext>,
+        info: Option<FileInfo>,
         contents: String,
     ) -> File {
-        let file = File::new(self, file_id, dialect, api_context, contents);
+        let file = File::new(self, file_id, dialect, info, contents);
         self.files.insert(file_id, file);
         file
     }

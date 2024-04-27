@@ -127,13 +127,19 @@ fn add_target_symbols(db: &Database, file: File, acc: &mut Vec<DocumentSymbol>) 
 mod tests {
     use expect_test::{expect, Expect};
     use starpls_bazel::APIContext;
-    use starpls_common::Dialect;
+    use starpls_common::{Dialect, FileInfo};
 
     use crate::AnalysisSnapshot;
 
     fn check(input: &str, expect: Expect) {
-        let (snap, file_id) =
-            AnalysisSnapshot::from_single_file(input, Dialect::Bazel, Some(APIContext::Build));
+        let (snap, file_id) = AnalysisSnapshot::from_single_file(
+            input,
+            Dialect::Bazel,
+            Some(FileInfo::Bazel {
+                api_context: APIContext::Bzl,
+                is_external: false,
+            }),
+        );
         let symbols = snap.document_symbols(file_id).unwrap().unwrap();
         let mut actual = String::new();
         for symbol in symbols {

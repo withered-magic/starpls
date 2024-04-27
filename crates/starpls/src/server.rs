@@ -11,9 +11,9 @@ use rustc_hash::FxHashSet;
 use starpls_bazel::{
     build_language::decode_rules,
     client::{BazelCLI, BazelClient},
-    decode_builtins, Builtins,
+    decode_builtins, APIContext, Builtins,
 };
-use starpls_common::{Dialect, FileId};
+use starpls_common::{Dialect, FileId, FileInfo};
 use starpls_ide::{Analysis, AnalysisSnapshot, Change, InferenceOptions};
 
 use crate::{
@@ -164,7 +164,7 @@ impl Server {
             bazel_client.clone(),
             path_interner.clone(),
             info.workspace.clone(),
-            external_output_base,
+            external_output_base.clone(),
             task_pool_sender.clone(),
             bzlmod_enabled,
         );
@@ -186,7 +186,10 @@ impl Server {
             change.create_file(
                 file_id,
                 Dialect::Bazel,
-                Some(starpls_bazel::APIContext::Prelude),
+                Some(FileInfo::Bazel {
+                    api_context: APIContext::Bzl,
+                    is_external: false,
+                }),
                 contents,
             );
             analysis.apply_change(change);
@@ -198,7 +201,10 @@ impl Server {
             connection,
             req_queue: Default::default(),
             task_pool_handle,
-            document_manager: Arc::new(RwLock::new(DocumentManager::new(path_interner))),
+            document_manager: Arc::new(RwLock::new(DocumentManager::new(
+                path_interner,
+                external_output_base,
+            ))),
             diagnostics_manager: Default::default(),
             analysis,
             analysis_debouncer: AnalysisDebouncer::new(DEBOUNCE_INTERVAL, task_pool_sender),
@@ -246,7 +252,7 @@ impl Server {
                     change.create_file(
                         file_id,
                         document.dialect,
-                        document.api_context.clone(),
+                        document.info.clone(),
                         document.contents.clone(),
                     );
                 }

@@ -61,7 +61,7 @@ pub trait Db: salsa::DbWithJar<Jar> {
         &mut self,
         file_id: FileId,
         dialect: Dialect,
-        api_context: Option<APIContext>,
+        info: Option<FileInfo>,
         contents: String,
     ) -> File;
 
@@ -90,13 +90,35 @@ pub trait Db: salsa::DbWithJar<Jar> {
     ) -> anyhow::Result<Option<ResolvedPath>>;
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FileInfo {
+    Bazel {
+        api_context: APIContext,
+        is_external: bool,
+    },
+}
+
 #[salsa::input]
 pub struct File {
     pub id: FileId,
     pub dialect: Dialect,
-    pub api_context: Option<APIContext>,
+    pub info: Option<FileInfo>,
     #[return_ref]
     pub contents: String,
+}
+
+impl File {
+    pub fn api_context(&self, db: &dyn Db) -> Option<APIContext> {
+        self.info(db).map(|data| match data {
+            FileInfo::Bazel { api_context, .. } => api_context,
+        })
+    }
+
+    pub fn is_external(&self, db: &dyn Db) -> Option<bool> {
+        self.info(db).map(|data| match data {
+            FileInfo::Bazel { is_external, .. } => is_external,
+        })
+    }
 }
 
 #[salsa::tracked]

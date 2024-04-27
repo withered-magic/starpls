@@ -86,7 +86,7 @@ pub const BUILTINS_VALUES_DENY_LIST: &[&str] = &[
     "zip",
 ];
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum APIContext {
     Bzl,
     Build,

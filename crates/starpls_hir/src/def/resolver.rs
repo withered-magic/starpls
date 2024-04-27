@@ -160,11 +160,10 @@ impl<'a> Resolver<'a> {
                 let prelude_resolver = Resolver::new_for_module(self.db, prelude_file);
                 names.extend(
                     prelude_resolver
-                        .module_names()
+                        .module_defs(true)
                         .into_iter()
-                        .filter(|(name, def)| {
-                            !name.as_str().starts_with('_')
-                                && matches!(def, ScopeDef::Variable(_) | ScopeDef::Function(_))
+                        .filter(|(_, def)| {
+                            matches!(def, ScopeDef::Variable(_) | ScopeDef::Function(_))
                         }),
                 );
             }

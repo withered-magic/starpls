@@ -1,24 +1,41 @@
 use starpls_bazel::APIContext;
-use starpls_common::{Dialect, File, FileId, FileInfo};
+use starpls_common::{Db as _, Dialect, FileId, FileInfo};
 use starpls_test_util::parse_fixture;
 
-use crate::{def::resolver::Resolver, test_database::TestDatabase};
+use crate::{def::resolver::Resolver, test_database::TestDatabase, Db as _};
 
 fn check_scope(fixture: &str, expected: &[&str]) {
-    let test_db: TestDatabase = Default::default();
+    check_scope_full(fixture, expected, None)
+}
+
+fn check_scope_full(fixture: &str, expected: &[&str], prelude: Option<&str>) {
+    let mut test_db: TestDatabase = Default::default();
     let file_id = FileId(0);
     let (text, offset, _) = parse_fixture(fixture);
-
-    let file = File::new(
-        &test_db,
+    let file = test_db.create_file(
         file_id,
         Dialect::Bazel,
         Some(FileInfo::Bazel {
-            api_context: APIContext::Bzl,
+            api_context: APIContext::Build,
             is_external: false,
         }),
         text,
     );
+
+    if let Some(prelude) = prelude {
+        let prelude_file_id = FileId(1);
+        test_db.create_file(
+            prelude_file_id,
+            Dialect::Bazel,
+            Some(FileInfo::Bazel {
+                api_context: APIContext::Prelude,
+                is_external: false,
+            }),
+            prelude.to_string(),
+        );
+        test_db.set_bazel_prelude_file(prelude_file_id);
+    }
+
     let resolver = Resolver::new_for_offset(&test_db, file, offset);
     let names = resolver.module_names();
     let mut actual = names.keys().map(|name| name.as_str()).collect::<Vec<_>>();
@@ -163,5 +180,24 @@ def ts_project(tsc = _t$0sc):
     pass
     "#,
         &["_tsc"],
+    )
+}
+
+#[test]
+fn test_prelude() {
+    check_scope_full(
+        r#"
+foo = 123
+$0   
+"#,
+        &["bar", "f", "foo"],
+        Some(
+            r#"
+bar = "abc"
+
+def f():
+    pass
+"#,
+        ),
     )
 }

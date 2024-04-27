@@ -1,4 +1,9 @@
-use std::{mem, panic, sync::Arc, time::Duration};
+use std::{
+    fs, mem, panic,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
 use lsp_server::{Connection, ReqQueue};
 use parking_lot::RwLock;
@@ -6,9 +11,9 @@ use rustc_hash::FxHashSet;
 use starpls_bazel::{
     build_language::decode_rules,
     client::{BazelCLI, BazelClient},
-    decode_builtins, Builtins,
+    decode_builtins, APIContext, Builtins,
 };
-use starpls_common::FileId;
+use starpls_common::{Dialect, FileId, FileInfo};
 use starpls_ide::{Analysis, AnalysisSnapshot, Change, InferenceOptions};
 
 use crate::{
@@ -140,7 +145,7 @@ impl Server {
 
         eprintln!("server: bzlmod_enabled = {}", bzlmod_enabled);
 
-        // Additionally, load builtin rules.
+        // Load builtin rules from `bazel info build-language`.
         eprintln!("server: fetching builtin rules via `bazel info build-language`");
         let rules = match load_bazel_build_language(&*bazel_client) {
             Ok(builtins) => {
@@ -158,26 +163,48 @@ impl Server {
         let loader = DefaultFileLoader::new(
             bazel_client.clone(),
             path_interner.clone(),
-            info.workspace,
-            external_output_base,
+            info.workspace.clone(),
+            external_output_base.clone(),
             task_pool_sender.clone(),
             bzlmod_enabled,
         );
-
         let mut analysis = Analysis::new(
             Arc::new(loader),
             InferenceOptions {
                 infer_ctx_attrs: config.args.experimental_infer_ctx_attributes,
             },
         );
+
         analysis.set_builtin_defs(builtins, rules);
+
+        // Check for a prelude file. We skip verifying that `//tools/build_tools` is actually a package (i.e.
+        // that it actually contains a `BUILD.bazel`) file for simplicity.
+        if let Ok((prelude, contents)) = load_bazel_prelude(&info.workspace) {
+            eprintln!("server: found prelude file at {:?}", prelude);
+            let file_id = path_interner.intern_path(prelude);
+            let mut change = Change::default();
+            change.create_file(
+                file_id,
+                Dialect::Bazel,
+                Some(FileInfo::Bazel {
+                    api_context: APIContext::Bzl,
+                    is_external: false,
+                }),
+                contents,
+            );
+            analysis.apply_change(change);
+            analysis.set_bazel_prelude_file(file_id);
+        }
 
         let server = Server {
             config: Arc::new(config),
             connection,
             req_queue: Default::default(),
             task_pool_handle,
-            document_manager: Arc::new(RwLock::new(DocumentManager::new(path_interner))),
+            document_manager: Arc::new(RwLock::new(DocumentManager::new(
+                path_interner,
+                info.workspace,
+            ))),
             diagnostics_manager: Default::default(),
             analysis,
             analysis_debouncer: AnalysisDebouncer::new(DEBOUNCE_INTERVAL, task_pool_sender),
@@ -215,6 +242,8 @@ impl Server {
             return (changed_file_ids, has_opened_or_closed_documents);
         }
 
+        let mut prelude_file = None;
+
         for (file_id, change_kind) in changes {
             let document = match document_manager.get(file_id) {
                 Some(document) => document,
@@ -222,10 +251,20 @@ impl Server {
             };
             match change_kind {
                 DocumentChangeKind::Create => {
+                    if matches!(
+                        document.info,
+                        Some(FileInfo::Bazel {
+                            api_context: APIContext::Prelude,
+                            ..
+                        })
+                    ) {
+                        prelude_file = Some(file_id)
+                    }
+
                     change.create_file(
                         file_id,
                         document.dialect,
-                        document.api_context.clone(),
+                        document.info.clone(),
                         document.contents.clone(),
                     );
                 }
@@ -239,6 +278,10 @@ impl Server {
 
         // Apply the change to our analyzer. This will cancel any affected active Salsa operations.
         self.analysis.apply_change(change);
+        if let Some(prelude_file) = prelude_file {
+            self.analysis.set_bazel_prelude_file(prelude_file);
+        }
+
         (changed_file_ids, true)
     }
 
@@ -313,4 +356,10 @@ pub(crate) fn load_bazel_builtins() -> anyhow::Result<Builtins> {
 pub(crate) fn load_bazel_build_language(client: &dyn BazelClient) -> anyhow::Result<Builtins> {
     let build_language_output = client.build_language()?;
     decode_rules(&build_language_output)
+}
+
+fn load_bazel_prelude(workspace: impl AsRef<Path>) -> anyhow::Result<(PathBuf, String)> {
+    let prelude = workspace.as_ref().join("tools/build_rules/prelude_bazel");
+    let contents = fs::read_to_string(&prelude)?;
+    Ok((prelude, contents))
 }

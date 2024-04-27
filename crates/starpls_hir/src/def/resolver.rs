@@ -30,8 +30,17 @@ pub(crate) struct Resolver<'a> {
 
 #[derive(Clone, Debug)]
 pub(crate) enum Export {
-    Variable(ExprId),
+    Variable(VariableDef),
     Function(Function),
+}
+
+impl From<Export> for ScopeDef {
+    fn from(value: Export) -> Self {
+        match value {
+            Export::Variable(def) => ScopeDef::Variable(def),
+            Export::Function(func) => ScopeDef::Function(func),
+        }
+    }
 }
 
 impl<'a> Resolver<'a> {
@@ -44,14 +53,18 @@ impl<'a> Resolver<'a> {
     }
 
     pub(crate) fn resolve_export(&self, name: &Name) -> Option<Export> {
+        if name.as_str().starts_with('_') {
+            return None;
+        }
+
         self.scopes().find_map(|scope| {
             scope
-                .declarations
+                .defs
                 .get(name)
                 .and_then(|decls| decls.last())
                 .and_then(|decl| {
                     Some(match decl {
-                        ScopeDef::Variable(VariableDef { expr, .. }) => Export::Variable(*expr),
+                        ScopeDef::Variable(def) => Export::Variable(def.clone()),
                         ScopeDef::Function(func) => Export::Function(*func),
                         _ => return None,
                     })
@@ -62,13 +75,25 @@ impl<'a> Resolver<'a> {
     pub(crate) fn resolve_name(&self, name: &Name) -> Option<Vec<ScopeDef>> {
         // Check module scopes first.
         for scope in self.scopes() {
-            if let Some(declarations) = scope.declarations.get(&name) {
+            if let Some(declarations) = scope.defs.get(&name) {
                 return Some(declarations.clone());
             }
         }
 
-        // Fall back to the builtins scope.
-        self.resolve_name_in_builtins(name)
+        // Fall back to prelude, and then to the builtins scope.
+        let mut defs = None;
+        if self.file.api_context(self.db) == Some(APIContext::Build) {
+            defs = self
+                .db
+                .get_bazel_prelude_file()
+                .and_then(|prelude_file_id| {
+                    let prelude_file = self.db.get_file(prelude_file_id)?;
+                    Resolver::resolve_export_in_file(self.db, prelude_file, name)
+                })
+                .map(|export| vec![export.into()])
+        }
+
+        defs.or_else(|| self.resolve_name_in_builtins(name))
     }
 
     fn resolve_name_in_builtins(&self, name: &Name) -> Option<Vec<ScopeDef>> {
@@ -125,6 +150,25 @@ impl<'a> Resolver<'a> {
             None => return names,
         };
 
+        // If this is a BUILD file, add names from the prelude.
+        if api_context == APIContext::Build && self.file.is_external(self.db) == Some(false) {
+            if let Some(prelude_file) = self
+                .db
+                .get_bazel_prelude_file()
+                .and_then(|prelude_file_id| self.db.get_file(prelude_file_id))
+            {
+                let prelude_resolver = Resolver::new_for_module(self.db, prelude_file);
+                names.extend(
+                    prelude_resolver
+                        .module_defs(true)
+                        .into_iter()
+                        .filter(|(_, def)| {
+                            matches!(def, ScopeDef::Variable(_) | ScopeDef::Function(_))
+                        }),
+                );
+            }
+        }
+
         // Add names from builtins, taking the current Bazel API context into account.
         let mut add_builtins = |api_globals: &APIGlobals| {
             for (name, func) in api_globals.functions.iter() {
@@ -153,12 +197,19 @@ impl<'a> Resolver<'a> {
     }
 
     pub(crate) fn module_names(&self) -> FxHashMap<Name, ScopeDef> {
+        self.module_defs(false)
+    }
+
+    pub(crate) fn module_defs(&self, filter_unexported: bool) -> FxHashMap<Name, ScopeDef> {
         let mut names = FxHashMap::default();
         for scope in self.scopes() {
-            for (name, decl) in scope.declarations.iter() {
+            for (name, def) in scope.defs.iter() {
+                if filter_unexported && name.as_str().starts_with('_') {
+                    continue;
+                }
                 if let Entry::Vacant(entry) = names.entry(name.clone()) {
-                    if let Some(decl) = decl.first().cloned() {
-                        entry.insert(decl);
+                    if let Some(def) = def.first().cloned() {
+                        entry.insert(def);
                     }
                 }
             }

@@ -1,5 +1,5 @@
 use starpls_bazel::Builtins;
-use starpls_common::{parse, Dialect, File, Parse};
+use starpls_common::{parse, Dialect, File, FileId, Parse};
 
 // The symbols from `def` crate are only exported to facilitate implementing the `Db` interface.
 // Ideally, we should find a way to avoid needing this, as it breaks the API boundary of this crate.
@@ -78,6 +78,10 @@ pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
     fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins, rules: Builtins);
 
     fn get_builtin_defs(&self, dialect: &Dialect) -> BuiltinDefs;
+
+    fn set_bazel_prelude_file(&mut self, file_id: FileId);
+
+    fn get_bazel_prelude_file(&self) -> Option<FileId>;
 }
 
 #[salsa::tracked]

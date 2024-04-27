@@ -4,7 +4,9 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use rustc_hash::FxHashMap;
 use salsa::ParallelDatabase;
 use starpls_bazel::{APIContext, Builtins};
-use starpls_common::{Db, Diagnostic, Dialect, File, FileId, LoadItemCandidate, ResolvedPath};
+use starpls_common::{
+    Db, Diagnostic, Dialect, File, FileId, FileInfo, LoadItemCandidate, ResolvedPath,
+};
 use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, LoadItemId, LoadStmt, ParamId, Ty};
 pub use starpls_hir::{Cancelled, InferenceOptions};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
@@ -37,6 +39,7 @@ pub(crate) struct Database {
     files: Arc<DashMap<FileId, File>>,
     loader: Arc<dyn FileLoader>,
     gcx: Arc<GlobalCtxt>,
+    prelude_file: Option<FileId>,
 }
 
 impl Database {
@@ -47,10 +50,10 @@ impl Database {
             match change {
                 FileChange::Create {
                     dialect,
-                    api_context,
+                    info,
                     contents,
                 } => {
-                    self.create_file(file_id, dialect, api_context, contents);
+                    self.create_file(file_id, dialect, info, contents);
                 }
                 FileChange::Update { contents } => {
                     self.update_file(file_id, contents);
@@ -70,6 +73,7 @@ impl salsa::ParallelDatabase for Database {
             gcx: self.gcx.clone(),
             loader: self.loader.clone(),
             storage: self.storage.snapshot(),
+            prelude_file: self.prelude_file,
         })
     }
 }
@@ -79,10 +83,10 @@ impl starpls_common::Db for Database {
         &mut self,
         file_id: FileId,
         dialect: Dialect,
-        api_context: Option<APIContext>,
+        info: Option<FileInfo>,
         contents: String,
     ) -> File {
-        let file = File::new(self, file_id, dialect, api_context, contents);
+        let file = File::new(self, file_id, dialect, info, contents);
         self.files.insert(file_id, file);
         file
     }
@@ -99,18 +103,17 @@ impl starpls_common::Db for Database {
         dialect: Dialect,
         from: FileId,
     ) -> anyhow::Result<Option<File>> {
-        let (file_id, dialect, api_context, contents) =
-            match self.loader.load_file(path, dialect, from)? {
-                Some(res) => res,
-                None => return Ok(None),
-            };
+        let (file_id, dialect, info, contents) = match self.loader.load_file(path, dialect, from)? {
+            Some(res) => res,
+            None => return Ok(None),
+        };
         Ok(Some(match self.files.entry(file_id) {
             Entry::Occupied(entry) => *entry.get(),
             Entry::Vacant(entry) => *entry.insert(File::new(
                 self,
                 file_id,
                 dialect,
-                api_context,
+                info,
                 contents.unwrap_or_default(),
             )),
         }))
@@ -155,7 +158,10 @@ impl starpls_common::Db for Database {
                         self,
                         build_file,
                         Dialect::Bazel,
-                        Some(APIContext::Bzl),
+                        Some(FileInfo::Bazel {
+                            api_context: APIContext::Build,
+                            is_external: false,
+                        }),
                         contents.take().unwrap_or_default(),
                     ));
                 }
@@ -218,13 +224,21 @@ impl starpls_hir::Db for Database {
                 Builtins::default(),
             ))
     }
+
+    fn set_bazel_prelude_file(&mut self, file_id: FileId) {
+        self.prelude_file = Some(file_id)
+    }
+
+    fn get_bazel_prelude_file(&self) -> Option<FileId> {
+        self.prelude_file
+    }
 }
 
 #[derive(Debug)]
 enum FileChange {
     Create {
         dialect: Dialect,
-        api_context: Option<APIContext>,
+        info: Option<FileInfo>,
         contents: String,
     },
     Update {
@@ -244,14 +258,14 @@ impl Change {
         &mut self,
         file_id: FileId,
         dialect: Dialect,
-        api_context: Option<APIContext>,
+        info: Option<FileInfo>,
         contents: String,
     ) {
         self.changed_files.push((
             file_id,
             FileChange::Create {
                 dialect,
-                api_context,
+                info,
                 contents,
             },
         ))
@@ -277,6 +291,7 @@ impl Analysis {
                 gcx: Arc::new(GlobalCtxt::new(options)),
                 storage: Default::default(),
                 loader,
+                prelude_file: None,
             },
         }
     }
@@ -294,6 +309,10 @@ impl Analysis {
     pub fn set_builtin_defs(&mut self, builtins: Builtins, rules: Builtins) {
         self.db.set_builtin_defs(Dialect::Bazel, builtins, rules);
     }
+
+    pub fn set_bazel_prelude_file(&mut self, file_id: FileId) {
+        self.db.set_bazel_prelude_file(file_id);
+    }
 }
 
 pub struct AnalysisSnapshot {
@@ -304,13 +323,13 @@ impl AnalysisSnapshot {
     pub fn from_single_file(
         contents: &str,
         dialect: Dialect,
-        api_context: Option<APIContext>,
+        info: Option<FileInfo>,
     ) -> (Self, FileId) {
         let mut file_set = FxHashMap::default();
         let file_id = FileId(0);
         file_set.insert("main.star".to_string(), (file_id, contents.to_string()));
         let mut change = Change::default();
-        change.create_file(file_id, dialect, api_context, contents.to_string());
+        change.create_file(file_id, dialect, info, contents.to_string());
         let mut analysis = Analysis::new(
             Arc::new(SimpleFileLoader::from_file_set(file_set)),
             Default::default(),
@@ -417,7 +436,7 @@ pub trait FileLoader: Send + Sync + 'static {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> anyhow::Result<Option<(FileId, Dialect, Option<APIContext>, Option<String>)>>;
+    ) -> anyhow::Result<Option<(FileId, Dialect, Option<FileInfo>, Option<String>)>>;
 
     /// Returns a list of Starlark modules that can be loaded from the given `path`.
     fn list_load_candidates(
@@ -446,7 +465,7 @@ impl FileLoader for SimpleFileLoader {
         path: &str,
         dialect: Dialect,
         _from: FileId,
-    ) -> anyhow::Result<Option<(FileId, Dialect, Option<APIContext>, Option<String>)>> {
+    ) -> anyhow::Result<Option<(FileId, Dialect, Option<FileInfo>, Option<String>)>> {
         Ok(self
             .file_set
             .get(path)

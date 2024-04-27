@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use dashmap::{mapref::entry::Entry, DashMap};
-use starpls_bazel::{APIContext, Builtins};
-use starpls_common::{File, FileId, LoadItemCandidate, ResolvedPath};
+use starpls_bazel::Builtins;
+use starpls_common::{File, FileId, FileInfo, LoadItemCandidate, ResolvedPath};
 use starpls_test_util::{make_test_builtins, FixtureType};
 
 use crate::{
@@ -15,6 +15,7 @@ pub(crate) struct TestDatabase {
     builtin_defs: Arc<DashMap<Dialect, BuiltinDefs>>,
     storage: salsa::Storage<Self>,
     files: Arc<DashMap<FileId, File>>,
+    prelude_file: Option<FileId>,
     pub(crate) gcx: Arc<GlobalCtxt>,
 }
 
@@ -37,10 +38,10 @@ impl starpls_common::Db for TestDatabase {
         &mut self,
         file_id: FileId,
         dialect: Dialect,
-        api_context: Option<APIContext>,
+        info: Option<FileInfo>,
         contents: String,
     ) -> File {
-        let file = File::new(self, file_id, dialect, api_context, contents);
+        let file = File::new(self, file_id, dialect, info, contents);
         self.files.insert(file_id, file);
         file
     }
@@ -135,6 +136,14 @@ impl crate::Db for TestDatabase {
                 Builtins::default(),
                 Builtins::default(),
             ))
+    }
+
+    fn set_bazel_prelude_file(&mut self, file_id: FileId) {
+        self.prelude_file = Some(file_id)
+    }
+
+    fn get_bazel_prelude_file(&self) -> Option<FileId> {
+        self.prelude_file
     }
 }
 

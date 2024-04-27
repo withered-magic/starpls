@@ -86,13 +86,14 @@ pub const BUILTINS_VALUES_DENY_LIST: &[&str] = &[
     "zip",
 ];
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum APIContext {
     Bzl,
     Build,
     Module,
     Repo,
     Workspace,
+    Prelude,
 }
 
 pub fn load_builtins(path: impl AsRef<Path>) -> anyhow::Result<Builtins> {

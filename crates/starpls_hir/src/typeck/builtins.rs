@@ -443,7 +443,7 @@ impl BuiltinFunction {
                     loaded_file,
                     &Name::from_str(&name),
                 )? {
-                    Export::Variable(expr) => expr,
+                    Export::Variable(expr) => expr.expr,
                     _ => return None,
                 };
 

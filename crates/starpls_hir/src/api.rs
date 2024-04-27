@@ -271,6 +271,13 @@ impl SemanticsScope<'_> {
             .map(|(name, def)| (name, def.into()))
     }
 
+    pub fn exports(&self) -> impl Iterator<Item = (Name, ScopeDef)> {
+        self.resolver
+            .module_defs(true)
+            .into_iter()
+            .map(|(name, def)| (name, def.into()))
+    }
+
     pub fn resolve_name(&self, name: &Name) -> Option<Vec<ScopeDef>> {
         self.resolver
             .resolve_name(&name)

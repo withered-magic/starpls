@@ -99,7 +99,7 @@ impl TyCtxt<'_> {
                     .resolve_name(name)
                     .and_then(|decls| decls.into_iter().last())
                     .map(|decl| match decl {
-                        ScopeDef::Variable(VariableDef { expr, source, .. }) => self
+                        ScopeDef::Variable(VariableDef { file, expr, source }) => self
                             .cx
                             .type_of_expr
                             .get(&FileExprId::new(file, expr))
@@ -1358,7 +1358,9 @@ impl TyCtxt<'_> {
                                 loaded_file,
                                 &Name::from_str(name),
                             ) {
-                                Some(Export::Variable(expr)) => tcx.infer_expr(loaded_file, expr),
+                                Some(Export::Variable(expr)) => {
+                                    tcx.infer_expr(loaded_file, expr.expr)
+                                }
                                 Some(Export::Function(func)) => func.ty(),
                                 None => {
                                     tcx.add_diagnostic_for_range(

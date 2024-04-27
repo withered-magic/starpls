@@ -30,8 +30,17 @@ pub(crate) struct Resolver<'a> {
 
 #[derive(Clone, Debug)]
 pub(crate) enum Export {
-    Variable(ExprId),
+    Variable(VariableDef),
     Function(Function),
+}
+
+impl From<Export> for ScopeDef {
+    fn from(value: Export) -> Self {
+        match value {
+            Export::Variable(def) => ScopeDef::Variable(def),
+            Export::Function(func) => ScopeDef::Function(func),
+        }
+    }
 }
 
 impl<'a> Resolver<'a> {
@@ -51,7 +60,7 @@ impl<'a> Resolver<'a> {
                 .and_then(|decls| decls.last())
                 .and_then(|decl| {
                     Some(match decl {
-                        ScopeDef::Variable(VariableDef { expr, .. }) => Export::Variable(*expr),
+                        ScopeDef::Variable(def) => Export::Variable(def.clone()),
                         ScopeDef::Function(func) => Export::Function(*func),
                         _ => return None,
                     })
@@ -67,8 +76,20 @@ impl<'a> Resolver<'a> {
             }
         }
 
-        // Fall back to the builtins scope.
-        self.resolve_name_in_builtins(name)
+        // Fall back to prelude, and then to the builtins scope.
+        let mut defs = None;
+        if self.file.api_context(self.db) == Some(APIContext::Build) {
+            defs = self
+                .db
+                .get_bazel_prelude_file()
+                .and_then(|prelude_file_id| {
+                    let prelude_file = self.db.get_file(prelude_file_id)?;
+                    Resolver::resolve_export_in_file(self.db, prelude_file, name)
+                })
+                .map(|export| vec![export.into()])
+        }
+
+        defs.or_else(|| self.resolve_name_in_builtins(name))
     }
 
     fn resolve_name_in_builtins(&self, name: &Name) -> Option<Vec<ScopeDef>> {
@@ -124,6 +145,25 @@ impl<'a> Resolver<'a> {
             Some(api_context) => api_context,
             None => return names,
         };
+
+        // If this is a BUILD file, add names from the prelude.
+        if api_context == APIContext::Build {
+            if let Some(prelude_file) = self
+                .db
+                .get_bazel_prelude_file()
+                .and_then(|prelude_file_id| self.db.get_file(prelude_file_id))
+            {
+                let prelude_resolver = Resolver::new_for_module(self.db, prelude_file);
+                names.extend(
+                    prelude_resolver
+                        .module_names()
+                        .into_iter()
+                        .filter(|(_, def)| {
+                            matches!(def, ScopeDef::Variable(_) | ScopeDef::Function(_))
+                        }),
+                );
+            }
+        }
 
         // Add names from builtins, taking the current Bazel API context into account.
         let mut add_builtins = |api_globals: &APIGlobals| {

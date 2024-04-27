@@ -37,6 +37,7 @@ pub(crate) struct Database {
     files: Arc<DashMap<FileId, File>>,
     loader: Arc<dyn FileLoader>,
     gcx: Arc<GlobalCtxt>,
+    prelude_file: Option<FileId>,
 }
 
 impl Database {
@@ -70,6 +71,7 @@ impl salsa::ParallelDatabase for Database {
             gcx: self.gcx.clone(),
             loader: self.loader.clone(),
             storage: self.storage.snapshot(),
+            prelude_file: self.prelude_file,
         })
     }
 }
@@ -218,6 +220,14 @@ impl starpls_hir::Db for Database {
                 Builtins::default(),
             ))
     }
+
+    fn set_bazel_prelude_file(&mut self, file_id: FileId) {
+        self.prelude_file = Some(file_id)
+    }
+
+    fn get_bazel_prelude_file(&self) -> Option<FileId> {
+        self.prelude_file
+    }
 }
 
 #[derive(Debug)]
@@ -277,6 +287,7 @@ impl Analysis {
                 gcx: Arc::new(GlobalCtxt::new(options)),
                 storage: Default::default(),
                 loader,
+                prelude_file: None,
             },
         }
     }
@@ -293,6 +304,10 @@ impl Analysis {
 
     pub fn set_builtin_defs(&mut self, builtins: Builtins, rules: Builtins) {
         self.db.set_builtin_defs(Dialect::Bazel, builtins, rules);
+    }
+
+    pub fn set_bazel_prelude_file(&mut self, file_id: FileId) {
+        self.db.set_bazel_prelude_file(file_id);
     }
 }
 

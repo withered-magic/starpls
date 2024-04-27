@@ -145,7 +145,7 @@ pub(crate) struct PathInterner {
 
 impl PathInterner {
     pub(crate) fn intern_path(&self, path: PathBuf) -> FileId {
-        let index = self.map.write().insert_full(path.clone()).0;
+        let index = self.map.write().insert_full(path).0;
         FileId(index as u32)
     }
 
@@ -633,9 +633,14 @@ pub(crate) fn dialect_and_api_context_for_path(
             (Dialect::Bazel, Some(APIContext::Workspace))
         }
         _ => match path.extension().and_then(|ext| ext.to_str()) {
-            Some("sky" | "star") => (Dialect::Standard, None),
             Some("bzl") => (Dialect::Bazel, Some(APIContext::Bzl)),
-            _ => return None,
+            _ => {
+                if path.ends_with("tools/build_rules/prelude_bazel") {
+                    (Dialect::Bazel, Some(APIContext::Prelude))
+                } else {
+                    (Dialect::Standard, None)
+                }
+            }
         },
     })
 }

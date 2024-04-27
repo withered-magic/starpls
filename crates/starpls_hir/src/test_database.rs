@@ -136,6 +136,12 @@ impl crate::Db for TestDatabase {
                 Builtins::default(),
             ))
     }
+
+    fn set_bazel_prelude_file(&mut self, _file: FileId) {}
+
+    fn get_bazel_prelude_file(&self) -> Option<FileId> {
+        None
+    }
 }
 
 #[allow(unused)]

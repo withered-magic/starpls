@@ -1,4 +1,9 @@
-use std::{mem, panic, sync::Arc, time::Duration};
+use std::{
+    fs, mem, panic,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
 use lsp_server::{Connection, ReqQueue};
 use parking_lot::RwLock;
@@ -8,7 +13,7 @@ use starpls_bazel::{
     client::{BazelCLI, BazelClient},
     decode_builtins, Builtins,
 };
-use starpls_common::FileId;
+use starpls_common::{Dialect, FileId};
 use starpls_ide::{Analysis, AnalysisSnapshot, Change, InferenceOptions};
 
 use crate::{
@@ -140,7 +145,7 @@ impl Server {
 
         eprintln!("server: bzlmod_enabled = {}", bzlmod_enabled);
 
-        // Additionally, load builtin rules.
+        // Load builtin rules from `bazel info build-language`.
         eprintln!("server: fetching builtin rules via `bazel info build-language`");
         let rules = match load_bazel_build_language(&*bazel_client) {
             Ok(builtins) => {
@@ -158,19 +163,35 @@ impl Server {
         let loader = DefaultFileLoader::new(
             bazel_client.clone(),
             path_interner.clone(),
-            info.workspace,
+            info.workspace.clone(),
             external_output_base,
             task_pool_sender.clone(),
             bzlmod_enabled,
         );
-
         let mut analysis = Analysis::new(
             Arc::new(loader),
             InferenceOptions {
                 infer_ctx_attrs: config.args.experimental_infer_ctx_attributes,
             },
         );
+
         analysis.set_builtin_defs(builtins, rules);
+
+        // Check for a prelude file. We skip verifying that `//tools/build_tools` is actually a package (i.e.
+        // that it actually contains a `BUILD.bazel`) file for simplicity.
+        if let Ok((prelude, contents)) = load_bazel_prelude(&info.workspace) {
+            eprintln!("server: found prelude file at {:?}", prelude);
+            let file_id = path_interner.intern_path(prelude);
+            let mut change = Change::default();
+            change.create_file(
+                file_id,
+                Dialect::Bazel,
+                Some(starpls_bazel::APIContext::Prelude),
+                contents,
+            );
+            analysis.apply_change(change);
+            analysis.set_bazel_prelude_file(file_id);
+        }
 
         let server = Server {
             config: Arc::new(config),
@@ -313,4 +334,10 @@ pub(crate) fn load_bazel_builtins() -> anyhow::Result<Builtins> {
 pub(crate) fn load_bazel_build_language(client: &dyn BazelClient) -> anyhow::Result<Builtins> {
     let build_language_output = client.build_language()?;
     decode_rules(&build_language_output)
+}
+
+fn load_bazel_prelude(workspace: impl AsRef<Path>) -> anyhow::Result<(PathBuf, String)> {
+    let prelude = workspace.as_ref().join("tools/build_rules/prelude_bazel");
+    let contents = fs::read_to_string(&prelude)?;
+    Ok((prelude, contents))
 }

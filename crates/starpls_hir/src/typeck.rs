@@ -1503,6 +1503,7 @@ impl<'a> TypeRefResolver<'a> {
                 "struct" | "structure" => self.resolve_single_arg_type_constructor(args, |ty| {
                     TyKind::Struct(Some(Struct::FieldSignature { ty }))
                 }),
+                "Target" => TyKind::Target.intern(),
                 name => match builtin_types.types(self.db).get(name).cloned() {
                     Some(ty) => ty,
                     None => {
@@ -1618,6 +1619,7 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
         // this once we support type guards.
         (_, TyKind::Union(tys)) => tys.iter().any(|target| assign_tys(db, source, target)),
         (TyKind::Union(tys), _) => tys.iter().any(|source| assign_tys(db, source, target)),
+        (TyKind::BuiltinType(source, _), TyKind::BuiltinType(target, _)) => source == target,
         (TyKind::String(_), TyKind::String(_))
         | (TyKind::Attribute(_), TyKind::Attribute(_))
         | (TyKind::Struct(_), TyKind::Struct(_))

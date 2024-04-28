@@ -130,7 +130,10 @@ pub(crate) fn completions(
                         && !param.is_kwargs_dict(db)
                         && !param.is_positional_only(db)
                 })
-                .filter_map(|param| param.name(db))
+                .filter_map(|param| match param.name(db) {
+                    Some(name) if !name.is_missing() => Some(name),
+                    _ => None,
+                })
             {
                 items.push(CompletionItem {
                     label: format!("{}=", name.as_str()),

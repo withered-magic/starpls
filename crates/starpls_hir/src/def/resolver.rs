@@ -204,7 +204,7 @@ impl<'a> Resolver<'a> {
         let mut names = FxHashMap::default();
         for scope in self.scopes() {
             for (name, def) in scope.defs.iter() {
-                if filter_unexported && name.as_str().starts_with('_') {
+                if (filter_unexported && name.as_str().starts_with('_')) || name.is_missing() {
                     continue;
                 }
                 if let Entry::Vacant(entry) = names.entry(name.clone()) {

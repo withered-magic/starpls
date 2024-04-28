@@ -35,9 +35,9 @@ impl From<String> for Hover {
 
 pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) -> Option<Hover> {
     let file = db.get_file(file_id)?;
-    let parse = parse(db, file);
+    let parsed = parse(db, file);
     let sema = Semantics::new(db);
-    let token = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
+    let token = pick_best_token(parsed.syntax(db).token_at_offset(pos), |kind| match kind {
         T![ident] => 2,
         T!['('] | T![')'] | T!['['] | T![']'] | T!['{'] | T!['}'] => 0,
         kind if kind.is_trivia_token() => 0,
@@ -157,10 +157,20 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             text.push('\n');
         }
         return Some(text.into());
-    } else if let Some(load_item) = ast::LoadItem::cast(parent) {
+    } else if let Some(load_item) = ast::LoadItem::cast(parent.clone()) {
         let load_item = sema.resolve_load_item(file, &load_item)?;
         let def = sema.def_for_load_item(&load_item)?;
         return Some(format_for_name(db, load_item.name(db).as_str(), &def.value.ty(db)).into());
+    } else if let Some(load_module) = ast::LoadModule::cast(parent) {
+        let load_stmt = ast::LoadStmt::cast(load_module.syntax().parent()?)?;
+        let loaded_file = sema.resolve_load_stmt(file, &load_stmt)?;
+        let parsed = parse(db, loaded_file);
+        let mut text = format!("```python\n(module) {}\n```\n", token.text());
+        if let Some(doc) = parsed.tree(db).doc().and_then(|doc| doc.value()) {
+            text.push_str(&unindent_doc(&doc));
+            text.push('\n');
+        }
+        return Some(text.into());
     }
 
     None

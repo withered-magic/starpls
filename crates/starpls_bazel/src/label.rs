@@ -105,6 +105,7 @@ impl error::Error for PartialParse<'_> {}
 pub enum ParseError {
     InvalidRepo,
     InvalidPackage,
+    InvalidPackageEndingSlash,
     InvalidTarget,
     EmptyPackage,
     EmptyTarget,
@@ -115,6 +116,7 @@ impl fmt::Display for ParseError {
         f.write_str(match self {
             ParseError::InvalidRepo => "invalid repo",
             ParseError::InvalidPackage => "invalid package",
+            ParseError::InvalidPackageEndingSlash => "package ends with slash",
             ParseError::InvalidTarget => "invalid target",
             ParseError::EmptyPackage => "empty package",
             ParseError::EmptyTarget => "empty target",
@@ -230,14 +232,12 @@ impl<'a, 'b> Parser<'a, 'b> {
         if has_target_only_chars {
             return Err(ParseError::InvalidPackage);
         }
-        if let Some(last_slash) = last_slash {
-            if last_slash + 1 == end {
-                return Err(ParseError::InvalidPackage);
-            }
-        }
         self.label.package_start = start;
         self.label.package_end = end;
-        Ok(last_slash)
+        match last_slash {
+            Some(last_slash) if last_slash + 1 == end => Err(ParseError::InvalidPackageEndingSlash),
+            _ => Ok(last_slash),
+        }
     }
 
     fn parse_target(&mut self) -> Result<(), ParseError> {
@@ -478,6 +478,6 @@ mod tests {
 
     #[test]
     fn test_invalid_package_ends_with_slash() {
-        check_err("@a//abc/", ParseError::InvalidPackage);
+        check_err("@a//abc/", ParseError::InvalidPackageEndingSlash);
     }
 }

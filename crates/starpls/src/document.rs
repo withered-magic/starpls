@@ -552,6 +552,7 @@ impl FileLoader for DefaultFileLoader {
                         // starting typing the package name.
                         read_dir_packages(root).map(Some)
                     }
+
                     Some(ParseError::EmptyTarget) => {
                         // Same logic as above, but for the target.
                         read_dir_targets(if label.is_relative() {
@@ -561,27 +562,33 @@ impl FileLoader for DefaultFileLoader {
                         })
                         .map(Some)
                     }
-                    Some(_) => {
-                        // Don't offer completions for any other parsing errors.
-                        Ok(None)
-                    }
-                    None => {
+
+                    Some(ParseError::InvalidPackageEndingSlash) | None => {
                         // TODO(withered-magic): Handle targets like in `//foo:bar/baz.bzl`.
                         if label.is_relative() {
                             // If the label is relative, check for target candidates in the current package.
                             read_dir_targets(package).map(Some)
                         } else if !label.target().is_empty() && !label.has_target_shorthand() {
                             // Check for target candidates in the label's package.
-                            read_dir_targets(root.join(label.package())).map(Some)
+                            let package_dir = root.join(label.package());
+                            let target_dir = match strip_slashes_or_pop_dir(label.target()) {
+                                Some(target_dir) => target_dir,
+                                None => return Ok(None),
+                            };
+                            read_dir_targets(package_dir.join(target_dir)).map(Some)
                         } else {
                             // Otherwise, find package candidates.
-                            let mut dir = root.join(label.package());
-                            if !label.package().ends_with('/') && !dir.pop() {
-                                Ok(None)
-                            } else {
-                                read_dir_packages(dir).map(Some)
-                            }
+                            let package_dir = match strip_slashes_or_pop_dir(label.package()) {
+                                Some(package_dir) => package_dir,
+                                None => return Ok(None),
+                            };
+                            read_dir_packages(root.join(package_dir)).map(Some)
                         }
+                    }
+
+                    _ => {
+                        // Don't offer completions for any other parsing errors.
+                        Ok(None)
                     }
                 }
             }
@@ -637,6 +644,19 @@ fn read_dir_targets(path: impl AsRef<Path>) -> anyhow::Result<Vec<LoadItemCandid
             })
         })
         .collect())
+}
+
+fn strip_slashes_or_pop_dir(input: &str) -> Option<PathBuf> {
+    Some(if input.ends_with('/') {
+        PathBuf::from(input.trim_end_matches('/'))
+    } else {
+        let mut target_dir = PathBuf::from(input);
+        if !target_dir.pop() {
+            return None;
+        }
+        eprintln!("target_dir: {:?}", target_dir);
+        target_dir
+    })
 }
 
 pub(crate) fn dialect_and_api_context_for_workspace_path(

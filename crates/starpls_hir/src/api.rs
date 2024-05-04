@@ -331,7 +331,14 @@ impl Type {
             TyKind::Function(func) => return func.doc(db).map(|doc| doc.to_string()),
             TyKind::IntrinsicFunction(func, _) => func.doc(db).clone(),
             TyKind::Rule(rule) => return rule.doc.as_ref().map(Box::to_string),
-            TyKind::Provider(provider) => return provider.doc.map(|doc| doc.value(db).to_string()),
+            // TyKind::Provider(provider) => return provider.doc.map(|doc| doc.value(db).to_string()),
+            TyKind::Provider(provider) => {
+                return match provider {
+                    Provider::CustomProvider(provider) => {
+                        provider.doc.map(|doc| doc.value(db).to_string())
+                    }
+                }
+            }
             TyKind::ModuleExtension(module_extension)
             | TyKind::ModuleExtensionProxy(module_extension) => {
                 return module_extension.doc.as_ref().map(Box::to_string)
@@ -370,10 +377,12 @@ impl Type {
     pub fn provider_fields_source(&self, db: &dyn Db) -> Option<InFile<ast::DictExpr>> {
         match self.ty.kind() {
             TyKind::Provider(provider) | TyKind::ProviderInstance(provider) => {
-                let dict_expr = provider
-                    .fields
-                    .as_ref()
-                    .and_then(|fields| fields.0.clone())?;
+                let dict_expr = match provider {
+                    Provider::CustomProvider(provider) => provider
+                        .fields
+                        .as_ref()
+                        .and_then(|fields| fields.0.clone())?,
+                };
                 source_map(db, dict_expr.file)
                     .expr_map_back
                     .get(&dict_expr.value)
@@ -441,11 +450,13 @@ impl Callable {
             CallableInner::IntrinsicFunction(func, _) => func.name(db),
             CallableInner::BuiltinFunction(func) => func.name(db),
             CallableInner::Rule(_) => Name::new_inline("rule"),
-            CallableInner::Provider(ref provider) => provider
-                .name
-                .as_ref()
-                .cloned()
-                .unwrap_or_else(|| Name::new_inline("provider")),
+            CallableInner::Provider(ref provider) => match provider {
+                Provider::CustomProvider(provider) => provider
+                    .name
+                    .as_ref()
+                    .cloned()
+                    .unwrap_or_else(|| Name::new_inline("provider")),
+            },
             CallableInner::ProviderRawConstructor(ref name, _) => name.clone(),
             CallableInner::Tag(_) => Name::new_inline("tag"),
         }
@@ -494,9 +505,11 @@ impl Callable {
                 _ => None,
             },
             CallableInner::Provider(ref provider)
-            | CallableInner::ProviderRawConstructor(_, ref provider) => {
-                provider.doc.map(|doc| doc.value(db).to_string())
-            }
+            | CallableInner::ProviderRawConstructor(_, ref provider) => match &*provider {
+                Provider::CustomProvider(provider) => {
+                    provider.doc.map(|doc| doc.value(db).to_string())
+                }
+            },
             CallableInner::Tag(ref tag_class) => tag_class.doc.as_ref().map(|doc| doc.to_string()),
         }
     }
@@ -532,8 +545,8 @@ enum CallableInner {
     IntrinsicFunction(IntrinsicFunction, Option<Substitution>),
     BuiltinFunction(BuiltinFunction),
     Rule(Ty),
-    Provider(Arc<Provider>),
-    ProviderRawConstructor(Name, Arc<Provider>),
+    Provider(Provider),
+    ProviderRawConstructor(Name, Provider),
     Tag(Arc<TagClass>),
 }
 

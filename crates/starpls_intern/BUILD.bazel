@@ -1,3 +1,4 @@
+load("@crates//:defs.bzl", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -5,10 +6,5 @@ package(default_visibility = ["//visibility:public"])
 rust_library(
     name = "starpls_intern",
     srcs = glob(["src/**/*.rs"]),
-    deps = [
-        "@crates//:dashmap",
-        "@crates//:hashbrown",
-        "@crates//:rustc-hash",
-        "@crates//:triomphe",
-    ],
+    deps = all_crate_deps(),
 )

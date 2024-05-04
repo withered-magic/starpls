@@ -155,6 +155,7 @@ struct SharedState {
 pub enum TypeRef {
     Name(Name, Option<Box<[TypeRef]>>),
     Union(Vec<TypeRef>),
+    Provider,
     Unknown,
 }
 
@@ -199,6 +200,7 @@ impl std::fmt::Display for TypeRef {
                 }
                 return Ok(());
             }
+            TypeRef::Provider => f.write_str("Unknown"),
             TypeRef::Unknown => f.write_str("Unknown"),
         }
     }
@@ -289,9 +291,14 @@ impl Ty {
                         )
                     }),
             ),
-            TyKind::ProviderInstance(provider) => {
-                Fields::Provider(provider.fields.as_ref()?.1.iter().enumerate().map(
-                    |(index, _)| {
+            TyKind::ProviderInstance(provider) => Fields::Provider(match provider {
+                Provider::CustomProvider(custom_provider) => custom_provider
+                    .fields
+                    .as_ref()?
+                    .1
+                    .iter()
+                    .enumerate()
+                    .map(|(index, _)| {
                         (
                             Field(FieldInner::ProviderField {
                                 provider: provider.clone(),
@@ -299,9 +306,8 @@ impl Ty {
                             }),
                             Ty::unknown(),
                         )
-                    },
-                ))
-            }
+                    }),
+            }),
             TyKind::ModuleExtensionProxy(module_extension) => Fields::ModuleExtensionProxy(
                 module_extension
                     .tag_classes
@@ -456,17 +462,21 @@ impl Ty {
                 )
             }
             TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
-                Params::Provider(provider.fields.iter().flat_map(|fields| {
-                    fields.1.iter().enumerate().map(|(index, _)| {
-                        (
-                            Param(ParamInner::ProviderParam {
-                                provider: provider.clone(),
-                                index,
-                            }),
-                            Ty::unknown(),
-                        )
-                    })
-                }))
+                Params::Provider(match provider {
+                    Provider::CustomProvider(custom_provider) => {
+                        custom_provider.fields.iter().flat_map(|fields| {
+                            fields.1.iter().enumerate().map(|(index, _)| {
+                                (
+                                    Param(ParamInner::ProviderParam {
+                                        provider: provider.clone(),
+                                        index,
+                                    }),
+                                    Ty::unknown(),
+                                )
+                            })
+                        })
+                    }
+                })
             }
             TyKind::Tag(tag_class) => Params::Tag(
                 tag_class
@@ -664,7 +674,7 @@ pub(crate) enum ParamInner {
     },
     RuleParam(RuleParam),
     ProviderParam {
-        provider: Arc<Provider>,
+        provider: Provider,
         index: usize,
     },
     TagParam(TagParam),
@@ -733,15 +743,15 @@ impl Param {
             ParamInner::ProviderParam {
                 ref provider,
                 index,
-            } => Some(
-                provider
+            } => Some(match provider {
+                Provider::CustomProvider(provider) => provider
                     .fields
                     .as_ref()
                     .expect("expected provider fields")
                     .1[index]
                     .name
                     .clone(),
-            ),
+            }),
             ParamInner::TagParam(TagParam::Keyword { ref name, .. }) => Some(name.clone()),
             ParamInner::TagParam(TagParam::Kwargs) => Some(Name::new_inline("kwargs")),
         }
@@ -773,16 +783,18 @@ impl Param {
                     .as_ref()
                     .map(Box::to_string)
             }
-            ParamInner::ProviderParam { provider, index } => {
-                return provider
-                    .fields
-                    .as_ref()
-                    .expect("expected provider fields")
-                    .1[*index]
-                    .doc
-                    .as_ref()
-                    .map(Box::to_string)
-            }
+            ParamInner::ProviderParam { provider, index } => match provider {
+                Provider::CustomProvider(provider) => {
+                    return provider
+                        .fields
+                        .as_ref()
+                        .expect("expected provider fields")
+                        .1[*index]
+                        .doc
+                        .as_ref()
+                        .map(Box::to_string)
+                }
+            },
             ParamInner::TagParam(TagParam::Keyword { attr, .. }) => {
                 return attr.doc.as_ref().map(Box::to_string)
             }
@@ -937,13 +949,15 @@ impl Field {
             FieldInner::ProviderField {
                 ref provider,
                 index,
-            } => provider
-                .fields
-                .as_ref()
-                .expect("expected provider fields")
-                .1[index]
-                .name
-                .clone(),
+            } => match provider {
+                Provider::CustomProvider(provider) => provider
+                    .fields
+                    .as_ref()
+                    .expect("expected provider fields")
+                    .1[index]
+                    .name
+                    .clone(),
+            },
             FieldInner::ModuleExtensionProxyField {
                 ref module_extension,
                 index,
@@ -966,15 +980,17 @@ impl Field {
             FieldInner::ProviderField {
                 ref provider,
                 index,
-            } => provider
-                .fields
-                .as_ref()
-                .expect("expected provider fields")
-                .1[index]
-                .doc
-                .as_ref()
-                .map(|doc| doc.to_string())
-                .unwrap_or_default(),
+            } => match provider {
+                Provider::CustomProvider(provider) => provider
+                    .fields
+                    .as_ref()
+                    .expect("expected provider fields")
+                    .1[index]
+                    .doc
+                    .as_ref()
+                    .map(Box::to_string)
+                    .unwrap_or_default(),
+            },
             FieldInner::ModuleExtensionProxyField {
                 ref module_extension,
                 index,
@@ -1009,7 +1025,7 @@ pub(crate) enum FieldInner {
         doc: Option<String>,
     },
     ProviderField {
-        provider: Arc<Provider>,
+        provider: Provider,
         index: usize,
     },
     ModuleExtensionProxyField {
@@ -1127,11 +1143,11 @@ pub(crate) enum TyKind {
     Rule(Rule),
     /// A Bazel provider (https://bazel.build/rules/lib/builtins/Provider.html).
     /// This is a callable the yields "provider instances".
-    Provider(Arc<Provider>),
+    Provider(Provider),
     /// An instance of a Bazel provider. The contained `Ty` must have kind `TyKind::Provider`.
-    ProviderInstance(Arc<Provider>),
+    ProviderInstance(Provider),
     /// The raw constructor for a Bazel provider.
-    ProviderRawConstructor(Name, Arc<Provider>),
+    ProviderRawConstructor(Name, Provider),
     /// A Bazel tag class.
     TagClass(Arc<TagClass>),
     /// A Bazel module extension.
@@ -1259,10 +1275,23 @@ impl Rule {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct Provider {
+pub(crate) struct CustomProvider {
     pub(crate) name: Option<Name>,
     pub(crate) doc: Option<LiteralString>,
     pub(crate) fields: Option<(Option<InFile<ExprId>>, Box<[ProviderField]>)>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum Provider {
+    CustomProvider(Arc<CustomProvider>),
+}
+
+impl Provider {
+    pub(crate) fn name(&self) -> Option<&Name> {
+        match self {
+            Provider::CustomProvider(provider) => provider.name.as_ref(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1516,6 +1545,7 @@ impl<'a> TypeRefResolver<'a> {
                 args.iter()
                     .map(|type_ref| self.resolve_type_ref_inner(&type_ref)),
             ),
+            TypeRef::Provider => types.unknown.clone(),
             TypeRef::Unknown => types.unknown.clone(),
         }
     }

@@ -5,9 +5,9 @@ use crate::{
     module,
     typeck::{
         builtins::BuiltinFunctionParam, intrinsics::IntrinsicFunctionParam, resolve_type_ref,
-        Protocol, RuleKind, Tuple, TyKind, TypeRef,
+        Protocol, Provider, RuleKind, Tuple, TyKind, TypeRef,
     },
-    Db, Ty, Type,
+    Db, Name, Ty, Type,
 };
 
 pub trait DisplayWithDb {
@@ -275,15 +275,9 @@ impl DisplayWithDb for TyKind {
                 RuleKind::Repository => "repository_rule",
             },
             TyKind::Provider(provider) => {
-                return write!(
-                    f,
-                    "Provider[{}]",
-                    provider.name.as_ref().map_or("_", |name| name.as_str())
-                );
+                return write!(f, "Provider[{}]", provider.name().map_or("_", Name::as_str));
             }
-            TyKind::ProviderInstance(provider) => {
-                provider.name.as_ref().map_or("_", |name| name.as_str())
-            }
+            TyKind::ProviderInstance(provider) => provider.name().map_or("_", Name::as_str),
             TyKind::ProviderRawConstructor(_, _) => "ProviderRawConstructor",
             TyKind::TagClass(_) => "tag_class",
             TyKind::ModuleExtension(_) => "module_extension",

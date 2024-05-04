@@ -235,17 +235,19 @@ impl Slots {
 
     pub(crate) fn from_provider(provider: &Provider) -> Self {
         Self {
-            slots: provider
-                .fields
-                .iter()
-                .flat_map(|fields| {
-                    fields.1.iter().map(|field| Slot::Keyword {
-                        name: field.name.clone(),
-                        provider: SlotProvider::Missing,
-                        positional: false,
+            slots: match provider {
+                Provider::CustomProvider(provider) => provider
+                    .fields
+                    .iter()
+                    .flat_map(|fields| {
+                        fields.1.iter().map(|field| Slot::Keyword {
+                            name: field.name.clone(),
+                            provider: SlotProvider::Missing,
+                            positional: false,
+                        })
                     })
-                })
-                .collect(),
+                    .collect(),
+            },
             disable_errors: true,
         }
     }

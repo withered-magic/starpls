@@ -18,8 +18,8 @@ use crate::{
     },
     source_map,
     typeck::{
-        Attribute, AttributeKind, ModuleExtension, Provider, ProviderField, Rule as TyRule,
-        RuleKind, Struct, TagClass, Tuple,
+        Attribute, AttributeKind, CustomProvider, ModuleExtension, Provider, ProviderField,
+        Rule as TyRule, RuleKind, Struct, TagClass, Tuple,
     },
     Db, ExprId, Name, Ty, TyCtxt, TyKind, TypeRef,
 };
@@ -84,6 +84,13 @@ impl APIGlobals {
             }
 
             if let Some(callable) = &value.callable {
+                // Check if this callable is known to be a provider. If so, create a new `Provider`
+                // instance and save it in the variables map instead.
+                match value.name.as_str() {
+                    "DefaultInfo" => {}
+                    _ => {}
+                }
+
                 functions.insert(
                     value.name.clone(),
                     builtin_function(db, &value.name, callable, &value.doc, None),
@@ -233,11 +240,11 @@ impl BuiltinFunction {
                         })
                         .unwrap_or_default();
 
-                    let provider = Arc::new(Provider {
+                    let provider = Provider::CustomProvider(Arc::new(CustomProvider {
                         name: provider_name,
                         doc,
                         fields,
-                    });
+                    }));
 
                     TyKind::Tuple(Tuple::Simple(smallvec![
                         TyKind::Provider(provider.clone()).intern(),
@@ -256,7 +263,11 @@ impl BuiltinFunction {
                         .and_then(|name_ref| name_ref.name())
                         .as_ref()
                         .map(|name| Name::from_str(name.text()));
-                    TyKind::Provider(Arc::new(Provider { name, doc, fields }))
+                    TyKind::Provider(Provider::CustomProvider(Arc::new(CustomProvider {
+                        name,
+                        doc,
+                        fields,
+                    })))
                 }
             }
 

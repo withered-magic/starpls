@@ -13,7 +13,9 @@ use starpls_syntax::{LineIndex, TextRange, TextSize};
 use starpls_test_util::make_test_builtins;
 
 pub use crate::{
-    completions::{CompletionItem, CompletionItemKind, CompletionMode},
+    completions::{
+        CompletionItem, CompletionItemKind, CompletionMode, Edit, InsertReplaceEdit, TextEdit,
+    },
     document_symbols::{DocumentSymbol, SymbolKind, SymbolTag},
     hover::{Hover, Markup},
     signature_help::{ParameterInfo, SignatureHelp, SignatureInfo},

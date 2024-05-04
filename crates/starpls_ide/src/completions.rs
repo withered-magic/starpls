@@ -23,6 +23,7 @@ pub struct CompletionItem {
     pub label: String,
     pub kind: CompletionItemKind,
     pub mode: Option<CompletionMode>,
+    pub filter_text: Option<String>,
     relevance: CompletionRelevance,
 }
 
@@ -33,15 +34,28 @@ impl CompletionItem {
 }
 
 #[derive(Debug)]
+pub enum Edit {
+    TextEdit(TextEdit),
+    InsertReplaceEdit(InsertReplaceEdit),
+}
+
+#[derive(Debug)]
 pub struct TextEdit {
     pub range: TextRange,
     pub new_text: String,
 }
 
 #[derive(Debug)]
+pub struct InsertReplaceEdit {
+    pub new_text: String,
+    pub insert: TextRange,
+    pub replace: TextRange,
+}
+
+#[derive(Debug)]
 pub enum CompletionMode {
     InsertText(String),
-    TextEdit(TextEdit),
+    TextEdit(Edit),
 }
 
 #[derive(Debug)]
@@ -140,6 +154,7 @@ pub(crate) fn completions(
                     kind: CompletionItemKind::Variable,
                     mode: Some(CompletionMode::InsertText(format!("{} = ", name.as_str()))),
                     relevance: CompletionRelevance::Parameter,
+                    filter_text: None,
                 });
             }
 
@@ -163,6 +178,7 @@ pub(crate) fn completions(
                         } else {
                             CompletionRelevance::Builtin
                         },
+                        filter_text: None,
                     });
                 }
 
@@ -182,6 +198,7 @@ pub(crate) fn completions(
                     },
                     mode: None,
                     relevance: CompletionRelevance::VariableOrKeyword,
+                    filter_text: None,
                 })
             }
         }
@@ -192,6 +209,7 @@ pub(crate) fn completions(
                     kind: CompletionItemKind::Class,
                     mode: None,
                     relevance: CompletionRelevance::VariableOrKeyword,
+                    filter_text: None,
                 })
             }
         }
@@ -202,23 +220,44 @@ pub(crate) fn completions(
                 let start = TextSize::from(
                     value
                         .rfind(&['/', ':', '@'])
-                        .map(|start| start + 1)
+                        .map(|start| {
+                            if candidate.replace_trailing_slash {
+                                start
+                            } else {
+                                start + 1
+                            }
+                        })
                         .unwrap_or(0) as u32,
                 );
+                let end = TextSize::from(value.len() as u32);
+                let (edit, filter_text) = if candidate.replace_trailing_slash {
+                    (
+                        Edit::InsertReplaceEdit(InsertReplaceEdit {
+                            new_text: candidate.path.clone(),
+                            insert: TextRange::new(token_start + start, token_start + end),
+                            replace: TextRange::new(token_start + start, token_start + end),
+                        }),
+                        Some("/".to_string()),
+                    )
+                } else {
+                    (
+                        Edit::TextEdit(TextEdit {
+                            range: TextRange::new(token_start + start, token_start + end),
+                            new_text: candidate.path.clone(),
+                        }),
+                        None,
+                    )
+                };
+
                 items.push(CompletionItem {
-                    label: candidate.path.clone(),
+                    label: candidate.path,
                     kind: match candidate.kind {
                         LoadItemCandidateKind::Directory => CompletionItemKind::Folder,
                         LoadItemCandidateKind::File => CompletionItemKind::File,
                     },
-                    mode: Some(CompletionMode::TextEdit(TextEdit {
-                        range: TextRange::new(
-                            start + token_start,
-                            TextSize::from(value.len() as u32) + token_start,
-                        ),
-                        new_text: candidate.path,
-                    })),
+                    mode: Some(CompletionMode::TextEdit(edit)),
                     relevance: CompletionRelevance::VariableOrKeyword,
+                    filter_text,
                 });
             }
         }
@@ -245,6 +284,7 @@ pub(crate) fn completions(
                     },
                     mode: None,
                     relevance: CompletionRelevance::VariableOrKeyword,
+                    filter_text: None,
                 });
             }
         }
@@ -259,6 +299,7 @@ pub(crate) fn completions(
                     kind: CompletionItemKind::Constant,
                     mode: None,
                     relevance: CompletionRelevance::VariableOrKeyword,
+                    filter_text: None,
                 });
             }
         }
@@ -275,6 +316,7 @@ pub(crate) fn add_globals(items: &mut Vec<CompletionItem>) {
             kind: CompletionItemKind::Keyword,
             mode: None,
             relevance: CompletionRelevance::VariableOrKeyword,
+            filter_text: None,
         })
     };
     add_global("True");
@@ -289,6 +331,7 @@ fn add_keywords(items: &mut Vec<CompletionItem>, is_in_def: bool, is_in_for: boo
             kind: CompletionItemKind::Keyword,
             mode: None,
             relevance: CompletionRelevance::VariableOrKeyword,
+            filter_text: None,
         })
     };
     add_keyword("def");

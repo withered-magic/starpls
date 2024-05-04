@@ -36,6 +36,7 @@ pub enum LoadItemCandidateKind {
 pub struct LoadItemCandidate {
     pub kind: LoadItemCandidateKind,
     pub path: String,
+    pub replace_trailing_slash: bool,
 }
 
 /// A Key corresponding to an interned file path. Use these instead of `Path`s to refer to files.

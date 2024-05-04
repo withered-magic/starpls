@@ -62,7 +62,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn run_server(args: ServerArgs) -> anyhow::Result<()> {
-    eprintln!("server: starpls, v0.1.13");
+    eprintln!("server: starpls, v0.1.14");
 
     // Create the transport over stdio.
     let (connection, io_threads) = Connection::stdio();

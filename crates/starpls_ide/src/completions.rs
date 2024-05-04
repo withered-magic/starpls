@@ -200,7 +200,10 @@ pub(crate) fn completions(
             let token_start = text.syntax().text_range().start() + TextSize::from(offset);
             for candidate in db.list_load_candidates(&value, file_id).ok()?? {
                 let start = TextSize::from(
-                    value.rfind(&['/', ':']).map(|start| start + 1).unwrap_or(0) as u32,
+                    value
+                        .rfind(&['/', ':', '@'])
+                        .map(|start| start + 1)
+                        .unwrap_or(0) as u32,
                 );
                 items.push(CompletionItem {
                     label: candidate.path.clone(),
@@ -347,7 +350,7 @@ impl CompletionContext {
 
         if matches!(
             trigger_character.as_ref().map(|c| c.as_str()),
-            Some("/" | ":")
+            Some("/" | ":" | "@")
         ) {
             return None;
         }

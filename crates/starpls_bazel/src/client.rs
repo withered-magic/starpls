@@ -27,6 +27,7 @@ pub trait BazelClient: Send + Sync + 'static {
     ) -> anyhow::Result<Option<String>>;
     fn clear_repo_mappings(&self);
     fn null_query_external_repo_targets(&self, repo: &str) -> anyhow::Result<()>;
+    fn repo_mapping_keys(&self, from_repo: &str) -> anyhow::Result<Vec<String>>;
 }
 
 pub struct BazelCLI {
@@ -145,6 +146,22 @@ impl BazelClient for BazelCLI {
             .stderr(Stdio::null())
             .status()?;
         Ok(())
+    }
+
+    fn repo_mapping_keys(&self, from_repo: &str) -> anyhow::Result<Vec<String>> {
+        let mappings = self.repo_mappings.read();
+        if let Some(mapping) = mappings.get(from_repo) {
+            return Ok(mapping.keys().cloned().collect());
+        }
+        drop(mappings);
+
+        // Otherwise, fetch the repo mapping and cache it. For now, we always cache the result, even if the call failed.
+        let mapping = self.dump_repo_mapping(from_repo).unwrap_or_default();
+        let keys = mapping.keys().cloned().collect();
+        self.repo_mappings
+            .write()
+            .insert(from_repo.to_string(), mapping);
+        Ok(keys)
     }
 }
 

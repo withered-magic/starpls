@@ -26,6 +26,15 @@ use starpls_ide::FileLoader;
 
 use crate::event_loop::{FetchExternalRepoRequest, Task};
 
+macro_rules! try_opt {
+    ($expr:expr) => {
+        match { $expr } {
+            Some(res) => res,
+            None => return Ok(None),
+        }
+    };
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum DocumentSource {
     Editor(i32),
@@ -235,38 +244,13 @@ struct ResolvedLabel {
 }
 
 impl DefaultFileLoader {
-    fn dirname(&self, file_id: FileId) -> PathBuf {
-        // Find the importing file's directory.
-        let mut from_path = self.interner.lookup_by_file_id(file_id);
-        assert!(from_path.pop());
-        from_path
-    }
-
     fn resolve_label(&self, label: &Label, from: FileId) -> anyhow::Result<Option<ResolvedLabel>> {
         let repo_kind = label.kind();
         let mut canonical_repo_res = None;
         let (root, package) = match &repo_kind {
             RepoKind::Apparent if self.bzlmod_enabled => {
                 let from_path = self.interner.lookup_by_file_id(from);
-                let from_repo = match from_path.strip_prefix(&self.external_output_base) {
-                    Result::Ok(stripped) => match stripped
-                        .components()
-                        .next()
-                        .as_ref()
-                        .and_then(|component| component.as_os_str().to_str())
-                    {
-                        Some(from_repo) => from_repo,
-                        None => return Ok(None),
-                    },
-                    Err(_) => {
-                        if from_path.starts_with(&self.workspace) {
-                            ""
-                        } else {
-                            return Ok(None);
-                        }
-                    }
-                };
-
+                let from_repo = try_opt!(self.repo_for_path(&from_path));
                 let canonical_repo = self
                     .bazel_client
                     .resolve_repo_from_mapping(label.repo(), from_repo)?;
@@ -363,6 +347,23 @@ impl DefaultFileLoader {
 
         Ok((file_id, contents))
     }
+
+    fn repo_for_path<'a>(&'a self, path: &'a PathBuf) -> Option<&str> {
+        match path.strip_prefix(&self.external_output_base) {
+            Result::Ok(stripped) => stripped
+                .components()
+                .next()
+                .as_ref()
+                .and_then(|component| component.as_os_str().to_str()),
+            Err(_) => {
+                if path.starts_with(&self.workspace) {
+                    Some("")
+                } else {
+                    None
+                }
+            }
+        }
+    }
 }
 
 impl FileLoader for DefaultFileLoader {
@@ -382,11 +383,7 @@ impl FileLoader for DefaultFileLoader {
             Err(err) => return Err(anyhow!("error parsing label: {}", err.err)),
         };
 
-        let resolved_label = match self.resolve_label(&label, from)? {
-            Some(resolved_label) => resolved_label,
-            None => return Ok(None),
-        };
-
+        let resolved_label = try_opt!(self.resolve_label(&label, from)?);
         let res = if fs::metadata(&resolved_label.resolved_path)
             .ok()
             .map(|metadata| metadata.is_file())
@@ -400,20 +397,14 @@ impl FileLoader for DefaultFileLoader {
                 return Ok(None);
             }
 
-            let parent = match resolved_label.resolved_path.parent() {
-                Some(parent) => parent,
-                None => return Ok(None),
-            };
-            let build_file = match fs::read_dir(parent)
+            let parent = try_opt!(resolved_label.resolved_path.parent());
+            let build_file = try_opt!(fs::read_dir(parent)
                 .into_iter()
                 .flat_map(|entries| entries.into_iter())
                 .find_map(|entry| match entry.ok()?.file_name().to_str()? {
                     file_name @ ("BUILD" | "BUILD.bazel") => Some(file_name.to_string()),
                     _ => None,
-                }) {
-                Some(build_file) => build_file,
-                None => return Ok(None),
-            };
+                }));
             let path = parent.join(build_file);
 
             // If we've already interned this file, then simply return the file id.
@@ -463,10 +454,7 @@ impl FileLoader for DefaultFileLoader {
                 {
                     Some(path) => (path, None),
                     None => {
-                        let res = match self.resolve_label(&label, from)? {
-                            Some(res) => res,
-                            None => return Ok(None),
-                        };
+                        let res = try_opt!(self.resolve_label(&label, from)?);
                         self.record_cache_result(&repo_kind, path, from, res.resolved_path.clone());
                         (res.resolved_path, res.canonical_repo)
                     }
@@ -494,9 +482,10 @@ impl FileLoader for DefaultFileLoader {
         dialect: Dialect,
         from: FileId,
     ) -> anyhow::Result<Option<Vec<LoadItemCandidate>>> {
+        let from_path = self.interner.lookup_by_file_id(from);
         match dialect {
             Dialect::Standard => {
-                let from_dir = self.dirname(from);
+                let from_dir = from_path.parent().unwrap();
                 let has_trailing_slash = path.ends_with(MAIN_SEPARATOR);
                 let mut path = from_dir.join(path);
                 if !has_trailing_slash {
@@ -528,22 +517,50 @@ impl FileLoader for DefaultFileLoader {
             }
             Dialect::Bazel => {
                 // Determine the loading file's workspace root and package.
-                let (root, package) = match starpls_bazel::resolve_workspace(
+                let (mut root, package) = try_opt!(starpls_bazel::resolve_workspace(
                     self.interner.lookup_by_file_id(from),
-                )? {
-                    Some(res) => res,
-                    None => return Ok(None),
-                };
-
+                )?);
                 let (label, err) = match Label::parse(path) {
                     Result::Ok(label) => (label, None),
                     Err(PartialParse { partial, err }) => (partial, Some(err)),
                 };
 
-                if label.kind() != RepoKind::Current
-                    || (!label.has_leading_slashes() && !label.is_relative())
+                if !label.has_leading_slashes()
+                    && !label.is_relative()
+                    && err != Some(ParseError::InvalidRepo)
                 {
-                    return Ok(None);
+                    return Ok(match label.kind() {
+                        RepoKind::Apparent if self.bzlmod_enabled => Some(
+                            self.bazel_client
+                                .repo_mapping_keys("")?
+                                .into_iter()
+                                .map(|repo| LoadItemCandidate {
+                                    kind: LoadItemCandidateKind::Directory,
+                                    path: repo.to_string(),
+                                })
+                                .collect(),
+                        ),
+                        _ => None,
+                    });
+                }
+
+                match label.kind() {
+                    RepoKind::Apparent | RepoKind::Canonical => {
+                        root = if self.bzlmod_enabled {
+                            let from_repo = try_opt!(self.repo_for_path(&from_path));
+                            let canonical_repo = try_opt!(self
+                                .bazel_client
+                                .resolve_repo_from_mapping(label.repo(), from_repo)?);
+                            if canonical_repo.is_empty() {
+                                self.workspace.clone()
+                            } else {
+                                self.external_output_base.join(canonical_repo)
+                            }
+                        } else {
+                            self.external_output_base.join(label.repo())
+                        };
+                    }
+                    RepoKind::Current => {}
                 }
 
                 match err {
@@ -571,17 +588,11 @@ impl FileLoader for DefaultFileLoader {
                         } else if !label.target().is_empty() && !label.has_target_shorthand() {
                             // Check for target candidates in the label's package.
                             let package_dir = root.join(label.package());
-                            let target_dir = match strip_slashes_or_pop_dir(label.target()) {
-                                Some(target_dir) => target_dir,
-                                None => return Ok(None),
-                            };
+                            let target_dir = try_opt!(strip_slashes_or_pop_dir(label.target()));
                             read_dir_targets(package_dir.join(target_dir)).map(Some)
                         } else {
                             // Otherwise, find package candidates.
-                            let package_dir = match strip_slashes_or_pop_dir(label.package()) {
-                                Some(package_dir) => package_dir,
-                                None => return Ok(None),
-                            };
+                            let package_dir = try_opt!(strip_slashes_or_pop_dir(label.package()));
                             read_dir_packages(root.join(package_dir)).map(Some)
                         }
                     }
@@ -654,7 +665,6 @@ fn strip_slashes_or_pop_dir(input: &str) -> Option<PathBuf> {
         if !target_dir.pop() {
             return None;
         }
-        eprintln!("target_dir: {:?}", target_dir);
         target_dir
     })
 }

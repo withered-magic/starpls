@@ -20,7 +20,7 @@ mod server;
 mod task_pool;
 mod utils;
 
-const COMPLETION_TRIGGER_CHARACTERS: &[char] = &['.', '"', '\'', '/', ':'];
+const COMPLETION_TRIGGER_CHARACTERS: &[char] = &['.', '"', '\'', '/', ':', '@'];
 const SIGNATURE_HELP_TRIGGER_CHARACTERS: &[char] = &['(', ',', ')'];
 
 #[derive(Parser)]

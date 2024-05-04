@@ -507,6 +507,7 @@ impl FileLoader for DefaultFileLoader {
                                 candidates.push(LoadItemCandidate {
                                     kind: LoadItemCandidateKind::File,
                                     path: name.to_string(),
+                                    replace_trailing_slash: false,
                                 })
                             }
                         }
@@ -537,6 +538,7 @@ impl FileLoader for DefaultFileLoader {
                                 .map(|repo| LoadItemCandidate {
                                     kind: LoadItemCandidateKind::Directory,
                                     path: repo.to_string(),
+                                    replace_trailing_slash: false,
                                 })
                                 .collect(),
                         ),
@@ -567,7 +569,7 @@ impl FileLoader for DefaultFileLoader {
                     Some(ParseError::EmptyPackage) => {
                         // An empty package usually indicates that the user is about to
                         // starting typing the package name.
-                        read_dir_packages(root).map(Some)
+                        read_dir_packages_and_targets(root, false).map(Some)
                     }
 
                     Some(ParseError::EmptyTarget) => {
@@ -588,12 +590,18 @@ impl FileLoader for DefaultFileLoader {
                         } else if !label.target().is_empty() && !label.has_target_shorthand() {
                             // Check for target candidates in the label's package.
                             let package_dir = root.join(label.package());
-                            let target_dir = try_opt!(strip_slashes_or_pop_dir(label.target()));
+                            let (target_dir, _) =
+                                try_opt!(strip_slashes_or_pop_dir(label.target()));
                             read_dir_targets(package_dir.join(target_dir)).map(Some)
                         } else {
                             // Otherwise, find package candidates.
-                            let package_dir = try_opt!(strip_slashes_or_pop_dir(label.package()));
-                            read_dir_packages(root.join(package_dir)).map(Some)
+                            let (package_dir, has_trailing_slash) =
+                                try_opt!(strip_slashes_or_pop_dir(label.package()));
+                            read_dir_packages_and_targets(
+                                root.join(package_dir),
+                                has_trailing_slash,
+                            )
+                            .map(Some)
                         }
                     }
 
@@ -607,7 +615,10 @@ impl FileLoader for DefaultFileLoader {
     }
 }
 
-fn read_dir_packages(path: impl AsRef<Path>) -> anyhow::Result<Vec<LoadItemCandidate>> {
+fn read_dir_packages_and_targets(
+    path: impl AsRef<Path>,
+    has_trailing_slash: bool,
+) -> anyhow::Result<Vec<LoadItemCandidate>> {
     Ok(fs::read_dir(path)?
         .flat_map(|entry| entry)
         .filter_map(|entry| {
@@ -618,13 +629,25 @@ fn read_dir_packages(path: impl AsRef<Path>) -> anyhow::Result<Vec<LoadItemCandi
         })
         .filter_map(|(file_type, file_name)| {
             file_name.to_str().and_then(|file_name| {
+                let (kind, path, replace_trailing_slash) = if file_type.is_dir() {
+                    (
+                        LoadItemCandidateKind::Directory,
+                        file_name.to_string(),
+                        false,
+                    )
+                } else if file_name.ends_with(".bzl") {
+                    (
+                        LoadItemCandidateKind::File,
+                        format!(":{}", file_name),
+                        has_trailing_slash,
+                    )
+                } else {
+                    return None;
+                };
                 Some(LoadItemCandidate {
-                    kind: if file_type.is_dir() {
-                        LoadItemCandidateKind::Directory
-                    } else {
-                        return None;
-                    },
-                    path: file_name.to_string(),
+                    kind,
+                    path,
+                    replace_trailing_slash,
                 })
             })
         })
@@ -651,21 +674,22 @@ fn read_dir_targets(path: impl AsRef<Path>) -> anyhow::Result<Vec<LoadItemCandid
                         return None;
                     },
                     path: file_name.to_string(),
+                    replace_trailing_slash: false,
                 })
             })
         })
         .collect())
 }
 
-fn strip_slashes_or_pop_dir(input: &str) -> Option<PathBuf> {
+fn strip_slashes_or_pop_dir(input: &str) -> Option<(PathBuf, bool)> {
     Some(if input.ends_with('/') {
-        PathBuf::from(input.trim_end_matches('/'))
+        (PathBuf::from(input.trim_end_matches('/')), true)
     } else {
         let mut target_dir = PathBuf::from(input);
         if !target_dir.pop() {
             return None;
         }
-        target_dir
+        (target_dir, false)
     })
 }
 

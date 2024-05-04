@@ -2,7 +2,7 @@ use anyhow::Ok;
 use starpls_ide::{
     CompletionItemKind,
     CompletionMode::{InsertText, TextEdit},
-    FilePosition,
+    Edit, FilePosition,
 };
 
 use crate::{
@@ -97,14 +97,39 @@ pub(crate) fn completion(
                         InsertText(text) => (Some(text), None),
                         TextEdit(edit) => (
                             None,
-                            Some(lsp_types::CompletionTextEdit::Edit(lsp_types::TextEdit {
-                                range: convert::lsp_range_from_text_range(edit.range, line_index)?,
-                                new_text: edit.new_text,
-                            })),
+                            Some(match edit {
+                                Edit::TextEdit(edit) => {
+                                    lsp_types::CompletionTextEdit::Edit(lsp_types::TextEdit {
+                                        range: convert::lsp_range_from_text_range(
+                                            edit.range, line_index,
+                                        )?,
+                                        new_text: edit.new_text,
+                                    })
+                                }
+                                Edit::InsertReplaceEdit(edit)
+                                    if snapshot.config.has_insert_replace_support() =>
+                                {
+                                    lsp_types::CompletionTextEdit::InsertAndReplace(
+                                        lsp_types::InsertReplaceEdit {
+                                            new_text: edit.new_text,
+                                            insert: convert::lsp_range_from_text_range(
+                                                edit.insert,
+                                                line_index,
+                                            )?,
+                                            replace: convert::lsp_range_from_text_range(
+                                                edit.replace,
+                                                line_index,
+                                            )?,
+                                        },
+                                    )
+                                }
+                                _ => return None,
+                            }),
                         ),
                     },
                     None => (None, None),
                 };
+
                 Some(lsp_types::CompletionItem {
                     label: item.label,
                     kind: Some(match item.kind {
@@ -121,6 +146,7 @@ pub(crate) fn completion(
                     sort_text,
                     insert_text,
                     text_edit,
+                    filter_text: item.filter_text,
                     ..Default::default()
                 })
             })

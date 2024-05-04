@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{anyhow, bail, Ok};
+use anyhow::{anyhow, bail};
 use crossbeam_channel::Sender;
 use dashmap::DashMap;
 use indexmap::IndexSet;
@@ -319,7 +319,7 @@ impl DefaultFileLoader {
             Some(file_id) => (file_id, None),
             None => {
                 let contents = match fs::read_to_string(&path) {
-                    Result::Ok(contents) => contents,
+                    Ok(contents) => contents,
                     Err(err) => {
                         if let Some(canonical_repo) = fetch_repo_on_err {
                             if !self
@@ -350,7 +350,7 @@ impl DefaultFileLoader {
 
     fn repo_for_path<'a>(&'a self, path: &'a PathBuf) -> Option<&str> {
         match path.strip_prefix(&self.external_output_base) {
-            Result::Ok(stripped) => stripped
+            Ok(stripped) => stripped
                 .components()
                 .next()
                 .as_ref()
@@ -379,7 +379,7 @@ impl FileLoader for DefaultFileLoader {
 
         // Parse the load path as a Bazel label.
         let label = match Label::parse(path) {
-            Result::Ok(label) => label,
+            Ok(label) => label,
             Err(err) => return Err(anyhow!("error parsing label: {}", err.err)),
         };
 
@@ -439,7 +439,7 @@ impl FileLoader for DefaultFileLoader {
             Dialect::Bazel => {
                 // Parse the load path as a Bazel label.
                 let label = match Label::parse(path) {
-                    Result::Ok(label) => label,
+                    Ok(label) => label,
                     Err(err) => return Err(anyhow!("error parsing label: {}", err.err)),
                 };
 
@@ -522,7 +522,7 @@ impl FileLoader for DefaultFileLoader {
                     self.interner.lookup_by_file_id(from),
                 )?);
                 let (label, err) = match Label::parse(path) {
-                    Result::Ok(label) => (label, None),
+                    Ok(label) => (label, None),
                     Err(PartialParse { partial, err }) => (partial, Some(err)),
                 };
 
@@ -539,6 +539,19 @@ impl FileLoader for DefaultFileLoader {
                                     kind: LoadItemCandidateKind::Directory,
                                     path: repo.to_string(),
                                     replace_trailing_slash: false,
+                                })
+                                .collect(),
+                        ),
+                        RepoKind::Canonical | RepoKind::Apparent => Some(
+                            fs::read_dir(&self.external_output_base)?
+                                .into_iter()
+                                .filter_map(|entry| {
+                                    let entry = entry.ok()?;
+                                    entry.file_type().ok()?.is_dir().then(|| LoadItemCandidate {
+                                        kind: LoadItemCandidateKind::Directory,
+                                        path: entry.file_name().to_string_lossy().to_string(),
+                                        replace_trailing_slash: false,
+                                    })
                                 })
                                 .collect(),
                         ),

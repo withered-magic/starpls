@@ -120,7 +120,44 @@ impl APIGlobals {
                     }
                 }
             } else {
-                variables.insert(value.name.clone(), parse_type_ref(&value.r#type));
+                match providers.get(value.name.as_str()) {
+                    Some(ty) => {
+                        let params = ty
+                            .field
+                            .iter()
+                            .filter(|field| field.callable.is_none())
+                            .map(|field| BuiltinFunctionParam::Simple {
+                                name: Name::from_str(&field.name),
+                                type_ref: parse_type_ref(&field.r#type),
+                                doc: field.doc.clone(),
+                                default_value: None,
+                                positional: false,
+                                is_mandatory: false,
+                            })
+                            .collect();
+                        let fields = ty
+                            .field
+                            .iter()
+                            .map(|field| BuiltinField {
+                                name: Name::from_str(&field.name),
+                                type_ref: maybe_field_type_ref_override(&ty.name, &field.name)
+                                    .unwrap_or_else(|| parse_type_ref(&field.r#type)),
+                                doc: normalize_doc_text(&field.doc),
+                            })
+                            .collect();
+                        let provider = BuiltinProvider::new(
+                            db,
+                            Name::from_str(&ty.name),
+                            params,
+                            fields,
+                            ty.doc.clone(),
+                        );
+                        variables.insert(ty.name.clone(), TypeRef::Provider(provider));
+                    }
+                    None => {
+                        variables.insert(value.name.clone(), parse_type_ref(&value.r#type));
+                    }
+                }
             }
         }
 

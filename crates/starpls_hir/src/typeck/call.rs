@@ -233,10 +233,19 @@ impl Slots {
         }
     }
 
-    pub(crate) fn from_provider(provider: &Provider) -> Self {
+    pub(crate) fn from_provider(db: &dyn Db, provider: &Provider) -> Self {
         Self {
             slots: match provider {
-                Provider::CustomProvider(provider) => provider
+                Provider::Builtin(provider) => provider
+                    .params(db)
+                    .iter()
+                    .map(|param| Slot::Keyword {
+                        name: param.name(),
+                        provider: SlotProvider::Missing,
+                        positional: false,
+                    })
+                    .collect(),
+                Provider::Custom(provider) => provider
                     .fields
                     .iter()
                     .flat_map(|fields| {

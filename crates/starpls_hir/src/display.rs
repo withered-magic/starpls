@@ -5,7 +5,7 @@ use crate::{
     module,
     typeck::{
         builtins::BuiltinFunctionParam, intrinsics::IntrinsicFunctionParam, resolve_type_ref,
-        Protocol, Provider, RuleKind, Tuple, TyKind, TypeRef,
+        Protocol, RuleKind, Tuple, TyKind, TypeRef,
     },
     Db, Name, Ty, Type,
 };
@@ -275,9 +275,13 @@ impl DisplayWithDb for TyKind {
                 RuleKind::Repository => "repository_rule",
             },
             TyKind::Provider(provider) => {
-                return write!(f, "Provider[{}]", provider.name().map_or("_", Name::as_str));
+                return write!(
+                    f,
+                    "Provider[{}]",
+                    provider.name(db).map_or("_", Name::as_str)
+                );
             }
-            TyKind::ProviderInstance(provider) => provider.name().map_or("_", Name::as_str),
+            TyKind::ProviderInstance(provider) => provider.name(db).map_or("_", Name::as_str),
             TyKind::ProviderRawConstructor(_, _) => "ProviderRawConstructor",
             TyKind::TagClass(_) => "tag_class",
             TyKind::ModuleExtension(_) => "module_extension",

@@ -240,7 +240,7 @@ impl BuiltinFunction {
                         })
                         .unwrap_or_default();
 
-                    let provider = Provider::CustomProvider(Arc::new(CustomProvider {
+                    let provider = Provider::Custom(Arc::new(CustomProvider {
                         name: provider_name,
                         doc,
                         fields,
@@ -263,7 +263,7 @@ impl BuiltinFunction {
                         .and_then(|name_ref| name_ref.name())
                         .as_ref()
                         .map(|name| Name::from_str(name.text()));
-                    TyKind::Provider(Provider::CustomProvider(Arc::new(CustomProvider {
+                    TyKind::Provider(Provider::Custom(Arc::new(CustomProvider {
                         name,
                         doc,
                         fields,
@@ -517,6 +517,26 @@ impl BuiltinFunctionParam {
             _ => Name::missing(),
         }
     }
+
+    pub(crate) fn doc(&self) -> &str {
+        match self {
+            BuiltinFunctionParam::Simple { doc, .. }
+            | BuiltinFunctionParam::ArgsList { doc, .. }
+            | BuiltinFunctionParam::KwargsDict { doc, .. } => doc,
+        }
+    }
+}
+
+#[salsa::tracked]
+pub(crate) struct BuiltinProvider {
+    #[return_ref]
+    pub(crate) name: Name,
+    #[return_ref]
+    pub(crate) params: Vec<BuiltinFunctionParam>,
+    #[return_ref]
+    pub(crate) fields: Vec<BuiltinField>,
+    #[return_ref]
+    pub(crate) doc: String,
 }
 
 #[salsa::input]

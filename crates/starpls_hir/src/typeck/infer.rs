@@ -1476,7 +1476,7 @@ impl TyCtxt<'_> {
                     TyKind::BuiltinFunction(func) => func.params(db)[..].into(),
                     TyKind::Rule(rule) => Slots::from_rule(db, rule),
                     TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
-                        Slots::from_provider(&provider)
+                        Slots::from_provider(db, &provider)
                     }
                     TyKind::Tag(tag_class) => Slots::from_tag_class(tag_class),
                     _ => return None,

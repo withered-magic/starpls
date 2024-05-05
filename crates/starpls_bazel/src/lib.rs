@@ -86,6 +86,42 @@ pub const BUILTINS_VALUES_DENY_LIST: &[&str] = &[
     "zip",
 ];
 
+pub const KNOWN_PROVIDER_TYPES: &[&str] = &[
+    "AnalysisTestResultInfo",
+    "AndroidNeverLinkLibrariesProvider",
+    "ApkInfo",
+    "BaselineProfileProvider",
+    "CcInfo",
+    "CcToolchainConfigInfo",
+    "CcToolchainInfo",
+    "ConstraintSettingInfo",
+    "ConstraintValueInfo",
+    "DebugPackageInfo",
+    "DefaultInfo",
+    "ExecutionInfo",
+    "FeatureFlagInfo",
+    "FilesToRunProvider",
+    "GeneratedExtensionRegistryProvider",
+    "IncompatiblePlatformProvider",
+    "InstrumentedFilesInfo",
+    "java_compilation_info",
+    "java_output_jars",
+    "JavaRuntimeInfo",
+    "JavaToolchainInfo",
+    "ObjcProvider",
+    "OutputGroupInfo",
+    "PackageSpecificationInfo",
+    "PlatformInfo",
+    "ProguardSpecProvider",
+    "ProtoRegistryProvider",
+    "PyInfo",
+    "PyRuntimeInfo",
+    "RunEnvironmentInfo",
+    "TemplateVariableInfo",
+    "ToolchainInfo",
+    "ToolchainTypeInfo",
+];
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum APIContext {
     Bzl,

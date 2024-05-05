@@ -5,8 +5,8 @@ use rustc_hash::FxHashMap;
 use smallvec::smallvec;
 use starpls_bazel::{
     attr,
-    builtin::{Callable, Value},
-    env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST,
+    builtin::{Callable, Param, Type, Value},
+    env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST, KNOWN_PROVIDER_TYPES,
 };
 use starpls_common::{parse, Dialect, File, InFile};
 use starpls_syntax::ast::{self, AstNode};
@@ -33,43 +33,47 @@ pub(crate) struct BuiltinTypes {
 }
 
 #[salsa::tracked]
-pub struct BuiltinType {
-    pub name: Name,
+pub(crate) struct BuiltinType {
+    pub(crate) name: Name,
     #[return_ref]
-    pub fields: Vec<BuiltinField>,
+    pub(crate) fields: Vec<BuiltinField>,
     #[return_ref]
-    pub methods: Vec<BuiltinFunction>,
+    pub(crate) methods: Vec<BuiltinFunction>,
     #[return_ref]
-    pub doc: String,
+    pub(crate) doc: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BuiltinField {
-    pub name: Name,
-    pub type_ref: TypeRef,
-    pub doc: String,
+pub(crate) struct BuiltinField {
+    pub(crate) name: Name,
+    pub(crate) type_ref: TypeRef,
+    pub(crate) doc: String,
 }
 
 #[salsa::tracked]
-pub struct BuiltinGlobals {
+pub(crate) struct BuiltinGlobals {
     #[return_ref]
-    pub bzl_globals: APIGlobals,
+    pub(crate) bzl_globals: APIGlobals,
     #[return_ref]
-    pub bzlmod_globals: APIGlobals,
+    pub(crate) bzlmod_globals: APIGlobals,
     #[return_ref]
-    pub repo_globals: APIGlobals,
+    pub(crate) repo_globals: APIGlobals,
     #[return_ref]
-    pub workspace_globals: APIGlobals,
+    pub(crate) workspace_globals: APIGlobals,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct APIGlobals {
-    pub functions: FxHashMap<String, BuiltinFunction>,
-    pub variables: FxHashMap<String, TypeRef>,
+pub(crate) struct APIGlobals {
+    pub(crate) functions: FxHashMap<String, BuiltinFunction>,
+    pub(crate) variables: FxHashMap<String, TypeRef>,
 }
 
 impl APIGlobals {
-    fn from_values<'a, I>(db: &dyn Db, values: I) -> Self
+    fn from_values<'a, I>(
+        db: &dyn Db,
+        values: I,
+        providers: &'a FxHashMap<String, &'a Type>,
+    ) -> Self
     where
         I: Iterator<Item = &'a Value>,
     {
@@ -86,15 +90,35 @@ impl APIGlobals {
             if let Some(callable) = &value.callable {
                 // Check if this callable is known to be a provider. If so, create a new `Provider`
                 // instance and save it in the variables map instead.
-                match value.name.as_str() {
-                    "DefaultInfo" => {}
-                    _ => {}
+                match providers.get(value.name.as_str()) {
+                    Some(ty) => {
+                        let params = callable.param.iter().map(builtin_param).collect();
+                        let fields = ty
+                            .field
+                            .iter()
+                            .map(|field| BuiltinField {
+                                name: Name::from_str(&field.name),
+                                type_ref: maybe_field_type_ref_override(&ty.name, &field.name)
+                                    .unwrap_or_else(|| parse_type_ref(&field.r#type)),
+                                doc: normalize_doc_text(&field.doc),
+                            })
+                            .collect();
+                        let provider = BuiltinProvider::new(
+                            db,
+                            Name::from_str(&ty.name),
+                            params,
+                            fields,
+                            ty.doc.clone(),
+                        );
+                        variables.insert(ty.name.clone(), TypeRef::Provider(provider));
+                    }
+                    None => {
+                        functions.insert(
+                            value.name.clone(),
+                            builtin_function(db, &value.name, callable, &value.doc, None),
+                        );
+                    }
                 }
-
-                functions.insert(
-                    value.name.clone(),
-                    builtin_function(db, &value.name, callable, &value.doc, None),
-                );
             } else {
                 variables.insert(value.name.clone(), parse_type_ref(&value.r#type));
             }
@@ -108,16 +132,16 @@ impl APIGlobals {
 }
 
 #[salsa::tracked]
-pub struct BuiltinFunction {
-    pub name: Name,
+pub(crate) struct BuiltinFunction {
+    pub(crate) name: Name,
     #[return_ref]
-    pub parent_type: Option<String>,
+    pub(crate) parent_type: Option<String>,
     #[return_ref]
-    pub params: Vec<BuiltinFunctionParam>,
+    pub(crate) params: Vec<BuiltinFunctionParam>,
     #[return_ref]
-    pub ret_type_ref: TypeRef,
+    pub(crate) ret_type_ref: TypeRef,
     #[return_ref]
-    pub doc: String,
+    pub(crate) doc: String,
 }
 
 impl BuiltinFunction {
@@ -474,7 +498,7 @@ impl BuiltinFunction {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum BuiltinFunctionParam {
+pub(crate) enum BuiltinFunctionParam {
     Simple {
         name: Name,
         type_ref: TypeRef,
@@ -556,6 +580,15 @@ pub(crate) fn builtin_globals(db: &dyn Db, dialect: Dialect) -> BuiltinGlobals {
 pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGlobals {
     let builtins = defs.builtins(db);
     let rules = defs.rules(db);
+
+    // Collect all known provider types.
+    let providers: FxHashMap<String, &Type> = builtins
+        .r#type
+        .iter()
+        .filter(|ty| KNOWN_PROVIDER_TYPES.contains(&ty.name.as_str()))
+        .map(|ty| (ty.name.clone(), ty))
+        .collect();
+
     let bzl_globals = APIGlobals::from_values(
         db,
         env::make_bzl_builtins()
@@ -564,12 +597,17 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
             .chain(env::make_build_builtins().global.iter())
             .chain(builtins.global.iter())
             .chain(rules.global.iter()),
+        &providers,
     );
-    let bzlmod_globals =
-        APIGlobals::from_values(db, env::make_module_bazel_builtins().global.iter());
-    let repo_globals = APIGlobals::from_values(db, env::make_repo_builtins().global.iter());
+    let bzlmod_globals = APIGlobals::from_values(
+        db,
+        env::make_module_bazel_builtins().global.iter(),
+        &providers,
+    );
+    let repo_globals =
+        APIGlobals::from_values(db, env::make_repo_builtins().global.iter(), &providers);
     let workspace_globals =
-        APIGlobals::from_values(db, env::make_workspace_builtins().global.iter());
+        APIGlobals::from_values(db, env::make_workspace_builtins().global.iter(), &providers);
 
     BuiltinGlobals::new(
         db,
@@ -595,7 +633,10 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
     for type_ in builtins.r#type.iter() {
         // Skip deny-listed types, which are handled directly by the
         // language server.
-        if type_.name.is_empty() || BUILTINS_TYPES_DENY_LIST.contains(&type_.name.as_str()) {
+        if type_.name.is_empty()
+            || BUILTINS_TYPES_DENY_LIST.contains(&type_.name.as_str())
+            || KNOWN_PROVIDER_TYPES.contains(&type_.name.as_str())
+        {
             continue;
         }
 
@@ -673,40 +714,6 @@ fn builtin_function(
     doc: &str,
     parent_name: Option<&str>,
 ) -> BuiltinFunction {
-    let mut params = Vec::new();
-
-    for param in callable.param.iter() {
-        let name = Name::from_str(param.name.trim_start_matches('*'));
-
-        // We need to apply a few normalization steps to parameter types.
-        params.push(if param.is_star_arg {
-            BuiltinFunctionParam::ArgsList {
-                name,
-                type_ref: maybe_strip_iterable_or_dict(parse_type_ref(&param.r#type)),
-                doc: normalize_doc_text(&param.doc),
-            }
-        } else if param.is_star_star_arg {
-            BuiltinFunctionParam::KwargsDict {
-                name,
-                type_ref: maybe_strip_iterable_or_dict(parse_type_ref(&param.r#type)),
-                doc: normalize_doc_text(&param.doc),
-            }
-        } else {
-            BuiltinFunctionParam::Simple {
-                name,
-                type_ref: parse_type_ref(&param.r#type),
-                doc: normalize_doc_text(&param.doc),
-                default_value: if !param.default_value.is_empty() {
-                    Some(param.default_value.clone())
-                } else {
-                    None
-                },
-                positional: true,
-                is_mandatory: param.is_mandatory,
-            }
-        });
-    }
-
     // Apply overrides for function return types known to be incorrect. For now, this
     // consists only of the `Label()` constructor.
     let ret_type_ref = match name {
@@ -718,7 +725,7 @@ fn builtin_function(
         db,
         Name::from_str(name),
         parent_name.map(|parent_name| parent_name.to_string()),
-        params,
+        callable.param.iter().map(builtin_param).collect(),
         parse_type_ref(ret_type_ref),
         if doc.is_empty() {
             DEFAULT_DOC.to_string()
@@ -726,6 +733,36 @@ fn builtin_function(
             normalize_doc_text(&doc)
         },
     )
+}
+
+fn builtin_param(param: &Param) -> BuiltinFunctionParam {
+    let name = Name::from_str(&param.name.trim_start_matches('*'));
+    if param.is_star_arg {
+        BuiltinFunctionParam::ArgsList {
+            name,
+            type_ref: maybe_strip_iterable_or_dict(parse_type_ref(&param.r#type)),
+            doc: normalize_doc_text(&param.doc),
+        }
+    } else if param.is_star_star_arg {
+        BuiltinFunctionParam::KwargsDict {
+            name,
+            type_ref: maybe_strip_iterable_or_dict(parse_type_ref(&param.r#type)),
+            doc: normalize_doc_text(&param.doc),
+        }
+    } else {
+        BuiltinFunctionParam::Simple {
+            name,
+            type_ref: parse_type_ref(&param.r#type),
+            doc: normalize_doc_text(&param.doc),
+            default_value: if !param.default_value.is_empty() {
+                Some(param.default_value.clone())
+            } else {
+                None
+            },
+            positional: true,
+            is_mandatory: param.is_mandatory,
+        }
+    }
 }
 
 #[salsa::tracked]

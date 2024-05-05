@@ -152,10 +152,10 @@ struct SharedState {
 
 /// A reference to a type in a source file.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum TypeRef {
+pub(crate) enum TypeRef {
     Name(Name, Option<Box<[TypeRef]>>),
     Union(Vec<TypeRef>),
-    Provider,
+    Provider(BuiltinProvider),
     Unknown,
 }
 
@@ -200,8 +200,7 @@ impl std::fmt::Display for TypeRef {
                 }
                 return Ok(());
             }
-            TypeRef::Provider => f.write_str("Unknown"),
-            TypeRef::Unknown => f.write_str("Unknown"),
+            _ => f.write_str("Unknown"),
         }
     }
 }
@@ -478,7 +477,7 @@ impl Ty {
             TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
                 Params::Provider(match provider {
                     Provider::Builtin(builtin_provider) => {
-                        ProviderParams::Builtin(builtin_provider.fields(db).iter().enumerate().map(
+                        ProviderParams::Builtin(builtin_provider.params(db).iter().enumerate().map(
                             |(index, _)| {
                                 (
                                     Param(ParamInner::ProviderParam {
@@ -1625,7 +1624,7 @@ impl<'a> TypeRefResolver<'a> {
                 args.iter()
                     .map(|type_ref| self.resolve_type_ref_inner(&type_ref)),
             ),
-            TypeRef::Provider => types.unknown.clone(),
+            TypeRef::Provider(provider) => TyKind::Provider(Provider::Builtin(*provider)).intern(),
             TypeRef::Unknown => types.unknown.clone(),
         }
     }

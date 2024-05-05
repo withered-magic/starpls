@@ -246,7 +246,12 @@ impl From<scope::ScopeDef> for ScopeDef {
             scope::ScopeDef::Variable(it) => ScopeDef::Variable(Variable {
                 id: Some((it.file, it.expr)),
             }),
-            scope::ScopeDef::BuiltinVariable(_) => ScopeDef::Variable(Variable { id: None }),
+            scope::ScopeDef::BuiltinVariable(type_ref) => match type_ref {
+                TypeRef::Provider(provider) => ScopeDef::Callable(Callable(
+                    CallableInner::Provider(Provider::Builtin(provider)),
+                )),
+                _ => ScopeDef::Variable(Variable { id: None }),
+            },
             scope::ScopeDef::Parameter(ParameterDef {
                 func: parent,
                 index,

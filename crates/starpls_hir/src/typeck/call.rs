@@ -239,10 +239,19 @@ impl Slots {
                 Provider::Builtin(provider) => provider
                     .params(db)
                     .iter()
-                    .map(|param| Slot::Keyword {
-                        name: param.name(),
-                        provider: SlotProvider::Missing,
-                        positional: false,
+                    .map(|param| match param {
+                        BuiltinFunctionParam::Simple { name, .. } => Slot::Keyword {
+                            name: name.clone(),
+                            provider: SlotProvider::Missing,
+                            positional: false,
+                        },
+                        BuiltinFunctionParam::ArgsList { .. } => Slot::ArgsList {
+                            providers: smallvec![],
+                            bare: false,
+                        },
+                        BuiltinFunctionParam::KwargsDict { .. } => Slot::KwargsDict {
+                            providers: smallvec![],
+                        },
                     })
                     .collect(),
                 Provider::Custom(provider) => provider

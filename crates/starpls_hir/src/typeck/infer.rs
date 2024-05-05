@@ -890,6 +890,7 @@ impl TyCtxt<'_> {
                         | TyKind::String(_)
                         | TyKind::Bytes
                         | TyKind::Protocol(Protocol::Sequence(_))
+                        | TyKind::Target
                 ) {
                     self.add_expr_diagnostic_warning(
                         file,

@@ -537,8 +537,9 @@ impl BuiltinFunctionParam {
 
     pub(crate) fn name(&self) -> Name {
         match self {
-            BuiltinFunctionParam::Simple { name, .. } => name.clone(),
-            _ => Name::missing(),
+            BuiltinFunctionParam::Simple { name, .. }
+            | BuiltinFunctionParam::ArgsList { name, .. }
+            | BuiltinFunctionParam::KwargsDict { name, .. } => name.clone(),
         }
     }
 

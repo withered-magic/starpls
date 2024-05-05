@@ -294,13 +294,13 @@ impl Ty {
                 TyKind::ProviderInstance(provider) => Fields::Provider(match provider {
                     Provider::Builtin(builtin_provier) => {
                         ProviderFields::Builtin(builtin_provier.fields(db).iter().enumerate().map(
-                            |(index, _)| {
+                            |(index, field)| {
                                 (
                                     Field(FieldInner::ProviderField {
                                         provider: provider.clone(),
                                         index,
                                     }),
-                                    Ty::unknown(),
+                                    resolve_type_ref(db, &field.type_ref).0,
                                 )
                             },
                         ))
@@ -478,13 +478,13 @@ impl Ty {
                 Params::Provider(match provider {
                     Provider::Builtin(builtin_provider) => {
                         ProviderParams::Builtin(builtin_provider.params(db).iter().enumerate().map(
-                            |(index, _)| {
+                            |(index, param)| {
                                 (
                                     Param(ParamInner::ProviderParam {
                                         provider: provider.clone(),
                                         index,
                                     }),
-                                    Ty::unknown(),
+                                    resolve_type_ref_opt(db, param.type_ref()),
                                 )
                             },
                         ))
@@ -878,6 +878,15 @@ impl Param {
             ),
             ParamInner::RuleParam(RuleParam::Kwargs) => true,
             ParamInner::TagParam(TagParam::Kwargs) => true,
+            ParamInner::ProviderParam {
+                provider: Provider::Builtin(ref provider),
+                index,
+            } => {
+                matches!(
+                    provider.params(db)[index],
+                    BuiltinFunctionParam::KwargsDict { .. }
+                )
+            }
             _ => false,
         }
     }

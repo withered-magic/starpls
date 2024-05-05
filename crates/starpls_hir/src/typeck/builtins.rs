@@ -87,76 +87,27 @@ impl APIGlobals {
                 continue;
             }
 
-            if let Some(callable) = &value.callable {
-                // Check if this callable is known to be a provider. If so, create a new `Provider`
-                // instance and save it in the variables map instead.
-                match providers.get(value.name.as_str()) {
-                    Some(ty) => {
-                        let params = callable.param.iter().map(builtin_param).collect();
-                        let fields = ty
-                            .field
-                            .iter()
-                            .map(|field| BuiltinField {
-                                name: Name::from_str(&field.name),
-                                type_ref: maybe_field_type_ref_override(&ty.name, &field.name)
-                                    .unwrap_or_else(|| parse_type_ref(&field.r#type)),
-                                doc: normalize_doc_text(&field.doc),
-                            })
-                            .collect();
-                        let provider = BuiltinProvider::new(
-                            db,
-                            Name::from_str(&ty.name),
-                            params,
-                            fields,
-                            ty.doc.clone(),
-                        );
-                        variables.insert(ty.name.clone(), TypeRef::Provider(provider));
-                    }
-                    None => {
-                        functions.insert(
-                            value.name.clone(),
-                            builtin_function(db, &value.name, callable, &value.doc, None),
-                        );
-                    }
+            match (providers.get(value.name.as_str()), &value.callable) {
+                (Some(ty), Some(callable)) => {
+                    variables.insert(
+                        ty.name.clone(),
+                        TypeRef::Provider(builtin_provider(db, ty, Some(callable))),
+                    );
                 }
-            } else {
-                match providers.get(value.name.as_str()) {
-                    Some(ty) => {
-                        let params = ty
-                            .field
-                            .iter()
-                            .filter(|field| field.callable.is_none())
-                            .map(|field| BuiltinFunctionParam::Simple {
-                                name: Name::from_str(&field.name),
-                                type_ref: parse_type_ref(&field.r#type),
-                                doc: field.doc.clone(),
-                                default_value: None,
-                                positional: false,
-                                is_mandatory: false,
-                            })
-                            .collect();
-                        let fields = ty
-                            .field
-                            .iter()
-                            .map(|field| BuiltinField {
-                                name: Name::from_str(&field.name),
-                                type_ref: maybe_field_type_ref_override(&ty.name, &field.name)
-                                    .unwrap_or_else(|| parse_type_ref(&field.r#type)),
-                                doc: normalize_doc_text(&field.doc),
-                            })
-                            .collect();
-                        let provider = BuiltinProvider::new(
-                            db,
-                            Name::from_str(&ty.name),
-                            params,
-                            fields,
-                            ty.doc.clone(),
-                        );
-                        variables.insert(ty.name.clone(), TypeRef::Provider(provider));
-                    }
-                    None => {
-                        variables.insert(value.name.clone(), parse_type_ref(&value.r#type));
-                    }
+                (Some(ty), None) => {
+                    variables.insert(
+                        ty.name.clone(),
+                        TypeRef::Provider(builtin_provider(db, ty, None)),
+                    );
+                }
+                (None, Some(callable)) => {
+                    functions.insert(
+                        value.name.clone(),
+                        builtin_function(db, &value.name, callable, &value.doc, None),
+                    );
+                }
+                (None, None) => {
+                    variables.insert(value.name.clone(), parse_type_ref(&value.r#type));
                 }
             }
         }
@@ -667,6 +618,13 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
     let builtins = defs.builtins(db);
     let rules = defs.rules(db);
     let mut missing_module_members = env::make_missing_module_members();
+    // Collect all known provider types.
+    let providers: FxHashMap<String, &Type> = builtins
+        .r#type
+        .iter()
+        .filter(|ty| KNOWN_PROVIDER_TYPES.contains(&ty.name.as_str()))
+        .map(|ty| (ty.name.clone(), ty))
+        .collect();
 
     for type_ in builtins.r#type.iter() {
         // Skip deny-listed types, which are handled directly by the
@@ -708,19 +666,39 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
             if let Some(callable) = &field.callable {
                 // Filter out duplicates.
                 if !seen_methods.contains(&field.name.as_str()) {
-                    methods.push(builtin_function(
-                        db,
-                        &field.name,
-                        callable,
-                        &field.doc,
-                        Some(&type_.name),
-                    ));
+                    match providers.get(field.name.as_str()) {
+                        Some(ty) => {
+                            fields.push(BuiltinField {
+                                name: Name::from_str(&ty.name),
+                                type_ref: TypeRef::Provider(builtin_provider(
+                                    db,
+                                    ty,
+                                    Some(callable),
+                                )),
+                                doc: normalize_doc_text(&field.doc),
+                            });
+                        }
+                        None => {
+                            methods.push(builtin_function(
+                                db,
+                                &field.name,
+                                callable,
+                                &field.doc,
+                                Some(&type_.name),
+                            ));
+                        }
+                    }
                 }
             } else {
+                let type_ref = match providers.get(field.name.as_str()) {
+                    Some(ty) => TypeRef::Provider(builtin_provider(db, ty, None)),
+                    None => maybe_field_type_ref_override(&type_.name, &field.name)
+                        .unwrap_or_else(|| parse_type_ref(&field.r#type)),
+                };
+
                 fields.push(BuiltinField {
                     name: Name::from_str(&field.name),
-                    type_ref: maybe_field_type_ref_override(&type_.name, &field.name)
-                        .unwrap_or_else(|| parse_type_ref(&field.r#type)),
+                    type_ref,
                     doc: normalize_doc_text(&field.doc),
                 });
             }
@@ -803,6 +781,43 @@ fn builtin_param(param: &Param) -> BuiltinFunctionParam {
     }
 }
 
+fn builtin_provider(db: &dyn Db, ty: &Type, callable: Option<&Callable>) -> BuiltinProvider {
+    let params = match callable {
+        Some(callable) => callable.param.iter().map(builtin_param).collect(),
+        None => ty
+            .field
+            .iter()
+            .filter(|field| field.callable.is_none())
+            .map(|field| BuiltinFunctionParam::Simple {
+                name: Name::from_str(&field.name),
+                type_ref: parse_type_ref(&field.r#type),
+                doc: normalize_doc_text(&field.doc),
+                default_value: None,
+                positional: false,
+                is_mandatory: false,
+            })
+            .collect(),
+    };
+
+    let provider_fields = ty
+        .field
+        .iter()
+        .map(|field| BuiltinField {
+            name: Name::from_str(&field.name),
+            type_ref: maybe_field_type_ref_override(&ty.name, &field.name)
+                .unwrap_or_else(|| parse_type_ref(&field.r#type)),
+            doc: normalize_doc_text(&field.doc),
+        })
+        .collect();
+    BuiltinProvider::new(
+        db,
+        Name::from_str(&ty.name),
+        params,
+        provider_fields,
+        normalize_doc_text(&ty.doc),
+    )
+}
+
 #[salsa::tracked]
 pub(crate) struct CommonAttributes {
     #[return_ref]
@@ -851,7 +866,7 @@ pub(crate) fn common_attributes_query(db: &dyn Db) -> CommonAttributes {
                             attr::AttributeKind::StringList => StringList,
                             attr::AttributeKind::StringListDict => StringListDict,
                         },
-                        doc: Some(attr.doc.into_boxed_str()),
+                        doc: Some(normalize_doc_text(&attr.doc).into_boxed_str()),
                         mandatory: attr.is_mandatory,
                         default_text_range: Some(Either::Right(attr.default_value)),
                     },

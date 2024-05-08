@@ -7,7 +7,7 @@ use crate::{
         builtins::BuiltinFunctionParam, intrinsics::IntrinsicFunctionParam, resolve_type_ref,
         Protocol, RuleKind, Tuple, TyKind, TypeRef,
     },
-    Db, Ty, Type,
+    Db, Name, Ty, Type,
 };
 
 pub trait DisplayWithDb {
@@ -278,12 +278,10 @@ impl DisplayWithDb for TyKind {
                 return write!(
                     f,
                     "Provider[{}]",
-                    provider.name.as_ref().map_or("_", |name| name.as_str())
+                    provider.name(db).map_or("_", Name::as_str)
                 );
             }
-            TyKind::ProviderInstance(provider) => {
-                provider.name.as_ref().map_or("_", |name| name.as_str())
-            }
+            TyKind::ProviderInstance(provider) => provider.name(db).map_or("_", Name::as_str),
             TyKind::ProviderRawConstructor(_, _) => "ProviderRawConstructor",
             TyKind::TagClass(_) => "tag_class",
             TyKind::ModuleExtension(_) => "module_extension",

@@ -43,6 +43,7 @@ pub struct Jar(
     typeck::builtins::BuiltinDefs,
     typeck::builtins::BuiltinFunction,
     typeck::builtins::BuiltinGlobals,
+    typeck::builtins::BuiltinProvider,
     typeck::builtins::BuiltinType,
     typeck::builtins::BuiltinTypes,
     typeck::builtins::builtin_globals_query,

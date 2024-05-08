@@ -21,8 +21,8 @@ use crate::{
         call::{Slot, SlotProvider, Slots},
         intrinsics::{IntrinsicFunctionParam, IntrinsicTypes},
         resolve_type_ref, resolve_type_ref_opt, DictLiteral, FileExprId, FileLoadItemId,
-        FileLoadStmt, FileParamId, Protocol, RuleKind, Struct, Substitution, Tuple, Ty, TyCtxt,
-        TyData, TyKind, TypeRef, TypecheckCancelled,
+        FileLoadStmt, FileParamId, Protocol, Provider, RuleKind, Struct, Substitution, Tuple, Ty,
+        TyCtxt, TyData, TyKind, TypeRef, TypecheckCancelled,
     },
     Name,
 };
@@ -213,9 +213,9 @@ impl TyCtxt<'_> {
                 let receiver_ty = self.infer_expr(file, *dot_expr);
                 match receiver_ty.kind() {
                     TyKind::Unknown
-                    | TyKind::ProviderInstance(_)
                     | TyKind::Unbound
-                    | TyKind::Any => self.unknown_ty(),
+                    | TyKind::Any
+                    | TyKind::ProviderInstance(Provider::Custom(_)) => self.unknown_ty(),
                     _ => {
                         if field.is_missing() {
                             return self.unknown_ty();
@@ -249,7 +249,9 @@ impl TyCtxt<'_> {
                                             })
                                             .unwrap_or_else(|| self.unknown_ty());
                                     }
-                                    TyKind::Struct(_) => return self.unknown_ty(),
+                                    TyKind::Struct(_) | TyKind::ProviderInstance(_) => {
+                                        return self.unknown_ty()
+                                    }
                                     _ => {}
                                 }
 
@@ -888,6 +890,7 @@ impl TyCtxt<'_> {
                         | TyKind::String(_)
                         | TyKind::Bytes
                         | TyKind::Protocol(Protocol::Sequence(_))
+                        | TyKind::Target
                 ) {
                     self.add_expr_diagnostic_warning(
                         file,
@@ -1476,7 +1479,7 @@ impl TyCtxt<'_> {
                     TyKind::BuiltinFunction(func) => func.params(db)[..].into(),
                     TyKind::Rule(rule) => Slots::from_rule(db, rule),
                     TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
-                        Slots::from_provider(&provider)
+                        Slots::from_provider(db, &provider)
                     }
                     TyKind::Tag(tag_class) => Slots::from_tag_class(tag_class),
                     _ => return None,

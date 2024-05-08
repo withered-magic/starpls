@@ -233,19 +233,39 @@ impl Slots {
         }
     }
 
-    pub(crate) fn from_provider(provider: &Provider) -> Self {
+    pub(crate) fn from_provider(db: &dyn Db, provider: &Provider) -> Self {
         Self {
-            slots: provider
-                .fields
-                .iter()
-                .flat_map(|fields| {
-                    fields.1.iter().map(|field| Slot::Keyword {
-                        name: field.name.clone(),
-                        provider: SlotProvider::Missing,
-                        positional: false,
+            slots: match provider {
+                Provider::Builtin(provider) => provider
+                    .params(db)
+                    .iter()
+                    .map(|param| match param {
+                        BuiltinFunctionParam::Simple { name, .. } => Slot::Keyword {
+                            name: name.clone(),
+                            provider: SlotProvider::Missing,
+                            positional: false,
+                        },
+                        BuiltinFunctionParam::ArgsList { .. } => Slot::ArgsList {
+                            providers: smallvec![],
+                            bare: false,
+                        },
+                        BuiltinFunctionParam::KwargsDict { .. } => Slot::KwargsDict {
+                            providers: smallvec![],
+                        },
                     })
-                })
-                .collect(),
+                    .collect(),
+                Provider::Custom(provider) => provider
+                    .fields
+                    .iter()
+                    .flat_map(|fields| {
+                        fields.1.iter().map(|field| Slot::Keyword {
+                            name: field.name.clone(),
+                            provider: SlotProvider::Missing,
+                            positional: false,
+                        })
+                    })
+                    .collect(),
+            },
             disable_errors: true,
         }
     }

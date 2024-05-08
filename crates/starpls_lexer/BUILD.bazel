@@ -1,3 +1,4 @@
+load("@crates//:defs.bzl", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
@@ -10,5 +11,5 @@ rust_library(
 rust_test(
     name = "starpls_lexer_test",
     crate = ":starpls_lexer",
-    deps = ["@crates//:expect-test"],
+    deps = all_crate_deps(normal_dev = True),
 )

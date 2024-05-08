@@ -246,7 +246,12 @@ impl From<scope::ScopeDef> for ScopeDef {
             scope::ScopeDef::Variable(it) => ScopeDef::Variable(Variable {
                 id: Some((it.file, it.expr)),
             }),
-            scope::ScopeDef::BuiltinVariable(_) => ScopeDef::Variable(Variable { id: None }),
+            scope::ScopeDef::BuiltinVariable(type_ref) => match type_ref {
+                TypeRef::Provider(provider) => ScopeDef::Callable(Callable(
+                    CallableInner::Provider(Provider::Builtin(provider)),
+                )),
+                _ => ScopeDef::Variable(Variable { id: None }),
+            },
             scope::ScopeDef::Parameter(ParameterDef {
                 func: parent,
                 index,
@@ -325,20 +330,20 @@ impl Type {
     }
 
     pub fn doc(&self, db: &dyn Db) -> Option<String> {
-        Some(match self.ty.kind() {
-            TyKind::BuiltinFunction(func) => func.doc(db).clone(),
-            TyKind::BuiltinType(ty, _) => ty.doc(db).clone(),
+        match self.ty.kind() {
+            TyKind::BuiltinFunction(func) => Some(func.doc(db).clone()),
+            TyKind::BuiltinType(ty, _) => Some(ty.doc(db).clone()),
             TyKind::Function(func) => return func.doc(db).map(|doc| doc.to_string()),
-            TyKind::IntrinsicFunction(func, _) => func.doc(db).clone(),
-            TyKind::Rule(rule) => return rule.doc.as_ref().map(Box::to_string),
-            TyKind::Provider(provider) => return provider.doc.map(|doc| doc.value(db).to_string()),
+            TyKind::IntrinsicFunction(func, _) => Some(func.doc(db).clone()),
+            TyKind::Rule(rule) => rule.doc.as_ref().map(Box::to_string),
+            TyKind::Provider(provider) => provider.doc(db),
             TyKind::ModuleExtension(module_extension)
             | TyKind::ModuleExtensionProxy(module_extension) => {
-                return module_extension.doc.as_ref().map(Box::to_string)
+                module_extension.doc.as_ref().map(Box::to_string)
             }
-            TyKind::Target => TARGET_DOC.into(),
-            _ => return None,
-        })
+            TyKind::Target => Some(TARGET_DOC.into()),
+            _ => None,
+        }
     }
 
     pub fn fields(&self, db: &dyn Db) -> Vec<(Field, Type)> {
@@ -370,10 +375,13 @@ impl Type {
     pub fn provider_fields_source(&self, db: &dyn Db) -> Option<InFile<ast::DictExpr>> {
         match self.ty.kind() {
             TyKind::Provider(provider) | TyKind::ProviderInstance(provider) => {
-                let dict_expr = provider
-                    .fields
-                    .as_ref()
-                    .and_then(|fields| fields.0.clone())?;
+                let dict_expr = match provider {
+                    Provider::Builtin(_) => return None,
+                    Provider::Custom(provider) => provider
+                        .fields
+                        .as_ref()
+                        .and_then(|fields| fields.0.clone())?,
+                };
                 source_map(db, dict_expr.file)
                     .expr_map_back
                     .get(&dict_expr.value)
@@ -442,8 +450,7 @@ impl Callable {
             CallableInner::BuiltinFunction(func) => func.name(db),
             CallableInner::Rule(_) => Name::new_inline("rule"),
             CallableInner::Provider(ref provider) => provider
-                .name
-                .as_ref()
+                .name(db)
                 .cloned()
                 .unwrap_or_else(|| Name::new_inline("provider")),
             CallableInner::ProviderRawConstructor(ref name, _) => name.clone(),
@@ -494,9 +501,10 @@ impl Callable {
                 _ => None,
             },
             CallableInner::Provider(ref provider)
-            | CallableInner::ProviderRawConstructor(_, ref provider) => {
-                provider.doc.map(|doc| doc.value(db).to_string())
-            }
+            | CallableInner::ProviderRawConstructor(_, ref provider) => match provider {
+                Provider::Builtin(provider) => Some(provider.doc(db).clone()),
+                Provider::Custom(provider) => provider.doc.map(|doc| doc.value(db).to_string()),
+            },
             CallableInner::Tag(ref tag_class) => tag_class.doc.as_ref().map(|doc| doc.to_string()),
         }
     }
@@ -532,8 +540,8 @@ enum CallableInner {
     IntrinsicFunction(IntrinsicFunction, Option<Substitution>),
     BuiltinFunction(BuiltinFunction),
     Rule(Ty),
-    Provider(Arc<Provider>),
-    ProviderRawConstructor(Name, Arc<Provider>),
+    Provider(Provider),
+    ProviderRawConstructor(Name, Provider),
     Tag(Arc<TagClass>),
 }
 

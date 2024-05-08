@@ -1,3 +1,4 @@
+load("@crates//:defs.bzl", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_binary")
 
 package(default_visibility = ["//visibility:public"])
@@ -6,23 +7,10 @@ rust_binary(
     name = "starpls",
     srcs = glob(["src/**/*.rs"]),
     compile_data = [":src/builtin/builtin.pb"],
-    deps = [
+    deps = all_crate_deps() + [
         "//crates/starpls_bazel",
         "//crates/starpls_common",
         "//crates/starpls_ide",
         "//crates/starpls_syntax",
-        "@crates//:anyhow",
-        "@crates//:clap",
-        "@crates//:crossbeam-channel",
-        "@crates//:dashmap",
-        "@crates//:indexmap",
-        "@crates//:line-index",
-        "@crates//:lsp-server",
-        "@crates//:lsp-types",
-        "@crates//:parking_lot",
-        "@crates//:rayon",
-        "@crates//:rustc-hash",
-        "@crates//:serde",
-        "@crates//:serde_json",
     ],
 )

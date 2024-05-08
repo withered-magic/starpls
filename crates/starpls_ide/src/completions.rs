@@ -165,7 +165,7 @@ pub(crate) fn completions(
                         label: name.to_string(),
                         kind: match &decl {
                             ScopeDef::Callable(_) => CompletionItemKind::Function,
-                            decl if decl.ty(db).is_callable() => CompletionItemKind::Function,
+                            def if def.ty(db).is_callable() => CompletionItemKind::Function,
                             // All the global values in the Bazel builtins are modules.
                             ScopeDef::Variable(it) if !it.is_user_defined() => {
                                 CompletionItemKind::Module

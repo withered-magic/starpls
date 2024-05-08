@@ -20,7 +20,7 @@ use crate::{
     typeck::{
         builtins::{
             builtin_types, common_attributes_query, BuiltinFunction, BuiltinFunctionParam,
-            BuiltinType,
+            BuiltinProvider, BuiltinType,
         },
         intrinsics::{
             intrinsic_field_types, intrinsic_types, IntrinsicClass, IntrinsicFunction,
@@ -152,9 +152,10 @@ struct SharedState {
 
 /// A reference to a type in a source file.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum TypeRef {
+pub(crate) enum TypeRef {
     Name(Name, Option<Box<[TypeRef]>>),
     Union(Vec<TypeRef>),
+    Provider(BuiltinProvider),
     Unknown,
 }
 
@@ -199,7 +200,7 @@ impl std::fmt::Display for TypeRef {
                 }
                 return Ok(());
             }
-            TypeRef::Unknown => f.write_str("Unknown"),
+            _ => f.write_str("Unknown"),
         }
     }
 }
@@ -225,115 +226,133 @@ impl Ty {
             return Some(Fields::Intrinsic(self.intrinsic_class_fields(db, class)));
         }
 
-        let fields = match kind {
-            TyKind::BuiltinType(ty, data) => Fields::Builtin(
-                ty.fields(db)
-                    .iter()
-                    .enumerate()
-                    .map(move |(index, field)| {
-                        let resolved = resolve_type_ref(db, &field.type_ref).0;
-                        let resolved = match (resolved.kind(), data) {
-                            // If `TyData` is set, this means the current type is either `ctx` or `repository_ctx`.
-                            // Override the `attr` field for both of these types.
-                            (TyKind::Struct(_), Some(TyData::Attributes(attrs)))
-                                if field.name.as_str() == "attr" =>
-                            {
-                                TyKind::Struct(Some(Struct::Attributes {
-                                    attrs: attrs.clone(),
-                                }))
-                                .intern()
-                            }
-                            _ => resolved,
+        let fields =
+            match kind {
+                TyKind::BuiltinType(ty, data) => Fields::Builtin(
+                    ty.fields(db)
+                        .iter()
+                        .enumerate()
+                        .map(move |(index, field)| {
+                            let resolved = resolve_type_ref(db, &field.type_ref).0;
+                            let resolved = match (resolved.kind(), data) {
+                                // If `TyData` is set, this means the current type is either `ctx` or `repository_ctx`.
+                                // Override the `attr` field for both of these types.
+                                (TyKind::Struct(_), Some(TyData::Attributes(attrs)))
+                                    if field.name.as_str() == "attr" =>
+                                {
+                                    TyKind::Struct(Some(Struct::Attributes {
+                                        attrs: attrs.clone(),
+                                    }))
+                                    .intern()
+                                }
+                                _ => resolved,
+                            };
+                            let field = Field(FieldInner::BuiltinField { parent: *ty, index });
+                            (field, resolved)
+                        })
+                        .chain(ty.methods(db).iter().map(|func| {
+                            (
+                                Field(FieldInner::BuiltinMethod { func: *func }),
+                                TyKind::BuiltinFunction(*func).intern(),
+                            )
+                        })),
+                ),
+                TyKind::Union(tys) => {
+                    // TODO(withered-magic): Can probably do better than a Vec here?
+                    let mut acc = Vec::new();
+                    tys.iter().for_each(|ty| {
+                        let fields = match ty.fields(db) {
+                            Some(fields) => fields,
+                            None => return,
                         };
-                        let field = Field(FieldInner::BuiltinField { parent: *ty, index });
-                        (field, resolved)
-                    })
-                    .chain(ty.methods(db).iter().map(|func| {
-                        (
-                            Field(FieldInner::BuiltinMethod { func: *func }),
-                            TyKind::BuiltinFunction(*func).intern(),
-                        )
-                    })),
-            ),
-            TyKind::Union(tys) => {
-                // TODO(withered-magic): Can probably do better than a Vec here?
-                let mut acc = Vec::new();
-                tys.iter().for_each(|ty| {
-                    let fields = match ty.fields(db) {
-                        Some(fields) => fields,
-                        None => return,
-                    };
 
-                    for (field, ty) in fields {
-                        acc.push((field, ty));
+                        for (field, ty) in fields {
+                            acc.push((field, ty));
+                        }
+                    });
+                    Fields::Union(acc.into_iter())
+                }
+                TyKind::Struct(strukt) => Fields::Struct(
+                    strukt
+                        .as_ref()
+                        .and_then(|strukt| match strukt {
+                            Struct::Inline { fields, .. } => Some(fields),
+                            _ => None,
+                        })
+                        .into_iter()
+                        .flat_map(|fields| fields.iter())
+                        .map(|(name, ty)| {
+                            (
+                                Field(FieldInner::StructField {
+                                    name: name.clone(),
+                                    doc: None,
+                                }),
+                                ty.clone(),
+                            )
+                        }),
+                ),
+                TyKind::ProviderInstance(provider) => Fields::Provider(match provider {
+                    Provider::Builtin(builtin_provier) => {
+                        ProviderFields::Builtin(builtin_provier.fields(db).iter().enumerate().map(
+                            |(index, field)| {
+                                (
+                                    Field(FieldInner::ProviderField {
+                                        provider: provider.clone(),
+                                        index,
+                                    }),
+                                    resolve_type_ref(db, &field.type_ref).0,
+                                )
+                            },
+                        ))
                     }
-                });
-                Fields::Union(acc.into_iter())
-            }
-            TyKind::Struct(strukt) => Fields::Struct(
-                strukt
-                    .as_ref()
-                    .and_then(|strukt| match strukt {
-                        Struct::Inline { fields, .. } => Some(fields),
-                        _ => None,
-                    })
-                    .into_iter()
-                    .flat_map(|fields| fields.iter())
-                    .map(|(name, ty)| {
-                        (
-                            Field(FieldInner::StructField {
-                                name: name.clone(),
-                                doc: None,
-                            }),
-                            ty.clone(),
+                    Provider::Custom(custom_provider) => {
+                        ProviderFields::Custom(
+                            custom_provider.fields.as_ref()?.1.iter().enumerate().map(
+                                |(index, _)| {
+                                    (
+                                        Field(FieldInner::ProviderField {
+                                            provider: provider.clone(),
+                                            index,
+                                        }),
+                                        Ty::unknown(),
+                                    )
+                                },
+                            ),
                         )
-                    }),
-            ),
-            TyKind::ProviderInstance(provider) => {
-                Fields::Provider(provider.fields.as_ref()?.1.iter().enumerate().map(
-                    |(index, _)| {
-                        (
-                            Field(FieldInner::ProviderField {
-                                provider: provider.clone(),
-                                index,
-                            }),
-                            Ty::unknown(),
-                        )
-                    },
-                ))
-            }
-            TyKind::ModuleExtensionProxy(module_extension) => Fields::ModuleExtensionProxy(
-                module_extension
-                    .tag_classes
-                    .iter()
-                    .flat_map(|tag_classes| tag_classes.iter())
-                    .enumerate()
-                    .map(|(index, (_, tag_class))| {
-                        (
-                            Field(FieldInner::ModuleExtensionProxyField {
-                                module_extension: module_extension.clone(),
-                                index,
-                            }),
-                            TyKind::Tag(tag_class.clone()).intern(),
-                        )
-                    }),
-            ),
-            TyKind::Target => {
-                let label_ty = builtin_types(db, Dialect::Bazel)
-                    .types(db)
-                    .get("Label")
-                    .cloned()
-                    .unwrap_or_else(|| Ty::unknown());
-                Fields::Static(iter::once((
-                    Field(FieldInner::StaticField {
-                        name: "label",
-                        doc: Some("The identifier of the target."),
-                    }),
-                    label_ty,
-                )))
-            }
-            _ => return None,
-        };
+                    }
+                }),
+                TyKind::ModuleExtensionProxy(module_extension) => Fields::ModuleExtensionProxy(
+                    module_extension
+                        .tag_classes
+                        .iter()
+                        .flat_map(|tag_classes| tag_classes.iter())
+                        .enumerate()
+                        .map(|(index, (_, tag_class))| {
+                            (
+                                Field(FieldInner::ModuleExtensionProxyField {
+                                    module_extension: module_extension.clone(),
+                                    index,
+                                }),
+                                TyKind::Tag(tag_class.clone()).intern(),
+                            )
+                        }),
+                ),
+                TyKind::Target => {
+                    let label_ty = builtin_types(db, Dialect::Bazel)
+                        .types(db)
+                        .get("Label")
+                        .cloned()
+                        .unwrap_or_else(|| Ty::unknown());
+                    Fields::Static(iter::once((
+                        Field(FieldInner::StaticField {
+                            name: "label",
+                            doc: Some("The identifier of the target."),
+                        }),
+                        label_ty,
+                    )))
+                }
+                _ => return None,
+            };
 
         Some(fields)
     }
@@ -456,17 +475,34 @@ impl Ty {
                 )
             }
             TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
-                Params::Provider(provider.fields.iter().flat_map(|fields| {
-                    fields.1.iter().enumerate().map(|(index, _)| {
-                        (
-                            Param(ParamInner::ProviderParam {
-                                provider: provider.clone(),
-                                index,
-                            }),
-                            Ty::unknown(),
-                        )
-                    })
-                }))
+                Params::Provider(match provider {
+                    Provider::Builtin(builtin_provider) => {
+                        ProviderParams::Builtin(builtin_provider.params(db).iter().enumerate().map(
+                            |(index, param)| {
+                                (
+                                    Param(ParamInner::ProviderParam {
+                                        provider: provider.clone(),
+                                        index,
+                                    }),
+                                    resolve_type_ref_opt(db, param.type_ref()),
+                                )
+                            },
+                        ))
+                    }
+                    Provider::Custom(custom_provider) => {
+                        ProviderParams::Custom(custom_provider.fields.iter().flat_map(|fields| {
+                            fields.1.iter().enumerate().map(|(index, _)| {
+                                (
+                                    Param(ParamInner::ProviderParam {
+                                        provider: provider.clone(),
+                                        index,
+                                    }),
+                                    Ty::unknown(),
+                                )
+                            })
+                        }))
+                    }
+                })
             }
             TyKind::Tag(tag_class) => Params::Tag(
                 tag_class
@@ -664,7 +700,7 @@ pub(crate) enum ParamInner {
     },
     RuleParam(RuleParam),
     ProviderParam {
-        provider: Arc<Provider>,
+        provider: Provider,
         index: usize,
     },
     TagParam(TagParam),
@@ -733,15 +769,16 @@ impl Param {
             ParamInner::ProviderParam {
                 ref provider,
                 index,
-            } => Some(
-                provider
+            } => Some(match provider {
+                Provider::Builtin(provider) => provider.params(db)[index].name(),
+                Provider::Custom(provider) => provider
                     .fields
                     .as_ref()
                     .expect("expected provider fields")
                     .1[index]
                     .name
                     .clone(),
-            ),
+            }),
             ParamInner::TagParam(TagParam::Keyword { ref name, .. }) => Some(name.clone()),
             ParamInner::TagParam(TagParam::Kwargs) => Some(Name::new_inline("kwargs")),
         }
@@ -756,11 +793,9 @@ impl Param {
                     .doc()
                     .map(|doc| doc.to_string());
             }
-            ParamInner::BuiltinParam { parent, index } => match &parent.params(db)[*index] {
-                BuiltinFunctionParam::Simple { doc, .. }
-                | BuiltinFunctionParam::ArgsList { doc, .. }
-                | BuiltinFunctionParam::KwargsDict { doc, .. } => doc.clone(),
-            },
+            ParamInner::BuiltinParam { parent, index } => {
+                parent.params(db)[*index].doc().to_string()
+            }
             ParamInner::IntrinsicParam { .. } => return None,
             ParamInner::RuleParam(RuleParam::Keyword { attr, .. }) => {
                 return attr.doc.as_ref().map(Box::to_string)
@@ -773,16 +808,19 @@ impl Param {
                     .as_ref()
                     .map(Box::to_string)
             }
-            ParamInner::ProviderParam { provider, index } => {
-                return provider
-                    .fields
-                    .as_ref()
-                    .expect("expected provider fields")
-                    .1[*index]
-                    .doc
-                    .as_ref()
-                    .map(Box::to_string)
-            }
+            ParamInner::ProviderParam { provider, index } => match provider {
+                Provider::Builtin(provider) => provider.params(db)[*index].doc().to_string(),
+                Provider::Custom(provider) => {
+                    return provider
+                        .fields
+                        .as_ref()
+                        .expect("expected provider fields")
+                        .1[*index]
+                        .doc
+                        .as_ref()
+                        .map(Box::to_string)
+                }
+            },
             ParamInner::TagParam(TagParam::Keyword { attr, .. }) => {
                 return attr.doc.as_ref().map(Box::to_string)
             }
@@ -840,6 +878,15 @@ impl Param {
             ),
             ParamInner::RuleParam(RuleParam::Kwargs) => true,
             ParamInner::TagParam(TagParam::Kwargs) => true,
+            ParamInner::ProviderParam {
+                provider: Provider::Builtin(ref provider),
+                index,
+            } => {
+                matches!(
+                    provider.params(db)[index],
+                    BuiltinFunctionParam::KwargsDict { .. }
+                )
+            }
             _ => false,
         }
     }
@@ -893,16 +940,36 @@ impl Param {
     }
 }
 
-enum Params<I1, I2, I3, I4, I5, I6> {
+enum ProviderParams<I1, I2> {
+    Builtin(I1),
+    Custom(I2),
+}
+
+impl<I1, I2> Iterator for ProviderParams<I1, I2>
+where
+    I1: Iterator<Item = (Param, Ty)>,
+    I2: Iterator<Item = (Param, Ty)>,
+{
+    type Item = (Param, Ty);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            ProviderParams::Builtin(it) => it.next(),
+            ProviderParams::Custom(it) => it.next(),
+        }
+    }
+}
+
+enum Params<I1, I2, I3, I4, I5, I6, I7> {
     Simple(I1),
     Intrinsic(I2),
     Builtin(I3),
     Rule(I4),
-    Provider(I5),
-    Tag(I6),
+    Provider(ProviderParams<I5, I6>),
+    Tag(I7),
 }
 
-impl<I1, I2, I3, I4, I5, I6> Iterator for Params<I1, I2, I3, I4, I5, I6>
+impl<I1, I2, I3, I4, I5, I6, I7> Iterator for Params<I1, I2, I3, I4, I5, I6, I7>
 where
     I1: Iterator<Item = (Param, Ty)>,
     I2: Iterator<Item = (Param, Ty)>,
@@ -910,17 +977,18 @@ where
     I4: Iterator<Item = (Param, Ty)>,
     I5: Iterator<Item = (Param, Ty)>,
     I6: Iterator<Item = (Param, Ty)>,
+    I7: Iterator<Item = (Param, Ty)>,
 {
     type Item = (Param, Ty);
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            Params::Simple(iter) => iter.next(),
-            Params::Intrinsic(iter) => iter.next(),
-            Params::Builtin(iter) => iter.next(),
-            Params::Rule(iter) => iter.next(),
-            Params::Provider(iter) => iter.next(),
-            Params::Tag(iter) => iter.next(),
+            Params::Simple(it) => it.next(),
+            Params::Intrinsic(it) => it.next(),
+            Params::Builtin(it) => it.next(),
+            Params::Rule(it) => it.next(),
+            Params::Provider(it) => it.next(),
+            Params::Tag(it) => it.next(),
         }
     }
 }
@@ -937,13 +1005,16 @@ impl Field {
             FieldInner::ProviderField {
                 ref provider,
                 index,
-            } => provider
-                .fields
-                .as_ref()
-                .expect("expected provider fields")
-                .1[index]
-                .name
-                .clone(),
+            } => match provider {
+                Provider::Builtin(provider) => provider.fields(db)[index].name.clone(),
+                Provider::Custom(provider) => provider
+                    .fields
+                    .as_ref()
+                    .expect("expected provider fields")
+                    .1[index]
+                    .name
+                    .clone(),
+            },
             FieldInner::ModuleExtensionProxyField {
                 ref module_extension,
                 index,
@@ -966,15 +1037,18 @@ impl Field {
             FieldInner::ProviderField {
                 ref provider,
                 index,
-            } => provider
-                .fields
-                .as_ref()
-                .expect("expected provider fields")
-                .1[index]
-                .doc
-                .as_ref()
-                .map(|doc| doc.to_string())
-                .unwrap_or_default(),
+            } => match provider {
+                Provider::Builtin(provider) => provider.fields(db)[index].doc.clone(),
+                Provider::Custom(provider) => provider
+                    .fields
+                    .as_ref()
+                    .expect("expected provider fields")
+                    .1[index]
+                    .doc
+                    .as_ref()
+                    .map(Box::to_string)
+                    .unwrap_or_default(),
+            },
             FieldInner::ModuleExtensionProxyField {
                 ref module_extension,
                 index,
@@ -1009,7 +1083,7 @@ pub(crate) enum FieldInner {
         doc: Option<String>,
     },
     ProviderField {
-        provider: Arc<Provider>,
+        provider: Provider,
         index: usize,
     },
     ModuleExtensionProxyField {
@@ -1022,17 +1096,37 @@ pub(crate) enum FieldInner {
     },
 }
 
-enum Fields<I1, I2, I3, I4, I5, I6, I7> {
+enum ProviderFields<I1, I2> {
+    Builtin(I1),
+    Custom(I2),
+}
+
+impl<I1, I2> Iterator for ProviderFields<I1, I2>
+where
+    I1: Iterator<Item = (Field, Ty)>,
+    I2: Iterator<Item = (Field, Ty)>,
+{
+    type Item = (Field, Ty);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            ProviderFields::Builtin(it) => it.next(),
+            ProviderFields::Custom(it) => it.next(),
+        }
+    }
+}
+
+enum Fields<I1, I2, I3, I4, I5, I6, I7, I8> {
     Intrinsic(I1),
     Builtin(I2),
     Union(I3),
     Struct(I4),
-    Provider(I5),
-    ModuleExtensionProxy(I6),
-    Static(I7),
+    Provider(ProviderFields<I5, I6>),
+    ModuleExtensionProxy(I7),
+    Static(I8),
 }
 
-impl<I1, I2, I3, I4, I5, I6, I7> Iterator for Fields<I1, I2, I3, I4, I5, I6, I7>
+impl<I1, I2, I3, I4, I5, I6, I7, I8> Iterator for Fields<I1, I2, I3, I4, I5, I6, I7, I8>
 where
     I1: Iterator<Item = (Field, Ty)>,
     I2: Iterator<Item = (Field, Ty)>,
@@ -1041,18 +1135,19 @@ where
     I5: Iterator<Item = (Field, Ty)>,
     I6: Iterator<Item = (Field, Ty)>,
     I7: Iterator<Item = (Field, Ty)>,
+    I8: Iterator<Item = (Field, Ty)>,
 {
     type Item = (Field, Ty);
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            Self::Intrinsic(iter) => iter.next(),
-            Self::Builtin(iter) => iter.next(),
-            Self::Union(iter) => iter.next(),
-            Self::Struct(iter) => iter.next(),
-            Self::Provider(iter) => iter.next(),
-            Self::ModuleExtensionProxy(iter) => iter.next(),
-            Self::Static(iter) => iter.next(),
+            Self::Intrinsic(it) => it.next(),
+            Self::Builtin(it) => it.next(),
+            Self::Union(it) => it.next(),
+            Self::Struct(it) => it.next(),
+            Self::Provider(it) => it.next(),
+            Self::ModuleExtensionProxy(it) => it.next(),
+            Self::Static(it) => it.next(),
         }
     }
 }
@@ -1127,11 +1222,11 @@ pub(crate) enum TyKind {
     Rule(Rule),
     /// A Bazel provider (https://bazel.build/rules/lib/builtins/Provider.html).
     /// This is a callable the yields "provider instances".
-    Provider(Arc<Provider>),
+    Provider(Provider),
     /// An instance of a Bazel provider. The contained `Ty` must have kind `TyKind::Provider`.
-    ProviderInstance(Arc<Provider>),
+    ProviderInstance(Provider),
     /// The raw constructor for a Bazel provider.
-    ProviderRawConstructor(Name, Arc<Provider>),
+    ProviderRawConstructor(Name, Provider),
     /// A Bazel tag class.
     TagClass(Arc<TagClass>),
     /// A Bazel module extension.
@@ -1259,10 +1354,32 @@ impl Rule {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct Provider {
+pub(crate) struct CustomProvider {
     pub(crate) name: Option<Name>,
     pub(crate) doc: Option<LiteralString>,
     pub(crate) fields: Option<(Option<InFile<ExprId>>, Box<[ProviderField]>)>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum Provider {
+    Builtin(BuiltinProvider),
+    Custom(Arc<CustomProvider>),
+}
+
+impl Provider {
+    pub(crate) fn name<'a>(&'a self, db: &'a dyn Db) -> Option<&'a Name> {
+        match self {
+            Provider::Builtin(provider) => Some(provider.name(db)),
+            Provider::Custom(provider) => provider.name.as_ref(),
+        }
+    }
+
+    pub(crate) fn doc(&self, db: &dyn Db) -> Option<String> {
+        match self {
+            Provider::Builtin(provider) => Some(provider.doc(db).clone()),
+            Provider::Custom(provider) => provider.doc.map(|doc| doc.value(db).to_string()),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1516,6 +1633,7 @@ impl<'a> TypeRefResolver<'a> {
                 args.iter()
                     .map(|type_ref| self.resolve_type_ref_inner(&type_ref)),
             ),
+            TypeRef::Provider(provider) => TyKind::Provider(Provider::Builtin(*provider)).intern(),
             TypeRef::Unknown => types.unknown.clone(),
         }
     }

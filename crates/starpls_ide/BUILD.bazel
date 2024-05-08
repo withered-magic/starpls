@@ -1,3 +1,4 @@
+load("@crates//:defs.bzl", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
@@ -8,17 +9,12 @@ rust_library(
     aliases = {
         "@crates//:salsa": "salsa",
     },
-    deps = [
+    deps = all_crate_deps() + [
         "//crates/starpls_bazel",
         "//crates/starpls_common",
         "//crates/starpls_hir",
         "//crates/starpls_syntax",
         "//crates/starpls_test_util",
-        "@crates//:anyhow",
-        "@crates//:dashmap",
-        "@crates//:rustc-hash",
-        "@crates//:salsa",
-        "@crates//:unindent",
     ],
 )
 
@@ -28,7 +24,5 @@ rust_test(
         "@crates//:salsa": "salsa",
     },
     crate = ":starpls_ide",
-    deps = [
-        "@crates//:expect-test",
-    ],
+    deps = all_crate_deps(normal_dev = True),
 )

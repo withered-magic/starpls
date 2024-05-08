@@ -302,6 +302,7 @@ pub(crate) enum Argument {
     UnpackedDict { expr: ExprId },
 }
 
+#[allow(private_interfaces)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Param {
     Simple {
@@ -342,7 +343,7 @@ impl Param {
         }
     }
 
-    pub fn type_ref(&self) -> Option<TypeRef> {
+    pub(crate) fn type_ref(&self) -> Option<TypeRef> {
         match self {
             Param::Simple { type_ref, .. }
             | Param::ArgsList { type_ref, .. }

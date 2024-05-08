@@ -37,8 +37,31 @@ fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptio
         vec![("attr", "struct")],
         vec![],
     ));
+    builder.add_type(FixtureType::new(
+        "DefaultInfo",
+        vec![("file", "string")],
+        vec![],
+    ));
+    builder.add_type(FixtureType::new(
+        "FeatureFlagInfo",
+        vec![("value", "string")],
+        vec![],
+    ));
+    builder.add_type(FixtureType::new(
+        "config_common",
+        vec![],
+        vec!["FeatureFlagInfo"],
+    ));
+    builder.add_function("DefaultInfo");
+    builder.add_type(FixtureType::new(
+        "PyInfo",
+        vec![("field1", "string")],
+        vec![],
+    ));
     builder.add_type(FixtureType::new("attr", vec![], vec!["label_list"]));
     builder.add_global("attr", "attr");
+    builder.add_global("config_common", "config_common");
+    builder.add_global("PyInfo", "PyInfo");
     builder.set_inference_options(options);
 
     let mut db = builder.build();
@@ -1179,4 +1202,38 @@ my_rule = rule(
             81..177 "rule(\n    implementation = _rule_impl,\n    attrs = {\n        \"srcs\": attr.label_list(),\n    },\n)": rule
         "#]],
     );
+}
+
+#[test]
+fn test_builtin_provider() {
+    check_infer(
+        r#"
+default_info = DefaultInfo()
+default_info.file    
+
+flag_info = config_common.FeatureFlagInfo()
+flag_info.value
+
+py_info = PyInfo()
+py_info.field1
+"#,
+        expect![[r#"
+            1..13 "default_info": DefaultInfo
+            16..27 "DefaultInfo": Provider[DefaultInfo]
+            16..29 "DefaultInfo()": DefaultInfo
+            30..42 "default_info": DefaultInfo
+            30..47 "default_info.file": string
+            53..62 "flag_info": FeatureFlagInfo
+            65..78 "config_common": config_common
+            65..94 "config_common.FeatureFlagInfo": Provider[FeatureFlagInfo]
+            65..96 "config_common.FeatureFlagInfo()": FeatureFlagInfo
+            97..106 "flag_info": FeatureFlagInfo
+            97..112 "flag_info.value": string
+            114..121 "py_info": PyInfo
+            124..130 "PyInfo": Provider[PyInfo]
+            124..132 "PyInfo()": PyInfo
+            133..140 "py_info": PyInfo
+            133..147 "py_info.field1": string
+        "#]],
+    )
 }

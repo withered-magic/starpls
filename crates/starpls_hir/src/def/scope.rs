@@ -20,15 +20,10 @@ pub(crate) struct ModuleScopes {
 }
 
 #[salsa::tracked]
-pub(crate) fn module_scopes_query(db: &dyn Db, info: ModuleInfo) -> ModuleScopes {
-    let scopes = Scopes::new_for_module(db, info);
-    ModuleScopes::new(db, scopes)
-}
-
-#[salsa::tracked]
 pub(crate) fn module_scopes(db: &dyn Db, file: File) -> ModuleScopes {
     let info = lower(db, file);
-    module_scopes_query(db, info)
+    let scopes = Scopes::new_for_module(db, info);
+    ModuleScopes::new(db, scopes)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

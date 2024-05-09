@@ -32,14 +32,12 @@ pub struct ModuleInfo {
 #[salsa::jar(db = Db)]
 pub struct Jar(
     lower,
-    lower_query,
     ModuleInfo,
     def::Function,
     def::LoadStmt,
     def::LiteralString,
     def::scope::ModuleScopes,
     def::scope::module_scopes,
-    def::scope::module_scopes_query,
     typeck::builtins::BuiltinDefs,
     typeck::builtins::BuiltinFunction,
     typeck::builtins::BuiltinGlobals,
@@ -86,16 +84,10 @@ pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
 }
 
 #[salsa::tracked]
-fn lower_query(db: &dyn Db, parse: Parse) -> ModuleInfo {
-    let file = parse.file(db);
-    let (module, source_map) = Module::new_with_source_map(db, file, parse.tree(db));
-    ModuleInfo::new(db, file, module, source_map)
-}
-
-#[salsa::tracked]
 pub fn lower(db: &dyn Db, file: File) -> ModuleInfo {
     let parse = parse(db, file);
-    lower_query(db, parse)
+    let (module, source_map) = Module::new_with_source_map(db, file, parse.tree(db));
+    ModuleInfo::new(db, file, module, source_map)
 }
 
 /// Shortcut to immediately access a `lower` query's `Module`.

@@ -91,6 +91,7 @@ impl Server {
         };
 
         eprintln!("server: workspace root: {:?}", info.workspace);
+        eprintln!("server: workspace name: {:?}", info.workspace_name);
 
         // Determine the output base for the purpose of resolving external repositories.
         let external_output_base = info.output_base.join("external");
@@ -164,6 +165,7 @@ impl Server {
             bazel_client.clone(),
             path_interner.clone(),
             info.workspace.clone(),
+            info.workspace_name,
             external_output_base.clone(),
             task_pool_sender.clone(),
             bzlmod_enabled,

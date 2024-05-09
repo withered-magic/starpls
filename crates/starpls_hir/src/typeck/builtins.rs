@@ -6,7 +6,8 @@ use smallvec::smallvec;
 use starpls_bazel::{
     attr,
     builtin::{Callable, Param, Type, Value},
-    env, Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST, KNOWN_PROVIDER_TYPES,
+    env::{self, make_workspace_builtins},
+    Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST, KNOWN_PROVIDER_TYPES,
 };
 use starpls_common::{parse, Dialect, File, InFile};
 use starpls_syntax::ast::{self, AstNode};
@@ -640,11 +641,21 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
         let mut fields = Vec::new();
         let mut methods = Vec::new();
         let mut seen_methods = HashSet::new();
+        let workspace_builtins = make_workspace_builtins();
 
         // Special handling for the "native" type, which includes all native rules.
         if type_.name == "native" {
-            for rule in rules.global.iter() {
+            for rule in rules.global.iter().chain(
+                workspace_builtins
+                    .global
+                    .iter()
+                    .filter(|global| !["workspace"].contains(&global.name.as_str())),
+            ) {
                 if let Some(callable) = &rule.callable {
+                    if seen_methods.contains(&rule.name.as_str()) {
+                        continue;
+                    }
+
                     seen_methods.insert(rule.name.as_str());
                     methods.push(builtin_function(
                         db,

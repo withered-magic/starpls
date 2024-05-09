@@ -42,6 +42,7 @@ pub(crate) fn run_check(paths: Vec<String>, output_base: Option<String>) -> anyh
         bazel_client,
         interner.clone(),
         info.workspace.clone(),
+        info.workspace_name,
         external_output_base.clone(),
         fetch_repo_sender,
         bzlmod_enabled,

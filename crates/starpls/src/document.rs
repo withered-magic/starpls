@@ -189,6 +189,7 @@ pub(crate) struct DefaultFileLoader {
     bazel_client: Arc<dyn BazelClient>,
     interner: Arc<PathInterner>,
     workspace: PathBuf,
+    workspace_name: Option<String>,
     external_output_base: PathBuf,
     cached_load_results: DashMap<String, PathBuf>,
     fetch_repo_sender: Sender<Task>,
@@ -200,6 +201,7 @@ impl DefaultFileLoader {
         bazel_client: Arc<dyn BazelClient>,
         interner: Arc<PathInterner>,
         workspace: PathBuf,
+        workspace_name: Option<String>,
         external_output_base: PathBuf,
         fetch_repo_sender: Sender<Task>,
         bzlmod_enabled: bool,
@@ -208,6 +210,7 @@ impl DefaultFileLoader {
             bazel_client,
             interner,
             workspace,
+            workspace_name,
             external_output_base,
             cached_load_results: Default::default(),
             fetch_repo_sender,
@@ -280,7 +283,12 @@ impl DefaultFileLoader {
                 if !label.repo().is_empty() {
                     canonical_repo_res = Some(label.repo().to_string());
                 }
-                (self.external_output_base.join(label.repo()), PathBuf::new())
+
+                if self.workspace_name.as_ref().map(|name| name.as_str()) == Some(label.repo()) {
+                    (self.workspace.clone(), PathBuf::new())
+                } else {
+                    (self.external_output_base.join(label.repo()), PathBuf::new())
+                }
             }
             RepoKind::Current => {
                 // Find the Bazel workspace root.
@@ -553,6 +561,11 @@ impl FileLoader for DefaultFileLoader {
                                         replace_trailing_slash: false,
                                     })
                                 })
+                                .chain(self.workspace_name.as_ref().map(|name| LoadItemCandidate {
+                                    kind: LoadItemCandidateKind::Directory,
+                                    path: name.clone(),
+                                    replace_trailing_slash: false,
+                                }))
                                 .collect(),
                         ),
                         _ => None,
@@ -571,6 +584,10 @@ impl FileLoader for DefaultFileLoader {
                             } else {
                                 self.external_output_base.join(canonical_repo)
                             }
+                        } else if self.workspace_name.as_ref().map(|name| name.as_str())
+                            == Some(label.repo())
+                        {
+                            self.workspace.clone()
                         } else {
                             self.external_output_base.join(label.repo())
                         };

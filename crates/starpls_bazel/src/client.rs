@@ -9,12 +9,15 @@ use anyhow::{anyhow, bail};
 use parking_lot::RwLock;
 use serde_json::Deserializer;
 
+const DEFAULT_WORKSPACE_NAMES: &[&str] = &["__main__", "_main"];
+
 #[derive(Default)]
 pub struct BazelInfo {
     pub output_base: PathBuf,
     pub release: String,
     pub starlark_semantics: String,
     pub workspace: PathBuf,
+    pub workspace_name: Option<String>,
 }
 
 pub trait BazelClient: Send + Sync + 'static {
@@ -73,6 +76,7 @@ impl BazelClient for BazelCLI {
     fn info(&self) -> anyhow::Result<BazelInfo> {
         let output = self.run_command(&[
             "info",
+            "execution_root",
             "output_base",
             "release",
             "starlark-semantics",
@@ -84,12 +88,22 @@ impl BazelClient for BazelCLI {
         let mut release = None;
         let mut starlark_semantics = None;
         let mut workspace = None;
+        let mut workspace_name = None;
         for line in output.lines() {
             let (key, value) = match line.split_once(": ") {
                 Some(pair) => pair,
                 None => continue,
             };
             match key {
+                "execution_root" => {
+                    // Taken from https://github.com/cameron-martin/bazel-lsp/blob/92644f21aca7cfbba332c67ac1aa9cf43765e021/src/workspace.rs#L24.
+                    workspace_name = PathBuf::from(value).file_name().and_then(|file_name| {
+                        match file_name.to_string_lossy().to_string() {
+                            name if DEFAULT_WORKSPACE_NAMES.contains(&name.as_str()) => None,
+                            name => Some(name),
+                        }
+                    });
+                }
                 "output_base" => output_base = Some(value),
                 "release" => release = Some(value),
                 "starlark-semantics" => starlark_semantics = Some(value),
@@ -111,6 +125,7 @@ impl BazelClient for BazelCLI {
             workspace: workspace
                 .ok_or_else(|| anyhow!("failed to determine workspace from `bazel info`"))?
                 .into(),
+            workspace_name,
         })
     }
 

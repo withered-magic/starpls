@@ -645,6 +645,9 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
 
         // Special handling for the "native" type, which includes all native rules.
         if type_.name == "native" {
+            // We also add symbols that are normally only available from `WORKSPACE` files, like
+            // `register_execution_platforms` and `register_toolchains`. This is technically
+            // incorrect if bzlmod is enabled, so we revisit this approach in the future.
             for rule in rules.global.iter().chain(
                 workspace_builtins
                     .global

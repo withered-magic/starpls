@@ -42,6 +42,7 @@ pub(crate) struct BuiltinType {
     pub(crate) methods: Vec<BuiltinFunction>,
     #[return_ref]
     pub(crate) doc: String,
+    pub(crate) indexable_by: Option<(TypeRef, TypeRef)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -718,6 +719,18 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
             }
         }
 
+        let indexable_by = match type_.name.as_str() {
+            "ToolchainContext" => Some(("string", "unknown")),
+            // TODO(withered-magic): Audit Bazel docs for other indexable builtin types.
+            _ => None,
+        }
+        .map(|(expected_index_ty, return_ty)| {
+            (
+                TypeRef::Name(Name::new_inline(expected_index_ty), None),
+                TypeRef::Name(Name::new_inline(return_ty), None),
+            )
+        });
+
         types.insert(
             type_.name.clone(),
             TyKind::BuiltinType(
@@ -727,6 +740,7 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
                     fields,
                     methods,
                     normalize_doc_text(&type_.doc),
+                    indexable_by,
                 ),
                 None,
             )

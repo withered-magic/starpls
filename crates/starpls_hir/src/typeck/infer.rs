@@ -317,6 +317,19 @@ impl TyCtxt<'_> {
                                 TyKind::Provider(provider),
                             ) => Some(TyKind::ProviderInstance(provider.clone()).intern()),
                             (TyKind::Any | TyKind::Unknown, _) => Some(Ty::unknown()),
+                            (TyKind::BuiltinType(ty, _), _) => match ty.indexable_by(db) {
+                                Some((expected_index_ty, return_ty)) => {
+                                    let expected_index_ty =
+                                        resolve_type_ref(db, &expected_index_ty).0;
+                                    let return_ty = resolve_type_ref(db, &return_ty).0;
+                                    if assign_tys(db, &index_ty, &expected_index_ty) {
+                                        Some(return_ty)
+                                    } else {
+                                        None
+                                    }
+                                }
+                                None => None,
+                            },
                             _ => None,
                         }
                         .unwrap_or_else(|| {

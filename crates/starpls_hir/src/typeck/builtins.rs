@@ -581,6 +581,12 @@ pub(crate) fn builtin_providers_query(db: &dyn Db, defs: BuiltinDefs) -> Builtin
         }
     }
 
+    for (name, ty) in &known_provider_tys {
+        if !providers.contains_key(name.as_str()) {
+            providers.insert(ty.name.clone(), builtin_provider(db, ty, None));
+        }
+    }
+
     BuiltinProviders::new(db, providers)
 }
 

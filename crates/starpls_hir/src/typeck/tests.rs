@@ -58,6 +58,7 @@ fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptio
         vec![("field1", "string")],
         vec![],
     ));
+    builder.add_type(FixtureType::new("CcInfo", vec![], vec![]));
     builder.add_type(FixtureType::new("attr", vec![], vec!["label_list"]));
     builder.add_global("attr", "attr");
     builder.add_global("config_common", "config_common");
@@ -1216,6 +1217,10 @@ flag_info.value
 
 py_info = PyInfo()
 py_info.field1
+
+def f(info):
+    # type: (CcInfo) -> None
+    info
 "#,
         expect![[r#"
             1..13 "default_info": DefaultInfo
@@ -1234,6 +1239,7 @@ py_info.field1
             124..132 "PyInfo()": PyInfo
             133..140 "py_info": PyInfo
             133..147 "py_info.field1": string
+            195..199 "info": CcInfo
         "#]],
     )
 }

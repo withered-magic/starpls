@@ -71,16 +71,13 @@ pub(crate) struct APIGlobals {
 }
 
 impl APIGlobals {
-    fn from_values<'a, I>(
-        db: &dyn Db,
-        values: I,
-        providers: &'a FxHashMap<String, &'a Type>,
-    ) -> Self
+    fn from_values<'a, I>(db: &dyn Db, providers: BuiltinProviders, values: I) -> Self
     where
         I: Iterator<Item = &'a Value>,
     {
         let mut functions = FxHashMap::default();
         let mut variables = FxHashMap::default();
+        let providers = providers.providers(db);
 
         for value in values {
             // Skip deny-listed globals, which are handled directly by the
@@ -90,17 +87,8 @@ impl APIGlobals {
             }
 
             match (providers.get(value.name.as_str()), &value.callable) {
-                (Some(ty), Some(callable)) => {
-                    variables.insert(
-                        ty.name.clone(),
-                        TypeRef::Provider(builtin_provider(db, ty, Some(callable))),
-                    );
-                }
-                (Some(ty), None) => {
-                    variables.insert(
-                        ty.name.clone(),
-                        TypeRef::Provider(builtin_provider(db, ty, None)),
-                    );
+                (Some(provider), _) => {
+                    variables.insert(value.name.clone(), TypeRef::Provider(*provider));
                 }
                 (None, Some(callable)) => {
                     functions.insert(
@@ -554,12 +542,52 @@ pub(crate) struct BuiltinProvider {
     pub(crate) doc: String,
 }
 
+#[salsa::tracked]
+pub(crate) struct BuiltinProviders {
+    #[return_ref]
+    pub(crate) providers: FxHashMap<String, BuiltinProvider>,
+}
+
 #[salsa::input]
 pub struct BuiltinDefs {
     #[return_ref]
     pub builtins: Builtins,
     #[return_ref]
     pub rules: Builtins,
+}
+
+#[salsa::tracked]
+pub(crate) fn builtin_providers_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinProviders {
+    // Collect all known provider types.
+    let builtins = defs.builtins(db);
+    let mut providers = FxHashMap::default();
+    let known_provider_tys: FxHashMap<String, &Type> = builtins
+        .r#type
+        .iter()
+        .filter(|ty| KNOWN_PROVIDER_TYPES.contains(&ty.name.as_str()))
+        .map(|ty| (ty.name.clone(), ty))
+        .collect();
+
+    for value in builtins
+        .global
+        .iter()
+        .chain(builtins.r#type.iter().flat_map(|ty| ty.field.iter()))
+    {
+        if let Some(ty) = known_provider_tys.get(value.name.as_str()) {
+            providers.insert(
+                ty.name.clone(),
+                builtin_provider(db, ty, value.callable.as_ref()),
+            );
+        }
+    }
+
+    for (name, ty) in &known_provider_tys {
+        if !providers.contains_key(name.as_str()) {
+            providers.insert(ty.name.clone(), builtin_provider(db, ty, None));
+        }
+    }
+
+    BuiltinProviders::new(db, providers)
 }
 
 pub(crate) fn builtin_globals(db: &dyn Db, dialect: Dialect) -> BuiltinGlobals {
@@ -571,34 +599,27 @@ pub(crate) fn builtin_globals(db: &dyn Db, dialect: Dialect) -> BuiltinGlobals {
 pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGlobals {
     let builtins = defs.builtins(db);
     let rules = defs.rules(db);
-
-    // Collect all known provider types.
-    let providers: FxHashMap<String, &Type> = builtins
-        .r#type
-        .iter()
-        .filter(|ty| KNOWN_PROVIDER_TYPES.contains(&ty.name.as_str()))
-        .map(|ty| (ty.name.clone(), ty))
-        .collect();
+    let providers = builtin_providers_query(db, defs);
 
     let bzl_globals = APIGlobals::from_values(
         db,
+        providers,
         env::make_bzl_builtins()
             .global
             .iter()
             .chain(env::make_build_builtins().global.iter())
             .chain(builtins.global.iter())
             .chain(rules.global.iter()),
-        &providers,
     );
     let bzlmod_globals = APIGlobals::from_values(
         db,
+        providers,
         env::make_module_bazel_builtins().global.iter(),
-        &providers,
     );
     let repo_globals =
-        APIGlobals::from_values(db, env::make_repo_builtins().global.iter(), &providers);
+        APIGlobals::from_values(db, providers, env::make_repo_builtins().global.iter());
     let workspace_globals =
-        APIGlobals::from_values(db, env::make_workspace_builtins().global.iter(), &providers);
+        APIGlobals::from_values(db, providers, env::make_workspace_builtins().global.iter());
 
     BuiltinGlobals::new(
         db,
@@ -620,17 +641,19 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
     let builtins = defs.builtins(db);
     let rules = defs.rules(db);
     let mut missing_module_members = env::make_missing_module_members();
-    // Collect all known provider types.
-    let providers: FxHashMap<String, &Type> = builtins
-        .r#type
-        .iter()
-        .filter(|ty| KNOWN_PROVIDER_TYPES.contains(&ty.name.as_str()))
-        .map(|ty| (ty.name.clone(), ty))
-        .collect();
+    let providers = builtin_providers_query(db, defs).providers(db);
+
+    // Add all builtin providers.
+    types.extend(providers.iter().map(|(name, provider)| {
+        (
+            name.clone(),
+            TyKind::ProviderInstance(Provider::Builtin(*provider)).intern(),
+        )
+    }));
 
     for type_ in builtins.r#type.iter() {
-        // Skip deny-listed types, which are handled directly by the
-        // language server.
+        // Skip deny-listed types, which are handled directly by `intrinsics.rs`, and provider types,
+        // which are handled above.
         if type_.name.is_empty()
             || BUILTINS_TYPES_DENY_LIST.contains(&type_.name.as_str())
             || KNOWN_PROVIDER_TYPES.contains(&type_.name.as_str())
@@ -648,7 +671,7 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
         if type_.name == "native" {
             // We also add symbols that are normally only available from `WORKSPACE` files, like
             // `register_execution_platforms` and `register_toolchains`. This is technically
-            // incorrect if bzlmod is enabled, so we revisit this approach in the future.
+            // incorrect if bzlmod is enabled, so we should revisit this approach in the future.
             for rule in rules.global.iter().chain(
                 workspace_builtins
                     .global
@@ -682,14 +705,10 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
                 // Filter out duplicates.
                 if !seen_methods.contains(&field.name.as_str()) {
                     match providers.get(field.name.as_str()) {
-                        Some(ty) => {
+                        Some(provider) => {
                             fields.push(BuiltinField {
-                                name: Name::from_str(&ty.name),
-                                type_ref: TypeRef::Provider(builtin_provider(
-                                    db,
-                                    ty,
-                                    Some(callable),
-                                )),
+                                name: provider.name(db).clone(),
+                                type_ref: TypeRef::Provider(*provider),
                                 doc: normalize_doc_text(&field.doc),
                             });
                         }
@@ -706,7 +725,7 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
                 }
             } else {
                 let type_ref = match providers.get(field.name.as_str()) {
-                    Some(ty) => TypeRef::Provider(builtin_provider(db, ty, None)),
+                    Some(provider) => TypeRef::Provider(*provider),
                     None => maybe_field_type_ref_override(&type_.name, &field.name)
                         .unwrap_or_else(|| parse_type_ref(&field.r#type)),
                 };
@@ -720,7 +739,7 @@ pub(crate) fn builtin_types_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinType
         }
 
         let indexable_by = match type_.name.as_str() {
-            "ToolchainContext" => Some(("string", "unknown")),
+            "ToolchainContext" => Some(("string", "ToolchainInfo")),
             // TODO(withered-magic): Audit Bazel docs for other indexable builtin types.
             _ => None,
         }

@@ -1142,8 +1142,8 @@ impl TyCtxt<'_> {
         let mut curr_node_id = start_node;
         let res = loop {
             let curr_node = &cfg.flow_nodes[curr_node_id];
-            match &curr_node {
-                FlowNode::Start => break Some(start_ty.clone()),
+            let curr_node_ty = match &curr_node {
+                FlowNode::Start => Some(start_ty.clone()),
                 FlowNode::Assign {
                     expr,
                     name: node_name,
@@ -1157,14 +1157,13 @@ impl TyCtxt<'_> {
                     }
 
                     self.infer_source_expr_assign(file, *source, None);
-                    break self
-                        .cx
+                    self.cx
                         .type_of_expr
                         .get(&FileExprId::new(file, *expr))
-                        .cloned();
+                        .cloned()
                 }
                 FlowNode::Branch { antecedents } => {
-                    break Some(Ty::union(antecedents.iter().filter_map(|antecedent| {
+                    Some(Ty::union(antecedents.iter().filter_map(|antecedent| {
                         self.infer_ref_from_flow_node(
                             cfg,
                             file,
@@ -1175,8 +1174,11 @@ impl TyCtxt<'_> {
                         )
                     })))
                 }
-                FlowNode::Never { .. } => break Some(Ty::unknown()),
-            }
+                FlowNode::Loop { .. } => None,
+                FlowNode::Unreachable { .. } => Some(Ty::never()),
+            };
+
+            break curr_node_ty;
         };
 
         self.cache_ref_type_at_flow_node(file, execution_scope, name, start_node, res)

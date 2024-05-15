@@ -29,7 +29,10 @@ pub(crate) enum FlowNode {
     Branch {
         antecedents: Vec<FlowNodeId>,
     },
-    Never {
+    Loop {
+        antecedents: Vec<FlowNodeId>,
+    },
+    Unreachable {
         antecedent: FlowNodeId,
     },
 }
@@ -81,12 +84,14 @@ impl<'a> CodeFlowLowerCtx<'a> {
             Stmt::Assign { lhs, rhs, .. } => {
                 self.lower_assignment_target(*lhs, *rhs);
             }
+
             Stmt::Def { stmts, .. } => {
                 self.with_new_start_node(|this| {
                     this.lower_stmts(stmts);
                     stmt
                 });
             }
+
             Stmt::If {
                 test,
                 if_stmts,
@@ -118,14 +123,17 @@ impl<'a> CodeFlowLowerCtx<'a> {
 
                 self.curr_node = post_if_node;
             }
+
             Stmt::Return { expr } => {
                 if let Some(expr) = expr {
                     self.lower_expr(*expr);
                 }
             }
+
             Stmt::Expr { expr } => {
                 self.lower_expr(*expr);
             }
+
             Stmt::For {
                 iterable,
                 targets,
@@ -134,34 +142,53 @@ impl<'a> CodeFlowLowerCtx<'a> {
                 for target in targets.iter() {
                     self.lower_assignment_target(*target, *iterable);
                 }
+
+                let pre_for_node = self.new_flow_node(FlowNode::Loop {
+                    antecedents: Vec::new(),
+                });
                 let post_for_node = self.new_flow_node(FlowNode::Branch {
                     antecedents: Vec::new(),
                 });
+
+                // Save the previous `break` and `continue` targets, and update them to point
+                // to the pre-`for` and post-`for` nodes that we just allocated.
                 let prev_break_target = self.curr_break_target;
                 let prev_continue_target = self.curr_continue_target;
                 self.curr_break_target = Some(post_for_node);
+                self.curr_continue_target = Some(pre_for_node);
+
+                // Lower the actual `for` statement body.
                 self.lower_stmts(stmts);
+
+                // Wire up the pre-`for` and post-`for` nodes.
+                self.push_antecedent(pre_for_node, self.curr_node);
+                self.push_antecedent(post_for_node, pre_for_node);
                 self.push_antecedent(post_for_node, self.curr_node);
                 self.curr_node = post_for_node;
+
+                // Restore the previous `break` and `continue` targets.
                 self.curr_break_target = prev_break_target;
                 self.curr_continue_target = prev_continue_target;
             }
+
             Stmt::Continue => {
                 if let Some(target) = &self.curr_continue_target {
                     self.push_antecedent(*target, self.curr_node);
                 }
-                self.curr_node = self.new_flow_node(FlowNode::Never {
+                self.curr_node = self.new_flow_node(FlowNode::Unreachable {
                     antecedent: self.curr_node,
                 });
             }
+
             Stmt::Break => {
                 if let Some(target) = &self.curr_break_target {
                     self.push_antecedent(*target, self.curr_node);
                 }
-                self.curr_node = self.new_flow_node(FlowNode::Never {
+                self.curr_node = self.new_flow_node(FlowNode::Unreachable {
                     antecedent: self.curr_node,
                 });
             }
+
             _ => {}
         }
     }

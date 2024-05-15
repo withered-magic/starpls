@@ -29,6 +29,9 @@ pub(crate) enum FlowNode {
     Branch {
         antecedents: Vec<FlowNodeId>,
     },
+    Never {
+        antecedent: FlowNodeId,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -131,7 +134,33 @@ impl<'a> CodeFlowLowerCtx<'a> {
                 for target in targets.iter() {
                     self.lower_assignment_target(*target, *iterable);
                 }
+                let post_for_node = self.new_flow_node(FlowNode::Branch {
+                    antecedents: Vec::new(),
+                });
+                let prev_break_target = self.curr_break_target;
+                let prev_continue_target = self.curr_continue_target;
+                self.curr_break_target = Some(post_for_node);
                 self.lower_stmts(stmts);
+                self.push_antecedent(post_for_node, self.curr_node);
+                self.curr_node = post_for_node;
+                self.curr_break_target = prev_break_target;
+                self.curr_continue_target = prev_continue_target;
+            }
+            Stmt::Continue => {
+                if let Some(target) = &self.curr_continue_target {
+                    self.push_antecedent(*target, self.curr_node);
+                }
+                self.curr_node = self.new_flow_node(FlowNode::Never {
+                    antecedent: self.curr_node,
+                });
+            }
+            Stmt::Break => {
+                if let Some(target) = &self.curr_break_target {
+                    self.push_antecedent(*target, self.curr_node);
+                }
+                self.curr_node = self.new_flow_node(FlowNode::Never {
+                    antecedent: self.curr_node,
+                });
             }
             _ => {}
         }
@@ -445,16 +474,117 @@ for x, y in [[1, 2], [3, 4]]:
                     }
 
                     'bb3: {
+                        data: Branch { antecedents: [] }
+                        antecedents: []
+                    }
+
+                    'bb4: {
                         data: Assign { expr: Id { idx: 19 }, name: Name("i"), execution_scope: Comp(Id { idx: 20 }), source: Id { idx: 18 }, antecedent: Id { idx: 2 } }
                         antecedents: ['bb2]
                     }
 
+                    'bb5: {
+                        data: Assign { expr: Id { idx: 9 }, name: Name("nums"), execution_scope: Module, source: Id { idx: 20 }, antecedent: Id { idx: 4 } }
+                        antecedents: ['bb4]
+                    }
+
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_break_stmt() {
+        check(
+            r#"
+for x in range(1, 5):
+    break
+"#,
+            expect![[r#"
+                def main():
+                    'bb0: {
+                        data: Start
+                        antecedents: []
+                    }
+
+                    'bb1: {
+                        data: Assign { expr: Id { idx: 4 }, name: Name("x"), execution_scope: Module, source: Id { idx: 3 }, antecedent: Id { idx: 0 } }
+                        antecedents: ['bb0]
+                    }
+
+                    'bb2: {
+                        data: Branch { antecedents: [Id { idx: 1 }] }
+                        antecedents: ['bb1]
+                    }
+
+                    'bb3: {
+                        data: Never { antecedent: Id { idx: 1 } }
+                        antecedents: []
+                    }
+
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_break_stmt_with_unreachable() {
+        check(
+            r#"
+for x in range(1, 5):
+    break
+    y = 1
+"#,
+            expect![[r#"
+                def main():
+                    'bb0: {
+                        data: Start
+                        antecedents: []
+                    }
+
+                    'bb1: {
+                        data: Assign { expr: Id { idx: 4 }, name: Name("x"), execution_scope: Module, source: Id { idx: 3 }, antecedent: Id { idx: 0 } }
+                        antecedents: ['bb0]
+                    }
+
+                    'bb2: {
+                        data: Branch { antecedents: [Id { idx: 1 }] }
+                        antecedents: ['bb1]
+                    }
+
+                    'bb3: {
+                        data: Never { antecedent: Id { idx: 1 } }
+                        antecedents: []
+                    }
+
                     'bb4: {
-                        data: Assign { expr: Id { idx: 9 }, name: Name("nums"), execution_scope: Module, source: Id { idx: 20 }, antecedent: Id { idx: 3 } }
+                        data: Assign { expr: Id { idx: 5 }, name: Name("y"), execution_scope: Module, source: Id { idx: 6 }, antecedent: Id { idx: 3 } }
                         antecedents: ['bb3]
                     }
 
             "#]],
         );
+    }
+
+    #[test]
+    fn test_break_stmt_nested() {
+        check(
+            r#"
+for x in range(5):
+    for y in range(5):
+        break
+        a = 1
+    break
+    b = 2
+"#,
+            expect![],
+        );
+    }
+
+    #[test]
+    fn test_continue_stmt() {
+        check(
+            r#"
+"#,
+            expect![],
+        )
     }
 }

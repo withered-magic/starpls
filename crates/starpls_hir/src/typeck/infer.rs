@@ -1175,6 +1175,7 @@ impl TyCtxt<'_> {
                         )
                     })))
                 }
+                FlowNode::Never { .. } => break Some(Ty::unknown()),
             }
         };
 

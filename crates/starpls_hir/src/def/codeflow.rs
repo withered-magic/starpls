@@ -32,9 +32,7 @@ pub(crate) enum FlowNode {
     Loop {
         antecedents: Vec<FlowNodeId>,
     },
-    Unreachable {
-        antecedent: FlowNodeId,
-    },
+    Unreachable,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -158,12 +156,13 @@ impl<'a> CodeFlowLowerCtx<'a> {
                 self.curr_continue_target = Some(pre_for_node);
 
                 // Lower the actual `for` statement body.
+                self.push_antecedent(pre_for_node, self.curr_node);
+                self.curr_node = pre_for_node;
                 self.lower_stmts(stmts);
 
                 // Wire up the pre-`for` and post-`for` nodes.
                 self.push_antecedent(pre_for_node, self.curr_node);
                 self.push_antecedent(post_for_node, pre_for_node);
-                self.push_antecedent(post_for_node, self.curr_node);
                 self.curr_node = post_for_node;
 
                 // Restore the previous `break` and `continue` targets.
@@ -175,18 +174,14 @@ impl<'a> CodeFlowLowerCtx<'a> {
                 if let Some(target) = &self.curr_continue_target {
                     self.push_antecedent(*target, self.curr_node);
                 }
-                self.curr_node = self.new_flow_node(FlowNode::Unreachable {
-                    antecedent: self.curr_node,
-                });
+                self.curr_node = self.new_flow_node(FlowNode::Unreachable);
             }
 
             Stmt::Break => {
                 if let Some(target) = &self.curr_break_target {
                     self.push_antecedent(*target, self.curr_node);
                 }
-                self.curr_node = self.new_flow_node(FlowNode::Unreachable {
-                    antecedent: self.curr_node,
-                });
+                self.curr_node = self.new_flow_node(FlowNode::Unreachable);
             }
 
             _ => {}
@@ -267,6 +262,9 @@ impl<'a> CodeFlowLowerCtx<'a> {
     fn push_antecedent(&mut self, this: FlowNodeId, antecedent: FlowNodeId) {
         match self.result.flow_nodes[this] {
             FlowNode::Branch {
+                ref mut antecedents,
+            }
+            | FlowNode::Loop {
                 ref mut antecedents,
             } => {
                 if !antecedents.contains(&antecedent) {
@@ -520,6 +518,17 @@ for x, y in [[1, 2], [3, 4]]:
     }
 
     #[test]
+    fn test_for_stmt_simple() {
+        check(
+            r#"
+for x in range(1, 5):
+    pass
+"#,
+            expect![],
+        );
+    }
+
+    #[test]
     fn test_break_stmt() {
         check(
             r#"
@@ -557,8 +566,11 @@ for x in range(1, 5):
         check(
             r#"
 for x in range(1, 5):
-    break
     y = 1
+    break
+    z = 1
+
+a = 1
 "#,
             expect![[r#"
                 def main():
@@ -610,6 +622,10 @@ for x in range(5):
     fn test_continue_stmt() {
         check(
             r#"
+for x in range(5):
+    y = 1
+    continue
+    z = 2
 "#,
             expect![],
         )

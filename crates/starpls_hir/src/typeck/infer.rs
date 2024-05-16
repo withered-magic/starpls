@@ -115,16 +115,17 @@ impl TyCtxt<'_> {
             }
             Expr::ListComp { expr, .. } => TyKind::List(self.infer_expr(file, *expr)).intern(),
             Expr::Dict { entries } => {
-                if entries.len() > 32 {
-                    return self.set_expr_type(
-                        file,
-                        expr,
-                        Ty::dict(Ty::unknown(), Ty::unknown(), None),
-                    );
-                }
-
-                let key_ty =
-                    Ty::union(entries.iter().map(|entry| self.infer_expr(file, entry.key)));
+                let key_ty = match entries.len() {
+                    0 => Ty::unknown(),
+                    len if len > 32 => {
+                        return self.set_expr_type(
+                            file,
+                            expr,
+                            Ty::dict(Ty::unknown(), Ty::unknown(), None),
+                        );
+                    }
+                    _ => Ty::union(entries.iter().map(|entry| self.infer_expr(file, entry.key))),
+                };
                 let value_ty = self.get_common_type(
                     file,
                     entries.iter().map(|entry| entry.value),

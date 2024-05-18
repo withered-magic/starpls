@@ -616,7 +616,7 @@ impl Ty {
         }
 
         match unique_tys.len() {
-            0 => TyKind::Never.intern(),
+            0 => Ty::never(),
             1 => unique_tys.into_iter().next().unwrap(),
             _ => TyKind::Union(unique_tys).intern(),
         }
@@ -1561,7 +1561,7 @@ pub(crate) struct InferenceCtxt {
     pub(crate) type_of_load_item: FxHashMap<FileLoadItemId, Ty>,
     pub(crate) type_of_param: FxHashMap<FileParamId, Ty>,
     pub(crate) source_assign_done: FxHashSet<FileExprId>,
-    pub(crate) flow_node_type_cache: FxHashMap<CodeFlowCacheKey, Option<Ty>>,
+    pub(crate) flow_node_type_cache: FxHashMap<CodeFlowCacheKey, Ty>,
 }
 
 pub struct CancelGuard<'a> {

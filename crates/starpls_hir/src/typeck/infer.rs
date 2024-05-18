@@ -1081,34 +1081,28 @@ impl TyCtxt<'_> {
             }
         };
 
-        let mut start_ty = self.unbound_ty();
-        let mut fallback_ty = effective_ty;
-        if execution_scope != expr_execution_scope {
+        let (start_ty, fallback_ty) = if execution_scope != expr_execution_scope {
             let cfg = code_flow_graph(self.db, file).cfg(self.db);
             let hir_id = match execution_scope {
                 ExecutionScopeId::Module => ScopeHirId::Module.into(),
                 ExecutionScopeId::Def(stmt) => stmt.into(),
                 ExecutionScopeId::Comp(expr) => expr.into(),
             };
-
             let start_node = cfg.hir_to_flow_node.get(&hir_id)?;
-            if let Some(ty) = self.infer_ref_from_flow_node(
+            let start_ty = self.infer_ref_from_flow_node(
                 cfg,
                 file,
                 execution_scope,
                 name,
                 &self.unbound_ty(),
                 *start_node,
-            ) {
-                start_ty = ty.clone();
-                fallback_ty = ty;
-            }
-        }
+            );
+            (start_ty.clone(), start_ty)
+        } else {
+            (self.unbound_ty(), effective_ty)
+        };
 
-        Some(
-            self.infer_expr_from_code_flow(file, expr, execution_scope, name, &start_ty)
-                .unwrap_or(fallback_ty),
-        )
+        Some(self.infer_expr_from_code_flow(file, expr, execution_scope, name, &start_ty))
     }
 
     fn infer_expr_from_code_flow(
@@ -1133,7 +1127,7 @@ impl TyCtxt<'_> {
         name: &Name,
         start_ty: &Ty,
         start_node: FlowNodeId,
-    ) -> Option<Ty> {
+    ) -> Ty {
         if let Some(res) =
             self.read_cached_ref_type_at_flow_node(file, execution_scope, name, start_node)
         {
@@ -1144,7 +1138,7 @@ impl TyCtxt<'_> {
         let res = loop {
             let curr_node = &cfg.flow_nodes[curr_node_id];
             let curr_node_ty = match &curr_node {
-                FlowNode::Start => Some(start_ty.clone()),
+                FlowNode::Start => start_ty.clone(),
                 FlowNode::Assign {
                     expr,
                     name: node_name,
@@ -1162,9 +1156,10 @@ impl TyCtxt<'_> {
                         .type_of_expr
                         .get(&FileExprId::new(file, *expr))
                         .cloned()
+                        .unwrap_or_else(|| Ty::never())
                 }
                 FlowNode::Branch { antecedents } => {
-                    Some(Ty::union(antecedents.iter().filter_map(|antecedent| {
+                    Ty::union(antecedents.iter().map(|antecedent| {
                         self.infer_ref_from_flow_node(
                             cfg,
                             file,
@@ -1173,10 +1168,10 @@ impl TyCtxt<'_> {
                             start_ty,
                             *antecedent,
                         )
-                    })))
+                    }))
                 }
-                FlowNode::Loop { .. } => None,
-                FlowNode::Unreachable { .. } => Some(Ty::never()),
+                FlowNode::Loop { .. } => (),
+                FlowNode::Unreachable { .. } => Ty::never(),
             };
 
             break curr_node_ty;
@@ -1191,7 +1186,7 @@ impl TyCtxt<'_> {
         execution_scope: ExecutionScopeId,
         name: &Name,
         flow_node: FlowNodeId,
-    ) -> Option<Option<Ty>> {
+    ) -> Option<Ty> {
         self.cx
             .flow_node_type_cache
             .get(&CodeFlowCacheKey {
@@ -1209,8 +1204,8 @@ impl TyCtxt<'_> {
         execution_scope: ExecutionScopeId,
         name: &Name,
         flow_node: FlowNodeId,
-        res: Option<Ty>,
-    ) -> Option<Ty> {
+        res: Ty,
+    ) -> Ty {
         self.cx.flow_node_type_cache.insert(
             CodeFlowCacheKey {
                 file,

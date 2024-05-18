@@ -8,14 +8,17 @@ use std::{
 use crossbeam::atomic::AtomicCell;
 use either::Either;
 use parking_lot::Mutex;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 use starpls_common::{parse, Diagnostic, Dialect, File, InFile};
 use starpls_intern::{impl_internable, Interned};
 use starpls_syntax::ast::SyntaxNodePtr;
 
 use crate::{
-    def::{ExprId, Function, LiteralString, LoadItemId, LoadStmt, Param as HirDefParam, ParamId},
+    def::{
+        codeflow::FlowNodeId, scope::ExecutionScopeId, ExprId, Function, LiteralString, LoadItemId,
+        LoadStmt, Param as HirDefParam, ParamId,
+    },
     module, source_map,
     typeck::{
         builtins::{
@@ -556,6 +559,10 @@ impl Ty {
         TyKind::Any.intern()
     }
 
+    pub(crate) fn never() -> Ty {
+        TyKind::Never.intern()
+    }
+
     pub(crate) fn bool() -> Ty {
         TyKind::Bool(None).intern()
     }
@@ -597,12 +604,13 @@ impl Ty {
                 TyKind::Union(tys) => {
                     tys.iter().cloned().for_each(check_unique);
                 }
+                TyKind::Never => {}
                 _ => check_unique(ty),
             }
         }
 
         match unique_tys.len() {
-            0 => TyKind::Unknown.intern(),
+            0 => Ty::never(),
             1 => unique_tys.into_iter().next().unwrap(),
             _ => TyKind::Union(unique_tys).intern(),
         }
@@ -1169,6 +1177,8 @@ pub(crate) enum TyKind {
     /// Similar to `Unknown`, but not necessarily the result of failed
     /// type inference.
     Any,
+    /// Indicates that the corresponding expression will never be evaluated.
+    Never,
     /// The type of the predefined `None` variable.
     None,
     /// A boolean.
@@ -1524,6 +1534,15 @@ impl GlobalCtxt {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct CodeFlowCacheKey {
+    file: File,
+    execution_scope: ExecutionScopeId,
+    name: Name,
+    flow_node: FlowNodeId,
+}
+
+#[allow(unused)]
 #[derive(Default)]
 pub(crate) struct InferenceCtxt {
     pub(crate) diagnostics: Vec<Diagnostic>,
@@ -1532,6 +1551,8 @@ pub(crate) struct InferenceCtxt {
     pub(crate) type_of_expr: FxHashMap<FileExprId, Ty>,
     pub(crate) type_of_load_item: FxHashMap<FileLoadItemId, Ty>,
     pub(crate) type_of_param: FxHashMap<FileParamId, Ty>,
+    pub(crate) source_assign_done: FxHashSet<FileExprId>,
+    pub(crate) flow_node_type_cache: FxHashMap<CodeFlowCacheKey, Ty>,
 }
 
 pub struct CancelGuard<'a> {

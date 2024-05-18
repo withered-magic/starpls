@@ -1,3 +1,4 @@
+use either::Either;
 use starpls_common::{line_index, Diagnostic, Diagnostics, File, FileRange, Severity};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr, AstToken, SyntaxNodePtr},
@@ -119,15 +120,18 @@ impl<'a> LoweringContext<'a> {
             ast::Statement::If(stmt) => {
                 let test = self.lower_expr_opt(stmt.test());
                 let if_stmts = self.lower_suite_opt(stmt.if_suite());
-                let elif_stmt = stmt
-                    .elif_stmt()
-                    .map(|elif_stmt| self.lower_stmt(ast::Statement::If(elif_stmt)));
-                let else_stmts = self.lower_suite_opt(stmt.else_suite());
+                let mut elif_or_else_stmts = None;
+                if let Some(elif_stmt) = stmt.elif_stmt() {
+                    elif_or_else_stmts =
+                        Some(Either::Left(self.lower_stmt(ast::Statement::If(elif_stmt))));
+                } else if let Some(suite) = stmt.else_suite() {
+                    elif_or_else_stmts = Some(Either::Right(self.lower_suite_opt(Some(suite))));
+                }
+
                 Stmt::If {
                     test,
                     if_stmts,
-                    elif_stmt,
-                    else_stmts,
+                    elif_or_else_stmts,
                 }
             }
             ast::Statement::For(syntax) => {

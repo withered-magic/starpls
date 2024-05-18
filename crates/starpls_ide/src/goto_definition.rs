@@ -28,7 +28,7 @@ pub(crate) fn goto_definition(
             sema.scope_for_expr(file, &ast::Expression::cast(name_ref.syntax().clone())?)?;
         return Some(
             scope
-                .resolve_name(&name)?
+                .resolve_name(&name)
                 .into_iter()
                 .flat_map(|def| match def {
                     ScopeDef::LoadItem(load_item) => {

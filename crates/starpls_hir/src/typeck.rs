@@ -608,6 +608,10 @@ impl Ty {
         }
     }
 
+    pub(crate) fn target() -> Ty {
+        TyKind::Target.intern()
+    }
+
     #[allow(unused)]
     fn is_any(&self) -> bool {
         self.kind() == &TyKind::Any
@@ -1308,11 +1312,10 @@ impl Attribute {
             AttributeKind::Int => Ty::int(),
             AttributeKind::IntList => Ty::list(Ty::int()),
             AttributeKind::String => Ty::string(),
-            AttributeKind::Label => TyKind::Target.intern(),
+            AttributeKind::Label => Ty::target(),
             AttributeKind::Output => Ty::unknown(),
-            AttributeKind::StringDict | AttributeKind::LabelKeyedStringDict => {
-                Ty::dict(Ty::string(), Ty::string(), None)
-            }
+            AttributeKind::StringDict => Ty::dict(Ty::string(), Ty::string(), None),
+            AttributeKind::LabelKeyedStringDict => Ty::dict(Ty::target(), Ty::string(), None),
             AttributeKind::StringList => Ty::list(Ty::string()),
             AttributeKind::LabelList => Ty::list(TyKind::Target.intern()),
             AttributeKind::OutputList => Ty::list(Ty::unknown()),

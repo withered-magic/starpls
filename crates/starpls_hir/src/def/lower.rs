@@ -571,6 +571,7 @@ impl<'a> LoweringContext<'a> {
                 type_.types().map(|type_| self.lower_type(type_)).collect(),
             )),
             ast::Type::NoneType(_) => Some(TypeRef::Name(Name::new_inline("None"), None)),
+            ast::Type::EllipsisType(_) => Some(TypeRef::Ellipsis),
         }
         .unwrap_or_else(|| TypeRef::Unknown)
     }

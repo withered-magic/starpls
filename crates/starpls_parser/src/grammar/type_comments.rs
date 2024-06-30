@@ -94,6 +94,11 @@ pub(crate) fn type_(p: &mut Parser) -> Option<CompletedMarker> {
             m.complete(p, NAMED_TYPE)
         }
         T!['('] => function_type(p),
+        ELLIPSIS => {
+            let m = p.start();
+            p.bump(ELLIPSIS);
+            m.complete(p, ELLIPSIS_TYPE)
+        }
         _ => {
             p.error_recover_until("Expected type", EMPTY);
             return None;

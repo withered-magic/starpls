@@ -97,7 +97,7 @@ pub enum SyntaxKind {
     LT_LT_EQ,
     GT_GT_EQ,
     ARROW,
-    ELLIPSES,
+    ELLIPSIS,
 
     // Expressions.
     NAME,
@@ -131,7 +131,8 @@ pub enum SyntaxKind {
 
     // Types.
     NONE_TYPE,
-    UNION_TYPE, // int | None
+    UNION_TYPE,    // int | None
+    ELLIPSIS_TYPE, // ...
 
     NAMED_TYPE,        // tuple[int, int, string]
     GENERIC_ARGUMENTS, // [int, int, string] in the type above
@@ -361,7 +362,7 @@ impl From<starpls_lexer::TokenKind> for SyntaxKind {
             starpls_lexer::TokenKind::LtLtEq => LT_LT_EQ,
             starpls_lexer::TokenKind::GtGtEq => GT_GT_EQ,
             starpls_lexer::TokenKind::Arrow => ARROW,
-            starpls_lexer::TokenKind::Ellipses => ELLIPSES,
+            starpls_lexer::TokenKind::Ellipsis => ELLIPSIS,
             starpls_lexer::TokenKind::Unknown => ERROR,
             starpls_lexer::TokenKind::Eof => EOF,
         }

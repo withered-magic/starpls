@@ -1241,5 +1241,45 @@ def f(info):
             133..147 "py_info.field1": string
             195..199 "info": CcInfo
         "#]],
-    )
+    );
+}
+
+#[test]
+fn test_tuple_type_comments() {
+    check_infer(
+        r#"
+a = (1, 2) # type: tuple[int, ...]
+b = (1, 2) # type: ...
+c = (1, 2) # type: list[...]
+d = (1, 2) # type: tuple[...]
+e = (1, 2) # type: tuple[int, ..., int]
+"#,
+        expect![[r#"
+            1..2 "a": tuple[int, ...]
+            6..7 "1": Literal[1]
+            9..10 "2": Literal[2]
+            5..11 "(1, 2)": tuple[Literal[1], Literal[2]]
+            36..37 "b": tuple[Literal[1], Literal[2]]
+            41..42 "1": Literal[1]
+            44..45 "2": Literal[2]
+            40..46 "(1, 2)": tuple[Literal[1], Literal[2]]
+            59..60 "c": tuple[Literal[1], Literal[2]]
+            64..65 "1": Literal[1]
+            67..68 "2": Literal[2]
+            63..69 "(1, 2)": tuple[Literal[1], Literal[2]]
+            88..89 "d": tuple[Literal[1], Literal[2]]
+            93..94 "1": Literal[1]
+            96..97 "2": Literal[2]
+            92..98 "(1, 2)": tuple[Literal[1], Literal[2]]
+            118..119 "e": tuple[Literal[1], Literal[2]]
+            123..124 "1": Literal[1]
+            126..127 "2": Literal[2]
+            122..128 "(1, 2)": tuple[Literal[1], Literal[2]]
+
+            47..58 "..." is not allowed in this context
+            70..87 "..." is not allowed in this context
+            99..117 "..." is not allowed in this context
+            129..157 "..." is not allowed in this context
+        "#]],
+    );
 }

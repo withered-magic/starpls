@@ -1,6 +1,6 @@
 use crate::{grammar::*, marker::CompletedMarker, syntax_kind::SyntaxKindSet, SyntaxKind};
 
-const TYPE_START: SyntaxKindSet = SyntaxKindSet::new(&[T![ident]]);
+const TYPE_START: SyntaxKindSet = SyntaxKindSet::new(&[T![ident], ELLIPSIS]);
 
 const PARAMETER_TYPE_START: SyntaxKindSet = TYPE_START.union(SyntaxKindSet::new(&[T![*], T![**]]));
 

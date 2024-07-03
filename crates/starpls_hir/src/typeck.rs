@@ -1635,7 +1635,7 @@ impl<'a> TypeRefResolver<'a> {
                         // Handle variable tuples directly. The ellipsis type `...` is valid only when
                         // it is the second of exactly two type arguments.
                         if args.len() == 2 && &args[1] == &TypeRef::Ellipsis {
-                            TyKind::Tuple(Tuple::Variable(self.resolve_type_ref_inner(&args[1])))
+                            TyKind::Tuple(Tuple::Variable(self.resolve_type_ref_inner(&args[0])))
                                 .intern()
                         } else {
                             TyKind::Tuple(Tuple::Simple(

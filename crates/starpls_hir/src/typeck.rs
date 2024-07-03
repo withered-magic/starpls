@@ -153,9 +153,15 @@ struct SharedState {
 /// A reference to a type in a source file.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum TypeRef {
+    /// A named type, e.g. `string` or `dict[int, bool]`
     Name(Name, Option<Box<[TypeRef]>>),
+    /// A union of one or more types, e.g. `int | None`
     Union(Vec<TypeRef>),
+    /// A provider type created with `provider()`, Bazel-only
     Provider(BuiltinProvider),
+    /// Used to indicate a variable-length tuple, e.g. `tuple[int, ...]`
+    Ellipsis,
+    /// An unknown type
     Unknown,
 }
 
@@ -1624,6 +1630,24 @@ impl<'a> TypeRefResolver<'a> {
                     TyKind::Struct(Some(Struct::FieldSignature { ty }))
                 }),
                 "Target" => TyKind::Target.intern(),
+                "tuple" => match args.as_ref() {
+                    Some(args) => {
+                        // Handle variable tuples directly. The ellipsis type `...` is valid only when
+                        // it is the second of exactly two type arguments.
+                        if args.len() == 2 && &args[1] == &TypeRef::Ellipsis {
+                            TyKind::Tuple(Tuple::Variable(self.resolve_type_ref_inner(&args[0])))
+                                .intern()
+                        } else {
+                            TyKind::Tuple(Tuple::Simple(
+                                args.iter()
+                                    .map(|type_ref| self.resolve_type_ref_inner(type_ref))
+                                    .collect(),
+                            ))
+                            .intern()
+                        }
+                    }
+                    None => TyKind::Tuple(Tuple::Variable(Ty::unknown())).intern(),
+                },
                 name => match builtin_types.types(self.db).get(name).cloned() {
                     Some(ty) => ty,
                     None => {
@@ -1637,6 +1661,13 @@ impl<'a> TypeRefResolver<'a> {
                     .map(|type_ref| self.resolve_type_ref_inner(&type_ref)),
             ),
             TypeRef::Provider(provider) => TyKind::Provider(Provider::Builtin(*provider)).intern(),
+            TypeRef::Ellipsis => {
+                // We handle ellipsis types only while processing tuples above, any other occurrences of
+                // ellipsis types are invalid.
+                self.errors
+                    .push("\"...\" is not allowed in this context".to_string());
+                types.unknown.clone()
+            }
             TypeRef::Unknown => types.unknown.clone(),
         }
     }

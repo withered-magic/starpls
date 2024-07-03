@@ -213,7 +213,7 @@ pub enum TokenKind {
     /// "->"
     Arrow,
     /// "..."
-    Ellipses,
+    Ellipsis,
 
     /// Unknown token, unrecognized by the lexer.
     Unknown,
@@ -626,7 +626,7 @@ impl Cursor<'_> {
                 } else if self.type_comment_tokens && self.first() == '.' && self.second() == '.' {
                     self.bump();
                     self.bump();
-                    Ellipses
+                    Ellipsis
                 } else {
                     Dot
                 }

@@ -1359,6 +1359,7 @@ pub enum Type {
     NamedType(NamedType),
     UnionType(UnionType),
     NoneType(NoneType),
+    EllipsisType(EllipsisType),
 }
 
 impl AstNode for Type {
@@ -1368,7 +1369,7 @@ impl AstNode for Type {
     where
         Self: Sized,
     {
-        matches!(kind, NAMED_TYPE | UNION_TYPE | NONE_TYPE)
+        matches!(kind, NAMED_TYPE | UNION_TYPE | NONE_TYPE | ELLIPSIS_TYPE)
     }
 
     fn cast(syntax: SyntaxNode) -> Option<Self>
@@ -1379,6 +1380,7 @@ impl AstNode for Type {
             NAMED_TYPE => Self::NamedType(NamedType { syntax }),
             UNION_TYPE => Self::UnionType(UnionType { syntax }),
             NONE_TYPE => Self::NoneType(NoneType { syntax }),
+            ELLIPSIS_TYPE => Self::EllipsisType(EllipsisType { syntax }),
             _ => return None,
         })
     }
@@ -1388,6 +1390,7 @@ impl AstNode for Type {
             Type::NamedType(type_) => type_.syntax(),
             Type::UnionType(type_) => type_.syntax(),
             Type::NoneType(type_) => type_.syntax(),
+            Type::EllipsisType(type_) => type_.syntax(),
         }
     }
 }
@@ -1405,6 +1408,10 @@ ast_node! {
 
 ast_node! {
     NoneType => NONE_TYPE
+}
+
+ast_node! {
+    EllipsisType => ELLIPSIS_TYPE
 }
 
 ast_node! {

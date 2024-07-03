@@ -1,6 +1,6 @@
 use crate::{grammar::*, marker::CompletedMarker, syntax_kind::SyntaxKindSet, SyntaxKind};
 
-const TYPE_START: SyntaxKindSet = SyntaxKindSet::new(&[T![ident]]);
+const TYPE_START: SyntaxKindSet = SyntaxKindSet::new(&[T![ident], ELLIPSIS]);
 
 const PARAMETER_TYPE_START: SyntaxKindSet = TYPE_START.union(SyntaxKindSet::new(&[T![*], T![**]]));
 
@@ -94,6 +94,11 @@ pub(crate) fn type_(p: &mut Parser) -> Option<CompletedMarker> {
             m.complete(p, NAMED_TYPE)
         }
         T!['('] => function_type(p),
+        ELLIPSIS => {
+            let m = p.start();
+            p.bump(ELLIPSIS);
+            m.complete(p, ELLIPSIS_TYPE)
+        }
         _ => {
             p.error_recover_until("Expected type", EMPTY);
             return None;

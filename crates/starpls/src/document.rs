@@ -284,7 +284,9 @@ impl DefaultFileLoader {
                     canonical_repo_res = Some(label.repo().to_string());
                 }
 
-                if self.workspace_name.as_ref().map(|name| name.as_str()) == Some(label.repo()) {
+                if self.workspace_name.as_ref().map(|name| name.as_str()) == Some(label.repo())
+                    || label.repo().is_empty()
+                {
                     (self.workspace.clone(), PathBuf::new())
                 } else {
                     (self.external_output_base.join(label.repo()), PathBuf::new())
@@ -586,6 +588,7 @@ impl FileLoader for DefaultFileLoader {
                             }
                         } else if self.workspace_name.as_ref().map(|name| name.as_str())
                             == Some(label.repo())
+                            || label.repo().is_empty()
                         {
                             self.workspace.clone()
                         } else {

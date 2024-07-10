@@ -1034,6 +1034,16 @@ impl TyCtxt<'_> {
                     known_ty = Some(ty)
                 }
 
+                // Determine the effective type of the named expression. The effective type is the union of the types
+                // of all the values assigned to the expression. For example, given:
+                //
+                // x = 1
+                // x = "one"
+                //
+                // then the effective type of `x` would be `int | string`. This type will be further narrowed by
+                // the code-flow analysis done below. NOTE: Even if the type has already been determined from the above
+                // logic (i.e. `known_ty` is `Some`), we still compute the effective type if only to infer types
+                // for the relevant assignment statements.
                 let effective_ty = Ty::union(var_defs.into_iter().map(|(file, expr, source)| {
                     let cached_ty = self
                         .cx
@@ -1102,7 +1112,12 @@ impl TyCtxt<'_> {
             (self.unbound_ty(), effective_ty)
         };
 
-        Some(self.infer_expr_from_code_flow(file, expr, execution_scope, name, &start_ty))
+        // See if we can narrow the effective type further through code-flow analysis. If not, then
+        // fall back to the effective type.
+        let code_flow_ty = self
+            .infer_expr_from_code_flow(file, expr, execution_scope, name, &start_ty)
+            .unwrap_or(fallback_ty);
+        Some(code_flow_ty)
     }
 
     fn infer_expr_from_code_flow(
@@ -1116,7 +1131,14 @@ impl TyCtxt<'_> {
         let cfg = code_flow_graph(self.db, file).cfg(self.db);
         let res = cfg.expr_to_node.get(&expr);
         let start_node = res?;
-        self.infer_ref_from_flow_node(&cfg, file, execution_scope, name, start_ty, *start_node)
+        Some(self.infer_ref_from_flow_node(
+            &cfg,
+            file,
+            execution_scope,
+            name,
+            start_ty,
+            *start_node,
+        ))
     }
 
     fn infer_ref_from_flow_node(
@@ -1170,7 +1192,7 @@ impl TyCtxt<'_> {
                         )
                     }))
                 }
-                FlowNode::Loop { .. } => (),
+                FlowNode::Loop { .. } => Ty::unknown(),
                 FlowNode::Unreachable { .. } => Ty::never(),
             };
 

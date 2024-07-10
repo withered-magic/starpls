@@ -98,12 +98,20 @@ impl TyCtxt<'_> {
                 let ty = self
                     .infer_name_expr(file, expr, name)
                     .unwrap_or_else(|| self.unbound_ty());
-                if ty.kind() == &TyKind::Unbound {
+
+                // Report unbound and possibly unbound variables.
+                if ty.is_unbound() {
                     self.add_expr_diagnostic_error(
                         file,
                         expr,
                         format!("\"{}\" is not defined", name.as_str()),
                     );
+                } else if ty.is_possibly_unbound() {
+                    self.add_expr_diagnostic_error(
+                        file,
+                        expr,
+                        format!("\"{}\" is possibly unbound", name.as_str()),
+                    )
                 }
                 ty
             }
@@ -1009,10 +1017,14 @@ impl TyCtxt<'_> {
     fn infer_name_expr(&mut self, file: File, expr: ExprId, name: &Name) -> Option<Ty> {
         let resolver = Resolver::new_for_expr_execution_scope(self.db, file, expr);
         let expr_scope = resolver.scope_for_expr(expr)?;
-        let expr_execution_scope = resolver.execution_scope_for_expr(expr)?;
-        let (execution_scope, effective_ty) = match resolver.resolve_name(name) {
-            Some((execution_scope, defs)) => {
+        let curr_execution_scope = resolver.execution_scope_for_expr(expr)?;
+        let (def_execution_scope, effective_ty) = match resolver.resolve_name(name) {
+            Some((def_execution_scope, defs)) => {
                 let mut var_defs = Vec::new();
+
+                // The type of a named expression may already be unambigiously known, e.g. in the case of
+                // annotated variable declarations or function definitions. In this case, we always use
+                // this known type.
                 let mut known_ty = None;
                 for def in defs.skip_while(|def| def.scope > expr_scope) {
                     let ty = match def.def {
@@ -1035,7 +1047,7 @@ impl TyCtxt<'_> {
                 }
 
                 // Determine the effective type of the named expression. The effective type is the union of the types
-                // of all the values assigned to the expression. For example, given:
+                // of all the values assigned to the name in question. For example, given:
                 //
                 // x = 1
                 // x = "one"
@@ -1067,7 +1079,7 @@ impl TyCtxt<'_> {
                     return known_ty;
                 }
 
-                (execution_scope, effective_ty)
+                (def_execution_scope, effective_ty)
             }
 
             None => {
@@ -1091,22 +1103,25 @@ impl TyCtxt<'_> {
             }
         };
 
-        let (start_ty, fallback_ty) = if execution_scope != expr_execution_scope {
+        // TODO(withered-magic): Should we use the fallback type for scenarios that we don't support yet, e.g. loops?
+        let (start_ty, fallback_ty) = if def_execution_scope != curr_execution_scope {
             let cfg = code_flow_graph(self.db, file).cfg(self.db);
-            let hir_id = match execution_scope {
+            let hir_id = match def_execution_scope {
                 ExecutionScopeId::Module => ScopeHirId::Module.into(),
                 ExecutionScopeId::Def(stmt) => stmt.into(),
                 ExecutionScopeId::Comp(expr) => expr.into(),
             };
             let start_node = cfg.hir_to_flow_node.get(&hir_id)?;
-            let start_ty = self.infer_ref_from_flow_node(
-                cfg,
-                file,
-                execution_scope,
-                name,
-                &self.unbound_ty(),
-                *start_node,
-            );
+            let start_ty = self
+                .infer_ref_from_flow_node(
+                    cfg,
+                    file,
+                    def_execution_scope,
+                    name,
+                    &self.unbound_ty(),
+                    *start_node,
+                )
+                .unwrap_or_else(|| self.unknown_ty());
             (start_ty.clone(), start_ty)
         } else {
             (self.unbound_ty(), effective_ty)
@@ -1114,10 +1129,10 @@ impl TyCtxt<'_> {
 
         // See if we can narrow the effective type further through code-flow analysis. If not, then
         // fall back to the effective type.
-        let code_flow_ty = self
-            .infer_expr_from_code_flow(file, expr, execution_scope, name, &start_ty)
-            .unwrap_or(fallback_ty);
-        Some(code_flow_ty)
+        Some(
+            self.infer_expr_from_code_flow(file, expr, curr_execution_scope, name, &start_ty)
+                .unwrap_or(fallback_ty),
+        )
     }
 
     fn infer_expr_from_code_flow(
@@ -1131,14 +1146,7 @@ impl TyCtxt<'_> {
         let cfg = code_flow_graph(self.db, file).cfg(self.db);
         let res = cfg.expr_to_node.get(&expr);
         let start_node = res?;
-        Some(self.infer_ref_from_flow_node(
-            &cfg,
-            file,
-            execution_scope,
-            name,
-            start_ty,
-            *start_node,
-        ))
+        self.infer_ref_from_flow_node(&cfg, file, execution_scope, name, start_ty, *start_node)
     }
 
     fn infer_ref_from_flow_node(
@@ -1149,7 +1157,7 @@ impl TyCtxt<'_> {
         name: &Name,
         start_ty: &Ty,
         start_node: FlowNodeId,
-    ) -> Ty {
+    ) -> Option<Ty> {
         if let Some(res) =
             self.read_cached_ref_type_at_flow_node(file, execution_scope, name, start_node)
         {
@@ -1157,7 +1165,7 @@ impl TyCtxt<'_> {
         }
 
         let mut curr_node_id = start_node;
-        let res = loop {
+        let res = 'outer: loop {
             let curr_node = &cfg.flow_nodes[curr_node_id];
             let curr_node_ty = match &curr_node {
                 FlowNode::Start => start_ty.clone(),
@@ -1168,6 +1176,8 @@ impl TyCtxt<'_> {
                     antecedent,
                     execution_scope: assign_execution_scope,
                 } => {
+                    // We need to do the extra check for the execution scope here to handle execution scopes from things
+                    // like list/dict comprehensions.
                     if name != node_name || execution_scope != *assign_execution_scope {
                         curr_node_id = *antecedent;
                         continue;
@@ -1181,22 +1191,29 @@ impl TyCtxt<'_> {
                         .unwrap_or_else(|| Ty::never())
                 }
                 FlowNode::Branch { antecedents } => {
-                    Ty::union(antecedents.iter().map(|antecedent| {
-                        self.infer_ref_from_flow_node(
+                    let mut antecedent_tys = Vec::with_capacity(antecedents.len());
+                    for antecedent in antecedents {
+                        match self.infer_ref_from_flow_node(
                             cfg,
                             file,
                             execution_scope,
                             name,
                             start_ty,
                             *antecedent,
-                        )
-                    }))
+                        ) {
+                            Some(antecedent_ty) => {
+                                antecedent_tys.push(antecedent_ty);
+                            }
+                            None => break 'outer None,
+                        }
+                    }
+                    Ty::union(antecedent_tys.into_iter())
                 }
-                FlowNode::Loop { .. } => Ty::unknown(),
+                FlowNode::Loop { .. } => break None,
                 FlowNode::Unreachable { .. } => Ty::never(),
             };
 
-            break curr_node_ty;
+            break Some(curr_node_ty);
         };
 
         self.cache_ref_type_at_flow_node(file, execution_scope, name, start_node, res)
@@ -1208,7 +1225,7 @@ impl TyCtxt<'_> {
         execution_scope: ExecutionScopeId,
         name: &Name,
         flow_node: FlowNodeId,
-    ) -> Option<Ty> {
+    ) -> Option<Option<Ty>> {
         self.cx
             .flow_node_type_cache
             .get(&CodeFlowCacheKey {
@@ -1226,8 +1243,8 @@ impl TyCtxt<'_> {
         execution_scope: ExecutionScopeId,
         name: &Name,
         flow_node: FlowNodeId,
-        res: Ty,
-    ) -> Ty {
+        res: Option<Ty>,
+    ) -> Option<Ty> {
         self.cx.flow_node_type_cache.insert(
             CodeFlowCacheKey {
                 file,

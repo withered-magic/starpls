@@ -636,6 +636,18 @@ impl Ty {
         self.kind() == &TyKind::Unknown || self.kind() == &TyKind::Unbound
     }
 
+    pub(crate) fn is_unbound(&self) -> bool {
+        self.kind() == &TyKind::Unbound
+    }
+
+    pub(crate) fn is_possibly_unbound(&self) -> bool {
+        match self.kind() {
+            TyKind::Union(tys) => tys.iter().any(|ty| ty.is_possibly_unbound()),
+            TyKind::Unbound => true,
+            _ => false,
+        }
+    }
+
     pub(crate) fn substitute(&self, args: &[Ty]) -> Ty {
         match self.kind() {
             TyKind::List(ty) => Ty::list(ty.substitute(args)),
@@ -1561,7 +1573,7 @@ pub(crate) struct InferenceCtxt {
     pub(crate) type_of_load_item: FxHashMap<FileLoadItemId, Ty>,
     pub(crate) type_of_param: FxHashMap<FileParamId, Ty>,
     pub(crate) source_assign_done: FxHashSet<FileExprId>,
-    pub(crate) flow_node_type_cache: FxHashMap<CodeFlowCacheKey, Ty>,
+    pub(crate) flow_node_type_cache: FxHashMap<CodeFlowCacheKey, Option<Ty>>,
 }
 
 pub struct CancelGuard<'a> {

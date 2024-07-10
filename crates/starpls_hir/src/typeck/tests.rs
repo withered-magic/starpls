@@ -1416,3 +1416,25 @@ def f():
         "#]],
     );
 }
+
+#[test]
+fn test_possibly_unbound() {
+    check_infer(
+        r#"
+def f():
+    if 1 < 2:
+        x = 1
+    x
+"#,
+        expect![[r#"
+            17..18 "1": Literal[1]
+            21..22 "2": Literal[2]
+            17..22 "1 < 2": bool
+            32..33 "x": Literal[1]
+            36..37 "1": Literal[1]
+            42..43 "x": int | Unbound
+
+            42..43 "x" is possibly unbound
+        "#]],
+    )
+}

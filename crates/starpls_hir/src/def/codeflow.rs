@@ -72,8 +72,16 @@ impl<'a> CodeFlowLowerCtx<'a> {
     }
 
     fn lower_stmts(&mut self, stmts: &[StmtId]) {
+        // Lower each statement in the list, stopping if we see unreachable code.
         for stmt in stmts {
             self.lower_stmt(*stmt);
+
+            // If we find ourselves at an unreachable flow node, all remaining statements
+            // are unreachable. Unreachable statements in general are not represented
+            // in the code flow graph, so we can simply exit here.
+            if self.result.flow_nodes[self.curr_node] == FlowNode::Unreachable {
+                break;
+            }
         }
     }
 

@@ -988,9 +988,10 @@ impl TyCtxt<'_> {
         };
 
         let sub_ty = match source_ty.kind() {
-            TyKind::List(ty) => ty.clone(),
+            TyKind::List(ty) | TyKind::Tuple(Tuple::Variable(ty)) => ty.clone(),
+            TyKind::Tuple(Tuple::Simple(tys)) => Ty::union(tys.iter().cloned()),
             TyKind::Dict(key_ty, _, _) => key_ty.clone(),
-            TyKind::Tuple(_) | TyKind::Any => self.any_ty(),
+            TyKind::Any => self.any_ty(),
             TyKind::Range => self.int_ty(),
             TyKind::StringElems => self.string_ty(),
             TyKind::BytesElems => self.int_ty(),
@@ -1029,8 +1030,31 @@ impl TyCtxt<'_> {
                 for def in defs.skip_while(|def| def.scope > expr_scope) {
                     let ty = match def.def {
                         ScopeDef::Variable(VariableDef { file, expr, source }) => {
-                            var_defs.push((file, *expr, source.clone()));
-                            continue;
+                            if self.shared_state.options.use_code_flow_analysis {
+                                var_defs.push((file, *expr, source.clone()));
+                                continue;
+                            } else {
+                                let cached_ty = self
+                                    .cx
+                                    .type_of_expr
+                                    .get(&FileExprId::new(*file, *expr))
+                                    .cloned();
+                                cached_ty.unwrap_or_else(|| {
+                                    source
+                                        .and_then(|source| {
+                                            self.infer_source_expr_assign(
+                                                *file,
+                                                source,
+                                                known_ty.clone(),
+                                            );
+                                            self.cx
+                                                .type_of_expr
+                                                .get(&FileExprId::new(*file, *expr))
+                                                .cloned()
+                                        })
+                                        .unwrap_or_else(|| self.unknown_ty())
+                                })
+                            }
                         }
                         ScopeDef::Function(func) => func.ty().into(),
                         ScopeDef::Parameter(ParameterDef { func, index }) => func
@@ -1143,9 +1167,13 @@ impl TyCtxt<'_> {
         name: &Name,
         start_ty: &Ty,
     ) -> Option<Ty> {
+        // If an expression is missing its corresponding node in the code flow graph, that
+        // means the expression is unreachable. We use the `Never` type to represent this case.
         let cfg = code_flow_graph(self.db, file).cfg(self.db);
-        let res = cfg.expr_to_node.get(&expr);
-        let start_node = res?;
+        let start_node = match cfg.expr_to_node.get(&expr) {
+            Some(start_node) => start_node,
+            None => return Some(TyKind::Never.intern()),
+        };
         self.infer_ref_from_flow_node(&cfg, file, execution_scope, name, start_ty, *start_node)
     }
 

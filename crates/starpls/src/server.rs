@@ -174,6 +174,7 @@ impl Server {
             Arc::new(loader),
             InferenceOptions {
                 infer_ctx_attrs: config.args.experimental_infer_ctx_attributes,
+                use_code_flow_analysis: false,
             },
         );
 

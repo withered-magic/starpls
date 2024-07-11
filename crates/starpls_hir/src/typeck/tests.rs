@@ -1190,6 +1190,7 @@ my_rule = repository_rule(
         "#]],
         InferenceOptions {
             infer_ctx_attrs: true,
+            use_code_flow_analysis: true,
         },
     );
 }
@@ -1437,4 +1438,57 @@ def f():
             42..43 "x" is possibly unbound
         "#]],
     )
+}
+
+#[test]
+fn test_unreachable() {
+    check_infer(
+        r#"
+def f():
+    for x in 1, 2, 3:
+        break
+        y = 1
+        y
+
+def g():
+    for x in 1, 2, 3:
+        continue
+        z = 2
+        z
+
+def h():
+    for x in 1, 2, 3:
+        if x < 1:
+            y = 1
+            break
+        else:
+            y = "one"
+            break
+        y
+"#,
+        expect![[r#"
+            18..19 "x": Any
+            23..24 "1": Literal[1]
+            26..27 "2": Literal[2]
+            29..30 "3": Literal[3]
+            23..30 "1, 2, 3": tuple[Literal[1], Literal[2], Literal[3]]
+            54..55 "y": Never
+            58..59 "1": Literal[1]
+            68..69 "y": Never
+        "#]],
+    );
+}
+
+#[test]
+fn test_for() {
+    check_infer(
+        r#"
+def f():
+    x = 1
+    for y in 1, 2, 3:
+        x = "one"
+    x
+"#,
+        expect![],
+    );
 }

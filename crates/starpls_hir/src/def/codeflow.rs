@@ -48,6 +48,7 @@ struct CodeFlowLowerCtx<'a> {
     scopes: &'a Scopes,
     result: CodeFlowGraph,
     curr_node: FlowNodeId,
+    unreachable_node: FlowNodeId,
     curr_break_target: Option<FlowNodeId>,
     curr_continue_target: Option<FlowNodeId>,
 }
@@ -55,6 +56,7 @@ struct CodeFlowLowerCtx<'a> {
 impl<'a> CodeFlowLowerCtx<'a> {
     fn new(module: &'a Module, scopes: &'a Scopes) -> Self {
         let mut flow_nodes = Arena::new();
+        let unreachable_node = flow_nodes.alloc(FlowNode::Unreachable);
         let curr_node = flow_nodes.alloc(FlowNode::Start);
         let cfg = CodeFlowGraph {
             flow_nodes,
@@ -66,6 +68,7 @@ impl<'a> CodeFlowLowerCtx<'a> {
             scopes,
             result: cfg,
             curr_node,
+            unreachable_node,
             curr_break_target: None,
             curr_continue_target: None,
         }
@@ -79,7 +82,7 @@ impl<'a> CodeFlowLowerCtx<'a> {
             // If we find ourselves at an unreachable flow node, all remaining statements
             // are unreachable. Unreachable statements in general are not represented
             // in the code flow graph, so we can simply exit here.
-            if self.result.flow_nodes[self.curr_node] == FlowNode::Unreachable {
+            if self.curr_node == self.unreachable_node {
                 break;
             }
         }
@@ -182,14 +185,14 @@ impl<'a> CodeFlowLowerCtx<'a> {
                 if let Some(target) = &self.curr_continue_target {
                     self.push_antecedent(*target, self.curr_node);
                 }
-                self.curr_node = self.new_flow_node(FlowNode::Unreachable);
+                self.curr_node = self.unreachable_node;
             }
 
             Stmt::Break => {
                 if let Some(target) = &self.curr_break_target {
                     self.push_antecedent(*target, self.curr_node);
                 }
-                self.curr_node = self.new_flow_node(FlowNode::Unreachable);
+                self.curr_node = self.unreachable_node;
             }
 
             _ => {}
@@ -275,7 +278,7 @@ impl<'a> CodeFlowLowerCtx<'a> {
             | FlowNode::Loop {
                 ref mut antecedents,
             } => {
-                if !antecedents.contains(&antecedent) {
+                if antecedent != self.unreachable_node && !antecedents.contains(&antecedent) {
                     antecedents.push(antecedent);
                 }
             }
@@ -342,13 +345,18 @@ mod tests {
         check(
             r#""#,
             expect![[r#"
-            def main():
-                'bb0: {
-                    data: Start
-                    antecedents: []
-                }
+                def main():
+                    'bb0: {
+                        data: Unreachable
+                        antecedents: []
+                    }
 
-        "#]],
+                    'bb1: {
+                        data: Start
+                        antecedents: []
+                    }
+
+            "#]],
         );
     }
 
@@ -362,18 +370,23 @@ y = "a"
             expect![[r#"
                 def main():
                     'bb0: {
-                        data: Start
+                        data: Unreachable
                         antecedents: []
                     }
 
                     'bb1: {
-                        data: Assign { expr: Id { idx: 0 }, name: Name("x"), execution_scope: Module, source: Id { idx: 1 }, antecedent: Id { idx: 0 } }
-                        antecedents: ['bb0]
+                        data: Start
+                        antecedents: []
                     }
 
                     'bb2: {
-                        data: Assign { expr: Id { idx: 2 }, name: Name("y"), execution_scope: Module, source: Id { idx: 3 }, antecedent: Id { idx: 1 } }
+                        data: Assign { expr: Id { idx: 0 }, name: Name("x"), execution_scope: Module, source: Id { idx: 1 }, antecedent: Id { idx: 1 } }
                         antecedents: ['bb1]
+                    }
+
+                    'bb3: {
+                        data: Assign { expr: Id { idx: 2 }, name: Name("y"), execution_scope: Module, source: Id { idx: 3 }, antecedent: Id { idx: 2 } }
+                        antecedents: ['bb2]
                     }
 
             "#]],
@@ -390,18 +403,23 @@ if x > 0:
             expect![[r#"
                 def main():
                     'bb0: {
-                        data: Start
+                        data: Unreachable
                         antecedents: []
                     }
 
                     'bb1: {
-                        data: Branch { antecedents: [Id { idx: 2 }, Id { idx: 0 }] }
-                        antecedents: ['bb2, 'bb0]
+                        data: Start
+                        antecedents: []
                     }
 
                     'bb2: {
-                        data: Assign { expr: Id { idx: 3 }, name: Name("y"), execution_scope: Module, source: Id { idx: 4 }, antecedent: Id { idx: 0 } }
-                        antecedents: ['bb0]
+                        data: Branch { antecedents: [Id { idx: 3 }, Id { idx: 1 }] }
+                        antecedents: ['bb3, 'bb1]
+                    }
+
+                    'bb3: {
+                        data: Assign { expr: Id { idx: 3 }, name: Name("y"), execution_scope: Module, source: Id { idx: 4 }, antecedent: Id { idx: 1 } }
+                        antecedents: ['bb1]
                     }
 
             "#]],
@@ -422,7 +440,7 @@ y = 4
             expect![[r#"
                 def main():
                     'bb0: {
-                        data: Start
+                        data: Unreachable
                         antecedents: []
                     }
 
@@ -432,23 +450,28 @@ y = 4
                     }
 
                     'bb2: {
-                        data: Assign { expr: Id { idx: 0 }, name: Name("x"), execution_scope: Def(Id { idx: 2 }), source: Id { idx: 1 }, antecedent: Id { idx: 1 } }
-                        antecedents: ['bb1]
+                        data: Start
+                        antecedents: []
                     }
 
                     'bb3: {
-                        data: Assign { expr: Id { idx: 2 }, name: Name("y"), execution_scope: Def(Id { idx: 2 }), source: Id { idx: 3 }, antecedent: Id { idx: 2 } }
+                        data: Assign { expr: Id { idx: 0 }, name: Name("x"), execution_scope: Def(Id { idx: 2 }), source: Id { idx: 1 }, antecedent: Id { idx: 2 } }
                         antecedents: ['bb2]
                     }
 
                     'bb4: {
-                        data: Assign { expr: Id { idx: 4 }, name: Name("x"), execution_scope: Module, source: Id { idx: 5 }, antecedent: Id { idx: 0 } }
-                        antecedents: ['bb0]
+                        data: Assign { expr: Id { idx: 2 }, name: Name("y"), execution_scope: Def(Id { idx: 2 }), source: Id { idx: 3 }, antecedent: Id { idx: 3 } }
+                        antecedents: ['bb3]
                     }
 
                     'bb5: {
-                        data: Assign { expr: Id { idx: 6 }, name: Name("y"), execution_scope: Module, source: Id { idx: 7 }, antecedent: Id { idx: 4 } }
-                        antecedents: ['bb4]
+                        data: Assign { expr: Id { idx: 4 }, name: Name("x"), execution_scope: Module, source: Id { idx: 5 }, antecedent: Id { idx: 1 } }
+                        antecedents: ['bb1]
+                    }
+
+                    'bb6: {
+                        data: Assign { expr: Id { idx: 6 }, name: Name("y"), execution_scope: Module, source: Id { idx: 7 }, antecedent: Id { idx: 5 } }
+                        antecedents: ['bb5]
                     }
 
             "#]],
@@ -464,18 +487,23 @@ nums = [x for x in range(10)]
             expect![[r#"
                 def main():
                     'bb0: {
-                        data: Start
+                        data: Unreachable
                         antecedents: []
                     }
 
                     'bb1: {
-                        data: Assign { expr: Id { idx: 5 }, name: Name("x"), execution_scope: Comp(Id { idx: 6 }), source: Id { idx: 4 }, antecedent: Id { idx: 0 } }
-                        antecedents: ['bb0]
+                        data: Start
+                        antecedents: []
                     }
 
                     'bb2: {
-                        data: Assign { expr: Id { idx: 0 }, name: Name("nums"), execution_scope: Module, source: Id { idx: 6 }, antecedent: Id { idx: 1 } }
+                        data: Assign { expr: Id { idx: 5 }, name: Name("x"), execution_scope: Comp(Id { idx: 6 }), source: Id { idx: 4 }, antecedent: Id { idx: 1 } }
                         antecedents: ['bb1]
+                    }
+
+                    'bb3: {
+                        data: Assign { expr: Id { idx: 0 }, name: Name("nums"), execution_scope: Module, source: Id { idx: 6 }, antecedent: Id { idx: 2 } }
+                        antecedents: ['bb2]
                     }
 
             "#]],
@@ -492,33 +520,43 @@ for x, y in [[1, 2], [3, 4]]:
             expect![[r#"
                 def main():
                     'bb0: {
-                        data: Start
+                        data: Unreachable
                         antecedents: []
                     }
 
                     'bb1: {
-                        data: Assign { expr: Id { idx: 7 }, name: Name("x"), execution_scope: Module, source: Id { idx: 6 }, antecedent: Id { idx: 0 } }
-                        antecedents: ['bb0]
+                        data: Start
+                        antecedents: []
                     }
 
                     'bb2: {
-                        data: Assign { expr: Id { idx: 8 }, name: Name("y"), execution_scope: Module, source: Id { idx: 6 }, antecedent: Id { idx: 1 } }
+                        data: Assign { expr: Id { idx: 7 }, name: Name("x"), execution_scope: Module, source: Id { idx: 6 }, antecedent: Id { idx: 1 } }
                         antecedents: ['bb1]
                     }
 
                     'bb3: {
-                        data: Branch { antecedents: [] }
-                        antecedents: []
-                    }
-
-                    'bb4: {
-                        data: Assign { expr: Id { idx: 19 }, name: Name("i"), execution_scope: Comp(Id { idx: 20 }), source: Id { idx: 18 }, antecedent: Id { idx: 2 } }
+                        data: Assign { expr: Id { idx: 8 }, name: Name("y"), execution_scope: Module, source: Id { idx: 6 }, antecedent: Id { idx: 2 } }
                         antecedents: ['bb2]
                     }
 
+                    'bb4: {
+                        data: Loop { antecedents: [Id { idx: 3 }, Id { idx: 7 }] }
+                        antecedents: ['bb3, 'bb7]
+                    }
+
                     'bb5: {
-                        data: Assign { expr: Id { idx: 9 }, name: Name("nums"), execution_scope: Module, source: Id { idx: 20 }, antecedent: Id { idx: 4 } }
+                        data: Branch { antecedents: [Id { idx: 4 }] }
                         antecedents: ['bb4]
+                    }
+
+                    'bb6: {
+                        data: Assign { expr: Id { idx: 19 }, name: Name("i"), execution_scope: Comp(Id { idx: 20 }), source: Id { idx: 18 }, antecedent: Id { idx: 4 } }
+                        antecedents: ['bb4]
+                    }
+
+                    'bb7: {
+                        data: Assign { expr: Id { idx: 9 }, name: Name("nums"), execution_scope: Module, source: Id { idx: 20 }, antecedent: Id { idx: 6 } }
+                        antecedents: ['bb6]
                     }
 
             "#]],
@@ -532,7 +570,34 @@ for x, y in [[1, 2], [3, 4]]:
 for x in range(1, 5):
     pass
 "#,
-            expect![],
+            expect![[r#"
+                def main():
+                    'bb0: {
+                        data: Unreachable
+                        antecedents: []
+                    }
+
+                    'bb1: {
+                        data: Start
+                        antecedents: []
+                    }
+
+                    'bb2: {
+                        data: Assign { expr: Id { idx: 4 }, name: Name("x"), execution_scope: Module, source: Id { idx: 3 }, antecedent: Id { idx: 1 } }
+                        antecedents: ['bb1]
+                    }
+
+                    'bb3: {
+                        data: Loop { antecedents: [Id { idx: 2 }, Id { idx: 3 }] }
+                        antecedents: ['bb2, 'bb3]
+                    }
+
+                    'bb4: {
+                        data: Branch { antecedents: [Id { idx: 3 }] }
+                        antecedents: ['bb3]
+                    }
+
+            "#]],
         );
     }
 
@@ -546,23 +611,28 @@ for x in range(1, 5):
             expect![[r#"
                 def main():
                     'bb0: {
-                        data: Start
+                        data: Unreachable
                         antecedents: []
                     }
 
                     'bb1: {
-                        data: Assign { expr: Id { idx: 4 }, name: Name("x"), execution_scope: Module, source: Id { idx: 3 }, antecedent: Id { idx: 0 } }
-                        antecedents: ['bb0]
+                        data: Start
+                        antecedents: []
                     }
 
                     'bb2: {
-                        data: Branch { antecedents: [Id { idx: 1 }] }
+                        data: Assign { expr: Id { idx: 4 }, name: Name("x"), execution_scope: Module, source: Id { idx: 3 }, antecedent: Id { idx: 1 } }
                         antecedents: ['bb1]
                     }
 
                     'bb3: {
-                        data: Never { antecedent: Id { idx: 1 } }
-                        antecedents: []
+                        data: Loop { antecedents: [Id { idx: 2 }] }
+                        antecedents: ['bb2]
+                    }
+
+                    'bb4: {
+                        data: Branch { antecedents: [Id { idx: 3 }] }
+                        antecedents: ['bb3]
                     }
 
             "#]],
@@ -583,28 +653,38 @@ a = 1
             expect![[r#"
                 def main():
                     'bb0: {
-                        data: Start
+                        data: Unreachable
                         antecedents: []
                     }
 
                     'bb1: {
-                        data: Assign { expr: Id { idx: 4 }, name: Name("x"), execution_scope: Module, source: Id { idx: 3 }, antecedent: Id { idx: 0 } }
-                        antecedents: ['bb0]
+                        data: Start
+                        antecedents: []
                     }
 
                     'bb2: {
-                        data: Branch { antecedents: [Id { idx: 1 }] }
+                        data: Assign { expr: Id { idx: 4 }, name: Name("x"), execution_scope: Module, source: Id { idx: 3 }, antecedent: Id { idx: 1 } }
                         antecedents: ['bb1]
                     }
 
                     'bb3: {
-                        data: Never { antecedent: Id { idx: 1 } }
-                        antecedents: []
+                        data: Loop { antecedents: [Id { idx: 2 }] }
+                        antecedents: ['bb2]
                     }
 
                     'bb4: {
+                        data: Branch { antecedents: [Id { idx: 5 }, Id { idx: 3 }] }
+                        antecedents: ['bb5, 'bb3]
+                    }
+
+                    'bb5: {
                         data: Assign { expr: Id { idx: 5 }, name: Name("y"), execution_scope: Module, source: Id { idx: 6 }, antecedent: Id { idx: 3 } }
                         antecedents: ['bb3]
+                    }
+
+                    'bb6: {
+                        data: Assign { expr: Id { idx: 9 }, name: Name("a"), execution_scope: Module, source: Id { idx: 10 }, antecedent: Id { idx: 4 } }
+                        antecedents: ['bb4]
                     }
 
             "#]],
@@ -622,7 +702,49 @@ for x in range(5):
     break
     b = 2
 "#,
-            expect![],
+            expect![[r#"
+                def main():
+                    'bb0: {
+                        data: Unreachable
+                        antecedents: []
+                    }
+
+                    'bb1: {
+                        data: Start
+                        antecedents: []
+                    }
+
+                    'bb2: {
+                        data: Assign { expr: Id { idx: 3 }, name: Name("x"), execution_scope: Module, source: Id { idx: 2 }, antecedent: Id { idx: 1 } }
+                        antecedents: ['bb1]
+                    }
+
+                    'bb3: {
+                        data: Loop { antecedents: [Id { idx: 2 }] }
+                        antecedents: ['bb2]
+                    }
+
+                    'bb4: {
+                        data: Branch { antecedents: [Id { idx: 7 }, Id { idx: 3 }] }
+                        antecedents: ['bb7, 'bb3]
+                    }
+
+                    'bb5: {
+                        data: Assign { expr: Id { idx: 7 }, name: Name("y"), execution_scope: Module, source: Id { idx: 6 }, antecedent: Id { idx: 3 } }
+                        antecedents: ['bb3]
+                    }
+
+                    'bb6: {
+                        data: Loop { antecedents: [Id { idx: 5 }] }
+                        antecedents: ['bb5]
+                    }
+
+                    'bb7: {
+                        data: Branch { antecedents: [Id { idx: 6 }] }
+                        antecedents: ['bb6]
+                    }
+
+            "#]],
         );
     }
 
@@ -635,7 +757,39 @@ for x in range(5):
     continue
     z = 2
 "#,
-            expect![],
+            expect![[r#"
+                def main():
+                    'bb0: {
+                        data: Unreachable
+                        antecedents: []
+                    }
+
+                    'bb1: {
+                        data: Start
+                        antecedents: []
+                    }
+
+                    'bb2: {
+                        data: Assign { expr: Id { idx: 3 }, name: Name("x"), execution_scope: Module, source: Id { idx: 2 }, antecedent: Id { idx: 1 } }
+                        antecedents: ['bb1]
+                    }
+
+                    'bb3: {
+                        data: Loop { antecedents: [Id { idx: 2 }, Id { idx: 5 }] }
+                        antecedents: ['bb2, 'bb5]
+                    }
+
+                    'bb4: {
+                        data: Branch { antecedents: [Id { idx: 3 }] }
+                        antecedents: ['bb3]
+                    }
+
+                    'bb5: {
+                        data: Assign { expr: Id { idx: 4 }, name: Name("y"), execution_scope: Module, source: Id { idx: 5 }, antecedent: Id { idx: 3 } }
+                        antecedents: ['bb3]
+                    }
+
+            "#]],
         )
     }
 }

@@ -15,6 +15,17 @@ fn check_infer(input: &str, expect: Expect) {
     check_infer_with_options(input, expect, Default::default())
 }
 
+fn check_infer_with_code_flow_analysis(input: &str, expect: Expect) {
+    check_infer_with_options(
+        input,
+        expect,
+        InferenceOptions {
+            use_code_flow_analysis: true,
+            ..Default::default()
+        },
+    )
+}
+
 fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptions) {
     let mut builder = TestDatabaseBuilder::default();
     builder.add_function("provider");
@@ -1107,7 +1118,7 @@ def _impl(ctx):
 
 #[test]
 fn test_simple_if_stmt() {
-    check_infer(
+    check_infer_with_code_flow_analysis(
         r#"
 cond = 1 < 2
 def f():
@@ -1189,7 +1200,7 @@ my_rule = repository_rule(
             269..387 "repository_rule(\n    implementation = _repository_rule_impl,\n    attrs = {\n        \"srcs\": attr.label_list(),\n    },\n)": repository_rule
         "#]],
         InferenceOptions {
-            infer_ctx_attrs: true,
+            infer_ctx_attributes: true,
             use_code_flow_analysis: true,
         },
     );
@@ -1234,7 +1245,7 @@ my_rule = rule(
 
 #[test]
 fn test_if_elif_stmt() {
-    check_infer(
+    check_infer_with_code_flow_analysis(
         r#"
 cond = 1 < 2
 def f():
@@ -1344,7 +1355,7 @@ e = (1, 2) # type: tuple[int, ..., int]
 
 #[test]
 fn test_if_else_stmts() {
-    check_infer(
+    check_infer_with_code_flow_analysis(
         r#"
 cond = 1 < 2
 def f():
@@ -1374,7 +1385,7 @@ def f():
 
 #[test]
 fn test_nested_if_stmts() {
-    check_infer(
+    check_infer_with_code_flow_analysis(
         r#"
 cond = 1 < 2
 def f():
@@ -1420,7 +1431,7 @@ def f():
 
 #[test]
 fn test_possibly_unbound() {
-    check_infer(
+    check_infer_with_code_flow_analysis(
         r#"
 def f():
     if 1 < 2:
@@ -1442,7 +1453,7 @@ def f():
 
 #[test]
 fn test_unreachable() {
-    check_infer(
+    check_infer_with_code_flow_analysis(
         r#"
 def f():
     for x in 1, 2, 3:
@@ -1467,7 +1478,7 @@ def h():
         y
 "#,
         expect![[r#"
-            18..19 "x": Any
+            18..19 "x": int
             23..24 "1": Literal[1]
             26..27 "2": Literal[2]
             29..30 "3": Literal[3]
@@ -1475,13 +1486,34 @@ def h():
             54..55 "y": Never
             58..59 "1": Literal[1]
             68..69 "y": Never
+            88..89 "x": int
+            93..94 "1": Literal[1]
+            96..97 "2": Literal[2]
+            99..100 "3": Literal[3]
+            93..100 "1, 2, 3": tuple[Literal[1], Literal[2], Literal[3]]
+            127..128 "z": Never
+            131..132 "2": Literal[2]
+            141..142 "z": Never
+            161..162 "x": int
+            166..167 "1": Literal[1]
+            169..170 "2": Literal[2]
+            172..173 "3": Literal[3]
+            166..173 "1, 2, 3": tuple[Literal[1], Literal[2], Literal[3]]
+            186..187 "x": Unknown
+            190..191 "1": Literal[1]
+            186..191 "x < 1": Unknown
+            205..206 "y": Literal[1]
+            209..210 "1": Literal[1]
+            255..256 "y": Literal["one"]
+            259..264 "\"one\"": Literal["one"]
+            291..292 "y": Never
         "#]],
     );
 }
 
 #[test]
 fn test_for() {
-    check_infer(
+    check_infer_with_code_flow_analysis(
         r#"
 def f():
     x = 1
@@ -1489,6 +1521,17 @@ def f():
         x = "one"
     x
 "#,
-        expect![],
+        expect![[r#"
+            14..15 "x": Literal[1]
+            18..19 "1": Literal[1]
+            28..29 "y": int
+            33..34 "1": Literal[1]
+            36..37 "2": Literal[2]
+            39..40 "3": Literal[3]
+            33..40 "1, 2, 3": tuple[Literal[1], Literal[2], Literal[3]]
+            50..51 "x": Literal["one"]
+            54..59 "\"one\"": Literal["one"]
+            64..65 "x": Unknown
+        "#]],
     );
 }

@@ -144,7 +144,7 @@ impl std::error::Error for Cancelled {}
 
 #[derive(Clone, Debug, Default)]
 pub struct InferenceOptions {
-    pub infer_ctx_attrs: bool,
+    pub infer_ctx_attributes: bool,
     pub use_code_flow_analysis: bool,
 }
 

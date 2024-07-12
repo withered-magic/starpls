@@ -901,6 +901,31 @@ impl TyCtxt<'_> {
         }
     }
 
+    fn infer_assign(
+        &mut self,
+        file: File,
+        expr: ExprId,
+        source: Option<ExprId>,
+        expected_ty: Option<Ty>,
+    ) -> Ty {
+        let cached_ty = self
+            .cx
+            .type_of_expr
+            .get(&FileExprId::new(file, expr))
+            .cloned();
+        cached_ty.unwrap_or_else(|| {
+            source
+                .and_then(|source| {
+                    self.infer_source_expr_assign(file, source, expected_ty);
+                    self.cx
+                        .type_of_expr
+                        .get(&FileExprId::new(file, expr))
+                        .cloned()
+                })
+                .unwrap_or_else(|| self.unknown_ty())
+        })
+    }
+
     fn infer_source_expr_assign(&mut self, file: File, source: ExprId, expected_ty: Option<Ty>) {
         let key = FileExprId::new(file, source);
         if self.cx.source_assign_done.contains(&key) {
@@ -1034,26 +1059,7 @@ impl TyCtxt<'_> {
                                 var_defs.push((file, *expr, source.clone()));
                                 continue;
                             } else {
-                                let cached_ty = self
-                                    .cx
-                                    .type_of_expr
-                                    .get(&FileExprId::new(*file, *expr))
-                                    .cloned();
-                                cached_ty.unwrap_or_else(|| {
-                                    source
-                                        .and_then(|source| {
-                                            self.infer_source_expr_assign(
-                                                *file,
-                                                source,
-                                                known_ty.clone(),
-                                            );
-                                            self.cx
-                                                .type_of_expr
-                                                .get(&FileExprId::new(*file, *expr))
-                                                .cloned()
-                                        })
-                                        .unwrap_or_else(|| self.unknown_ty())
-                                })
+                                self.infer_assign(*file, *expr, *source, None)
                             }
                         }
                         ScopeDef::Function(func) => func.ty().into(),
@@ -1067,7 +1073,8 @@ impl TyCtxt<'_> {
                         _ => continue,
                     };
 
-                    known_ty = Some(ty)
+                    known_ty = Some(ty);
+                    break;
                 }
 
                 // Determine the effective type of the named expression. The effective type is the union of the types
@@ -1081,22 +1088,7 @@ impl TyCtxt<'_> {
                 // logic (i.e. `known_ty` is `Some`), we still compute the effective type if only to infer types
                 // for the relevant assignment statements.
                 let effective_ty = Ty::union(var_defs.into_iter().map(|(file, expr, source)| {
-                    let cached_ty = self
-                        .cx
-                        .type_of_expr
-                        .get(&FileExprId::new(*file, expr))
-                        .cloned();
-                    cached_ty.unwrap_or_else(|| {
-                        source
-                            .and_then(|source| {
-                                self.infer_source_expr_assign(*file, source, known_ty.clone());
-                                self.cx
-                                    .type_of_expr
-                                    .get(&FileExprId::new(*file, expr))
-                                    .cloned()
-                            })
-                            .unwrap_or_else(|| self.unknown_ty())
-                    })
+                    self.infer_assign(*file, expr, source, known_ty.clone())
                 }));
 
                 if known_ty.is_some() {
@@ -1177,6 +1169,8 @@ impl TyCtxt<'_> {
         self.infer_ref_from_flow_node(&cfg, file, execution_scope, name, start_ty, *start_node)
     }
 
+    /// Returning `None` here means that code-flow analysis failed and that a fallback type should
+    /// be returned instead.
     fn infer_ref_from_flow_node(
         &mut self,
         cfg: &CodeFlowGraph,
@@ -1237,7 +1231,7 @@ impl TyCtxt<'_> {
                     }
                     Ty::union(antecedent_tys.into_iter())
                 }
-                FlowNode::Loop { .. } => break None,
+                FlowNode::Loop { .. } => Ty::unknown(), // TODO(withered-magic): Correctly handle loops.
                 FlowNode::Unreachable { .. } => Ty::never(),
             };
 
@@ -1481,7 +1475,7 @@ impl TyCtxt<'_> {
         let ty = self
             .shared_state
             .options
-            .infer_ctx_attrs
+            .infer_ctx_attributes
             .then(|| self.infer_param_from_rule_usage(file, param))
             .and_then(|ty| ty)
             .unwrap_or_else(|| match &module(self.db, file)[param] {

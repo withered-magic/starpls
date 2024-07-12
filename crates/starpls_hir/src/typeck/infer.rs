@@ -8,8 +8,9 @@ use starpls_syntax::{
 
 use crate::{
     def::{
+        codeflow::{code_flow_graph, CodeFlowGraph, FlowNode, FlowNodeId},
         resolver::{Export, Resolver},
-        scope::{LoadItemDef, ParameterDef, ScopeDef, VariableDef},
+        scope::{ExecutionScopeId, LoadItemDef, ParameterDef, ScopeDef, ScopeHirId, VariableDef},
         Argument, Expr, ExprId, Literal, LiteralString, LoadItem, LoadItemId, LoadStmt, Param,
         ParamId, Stmt,
     },
@@ -20,9 +21,9 @@ use crate::{
         builtins::builtin_types,
         call::{Slot, SlotProvider, Slots},
         intrinsics::{IntrinsicFunctionParam, IntrinsicTypes},
-        resolve_type_ref, resolve_type_ref_opt, DictLiteral, FileExprId, FileLoadItemId,
-        FileLoadStmt, FileParamId, Protocol, Provider, RuleKind, Struct, Substitution, Tuple, Ty,
-        TyCtxt, TyData, TyKind, TypeRef, TypecheckCancelled,
+        resolve_type_ref, resolve_type_ref_opt, CodeFlowCacheKey, DictLiteral, FileExprId,
+        FileLoadItemId, FileLoadStmt, FileParamId, Protocol, Provider, RuleKind, Struct,
+        Substitution, Tuple, Ty, TyCtxt, TyData, TyKind, TypeRef, TypecheckCancelled,
     },
     Name,
 };
@@ -94,48 +95,25 @@ impl TyCtxt<'_> {
         let curr_module = module(db, file);
         let ty = match &curr_module[expr] {
             Expr::Name { name } => {
-                let resolver = Resolver::new_for_expr(db, file, expr);
-                resolver
-                    .resolve_name(name)
-                    .and_then(|decls| decls.into_iter().last())
-                    .map(|decl| match decl {
-                        ScopeDef::Variable(VariableDef { file, expr, source }) => self
-                            .cx
-                            .type_of_expr
-                            .get(&FileExprId::new(file, expr))
-                            .cloned()
-                            .unwrap_or_else(|| {
-                                source
-                                    .and_then(|source| {
-                                        self.infer_source_expr_assign(file, source);
-                                        self.cx
-                                            .type_of_expr
-                                            .get(&FileExprId::new(file, expr))
-                                            .cloned()
-                                    })
-                                    .unwrap_or_else(|| self.unknown_ty())
-                            }),
-                        ScopeDef::Function(func) => func.ty(),
-                        ScopeDef::IntrinsicFunction(func) => {
-                            TyKind::IntrinsicFunction(func, Substitution::new_identity(0)).intern()
-                        }
-                        ScopeDef::BuiltinFunction(func) => TyKind::BuiltinFunction(func).intern(),
-                        ScopeDef::BuiltinVariable(type_ref) => resolve_type_ref(db, &type_ref).0,
-                        ScopeDef::Parameter(ParameterDef { func, index }) => func
-                            .map(|func| self.infer_param(file, func.params(db)[index]))
-                            .unwrap_or_else(|| self.unknown_ty()),
-                        ScopeDef::LoadItem(LoadItemDef { load_item, .. }) => {
-                            self.infer_load_item(file, load_item)
-                        }
-                    })
-                    .unwrap_or_else(|| {
-                        self.add_expr_diagnostic_error(
-                            file,
-                            expr,
-                            format!("\"{}\" is not defined", name.as_str()),
-                        );
-                        self.unbound_ty()
-                    })
+                let ty = self
+                    .infer_name_expr(file, expr, name)
+                    .unwrap_or_else(|| self.unbound_ty());
+
+                // Report unbound and possibly unbound variables.
+                if ty.is_unbound() {
+                    self.add_expr_diagnostic_error(
+                        file,
+                        expr,
+                        format!("\"{}\" is not defined", name.as_str()),
+                    );
+                } else if ty.is_possibly_unbound() {
+                    self.add_expr_diagnostic_error(
+                        file,
+                        expr,
+                        format!("\"{}\" is possibly unbound", name.as_str()),
+                    )
+                }
+                ty
             }
             Expr::List { exprs } => {
                 // Determine the full type of the list. If all of the specified elements are of the same type T, then
@@ -145,16 +123,17 @@ impl TyCtxt<'_> {
             }
             Expr::ListComp { expr, .. } => TyKind::List(self.infer_expr(file, *expr)).intern(),
             Expr::Dict { entries } => {
-                if entries.len() > 32 {
-                    return self.set_expr_type(
-                        file,
-                        expr,
-                        Ty::dict(Ty::unknown(), Ty::unknown(), None),
-                    );
-                }
-
-                let key_ty =
-                    Ty::union(entries.iter().map(|entry| self.infer_expr(file, entry.key)));
+                let key_ty = match entries.len() {
+                    0 => Ty::unknown(),
+                    len if len > 32 => {
+                        return self.set_expr_type(
+                            file,
+                            expr,
+                            Ty::dict(Ty::unknown(), Ty::unknown(), None),
+                        );
+                    }
+                    _ => Ty::union(entries.iter().map(|entry| self.infer_expr(file, entry.key))),
+                };
                 let value_ty = self.get_common_type(
                     file,
                     entries.iter().map(|entry| entry.value),
@@ -922,7 +901,46 @@ impl TyCtxt<'_> {
         }
     }
 
-    fn infer_source_expr_assign(&mut self, file: File, source: ExprId) {
+    fn infer_assign(
+        &mut self,
+        file: File,
+        expr: ExprId,
+        source: Option<ExprId>,
+        expected_ty: Option<Ty>,
+    ) -> Ty {
+        let cached_ty = self
+            .cx
+            .type_of_expr
+            .get(&FileExprId::new(file, expr))
+            .cloned();
+        cached_ty.unwrap_or_else(|| {
+            source
+                .and_then(|source| {
+                    self.infer_source_expr_assign(file, source, expected_ty);
+                    self.cx
+                        .type_of_expr
+                        .get(&FileExprId::new(file, expr))
+                        .cloned()
+                })
+                .unwrap_or_else(|| self.unknown_ty())
+        })
+    }
+
+    fn infer_source_expr_assign(&mut self, file: File, source: ExprId, expected_ty: Option<Ty>) {
+        let key = FileExprId::new(file, source);
+        if self.cx.source_assign_done.contains(&key) {
+            return;
+        }
+        self.infer_source_expr_assign_inner(file, source, expected_ty);
+        self.cx.source_assign_done.insert(key);
+    }
+
+    fn infer_source_expr_assign_inner(
+        &mut self,
+        file: File,
+        source: ExprId,
+        expected_ty: Option<Ty>,
+    ) {
         // Find the parent assignment node. This can be either an assignment statement (`x = 0`), a `for` statement (`for x in 1, 2, 3`), or
         // a for comp clause in a list/dict comprehension (`[x + 1 for x in [1, 2, 3]]`).
         let db = self.db;
@@ -946,21 +964,28 @@ impl TyCtxt<'_> {
         // Handle standard assigments, e.g. `x, y = 1, 2`.
         if let Some(node) = ast::AssignStmt::cast(parent.clone()) {
             let ptr = AstPtr::new(&ast::Statement::Assign(node.clone()));
-            let expected_ty = match &module(db, file)[*source_map.stmt_map.get(&ptr).unwrap()] {
-                Stmt::Assign { type_ref, .. } => type_ref.as_ref().and_then(|type_ref| {
-                    let (expected_ty, errors) = resolve_type_ref(db, &type_ref.0);
-                    if errors.is_empty() {
-                        Some(expected_ty)
-                    } else {
-                        // Add TypeRef resolution errors.
-                        for error in errors.iter() {
-                            self.add_diagnostic_for_range(file, Severity::Error, type_ref.1, error);
+            let expected_ty = expected_ty.or_else(|| {
+                match &module(db, file)[*source_map.stmt_map.get(&ptr).unwrap()] {
+                    Stmt::Assign { type_ref, .. } => type_ref.as_ref().and_then(|type_ref| {
+                        let (expected_ty, errors) = resolve_type_ref(db, &type_ref.0);
+                        if errors.is_empty() {
+                            Some(expected_ty)
+                        } else {
+                            // Add TypeRef resolution errors.
+                            for error in errors.iter() {
+                                self.add_diagnostic_for_range(
+                                    file,
+                                    Severity::Error,
+                                    type_ref.1,
+                                    error,
+                                );
+                            }
+                            None
                         }
-                        None
-                    }
-                }),
-                _ => None,
-            };
+                    }),
+                    _ => None,
+                }
+            });
 
             if let Some(lhs) = node.lhs() {
                 let lhs_ptr = AstPtr::new(&lhs);
@@ -988,9 +1013,10 @@ impl TyCtxt<'_> {
         };
 
         let sub_ty = match source_ty.kind() {
-            TyKind::List(ty) => ty.clone(),
+            TyKind::List(ty) | TyKind::Tuple(Tuple::Variable(ty)) => ty.clone(),
+            TyKind::Tuple(Tuple::Simple(tys)) => Ty::union(tys.iter().cloned()),
             TyKind::Dict(key_ty, _, _) => key_ty.clone(),
-            TyKind::Tuple(_) | TyKind::Any => self.any_ty(),
+            TyKind::Any => self.any_ty(),
             TyKind::Range => self.int_ty(),
             TyKind::StringElems => self.string_ty(),
             TyKind::BytesElems => self.int_ty(),
@@ -1014,6 +1040,245 @@ impl TyCtxt<'_> {
         }
     }
 
+    fn infer_name_expr(&mut self, file: File, expr: ExprId, name: &Name) -> Option<Ty> {
+        let resolver = Resolver::new_for_expr_execution_scope(self.db, file, expr);
+        let expr_scope = resolver.scope_for_expr(expr)?;
+        let curr_execution_scope = resolver.execution_scope_for_expr(expr)?;
+        let (def_execution_scope, effective_ty) = match resolver.resolve_name(name) {
+            Some((def_execution_scope, defs)) => {
+                let mut var_defs = Vec::new();
+
+                // The type of a named expression may already be unambigiously known, e.g. in the case of
+                // annotated variable declarations or function definitions. In this case, we always use
+                // this known type.
+                let mut known_ty = None;
+                for def in defs.skip_while(|def| def.scope > expr_scope) {
+                    let ty = match def.def {
+                        ScopeDef::Variable(VariableDef { file, expr, source }) => {
+                            if self.shared_state.options.use_code_flow_analysis {
+                                var_defs.push((file, *expr, source.clone()));
+                                continue;
+                            } else {
+                                self.infer_assign(*file, *expr, *source, None)
+                            }
+                        }
+                        ScopeDef::Function(func) => func.ty().into(),
+                        ScopeDef::Parameter(ParameterDef { func, index }) => func
+                            .map(|func| self.infer_param(file, func.params(self.db)[*index]))
+                            .unwrap_or_else(|| self.unknown_ty()),
+                        ScopeDef::LoadItem(LoadItemDef { load_item, .. }) => {
+                            self.infer_load_item(file, *load_item)
+                        }
+                        // This should be unreachable.
+                        _ => continue,
+                    };
+
+                    known_ty = Some(ty);
+                    break;
+                }
+
+                // Determine the effective type of the named expression. The effective type is the union of the types
+                // of all the values assigned to the name in question. For example, given:
+                //
+                // x = 1
+                // x = "one"
+                //
+                // then the effective type of `x` would be `int | string`. This type will be further narrowed by
+                // the code-flow analysis done below. NOTE: Even if the type has already been determined from the above
+                // logic (i.e. `known_ty` is `Some`), we still compute the effective type if only to infer types
+                // for the relevant assignment statements.
+                let effective_ty = Ty::union(var_defs.into_iter().map(|(file, expr, source)| {
+                    self.infer_assign(*file, expr, source, known_ty.clone())
+                }));
+
+                if known_ty.is_some() {
+                    return known_ty;
+                }
+
+                (def_execution_scope, effective_ty)
+            }
+
+            None => {
+                return Some(
+                    match resolver
+                        .resolve_name_in_prelude_or_builtins(name)?
+                        .iter()
+                        .next()?
+                    {
+                        ScopeDef::IntrinsicFunction(func) => {
+                            TyKind::IntrinsicFunction(*func, Substitution::new_identity(0)).intern()
+                        }
+                        ScopeDef::BuiltinFunction(func) => TyKind::BuiltinFunction(*func).intern(),
+                        ScopeDef::BuiltinVariable(type_ref) => {
+                            resolve_type_ref(self.db, &type_ref).0
+                        }
+                        // This should be unreachable.
+                        _ => return None,
+                    },
+                );
+            }
+        };
+
+        // TODO(withered-magic): Should we use the fallback type for scenarios that we don't support yet, e.g. loops?
+        let (start_ty, fallback_ty) = if def_execution_scope != curr_execution_scope {
+            let cfg = code_flow_graph(self.db, file).cfg(self.db);
+            let hir_id = match def_execution_scope {
+                ExecutionScopeId::Module => ScopeHirId::Module.into(),
+                ExecutionScopeId::Def(stmt) => stmt.into(),
+                ExecutionScopeId::Comp(expr) => expr.into(),
+            };
+            let start_node = cfg.hir_to_flow_node.get(&hir_id)?;
+            let start_ty = self
+                .infer_ref_from_flow_node(
+                    cfg,
+                    file,
+                    def_execution_scope,
+                    name,
+                    &self.unbound_ty(),
+                    *start_node,
+                )
+                .unwrap_or_else(|| self.unknown_ty());
+            (start_ty.clone(), start_ty)
+        } else {
+            (self.unbound_ty(), effective_ty)
+        };
+
+        // See if we can narrow the effective type further through code-flow analysis. If not, then
+        // fall back to the effective type.
+        Some(
+            self.infer_expr_from_code_flow(file, expr, curr_execution_scope, name, &start_ty)
+                .unwrap_or(fallback_ty),
+        )
+    }
+
+    fn infer_expr_from_code_flow(
+        &mut self,
+        file: File,
+        expr: ExprId,
+        execution_scope: ExecutionScopeId,
+        name: &Name,
+        start_ty: &Ty,
+    ) -> Option<Ty> {
+        // If an expression is missing its corresponding node in the code flow graph, that
+        // means the expression is unreachable. We use the `Never` type to represent this case.
+        let cfg = code_flow_graph(self.db, file).cfg(self.db);
+        let start_node = match cfg.expr_to_node.get(&expr) {
+            Some(start_node) => start_node,
+            None => return Some(TyKind::Never.intern()),
+        };
+        self.infer_ref_from_flow_node(&cfg, file, execution_scope, name, start_ty, *start_node)
+    }
+
+    /// Returning `None` here means that code-flow analysis failed and that a fallback type should
+    /// be returned instead.
+    fn infer_ref_from_flow_node(
+        &mut self,
+        cfg: &CodeFlowGraph,
+        file: File,
+        execution_scope: ExecutionScopeId,
+        name: &Name,
+        start_ty: &Ty,
+        start_node: FlowNodeId,
+    ) -> Option<Ty> {
+        if let Some(res) =
+            self.read_cached_ref_type_at_flow_node(file, execution_scope, name, start_node)
+        {
+            return res;
+        }
+
+        let mut curr_node_id = start_node;
+        let res = 'outer: loop {
+            let curr_node = &cfg.flow_nodes[curr_node_id];
+            let curr_node_ty = match &curr_node {
+                FlowNode::Start => start_ty.clone(),
+                FlowNode::Assign {
+                    expr,
+                    name: node_name,
+                    source,
+                    antecedent,
+                    execution_scope: assign_execution_scope,
+                } => {
+                    // We need to do the extra check for the execution scope here to handle execution scopes from things
+                    // like list/dict comprehensions.
+                    if name != node_name || execution_scope != *assign_execution_scope {
+                        curr_node_id = *antecedent;
+                        continue;
+                    }
+
+                    self.infer_source_expr_assign(file, *source, None);
+                    self.cx
+                        .type_of_expr
+                        .get(&FileExprId::new(file, *expr))
+                        .cloned()
+                        .unwrap_or_else(|| Ty::never())
+                }
+                FlowNode::Branch { antecedents } => {
+                    let mut antecedent_tys = Vec::with_capacity(antecedents.len());
+                    for antecedent in antecedents {
+                        match self.infer_ref_from_flow_node(
+                            cfg,
+                            file,
+                            execution_scope,
+                            name,
+                            start_ty,
+                            *antecedent,
+                        ) {
+                            Some(antecedent_ty) => {
+                                antecedent_tys.push(antecedent_ty);
+                            }
+                            None => break 'outer None,
+                        }
+                    }
+                    Ty::union(antecedent_tys.into_iter())
+                }
+                FlowNode::Loop { .. } => Ty::unknown(), // TODO(withered-magic): Correctly handle loops.
+                FlowNode::Unreachable { .. } => Ty::never(),
+            };
+
+            break Some(curr_node_ty);
+        };
+
+        self.cache_ref_type_at_flow_node(file, execution_scope, name, start_node, res)
+    }
+
+    fn read_cached_ref_type_at_flow_node(
+        &self,
+        file: File,
+        execution_scope: ExecutionScopeId,
+        name: &Name,
+        flow_node: FlowNodeId,
+    ) -> Option<Option<Ty>> {
+        self.cx
+            .flow_node_type_cache
+            .get(&CodeFlowCacheKey {
+                file,
+                execution_scope,
+                name: name.clone(),
+                flow_node,
+            })
+            .cloned()
+    }
+
+    fn cache_ref_type_at_flow_node(
+        &mut self,
+        file: File,
+        execution_scope: ExecutionScopeId,
+        name: &Name,
+        flow_node: FlowNodeId,
+        res: Option<Ty>,
+    ) -> Option<Ty> {
+        self.cx.flow_node_type_cache.insert(
+            CodeFlowCacheKey {
+                file,
+                execution_scope,
+                name: name.clone(),
+                flow_node,
+            },
+            res.clone(),
+        );
+        res
+    }
+
     fn assign_expr_source_ty(
         &mut self,
         file: File,
@@ -1032,7 +1297,8 @@ impl TyCtxt<'_> {
                             file,
                             root,
                             format!(
-                                "Expected value of type \"{}\"",
+                                "Expression of type \"{}\" cannot be assigned to variable of type \"{}\"",
+                                source_ty.display(self.db),
                                 expected_ty.display(self.db)
                             ),
                         )
@@ -1209,7 +1475,7 @@ impl TyCtxt<'_> {
         let ty = self
             .shared_state
             .options
-            .infer_ctx_attrs
+            .infer_ctx_attributes
             .then(|| self.infer_param_from_rule_usage(file, param))
             .and_then(|ty| ty)
             .unwrap_or_else(|| match &module(self.db, file)[param] {

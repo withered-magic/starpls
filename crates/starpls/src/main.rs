@@ -48,7 +48,9 @@ pub(crate) struct ServerArgs {
     bazel_path: Option<String>,
     /// Infer attributes on a rule implementation function's context parameter.
     #[clap(long = "experimental_infer_ctx_attributes", default_value_t = false)]
-    experimental_infer_ctx_attributes: bool,
+    infer_ctx_attributes: bool,
+    #[clap(long = "experimental_use_code_flow_analysis", default_value_t = false)]
+    use_code_flow_analysis: bool,
 }
 
 fn main() -> anyhow::Result<()> {

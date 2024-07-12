@@ -53,6 +53,10 @@ pub(crate) fn parameter_type(p: &mut Parser) {
             union_type(p);
             m.complete(p, KWARGS_DICT_PARAMETER_TYPE);
         }
+        ELLIPSIS => {
+            p.bump(ELLIPSIS);
+            m.complete(p, SIMPLE_PARAMETER_TYPE);
+        }
         _ => unreachable!(),
     }
 }

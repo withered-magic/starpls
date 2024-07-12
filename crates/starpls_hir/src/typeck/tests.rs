@@ -15,6 +15,17 @@ fn check_infer(input: &str, expect: Expect) {
     check_infer_with_options(input, expect, Default::default())
 }
 
+fn check_infer_with_code_flow_analysis(input: &str, expect: Expect) {
+    check_infer_with_options(
+        input,
+        expect,
+        InferenceOptions {
+            use_code_flow_analysis: true,
+            ..Default::default()
+        },
+    )
+}
+
 fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptions) {
     let mut builder = TestDatabaseBuilder::default();
     builder.add_function("provider");
@@ -274,7 +285,7 @@ greeting = 1 # type: string
             1..9 "greeting": string
             12..13 "1": Literal[1]
 
-            12..13 Expected value of type "string"
+            12..13 Expression of type "Literal[1]" cannot be assigned to variable of type "string"
         "#]],
     )
 }
@@ -1101,6 +1112,32 @@ def _impl(ctx):
             108..111 "ctx": ctx
             108..119 "ctx.outputs": struct
             108..123 "ctx.outputs.qux": File
+            "#]],
+    );
+}
+
+#[test]
+fn test_simple_if_stmt() {
+    check_infer_with_code_flow_analysis(
+        r#"
+cond = 1 < 2
+def f():
+    x = 0
+    if cond:
+        x = "less"
+    x
+"#,
+        expect![[r#"
+            1..5 "cond": bool
+            8..9 "1": Literal[1]
+            12..13 "2": Literal[2]
+            8..13 "1 < 2": bool
+            27..28 "x": Literal[0]
+            31..32 "0": Literal[0]
+            40..44 "cond": bool
+            54..55 "x": Literal["less"]
+            58..64 "\"less\"": Literal["less"]
+            69..70 "x": string | int
         "#]],
     );
 }
@@ -1163,7 +1200,8 @@ my_rule = repository_rule(
             269..387 "repository_rule(\n    implementation = _repository_rule_impl,\n    attrs = {\n        \"srcs\": attr.label_list(),\n    },\n)": repository_rule
         "#]],
         InferenceOptions {
-            infer_ctx_attrs: true,
+            infer_ctx_attributes: true,
+            use_code_flow_analysis: true,
         },
     );
 }
@@ -1201,6 +1239,37 @@ my_rule = rule(
             150..167 "attr.label_list()": Attribute
             132..174 "{\n        \"srcs\": attr.label_list(),\n    }": dict[string, Attribute]
             81..177 "rule(\n    implementation = _rule_impl,\n    attrs = {\n        \"srcs\": attr.label_list(),\n    },\n)": rule
+        "#]],
+    );
+}
+
+#[test]
+fn test_if_elif_stmt() {
+    check_infer_with_code_flow_analysis(
+        r#"
+cond = 1 < 2
+def f():
+    x = 0
+    if cond:
+        x = "less"
+    elif cond:
+        x = 1.
+    x
+"#,
+        expect![[r#"
+            1..5 "cond": bool
+            8..9 "1": Literal[1]
+            12..13 "2": Literal[2]
+            8..13 "1 < 2": bool
+            27..28 "x": Literal[0]
+            31..32 "0": Literal[0]
+            40..44 "cond": bool
+            54..55 "x": Literal["less"]
+            58..64 "\"less\"": Literal["less"]
+            74..78 "cond": bool
+            88..89 "x": float
+            92..94 "1.": float
+            99..100 "x": string | float | int
         "#]],
     );
 }
@@ -1280,6 +1349,189 @@ e = (1, 2) # type: tuple[int, ..., int]
             70..87 "..." is not allowed in this context
             99..117 "..." is not allowed in this context
             129..157 "..." is not allowed in this context
+        "#]],
+    );
+}
+
+#[test]
+fn test_if_else_stmts() {
+    check_infer_with_code_flow_analysis(
+        r#"
+cond = 1 < 2
+def f():
+    x = 0
+    if cond:
+        x = "less"
+    else:
+        x = 1.
+    x
+"#,
+        expect![[r#"
+            1..5 "cond": bool
+            8..9 "1": Literal[1]
+            12..13 "2": Literal[2]
+            8..13 "1 < 2": bool
+            27..28 "x": Literal[0]
+            31..32 "0": Literal[0]
+            40..44 "cond": bool
+            54..55 "x": Literal["less"]
+            58..64 "\"less\"": Literal["less"]
+            83..84 "x": float
+            87..89 "1.": float
+            94..95 "x": string | float
+        "#]],
+    );
+}
+
+#[test]
+fn test_nested_if_stmts() {
+    check_infer_with_code_flow_analysis(
+        r#"
+cond = 1 < 2
+def f():
+    x = 0
+    if cond:
+        x = "less"
+    else:
+        if cond:
+            x = 1.
+        elif cond:
+            x = b""
+        x
+        if cond:
+            x = True
+        x
+    x
+"#,
+        expect![[r#"
+            1..5 "cond": bool
+            8..9 "1": Literal[1]
+            12..13 "2": Literal[2]
+            8..13 "1 < 2": bool
+            27..28 "x": Literal[0]
+            31..32 "0": Literal[0]
+            40..44 "cond": bool
+            54..55 "x": Literal["less"]
+            58..64 "\"less\"": Literal["less"]
+            86..90 "cond": bool
+            104..105 "x": float
+            108..110 "1.": float
+            124..128 "cond": bool
+            142..143 "x": bytes
+            146..149 "b\"\"": bytes
+            158..159 "x": float | bytes | int
+            171..175 "cond": bool
+            189..190 "x": Literal[True]
+            193..197 "True": Literal[True]
+            206..207 "x": bool | float | bytes | int
+            212..213 "x": string | bool | float | bytes | int
+        "#]],
+    );
+}
+
+#[test]
+fn test_possibly_unbound() {
+    check_infer_with_code_flow_analysis(
+        r#"
+def f():
+    if 1 < 2:
+        x = 1
+    x
+"#,
+        expect![[r#"
+            17..18 "1": Literal[1]
+            21..22 "2": Literal[2]
+            17..22 "1 < 2": bool
+            32..33 "x": Literal[1]
+            36..37 "1": Literal[1]
+            42..43 "x": int | Unbound
+
+            42..43 "x" is possibly unbound
+        "#]],
+    )
+}
+
+#[test]
+fn test_unreachable() {
+    check_infer_with_code_flow_analysis(
+        r#"
+def f():
+    for x in 1, 2, 3:
+        break
+        y = 1
+        y
+
+def g():
+    for x in 1, 2, 3:
+        continue
+        z = 2
+        z
+
+def h():
+    for x in 1, 2, 3:
+        if x < 1:
+            y = 1
+            break
+        else:
+            y = "one"
+            break
+        y
+"#,
+        expect![[r#"
+            18..19 "x": int
+            23..24 "1": Literal[1]
+            26..27 "2": Literal[2]
+            29..30 "3": Literal[3]
+            23..30 "1, 2, 3": tuple[Literal[1], Literal[2], Literal[3]]
+            54..55 "y": Never
+            58..59 "1": Literal[1]
+            68..69 "y": Never
+            88..89 "x": int
+            93..94 "1": Literal[1]
+            96..97 "2": Literal[2]
+            99..100 "3": Literal[3]
+            93..100 "1, 2, 3": tuple[Literal[1], Literal[2], Literal[3]]
+            127..128 "z": Never
+            131..132 "2": Literal[2]
+            141..142 "z": Never
+            161..162 "x": int
+            166..167 "1": Literal[1]
+            169..170 "2": Literal[2]
+            172..173 "3": Literal[3]
+            166..173 "1, 2, 3": tuple[Literal[1], Literal[2], Literal[3]]
+            186..187 "x": Unknown
+            190..191 "1": Literal[1]
+            186..191 "x < 1": Unknown
+            205..206 "y": Literal[1]
+            209..210 "1": Literal[1]
+            255..256 "y": Literal["one"]
+            259..264 "\"one\"": Literal["one"]
+            291..292 "y": Never
+        "#]],
+    );
+}
+
+#[test]
+fn test_for() {
+    check_infer_with_code_flow_analysis(
+        r#"
+def f():
+    x = 1
+    for y in 1, 2, 3:
+        x = "one"
+    x
+"#,
+        expect![[r#"
+            14..15 "x": Literal[1]
+            18..19 "1": Literal[1]
+            28..29 "y": int
+            33..34 "1": Literal[1]
+            36..37 "2": Literal[2]
+            39..40 "3": Literal[3]
+            33..40 "1, 2, 3": tuple[Literal[1], Literal[2], Literal[3]]
+            50..51 "x": Literal["one"]
+            54..59 "\"one\"": Literal["one"]
+            64..65 "x": Unknown
         "#]],
     );
 }

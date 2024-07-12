@@ -86,6 +86,7 @@ impl DisplayWithDb for TyKind {
             TyKind::Unbound => "Unbound",
             TyKind::Unknown => "Unknown",
             TyKind::Any => "Any",
+            TyKind::Never => "Never",
             TyKind::None => "None",
             TyKind::Bool(Some(b)) => {
                 f.write_str("Literal[")?;

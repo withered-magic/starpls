@@ -1,4 +1,4 @@
-use std::collections::hash_map::Entry;
+use std::{collections::hash_map::Entry, iter};
 
 use rustc_hash::FxHashMap;
 use starpls_bazel::APIContext;
@@ -7,7 +7,10 @@ use starpls_syntax::{TextRange, TextSize};
 
 use crate::{
     def::{
-        scope::{module_scopes, Scope, ScopeDef, ScopeHirId, ScopeId, Scopes, VariableDef},
+        scope::{
+            module_scopes, ExecutionScopeId, Scope, ScopeDef, ScopeHirId, ScopeId, Scopes,
+            VariableDef,
+        },
         ExprId, Function, ModuleSourceMap,
     },
     source_map,
@@ -72,14 +75,33 @@ impl<'a> Resolver<'a> {
         })
     }
 
-    pub(crate) fn resolve_name(&self, name: &Name) -> Option<Vec<ScopeDef>> {
-        // Check module scopes first.
-        for scope in self.scopes() {
-            if let Some(declarations) = scope.defs.get(&name) {
-                return Some(declarations.clone());
-            }
-        }
+    pub(crate) fn resolve_name(
+        &'a self,
+        name: &'a Name,
+    ) -> Option<(ExecutionScopeId, impl Iterator<Item = SymbolDef<'a>> + '_)> {
+        let mut defs = self
+            .scopes_with_id()
+            .filter_map(move |(scope_id, scope)| {
+                scope
+                    .defs
+                    .get(&name)
+                    .map(|defs| (scope_id, scope.execution_scope, defs))
+            })
+            .flat_map(|(scope, execution_scope, defs)| {
+                defs.iter().map(move |def| SymbolDef {
+                    scope,
+                    execution_scope,
+                    def,
+                })
+            });
+        let first = defs.next()?;
+        let first_execution_scope = first.execution_scope;
+        let defs = iter::once(first)
+            .chain(defs.take_while(move |def| def.execution_scope == first_execution_scope));
+        Some((first_execution_scope, defs))
+    }
 
+    pub(crate) fn resolve_name_in_prelude_or_builtins(&self, name: &Name) -> Option<Vec<ScopeDef>> {
         // Fall back to prelude, and then to the builtins scope.
         let mut defs = None;
         if self.file.api_context(self.db) == Some(APIContext::Build) {
@@ -93,16 +115,14 @@ impl<'a> Resolver<'a> {
                 .map(|export| vec![export.into()])
         }
 
-        defs.or_else(|| self.resolve_name_in_builtins(name))
-    }
-
-    fn resolve_name_in_builtins(&self, name: &Name) -> Option<Vec<ScopeDef>> {
-        intrinsic_functions(self.db)
-            .functions(self.db)
-            .get(name)
-            .copied()
-            .map(|func| vec![ScopeDef::IntrinsicFunction(func)])
-            .or_else(|| self.resolve_name_in_builtin_globals(name))
+        defs.or_else(|| {
+            intrinsic_functions(self.db)
+                .functions(self.db)
+                .get(name)
+                .copied()
+                .map(|func| vec![ScopeDef::IntrinsicFunction(func)])
+        })
+        .or_else(|| self.resolve_name_in_builtin_globals(name))
     }
 
     fn resolve_name_in_builtin_globals(&self, name: &Name) -> Option<Vec<ScopeDef>> {
@@ -224,6 +244,13 @@ impl<'a> Resolver<'a> {
             .map(|scope| &self.scopes.scopes[*scope])
     }
 
+    fn scopes_with_id(&self) -> impl Iterator<Item = (ScopeId, &Scope)> {
+        self.scope_chain
+            .iter()
+            .rev()
+            .map(|scope| (*scope, &self.scopes.scopes[*scope]))
+    }
+
     pub(crate) fn new_for_module(db: &'a dyn Db, file: File) -> Self {
         let scopes = module_scopes(db, file).scopes(db);
         let scope = scopes.scope_for_hir_id(ScopeHirId::Module);
@@ -233,6 +260,12 @@ impl<'a> Resolver<'a> {
     pub(crate) fn new_for_expr(db: &'a dyn Db, file: File, expr: ExprId) -> Self {
         let scopes = module_scopes(db, file).scopes(db);
         let scope = scopes.scope_for_hir_id(expr);
+        Self::from_parts(db, file, scopes, scope)
+    }
+
+    pub(crate) fn new_for_expr_execution_scope(db: &'a dyn Db, file: File, expr: ExprId) -> Self {
+        let scopes = module_scopes(db, file).scopes(db);
+        let scope = scopes.scope_for_expr_execution_scope(expr);
         Self::from_parts(db, file, scopes, scope)
     }
 
@@ -264,6 +297,14 @@ impl<'a> Resolver<'a> {
                 find_nearest_predecessor(&scopes, &source_map, hir_range, offset).unwrap_or(scope)
             });
         Self::from_parts(db, file, scopes, scope)
+    }
+
+    pub(crate) fn scope_for_expr(&self, expr: ExprId) -> Option<ScopeId> {
+        self.scopes.scope_for_hir_id(expr)
+    }
+
+    pub(crate) fn execution_scope_for_expr(&self, expr: ExprId) -> Option<ExecutionScopeId> {
+        self.scopes.execution_scope_for_expr(expr)
     }
 
     fn from_parts(db: &'a dyn Db, file: File, scopes: &'a Scopes, scope: Option<ScopeId>) -> Self {
@@ -316,4 +357,11 @@ fn find_nearest_predecessor(
             }
         })
         .map(|(_, scope)| scope)
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct SymbolDef<'a> {
+    pub(crate) scope: ScopeId,
+    pub(crate) execution_scope: ExecutionScopeId,
+    pub(crate) def: &'a ScopeDef,
 }

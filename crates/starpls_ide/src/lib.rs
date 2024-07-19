@@ -7,7 +7,7 @@ use starpls_bazel::{APIContext, Builtins};
 use starpls_common::{
     Db, Diagnostic, Dialect, File, FileId, FileInfo, LoadItemCandidate, ResolvedPath,
 };
-use starpls_hir::{BuiltinDefs, Db as _, ExprId, GlobalCtxt, LoadItemId, LoadStmt, ParamId, Ty};
+use starpls_hir::{BuiltinDefs, Db as _, GlobalCtxt};
 pub use starpls_hir::{Cancelled, InferenceOptions};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use starpls_test_util::make_test_builtins;
@@ -176,35 +176,6 @@ impl starpls_common::Db for Database {
 }
 
 impl starpls_hir::Db for Database {
-    fn infer_expr(&self, file: File, expr: ExprId) -> Ty {
-        self.gcx.with_tcx(self, |tcx| tcx.infer_expr(file, expr))
-    }
-
-    fn infer_param(&self, file: File, param: ParamId) -> Ty {
-        self.gcx.with_tcx(self, |tcx| tcx.infer_param(file, param))
-    }
-
-    fn infer_load_item(&self, file: File, load_item: LoadItemId) -> Ty {
-        self.gcx
-            .with_tcx(self, |tcx| tcx.infer_load_item(file, load_item))
-    }
-
-    fn resolve_load_stmt(&self, file: File, load_stmt: LoadStmt) -> Option<File> {
-        self.gcx
-            .with_tcx(self, |tcx| tcx.resolve_load_stmt(file, load_stmt))
-    }
-
-    fn resolve_call_expr_active_param(
-        &self,
-        file: File,
-        expr: ExprId,
-        active_arg: usize,
-    ) -> Option<usize> {
-        self.gcx.with_tcx(self, |tcx| {
-            tcx.resolve_call_expr_active_param(file, expr, active_arg)
-        })
-    }
-
     fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins, rules: Builtins) {
         let defs = match self.builtin_defs.entry(dialect) {
             Entry::Occupied(entry) => *entry.get(),
@@ -233,6 +204,10 @@ impl starpls_hir::Db for Database {
 
     fn get_bazel_prelude_file(&self) -> Option<FileId> {
         self.prelude_file
+    }
+
+    fn gcx(&self) -> &GlobalCtxt {
+        &self.gcx
     }
 }
 

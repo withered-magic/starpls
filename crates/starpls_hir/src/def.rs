@@ -35,7 +35,7 @@ pub type LoadItemId = Id<LoadItem>;
 pub type LoadItemPtr = AstPtr<ast::LoadItem>;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Module {
+pub(crate) struct Module {
     pub(crate) exprs: Arena<Expr>,
     pub(crate) stmts: Arena<Stmt>,
     pub(crate) params: Arena<Param>,
@@ -47,13 +47,11 @@ pub struct Module {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ModuleSourceMap {
+pub(crate) struct ModuleSourceMap {
     pub root: ModulePtr,
     pub expr_map: FxHashMap<ExprPtr, ExprId>,
     pub expr_map_back: FxHashMap<ExprId, ExprPtr>,
-    #[allow(private_interfaces)]
     pub stmt_map: FxHashMap<StmtPtr, StmtId>,
-    #[allow(private_interfaces)]
     pub stmt_map_back: FxHashMap<StmtId, StmtPtr>,
     pub param_map: FxHashMap<ParamPtr, ParamId>,
     pub param_map_back: FxHashMap<ParamId, ParamPtr>,
@@ -103,9 +101,8 @@ impl Index<LoadItemId> for Module {
     }
 }
 
-#[allow(private_interfaces)]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Expr {
+pub(crate) enum Expr {
     Missing,
     Name {
         name: Name,
@@ -303,9 +300,8 @@ pub(crate) enum Argument {
     UnpackedDict { expr: ExprId },
 }
 
-#[allow(private_interfaces)]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Param {
+pub(crate) enum Param {
     Simple {
         name: Name,
         default: Option<ExprId>,

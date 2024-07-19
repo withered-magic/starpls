@@ -106,7 +106,7 @@ fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptio
         })
     {
         let expr = *source_map.expr_map.get(&ptr).unwrap();
-        let ty = db.infer_expr(file, expr);
+        let ty = db.gcx().with_tcx(&db, |tcx| tcx.infer_expr(file, expr));
         let node = ptr.to_node(&root);
         writeln!(
             res,
@@ -134,7 +134,9 @@ fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptio
         })
     {
         let param = *source_map.param_map.get(&ptr).unwrap();
-        db.infer_param(file, param);
+        db.gcx().with_tcx(&db, |tcx| {
+            tcx.infer_param(file, param);
+        });
     }
 
     let diagnostics = db.gcx.with_tcx(&db, |tcx| tcx.diagnostics_for_file(file));

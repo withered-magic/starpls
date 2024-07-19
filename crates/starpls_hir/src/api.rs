@@ -16,7 +16,7 @@ use crate::{
     },
     module, source_map,
     typeck::{
-        self, builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref,
+        self, builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref, with_tcx,
         FieldInner, ParamInner, Provider, Struct as DefStruct, Substitution, TagClass, Tuple, Ty,
         TypeRef,
     },
@@ -76,14 +76,14 @@ impl<'a> Semantics<'a> {
     pub fn type_of_expr(&self, file: File, expr: &ast::Expression) -> Option<Type> {
         let ptr = AstPtr::new(expr);
         let expr = source_map(self.db, file).expr_map.get(&ptr)?;
-        Some(self.db.infer_expr(file, *expr).into())
+        Some(with_tcx(self.db, |tcx| tcx.infer_expr(file, *expr).into()))
     }
 
     pub fn type_of_param(&self, file: File, param: &ast::Parameter) -> Option<Type> {
         let param = source_map(self.db, file)
             .param_map
             .get(&AstPtr::new(param))?;
-        Some(self.db.infer_param(file, *param).into())
+        Some(with_tcx(self.db, |tcx| tcx.infer_param(file, *param)).into())
     }
 
     pub fn resolve_load_stmt(&self, file: File, load_stmt: &ast::LoadStmt) -> Option<File> {
@@ -93,7 +93,7 @@ impl<'a> Semantics<'a> {
             Stmt::Load { load_stmt, .. } => load_stmt,
             _ => return None,
         };
-        self.db.resolve_load_stmt(file, load_stmt)
+        with_tcx(self.db, |tcx| tcx.resolve_load_stmt(file, load_stmt))
     }
 
     pub fn resolve_load_item(&self, file: File, load_item: &ast::LoadItem) -> Option<LoadItem> {
@@ -130,8 +130,9 @@ impl<'a> Semantics<'a> {
     ) -> Option<usize> {
         let ptr = AstPtr::new(&ast::Expression::Call(expr.clone()));
         let expr = source_map(self.db, file).expr_map.get(&ptr)?;
-        self.db
-            .resolve_call_expr_active_param(file, *expr, active_arg)
+        with_tcx(self.db, |tcx| {
+            tcx.resolve_call_expr_active_param(file, *expr, active_arg)
+        })
     }
 
     pub fn def_for_load_item(&self, load_item: &LoadItem) -> Option<InFile<ScopeDef>> {
@@ -218,9 +219,11 @@ impl ScopeDef {
         match self {
             ScopeDef::Variable(Variable {
                 id: Some((file, expr)),
-            }) => db.infer_expr(*file, *expr),
+            }) => with_tcx(db, |tcx| tcx.infer_expr(*file, *expr)),
             ScopeDef::Callable(callable) => return callable.ty(db),
-            ScopeDef::LoadItem(LoadItem { file, id }) => db.infer_load_item(*file, *id),
+            ScopeDef::LoadItem(LoadItem { file, id }) => {
+                with_tcx(db, |tcx| tcx.infer_load_item(*file, *id))
+            }
             _ => Ty::unknown(),
         }
         .into()

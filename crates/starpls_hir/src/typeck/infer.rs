@@ -79,7 +79,7 @@ impl TyCtxt<'_> {
         }
     }
 
-    pub fn infer_expr(&mut self, file: File, expr: ExprId) -> Ty {
+    pub(crate) fn infer_expr(&mut self, file: File, expr: ExprId) -> Ty {
         if let Some(ty) = self
             .cx
             .type_of_expr
@@ -1467,7 +1467,7 @@ impl TyCtxt<'_> {
         });
     }
 
-    pub fn infer_param(&mut self, file: File, param: ParamId) -> Ty {
+    pub(crate) fn infer_param(&mut self, file: File, param: ParamId) -> Ty {
         if let Some(ty) = self.cx.type_of_param.get(&FileParamId::new(file, param)) {
             return ty.clone();
         }
@@ -1713,7 +1713,7 @@ impl TyCtxt<'_> {
         res
     }
 
-    pub fn resolve_call_expr_active_param(
+    pub(crate) fn resolve_call_expr_active_param(
         &mut self,
         file: File,
         expr: ExprId,

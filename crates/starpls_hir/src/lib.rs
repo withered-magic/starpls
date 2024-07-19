@@ -1,16 +1,14 @@
 use starpls_bazel::Builtins;
 use starpls_common::{parse, Dialect, File, FileId, Parse};
 
-// The symbols from `def` crate are only exported to facilitate implementing the `Db` interface.
-// Ideally, we should find a way to avoid needing this, as it breaks the API boundary of this crate.
 pub use crate::{
     api::*,
-    def::{ExprId, LoadItemId, LoadStmt, Module, Name, ParamId},
+    def::Name,
     display::{DisplayWithDb, DisplayWithDbWrapper},
     typeck::{builtins::BuiltinDefs, Cancelled, GlobalCtxt, InferenceOptions, Ty, TyCtxt},
 };
 use crate::{
-    def::ModuleSourceMap,
+    def::{ExprId, Module, ModuleSourceMap},
     typeck::{TyKind, TypeRef},
 };
 
@@ -21,7 +19,7 @@ mod test_database;
 mod typeck;
 
 #[salsa::tracked]
-pub struct ModuleInfo {
+pub(crate) struct ModuleInfo {
     pub file: File,
     #[return_ref]
     pub module: Module,
@@ -65,27 +63,10 @@ pub struct Jar(
 );
 
 pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
-    fn infer_expr(&self, file: File, expr: ExprId) -> Ty;
-
-    fn infer_param(&self, file: File, param: ParamId) -> Ty;
-
-    fn infer_load_item(&self, file: File, load_item: LoadItemId) -> Ty;
-
-    fn resolve_load_stmt(&self, file: File, load_stmt: LoadStmt) -> Option<File>;
-
-    fn resolve_call_expr_active_param(
-        &self,
-        file: File,
-        expr: ExprId,
-        active_arg: usize,
-    ) -> Option<usize>;
-
+    fn gcx(&self) -> &GlobalCtxt;
     fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins, rules: Builtins);
-
     fn get_builtin_defs(&self, dialect: &Dialect) -> BuiltinDefs;
-
     fn set_bazel_prelude_file(&mut self, file_id: FileId);
-
     fn get_bazel_prelude_file(&self) -> Option<FileId>;
 }
 
@@ -97,17 +78,17 @@ fn lower_query(db: &dyn Db, parse: Parse) -> ModuleInfo {
 }
 
 #[salsa::tracked]
-pub fn lower(db: &dyn Db, file: File) -> ModuleInfo {
+pub(crate) fn lower(db: &dyn Db, file: File) -> ModuleInfo {
     let parse = parse(db, file);
     lower_query(db, parse)
 }
 
 /// Shortcut to immediately access a `lower` query's `Module`.
-pub fn module(db: &dyn Db, file: File) -> &Module {
+pub(crate) fn module(db: &dyn Db, file: File) -> &Module {
     lower(db, file).module(db)
 }
 
 /// Shortcut to immediately access a `lower` query's `ModuleSourceMap`.
-pub fn source_map(db: &dyn Db, file: File) -> &ModuleSourceMap {
+pub(crate) fn source_map(db: &dyn Db, file: File) -> &ModuleSourceMap {
     lower(db, file).source_map(db)
 }

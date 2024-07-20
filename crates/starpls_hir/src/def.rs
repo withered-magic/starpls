@@ -10,7 +10,7 @@ use starpls_syntax::{
     TextRange,
 };
 
-use crate::{typeck::TypeRef, Db, Ty, TyKind};
+use crate::{typeck::TypeRef, Db};
 
 pub(crate) mod codeflow;
 mod lower;
@@ -470,10 +470,4 @@ pub(crate) struct Function {
     pub(crate) ptr: SyntaxNodePtr,
     #[return_ref]
     pub(crate) params: Box<[ParamId]>,
-}
-
-impl Function {
-    pub fn ty(&self) -> Ty {
-        TyKind::Function(*self).intern()
-    }
 }

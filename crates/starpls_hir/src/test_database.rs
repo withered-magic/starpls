@@ -5,9 +5,7 @@ use starpls_bazel::Builtins;
 use starpls_common::{File, FileId, FileInfo, LoadItemCandidate, ResolvedPath};
 use starpls_test_util::{make_test_builtins, FixtureType};
 
-use crate::{
-    def::ExprId, BuiltinDefs, Db, Dialect, GlobalCtxt, InferenceOptions, LoadItemId, ParamId, Ty,
-};
+use crate::{BuiltinDefs, Db, Dialect, GlobalCtxt, InferenceOptions};
 
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, crate::Jar)]
@@ -90,32 +88,6 @@ impl starpls_common::Db for TestDatabase {
 }
 
 impl crate::Db for TestDatabase {
-    fn infer_expr(&self, file: File, expr: ExprId) -> Ty {
-        self.gcx.with_tcx(self, |tcx| tcx.infer_expr(file, expr))
-    }
-
-    fn infer_param(&self, file: File, param: ParamId) -> Ty {
-        self.gcx.with_tcx(self, |tcx| tcx.infer_param(file, param))
-    }
-
-    fn infer_load_item(&self, file: File, load_item: LoadItemId) -> Ty {
-        self.gcx
-            .with_tcx(self, |tcx| tcx.infer_load_item(file, load_item))
-    }
-
-    fn resolve_load_stmt(&self, _file: File, _load_stmt: crate::def::LoadStmt) -> Option<File> {
-        None
-    }
-
-    fn resolve_call_expr_active_param(
-        &self,
-        _file: File,
-        _expr: ExprId,
-        _active_arg: usize,
-    ) -> Option<usize> {
-        None
-    }
-
     fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins, rules: Builtins) {
         let defs = match self.builtin_defs.entry(dialect) {
             Entry::Occupied(entry) => *entry.get(),
@@ -144,6 +116,10 @@ impl crate::Db for TestDatabase {
 
     fn get_bazel_prelude_file(&self) -> Option<FileId> {
         self.prelude_file
+    }
+
+    fn gcx(&self) -> &GlobalCtxt {
+        &self.gcx
     }
 }
 

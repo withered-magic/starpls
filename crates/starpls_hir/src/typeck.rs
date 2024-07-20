@@ -407,7 +407,7 @@ impl Ty {
             TyKind::Function(func) => {
                 Params::Simple(func.params(db).iter().enumerate().map(|(index, param)| {
                     let file = func.file(db);
-                    let ty = db.infer_param(file, *param);
+                    let ty = with_tcx(db, |tcx| tcx.infer_param(file, *param));
                     let param = Param(ParamInner::Param {
                         parent: Some(*func),
                         index,
@@ -1554,6 +1554,13 @@ impl GlobalCtxt {
         };
         f(&mut tcx)
     }
+}
+
+pub(crate) fn with_tcx<F, T>(db: &dyn Db, f: F) -> T
+where
+    F: FnMut(&mut TyCtxt) -> T + std::panic::UnwindSafe,
+{
+    db.gcx().with_tcx(db, f)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

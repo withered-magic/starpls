@@ -11,8 +11,8 @@ use crate::{
     def::{
         self,
         resolver::Resolver,
-        scope::{self, module_scopes, ParameterDef},
-        Function as HirDefFunction, LoadItemId, Stmt,
+        scope::{self, module_scopes, FunctionDef, ParameterDef},
+        LoadItemId, Stmt,
     },
     module, source_map,
     typeck::{
@@ -42,15 +42,28 @@ impl<'a> Semantics<'a> {
         let ptr = AstPtr::new(&ast::Statement::cast(stmt.syntax().clone())?);
         let stmt = source_map(self.db, file).stmt_map.get(&ptr)?;
         match &module(self.db, file)[*stmt] {
-            Stmt::Def { func, .. } => Some((*func).into()),
+            Stmt::Def { func, .. } => Some(
+                FunctionDef {
+                    stmt: InFile { file, value: *stmt },
+                    func: *func,
+                }
+                .into(),
+            ),
             _ => None,
         }
     }
 
     pub fn resolve_type(&self, type_: &ast::NamedType) -> Option<Type> {
         Some(
-            resolve_type_ref(self.db, &TypeRef::from_str_opt(type_.name()?.text()))
-                .0
+            type_
+                .name()
+                .as_ref()
+                .map(|name| name.text())
+                .map(|text| {
+                    with_tcx(self.db, |tcx| {
+                        resolve_type_ref(tcx, &TypeRef::from_str_opt(text)).0
+                    })
+                })?
                 .into(),
         )
     }
@@ -58,7 +71,7 @@ impl<'a> Semantics<'a> {
     pub fn resolve_call_expr(&self, file: File, expr: &ast::CallExpr) -> Option<Callable> {
         let ty = self.type_of_expr(file, &expr.callee()?)?;
         Some(match ty.ty.kind() {
-            TyKind::Function(func) => (*func).into(),
+            TyKind::Function(def) => def.clone().into(),
             TyKind::IntrinsicFunction(func, subst) => {
                 Callable(CallableInner::IntrinsicFunction(*func, Some(subst.clone())))
             }
@@ -199,7 +212,7 @@ impl ScopeDef {
     pub fn syntax_node_ptr(&self, db: &dyn Db, file: File) -> Option<SyntaxNodePtr> {
         let source_map = source_map(db, file);
         match self {
-            ScopeDef::Callable(Callable(CallableInner::HirDef(func))) => Some(func.ptr(db)),
+            ScopeDef::Callable(Callable(CallableInner::HirDef(def))) => Some(def.func.ptr(db)),
             ScopeDef::Variable(Variable {
                 id: Some((_, expr)),
             }) => source_map
@@ -344,7 +357,7 @@ impl Type {
         match self.ty.kind() {
             TyKind::BuiltinFunction(func) => Some(func.doc(db).clone()),
             TyKind::BuiltinType(ty, _) => Some(ty.doc(db).clone()),
-            TyKind::Function(func) => return func.doc(db).map(|doc| doc.to_string()),
+            TyKind::Function(def) => return def.func.doc(db).map(|doc| doc.to_string()),
             TyKind::IntrinsicFunction(func, _) => Some(func.doc(db).clone()),
             TyKind::Rule(rule) => rule.doc.as_ref().map(Box::to_string),
             TyKind::Provider(provider) => provider.doc(db),
@@ -456,7 +469,7 @@ pub struct Callable(CallableInner);
 impl Callable {
     pub fn name(&self, db: &dyn Db) -> Name {
         match self.0 {
-            CallableInner::HirDef(func) => func.name(db),
+            CallableInner::HirDef(ref def) => def.func.name(db),
             CallableInner::IntrinsicFunction(func, _) => func.name(db),
             CallableInner::BuiltinFunction(func) => func.name(db),
             CallableInner::Rule(_) => Name::new_inline("rule"),
@@ -475,7 +488,7 @@ impl Callable {
 
     pub fn ty(&self, db: &dyn Db) -> Type {
         match self.0 {
-            CallableInner::HirDef(func) => TyKind::Function(func).intern(),
+            CallableInner::HirDef(ref def) => TyKind::Function(def.clone()).intern(),
             CallableInner::IntrinsicFunction(func, ref subst) => TyKind::IntrinsicFunction(
                 func,
                 subst
@@ -504,7 +517,7 @@ impl Callable {
 
     pub fn doc(&self, db: &dyn Db) -> Option<String> {
         match self.0 {
-            CallableInner::HirDef(func) => func.doc(db).map(|doc| doc.to_string()),
+            CallableInner::HirDef(ref def) => def.func.doc(db).map(|doc| doc.to_string()),
             CallableInner::BuiltinFunction(func) => Some(func.doc(db).clone()),
             CallableInner::IntrinsicFunction(func, _) => Some(func.doc(db).clone()),
             CallableInner::Rule(ref ty) => match ty.kind() {
@@ -533,9 +546,9 @@ impl Callable {
     }
 }
 
-impl From<HirDefFunction> for Callable {
-    fn from(func: HirDefFunction) -> Self {
-        Self(CallableInner::HirDef(func))
+impl From<FunctionDef> for Callable {
+    fn from(def: FunctionDef) -> Self {
+        Self(CallableInner::HirDef(def))
     }
 }
 
@@ -547,7 +560,7 @@ impl From<BuiltinFunction> for Callable {
 
 #[derive(Clone, Debug)]
 enum CallableInner {
-    HirDef(HirDefFunction),
+    HirDef(FunctionDef),
     IntrinsicFunction(IntrinsicFunction, Option<Substitution>),
     BuiltinFunction(BuiltinFunction),
     Rule(Ty),

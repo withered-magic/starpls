@@ -16,8 +16,9 @@ use starpls_syntax::ast::SyntaxNodePtr;
 
 use crate::{
     def::{
-        codeflow::FlowNodeId, scope::ExecutionScopeId, ExprId, Function, LiteralString, LoadItemId,
-        LoadStmt, Param as HirDefParam, ParamId,
+        codeflow::FlowNodeId,
+        scope::{ExecutionScopeId, FunctionDef},
+        ExprId, Function, LiteralString, LoadItemId, LoadStmt, Param as HirDefParam, ParamId,
     },
     module, source_map,
     typeck::{
@@ -243,7 +244,7 @@ impl Ty {
                         .iter()
                         .enumerate()
                         .map(move |(index, field)| {
-                            let resolved = resolve_type_ref(db, &field.type_ref).0;
+                            let resolved = resolve_builtin_type_ref(db, &field.type_ref).0;
                             let resolved = match (resolved.kind(), data) {
                                 // If `TyData` is set, this means the current type is either `ctx` or `repository_ctx`.
                                 // Override the `attr` field for both of these types.
@@ -310,7 +311,7 @@ impl Ty {
                                         provider: provider.clone(),
                                         index,
                                     }),
-                                    resolve_type_ref(db, &field.type_ref).0,
+                                    resolve_builtin_type_ref(db, &field.type_ref).0,
                                 )
                             },
                         ))
@@ -404,17 +405,17 @@ impl Ty {
         db: &'a dyn Db,
     ) -> Option<impl Iterator<Item = (Param, Ty)> + 'a> {
         Some(match self.kind() {
-            TyKind::Function(func) => {
-                Params::Simple(func.params(db).iter().enumerate().map(|(index, param)| {
-                    let file = func.file(db);
+            TyKind::Function(def) => Params::Simple(def.func.params(db).iter().enumerate().map(
+                |(index, param)| {
+                    let file = def.func.file(db);
                     let ty = with_tcx(db, |tcx| tcx.infer_param(file, *param));
                     let param = Param(ParamInner::Param {
-                        parent: Some(*func),
+                        parent: Some(def.func),
                         index,
                     });
                     (param, ty)
-                }))
-            }
+                },
+            )),
             TyKind::IntrinsicFunction(func, subst) => {
                 Params::Intrinsic(func.params(db).iter().enumerate().map(|(index, param)| {
                     let ty = param
@@ -430,7 +431,7 @@ impl Ty {
             }
             TyKind::BuiltinFunction(func) => {
                 Params::Builtin(func.params(db).iter().enumerate().map(|(index, param)| {
-                    let ty = resolve_type_ref_opt(db, param.type_ref());
+                    let ty = resolve_builtin_type_ref_opt(db, param.type_ref());
                     let ty = match param {
                         BuiltinFunctionParam::Simple { .. } => ty,
                         BuiltinFunctionParam::ArgsList { .. } => {
@@ -494,7 +495,7 @@ impl Ty {
                                         provider: provider.clone(),
                                         index,
                                     }),
-                                    resolve_type_ref_opt(db, param.type_ref()),
+                                    resolve_builtin_type_ref_opt(db, param.type_ref()),
                                 )
                             },
                         ))
@@ -542,9 +543,9 @@ impl Ty {
 
     pub(crate) fn ret_ty(&self, db: &dyn Db) -> Option<Ty> {
         Some(match self.kind() {
-            TyKind::Function(func) => resolve_type_ref_opt(db, func.ret_type_ref(db)),
+            TyKind::Function(def) => resolve_builtin_type_ref_opt(db, def.func.ret_type_ref(db)),
             TyKind::IntrinsicFunction(func, subst) => func.ret_ty(db).substitute(&subst.args),
-            TyKind::BuiltinFunction(func) => resolve_type_ref(db, &func.ret_type_ref(db)).0,
+            TyKind::BuiltinFunction(func) => resolve_builtin_type_ref(db, &func.ret_type_ref(db)).0,
             TyKind::Rule(_) => Ty::none(),
             TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
                 TyKind::ProviderInstance(provider.clone()).intern()
@@ -1228,7 +1229,7 @@ pub(crate) enum TyKind {
     /// the `range()` function.
     Range,
     /// A user-defined function.
-    Function(Function),
+    Function(FunctionDef),
     /// A function predefined by the Starlark specification.
     IntrinsicFunction(IntrinsicFunction, Substitution),
     /// A function defined outside of the Starlark specification.
@@ -1613,6 +1614,7 @@ pub struct TyCtxt<'a> {
 
 struct TypeRefResolver<'a> {
     db: &'a dyn Db,
+    tcx: Option<&'a TyCtxt<'a>>,
     errors: Vec<String>,
 }
 
@@ -1746,13 +1748,33 @@ impl<'a> TypeRefResolver<'a> {
     }
 }
 
-pub(crate) fn resolve_type_ref(db: &dyn Db, type_ref: &TypeRef) -> (Ty, Vec<String>) {
-    TypeRefResolver { db, errors: vec![] }.resolve_type_ref(type_ref)
+pub(crate) fn resolve_type_ref(tcx: &TyCtxt, type_ref: &TypeRef) -> (Ty, Vec<String>) {
+    TypeRefResolver {
+        db: tcx.db,
+        tcx: Some(tcx),
+        errors: vec![],
+    }
+    .resolve_type_ref(type_ref)
 }
 
-pub(crate) fn resolve_type_ref_opt(db: &dyn Db, type_ref: Option<TypeRef>) -> Ty {
+pub(crate) fn resolve_type_ref_opt(tcx: &TyCtxt, type_ref: Option<TypeRef>) -> Ty {
     type_ref
-        .map(|type_ref| resolve_type_ref(db, &type_ref).0)
+        .map(|type_ref| resolve_type_ref(tcx, &type_ref).0)
+        .unwrap_or_else(|| Ty::unknown())
+}
+
+pub(crate) fn resolve_builtin_type_ref(db: &dyn Db, type_ref: &TypeRef) -> (Ty, Vec<String>) {
+    TypeRefResolver {
+        db,
+        tcx: None,
+        errors: vec![],
+    }
+    .resolve_type_ref(type_ref)
+}
+
+pub(crate) fn resolve_builtin_type_ref_opt(db: &dyn Db, type_ref: Option<TypeRef>) -> Ty {
+    type_ref
+        .map(|type_ref| resolve_builtin_type_ref(db, &type_ref).0)
         .unwrap_or_else(|| Ty::unknown())
 }
 

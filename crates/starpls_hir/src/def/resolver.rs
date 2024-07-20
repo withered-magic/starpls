@@ -8,10 +8,10 @@ use starpls_syntax::{TextRange, TextSize};
 use crate::{
     def::{
         scope::{
-            module_scopes, ExecutionScopeId, Scope, ScopeDef, ScopeHirId, ScopeId, Scopes,
-            VariableDef,
+            module_scopes, ExecutionScopeId, FunctionDef, Scope, ScopeDef, ScopeHirId, ScopeId,
+            Scopes, VariableDef,
         },
-        ExprId, Function, ModuleSourceMap,
+        ExprId, ModuleSourceMap,
     },
     source_map,
     typeck::{
@@ -34,7 +34,7 @@ pub(crate) struct Resolver<'a> {
 #[derive(Clone, Debug)]
 pub(crate) enum Export {
     Variable(VariableDef),
-    Function(Function),
+    Function(FunctionDef),
 }
 
 impl From<Export> for ScopeDef {
@@ -68,7 +68,7 @@ impl<'a> Resolver<'a> {
                 .and_then(|decl| {
                     Some(match decl {
                         ScopeDef::Variable(def) => Export::Variable(def.clone()),
-                        ScopeDef::Function(func) => Export::Function(*func),
+                        ScopeDef::Function(def) => Export::Function(def.clone()),
                         _ => return None,
                     })
                 })

@@ -173,13 +173,19 @@ impl Scopes {
         self.scopes_by_hir_id.get(&id.into()).copied()
     }
 
-    pub(crate) fn execution_scope_for_expr(&self, expr: ExprId) -> Option<ExecutionScopeId> {
-        let scope = self.scope_for_hir_id(expr)?;
+    pub(crate) fn execution_scope_for_hir_id(
+        &self,
+        id: impl Into<ScopeHirId>,
+    ) -> Option<ExecutionScopeId> {
+        let scope = self.scope_for_hir_id(id)?;
         Some(self.scopes[scope].execution_scope)
     }
 
-    pub(crate) fn scope_for_expr_execution_scope(&self, expr: ExprId) -> Option<ScopeId> {
-        let scope = self.scope_for_hir_id(expr)?;
+    pub(crate) fn scope_for_hir_execution_scope(
+        &self,
+        hir: impl Into<ScopeHirId>,
+    ) -> Option<ScopeId> {
+        let scope = self.scope_for_hir_id(hir)?;
         self.scopes_by_execution_scope_id
             .get(&self.scopes[scope].execution_scope)
             .copied()

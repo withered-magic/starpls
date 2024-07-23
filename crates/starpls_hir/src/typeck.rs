@@ -17,8 +17,9 @@ use starpls_syntax::ast::SyntaxNodePtr;
 use crate::{
     def::{
         codeflow::FlowNodeId,
-        scope::{ExecutionScopeId, FunctionDef},
+        scope::{ExecutionScopeId, FunctionDef, ScopeHirId},
         ExprId, Function, LiteralString, LoadItemId, LoadStmt, Param as HirDefParam, ParamId,
+        StmtId,
     },
     module, source_map,
     typeck::{
@@ -1620,8 +1621,10 @@ struct TypeRefResolver<'a> {
 
 impl<'a> TypeRefResolver<'a> {
     fn resolve_type_ref(mut self, type_ref: &TypeRef) -> (Ty, Vec<String>) {
-        let ty = self.resolve_type_ref_inner(type_ref);
-        (ty, self.errors)
+        todo!()
+
+        // let ty = self.resolve_type_ref_inner(type_ref);
+        // (ty, self.errors)
     }
 
     fn resolve_type_ref_inner(&mut self, type_ref: &TypeRef) -> Ty {
@@ -1748,7 +1751,11 @@ impl<'a> TypeRefResolver<'a> {
     }
 }
 
-pub(crate) fn resolve_type_ref(tcx: &TyCtxt, type_ref: &TypeRef) -> (Ty, Vec<String>) {
+pub(crate) fn resolve_type_ref(
+    tcx: &TyCtxt,
+    type_ref: &TypeRef,
+    usage: StmtId,
+) -> (Ty, Vec<String>) {
     TypeRefResolver {
         db: tcx.db,
         tcx: Some(tcx),
@@ -1757,9 +1764,9 @@ pub(crate) fn resolve_type_ref(tcx: &TyCtxt, type_ref: &TypeRef) -> (Ty, Vec<Str
     .resolve_type_ref(type_ref)
 }
 
-pub(crate) fn resolve_type_ref_opt(tcx: &TyCtxt, type_ref: Option<TypeRef>) -> Ty {
+pub(crate) fn resolve_type_ref_opt(tcx: &TyCtxt, type_ref: Option<TypeRef>, usage: StmtId) -> Ty {
     type_ref
-        .map(|type_ref| resolve_type_ref(tcx, &type_ref).0)
+        .map(|type_ref| resolve_type_ref(tcx, &type_ref, usage).0)
         .unwrap_or_else(|| Ty::unknown())
 }
 

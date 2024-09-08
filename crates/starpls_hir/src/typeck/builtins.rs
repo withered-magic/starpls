@@ -165,7 +165,7 @@ impl BuiltinFunction {
                         match name.as_str() {
                             "doc" => {
                                 if let TyKind::String(Some(s)) = ty.kind() {
-                                    doc = Some(s.clone());
+                                    doc = Some(*s);
                                 }
                             }
                             "fields" => {
@@ -209,7 +209,7 @@ impl BuiltinFunction {
                     .get(&call_expr)
                     .and_then(|ptr| ptr.try_to_node(&parse(db, file).syntax(db)))
                     .and_then(|expr| expr.syntax().parent())
-                    .and_then(|parent| ast::AssignStmt::cast(parent))
+                    .and_then(ast::AssignStmt::cast)
                     .and_then(|assign_stmt| assign_stmt.lhs());
 
                 let extract_name = |expr: ast::Expression| {
@@ -281,7 +281,7 @@ impl BuiltinFunction {
                         match name.as_str() {
                             "doc" => {
                                 if let TyKind::String(Some(s)) = ty.kind() {
-                                    doc = Some(s.clone());
+                                    doc = Some(*s);
                                 }
                             }
                             "attrs" => {
@@ -793,13 +793,13 @@ fn builtin_function(
         if doc.is_empty() {
             DEFAULT_DOC.to_string()
         } else {
-            normalize_doc_text(&doc)
+            normalize_doc_text(doc)
         },
     )
 }
 
 fn builtin_param(param: &Param) -> BuiltinFunctionParam {
-    let name = Name::from_str(&param.name.trim_start_matches('*'));
+    let name = Name::from_str(param.name.trim_start_matches('*'));
     if param.is_star_arg {
         BuiltinFunctionParam::ArgsList {
             name,
@@ -937,10 +937,10 @@ fn normalize_doc(text: &str, is_type: bool) -> String {
     // We fix this by removing any text between angle brackets.
     let mut s = String::new();
     let mut in_tag = false;
-    let mut chars = text.chars();
+    let chars = text.chars();
     let mut tag = String::new();
 
-    while let Some(ch) = chars.next() {
+    for ch in chars {
         match (ch, in_tag) {
             ('<', _) => in_tag = true,
             ('>', _) => {
@@ -980,8 +980,8 @@ fn parse_type_ref(text: &str) -> TypeRef {
             match (
                 parts.next(),
                 parts.next().map(|element| {
-                    if element.ends_with('s') {
-                        &element[..element.len() - 1]
+                    if let Some(prefix) = element.strip_suffix('s') {
+                        prefix
                     } else {
                         element
                     }
@@ -999,7 +999,7 @@ fn parse_type_ref(text: &str) -> TypeRef {
                     Some(
                         vec![
                             TypeRef::from_str_opt("string"),
-                            element.map_or(TypeRef::Unknown, |element| parse_type_ref(element)),
+                            element.map_or(TypeRef::Unknown, parse_type_ref),
                         ]
                         .into_boxed_slice(),
                     ),
@@ -1027,10 +1027,7 @@ fn parse_type_ref(text: &str) -> TypeRef {
 fn type_ref_with_single_arg(name: &str, element: Option<&str>) -> TypeRef {
     TypeRef::Name(
         Name::from_str(name),
-        Some(
-            vec![element.map_or(TypeRef::Unknown, |element| parse_type_ref(element))]
-                .into_boxed_slice(),
-        ),
+        Some(vec![element.map_or(TypeRef::Unknown, parse_type_ref)].into_boxed_slice()),
     )
 }
 

@@ -146,7 +146,7 @@ impl TyCtxt<'_> {
                     .filter_map(|entry| match &curr_module[entry.key] {
                         Expr::Literal {
                             literal: Literal::String(s),
-                        } => Some((s.clone(), self.infer_expr(file, entry.value))),
+                        } => Some((*s, self.infer_expr(file, entry.value))),
                         _ => None,
                     })
                     .collect::<Vec<_>>();
@@ -169,7 +169,7 @@ impl TyCtxt<'_> {
             Expr::Literal { literal } => match literal {
                 Literal::Int(x) => TyKind::Int(i64::try_from(*x).ok()).intern(),
                 Literal::Float => self.float_ty(),
-                Literal::String(s) => TyKind::String(Some(s.clone())).intern(),
+                Literal::String(s) => TyKind::String(Some(*s)).intern(),
                 Literal::Bytes => self.bytes_ty(),
                 Literal::Bool(b) => TyKind::Bool(Some(*b)).intern(),
                 Literal::None => self.none_ty(),
@@ -179,7 +179,7 @@ impl TyCtxt<'_> {
                 expr: unary_expr,
             } => op
                 .as_ref()
-                .map(|op| self.infer_unary_expr(file, expr, *unary_expr, op.clone()))
+                .map(|op| self.infer_unary_expr(file, expr, *unary_expr, *op))
                 .unwrap_or_else(|| self.unknown_ty()),
             Expr::Binary { lhs, rhs, op } => op
                 .as_ref()
@@ -407,7 +407,7 @@ impl TyCtxt<'_> {
                             .map(|param| module[param].clone())
                             .collect::<Vec<_>>()[..]
                             .into();
-                        let errors = slots.assign_args(&args, None).0;
+                        let errors = slots.assign_args(args, None).0;
 
                         for error in errors {
                             self.add_expr_diagnostic_error(file, error.expr, error.message);
@@ -475,7 +475,7 @@ impl TyCtxt<'_> {
                     TyKind::IntrinsicFunction(func, subst) => {
                         let params = func.params(db);
                         let mut slots: Slots = params[..].into();
-                        let errors = slots.assign_args(&args, None).0;
+                        let errors = slots.assign_args(args, None).0;
 
                         for error in errors {
                             self.add_expr_diagnostic_error(file, error.expr, error.message);
@@ -530,7 +530,7 @@ impl TyCtxt<'_> {
                     TyKind::BuiltinFunction(func) => {
                         let params = func.params(db);
                         let mut slots: Slots = params[..].into();
-                        let errors = slots.assign_args(&args, None).0;
+                        let errors = slots.assign_args(args, None).0;
 
                         for error in errors {
                             self.add_expr_diagnostic_error(file, error.expr, error.message);
@@ -586,19 +586,19 @@ impl TyCtxt<'_> {
                         }
 
                         func.maybe_unique_ret_type(self, file, expr, args_with_ty)
-                            .unwrap_or_else(|| resolve_type_ref(db, &func.ret_type_ref(db)).0)
+                            .unwrap_or_else(|| resolve_type_ref(db, func.ret_type_ref(db)).0)
                     }
                     TyKind::Rule(rule) => {
                         let mut slots = Slots::from_rule(db, rule);
-                        slots.assign_args(&args, None);
+                        slots.assign_args(args, None);
 
                         let mut missing_attrs = Vec::new();
 
                         // Validate argument types.
                         for ((name, attr), slot) in rule.attrs(db).zip(slots.into_inner()) {
                             let expected_ty = attr.expected_ty();
-                            match slot {
-                                Slot::Keyword { provider, .. } => match provider {
+                            if let Slot::Keyword { provider, .. } = slot {
+                                match provider {
                                     SlotProvider::Single(expr, index) => {
                                         let ty = &arg_tys[index];
                                         if !assign_tys(db, ty, &expected_ty) {
@@ -611,8 +611,7 @@ impl TyCtxt<'_> {
                                         }
                                     }
                                     _ => {}
-                                },
-                                _ => {}
+                                }
                             }
                         }
 
@@ -639,7 +638,7 @@ impl TyCtxt<'_> {
                     TyKind::Tag(tag_class) => {
                         // TODO(withered-magic): Much of this logic is duplicated from handling `TyKind::Rule` above.
                         let mut slots = Slots::from_tag_class(tag_class);
-                        slots.assign_args(&args, None);
+                        slots.assign_args(args, None);
 
                         let mut missing_attrs = Vec::new();
 
@@ -651,8 +650,8 @@ impl TyCtxt<'_> {
                             .zip(slots.into_inner())
                         {
                             let expected_ty = attr.expected_ty();
-                            match slot {
-                                Slot::Keyword { provider, .. } => match provider {
+                            if let Slot::Keyword { provider, .. } = slot {
+                                match provider {
                                     SlotProvider::Single(expr, index) => {
                                         let ty = &arg_tys[index];
                                         if !assign_tys(db, ty, &expected_ty) {
@@ -665,8 +664,7 @@ impl TyCtxt<'_> {
                                         }
                                     }
                                     _ => {}
-                                },
-                                _ => {}
+                                }
                             }
                         }
 
@@ -1056,13 +1054,13 @@ impl TyCtxt<'_> {
                     let ty = match def.def {
                         ScopeDef::Variable(VariableDef { file, expr, source }) => {
                             if self.shared_state.options.use_code_flow_analysis {
-                                var_defs.push((file, *expr, source.clone()));
+                                var_defs.push((file, *expr, *source));
                                 continue;
                             } else {
                                 self.infer_assign(*file, *expr, *source, None)
                             }
                         }
-                        ScopeDef::Function(func) => func.ty().into(),
+                        ScopeDef::Function(func) => func.ty(),
                         ScopeDef::Parameter(ParameterDef { func, index }) => func
                             .map(|func| self.infer_param(file, func.params(self.db)[*index]))
                             .unwrap_or_else(|| self.unknown_ty()),
@@ -1102,15 +1100,14 @@ impl TyCtxt<'_> {
                 return Some(
                     match resolver
                         .resolve_name_in_prelude_or_builtins(name)?
-                        .iter()
-                        .next()?
+                        .first()?
                     {
                         ScopeDef::IntrinsicFunction(func) => {
                             TyKind::IntrinsicFunction(*func, Substitution::new_identity(0)).intern()
                         }
                         ScopeDef::BuiltinFunction(func) => TyKind::BuiltinFunction(*func).intern(),
                         ScopeDef::BuiltinVariable(type_ref) => {
-                            resolve_type_ref(self.db, &type_ref).0
+                            resolve_type_ref(self.db, type_ref).0
                         }
                         // This should be unreachable.
                         _ => return None,
@@ -1123,7 +1120,7 @@ impl TyCtxt<'_> {
         let (start_ty, fallback_ty) = if def_execution_scope != curr_execution_scope {
             let cfg = code_flow_graph(self.db, file).cfg(self.db);
             let hir_id = match def_execution_scope {
-                ExecutionScopeId::Module => ScopeHirId::Module.into(),
+                ExecutionScopeId::Module => ScopeHirId::Module,
                 ExecutionScopeId::Def(stmt) => stmt.into(),
                 ExecutionScopeId::Comp(expr) => expr.into(),
             };
@@ -1166,7 +1163,7 @@ impl TyCtxt<'_> {
             Some(start_node) => start_node,
             None => return Some(TyKind::Never.intern()),
         };
-        self.infer_ref_from_flow_node(&cfg, file, execution_scope, name, start_ty, *start_node)
+        self.infer_ref_from_flow_node(cfg, file, execution_scope, name, start_ty, *start_node)
     }
 
     /// Returning `None` here means that code-flow analysis failed and that a fallback type should
@@ -1210,7 +1207,7 @@ impl TyCtxt<'_> {
                         .type_of_expr
                         .get(&FileExprId::new(file, *expr))
                         .cloned()
-                        .unwrap_or_else(|| Ty::never())
+                        .unwrap_or_else(Ty::never)
                 }
                 FlowNode::Branch { antecedents } => {
                     let mut antecedent_tys = Vec::with_capacity(antecedents.len());
@@ -1330,8 +1327,8 @@ impl TyCtxt<'_> {
                 }
             }
             TyKind::Tuple(Tuple::Simple(tys)) => {
-                let mut pairs = exprs.iter().copied().zip(tys.iter());
-                while let Some((expr, ty)) = pairs.next() {
+                let pairs = exprs.iter().copied().zip(tys.iter());
+                for (expr, ty) in pairs {
                     self.assign_expr_source_ty(file, root, expr, ty.clone(), None);
                 }
                 if exprs.len() != tys.len() {
@@ -1365,9 +1362,8 @@ impl TyCtxt<'_> {
                 for expr in exprs.iter() {
                     self.assign_expr_unknown_rec(file, *expr);
                 }
-                return;
             }
-        };
+        }
     }
 
     fn assign_expr_unknown_rec(&mut self, file: File, expr: ExprId) {
@@ -1481,7 +1477,7 @@ impl TyCtxt<'_> {
             .unwrap_or_else(|| match &module(self.db, file)[param] {
                 Param::Simple { type_ref, .. } => type_ref
                     .as_ref()
-                    .map(|type_ref| self.lower_param_type_ref(file, param, &type_ref))
+                    .map(|type_ref| self.lower_param_type_ref(file, param, type_ref))
                     .unwrap_or_else(|| self.unknown_ty()),
                 Param::ArgsList { type_ref, .. } => TyKind::Tuple(Tuple::Variable(
                     type_ref
@@ -1595,22 +1591,21 @@ impl TyCtxt<'_> {
                             .cx
                             .load_resolution_stack
                             .iter()
-                            .find(|(entry_file, _)| loaded_file == *entry_file)
-                            .is_some()
+                            .any(|(entry_file, _)| loaded_file == *entry_file)
                         {
                             let mut message = String::from("Detected circular import\n");
                             for (_, load_stmt) in self.cx.load_resolution_stack.iter() {
                                 message.push_str("- ");
-                                message.push_str(&load_stmt.module(db));
+                                message.push_str(load_stmt.module(db));
                                 message.push('\n');
                             }
                             message.push_str("- ");
-                            message.push_str(&load_stmt.module(db));
+                            message.push_str(load_stmt.module(db));
                             message.push('\n');
 
                             // Use a range here to avoid having to allocate.
                             for i in 0..self.cx.load_resolution_stack.len() {
-                                let (file, load_stmt) = self.cx.load_resolution_stack[i].clone();
+                                let (file, load_stmt) = self.cx.load_resolution_stack[i];
                                 self.add_diagnostic_for_range(
                                     file,
                                     Severity::Warning,
@@ -1680,7 +1675,7 @@ impl TyCtxt<'_> {
         let module = load_stmt.module(self.db);
         let res = match self
             .db
-            .load_file(&module, file.dialect(self.db), file.id(self.db))
+            .load_file(module, file.dialect(self.db), file.id(self.db))
         {
             Ok(Some(loaded_file)) => Some(loaded_file),
             Ok(None) => return None,
@@ -1699,7 +1694,7 @@ impl TyCtxt<'_> {
             }
         };
 
-        self.cx.resolved_load_stmts.insert(id, res.clone());
+        self.cx.resolved_load_stmts.insert(id, res);
         res
     }
 
@@ -1737,10 +1732,8 @@ impl TyCtxt<'_> {
                     }
                 }
 
-                if active_arg == args.len() {
-                    if saw_keyword || saw_unpacked_dict {
-                        return None;
-                    }
+                if active_arg == args.len() && (saw_keyword || saw_unpacked_dict) {
+                    return None;
                 }
 
                 let callee_ty = self.infer_expr(file, *callee);
@@ -1758,15 +1751,15 @@ impl TyCtxt<'_> {
                     TyKind::BuiltinFunction(func) => func.params(db)[..].into(),
                     TyKind::Rule(rule) => Slots::from_rule(db, rule),
                     TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
-                        Slots::from_provider(db, &provider)
+                        Slots::from_provider(db, provider)
                     }
                     TyKind::Tag(tag_class) => Slots::from_tag_class(tag_class),
                     _ => return None,
                 };
 
-                slots.assign_args(&args, Some(active_arg)).1
+                slots.assign_args(args, Some(active_arg)).1
             }
-            _ => return None,
+            _ => None,
         }
     }
 

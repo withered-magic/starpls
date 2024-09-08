@@ -117,7 +117,7 @@ where
                     origin_selection_range: origin_selection_range.and_then(|range| {
                         convert::lsp_range_from_text_range(range, source_line_index)
                     }),
-                    target_range: range.clone()?,
+                    target_range: range?,
                     target_selection_range: range?,
                     target_uri: lsp_types::Url::from_file_path(
                         snapshot

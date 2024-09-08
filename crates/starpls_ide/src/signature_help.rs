@@ -105,14 +105,14 @@ pub(crate) fn signature_help(
 
     let is_rule_or_tag = func.is_rule() || func.is_tag();
     if is_rule_or_tag {
-        label.push_str("*");
+        label.push('*');
     }
 
     for (index, param_label) in param_labels.iter().enumerate() {
         if index > 0 || is_rule_or_tag {
             label.push_str(", ");
         }
-        label.push_str(&param_label);
+        label.push_str(param_label);
     }
 
     label.push_str(") -> ");

@@ -722,9 +722,7 @@ ast_node! {
 impl Suite {
     /// Only call this if you know the parent suite belongs to a function.
     pub fn type_comment(&self) -> Option<TypeComment> {
-        self.syntax()
-            .first_child()
-            .and_then(|node| TypeComment::cast(node))
+        self.syntax().first_child().and_then(TypeComment::cast)
     }
 }
 
@@ -1204,17 +1202,16 @@ ast_token! {
 impl Int {
     pub fn value(&self) -> Option<u64> {
         let text = self.syntax.text();
-        if text.starts_with("0") {
-            return Some(if text.len() == 1 {
-                0
-            } else {
-                u64::from_str_radix(&text[1..], 8).ok()?
-            });
+        if text.starts_with('0') && text.len() == 1 {
+            return Some(0);
         }
-        if text.starts_with("0x") {
-            return u64::from_str_radix(&text[2..], 16).ok();
+        if let Some(suffix) = text.strip_prefix('0') {
+            return u64::from_str_radix(suffix, 8).ok();
         }
-        return u64::from_str_radix(text, 10).ok();
+        if let Some(suffix) = text.strip_prefix("0x") {
+            return u64::from_str_radix(suffix, 16).ok();
+        }
+        text.parse::<u64>().ok()
     }
 }
 

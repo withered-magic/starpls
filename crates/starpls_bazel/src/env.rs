@@ -32,12 +32,12 @@ struct ValueJson {
     callable: Option<CallableJson>,
 }
 
-impl Into<Value> for ValueJson {
-    fn into(self) -> Value {
+impl From<ValueJson> for Value {
+    fn from(val: ValueJson) -> Self {
         Value {
-            name: self.name,
-            doc: self.doc,
-            callable: self.callable.map(|callable| Callable {
+            name: val.name,
+            doc: val.doc,
+            callable: val.callable.map(|callable| Callable {
                 param: callable
                     .params
                     .into_iter()

@@ -20,7 +20,7 @@ impl AnalysisDebouncer {
             loop {
                 if active {
                     match source_rx.recv_timeout(duration) {
-                        Ok(file_ids) => pending_file_ids.extend(file_ids.into_iter()),
+                        Ok(file_ids) => pending_file_ids.extend(file_ids),
                         Err(RecvTimeoutError::Disconnected) => break,
                         Err(RecvTimeoutError::Timeout) => {
                             sink.send(Task::AnalysisRequested(pending_file_ids.drain().collect()))
@@ -32,7 +32,7 @@ impl AnalysisDebouncer {
                     match source_rx.recv() {
                         Ok(file_ids) => {
                             active = true;
-                            pending_file_ids.extend(file_ids.into_iter());
+                            pending_file_ids.extend(file_ids);
                         }
                         Err(RecvError) => break,
                     }

@@ -71,7 +71,7 @@ fn run_server(args: ServerArgs) -> anyhow::Result<()> {
 
     // Initialize the connection with server capabilities. For now, this consists
     // only of `TextDocumentSyncKind.Full`.
-    let server_capabilities = serde_json::to_value(&ServerCapabilities {
+    let server_capabilities = serde_json::to_value(ServerCapabilities {
         completion_provider: Some(CompletionOptions {
             trigger_characters: Some(make_trigger_characters(COMPLETION_TRIGGER_CHARACTERS)),
             ..Default::default()

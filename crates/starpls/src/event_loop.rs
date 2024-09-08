@@ -320,7 +320,7 @@ fn collect_diagnostics(
     Some(
         diagnostics
             .into_iter()
-            .flat_map(|diagnostic| convert::lsp_diagnostic_from_native(diagnostic, &line_index))
+            .flat_map(|diagnostic| convert::lsp_diagnostic_from_native(diagnostic, line_index))
             .collect::<Vec<_>>(),
     )
 }

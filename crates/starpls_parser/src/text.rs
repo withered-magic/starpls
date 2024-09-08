@@ -140,6 +140,10 @@ impl<'a> StrWithTokens<'a> {
         (self.token_start[pos], self.token_start[end])
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.token_kinds.is_empty()
+    }
+
     pub fn len(&self) -> usize {
         self.token_kinds.len()
     }

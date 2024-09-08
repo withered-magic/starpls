@@ -84,7 +84,7 @@ impl<'a> Resolver<'a> {
             .filter_map(move |(scope_id, scope)| {
                 scope
                     .defs
-                    .get(&name)
+                    .get(name)
                     .map(|defs| (scope_id, scope.execution_scope, defs))
             })
             .flat_map(|(scope, execution_scope, defs)| {
@@ -192,11 +192,11 @@ impl<'a> Resolver<'a> {
         // Add names from builtins, taking the current Bazel API context into account.
         let mut add_builtins = |api_globals: &APIGlobals| {
             for (name, func) in api_globals.functions.iter() {
-                names.insert(Name::from_str(&name), ScopeDef::BuiltinFunction(*func));
+                names.insert(Name::from_str(name), ScopeDef::BuiltinFunction(*func));
             }
             for (name, type_ref) in api_globals.variables.iter() {
                 names.insert(
-                    Name::from_str(&name),
+                    Name::from_str(name),
                     ScopeDef::BuiltinVariable(type_ref.clone()),
                 );
             }
@@ -294,7 +294,7 @@ impl<'a> Resolver<'a> {
             .filter(|(range, _)| range.start() <= offset && offset <= range.end())
             .min_by_key(|(range, _)| range.len())
             .map(|(hir_range, scope)| {
-                find_nearest_predecessor(&scopes, &source_map, hir_range, offset).unwrap_or(scope)
+                find_nearest_predecessor(scopes, source_map, hir_range, offset).unwrap_or(scope)
             });
         Self::from_parts(db, file, scopes, scope)
     }

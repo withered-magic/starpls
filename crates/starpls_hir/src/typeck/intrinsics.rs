@@ -153,7 +153,7 @@ impl IntrinsicFunction {
                 .then_some(first_ty)
             })
             .cloned()
-            .unwrap_or_else(|| Ty::unknown());
+            .unwrap_or_else(Ty::unknown);
 
         Some(
             TyKind::Dict(

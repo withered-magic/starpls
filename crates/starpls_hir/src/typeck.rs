@@ -922,6 +922,22 @@ impl Param {
         }
     }
 
+    pub fn kind(&self, db: &dyn Db) -> Option<AttributeKind> {
+        let common = common_attributes_query(db);
+        let attr = match &self.0 {
+            ParamInner::BuiltinParam { parent, index } => match &parent.params(db)[*index] {
+                BuiltinFunctionParam::Simple { .. } => return None,
+                _ => return None,
+            },
+            ParamInner::RuleParam(RuleParam::Keyword { attr, .. }) => attr,
+            ParamInner::RuleParam(RuleParam::BuiltinKeyword(kind, index)) => {
+                common.get(db, kind.clone(), *index).1
+            }
+            _ => return None,
+        };
+        Some(attr.kind.clone())
+    }
+
     pub fn syntax_node_ptr(&self, db: &dyn Db) -> Option<SyntaxNodePtr> {
         match self.0 {
             ParamInner::Param { parent, index } => parent.and_then(|parent| {

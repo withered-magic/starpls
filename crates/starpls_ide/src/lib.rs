@@ -14,7 +14,8 @@ use starpls_test_util::make_test_builtins;
 
 pub use crate::{
     completions::{
-        CompletionItem, CompletionItemKind, CompletionMode, Edit, InsertReplaceEdit, TextEdit,
+        CompletionItem, CompletionItemKind, CompletionMode, Edit, InsertReplaceEdit,
+        InsertTextFormat, TextEdit,
     },
     document_symbols::{DocumentSymbol, SymbolKind, SymbolTag},
     hover::{Hover, Markup},

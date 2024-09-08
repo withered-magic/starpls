@@ -5,7 +5,9 @@ pub use crate::{
     api::*,
     def::Name,
     display::{DisplayWithDb, DisplayWithDbWrapper},
-    typeck::{builtins::BuiltinDefs, Cancelled, GlobalCtxt, InferenceOptions, Ty, TyCtxt},
+    typeck::{
+        builtins::BuiltinDefs, AttributeKind, Cancelled, GlobalCtxt, InferenceOptions, Ty, TyCtxt,
+    },
 };
 use crate::{
     def::{ExprId, Module, ModuleSourceMap},

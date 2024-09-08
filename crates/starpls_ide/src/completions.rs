@@ -2,7 +2,7 @@
 
 use rustc_hash::FxHashMap;
 use starpls_common::{parse, FileId, LoadItemCandidateKind};
-use starpls_hir::{Db, Name, Param, ScopeDef, Semantics, Type};
+use starpls_hir::{AttributeKind, Db, Name, Param, ScopeDef, Semantics, Type};
 use starpls_syntax::{
     ast::{self, AstNode, AstToken},
     parse_module,
@@ -24,6 +24,7 @@ pub struct CompletionItem {
     pub kind: CompletionItemKind,
     pub mode: Option<CompletionMode>,
     pub filter_text: Option<String>,
+    pub insert_text_format: Option<InsertTextFormat>,
     relevance: CompletionRelevance,
 }
 
@@ -43,6 +44,12 @@ pub enum Edit {
 pub struct TextEdit {
     pub range: TextRange,
     pub new_text: String,
+}
+
+#[derive(Debug)]
+pub enum InsertTextFormat {
+    PlainText,
+    Snippet,
 }
 
 #[derive(Debug)]
@@ -137,23 +144,28 @@ pub(crate) fn completions(
             is_loop_variable,
         }) => {
             // Add completions for parameter names (excluding arg list and kwarg dict parameters).
-            for name in params
-                .iter()
-                .filter(|param| {
-                    !param.is_args_list(db)
-                        && !param.is_kwargs_dict(db)
-                        && !param.is_positional_only(db)
-                })
-                .filter_map(|param| match param.name(db) {
-                    Some(name) if !name.is_missing() => Some(name),
-                    _ => None,
-                })
-            {
+            for param in params.iter().filter(|param| {
+                !param.is_args_list(db)
+                    && !param.is_kwargs_dict(db)
+                    && !param.is_positional_only(db)
+                    && param.name(db).is_some()
+            }) {
+                let name = param.name(db).unwrap();
+                let kind = param.kind(db);
+                let insert_text = match kind {
+                    Some(AttributeKind::String) => format!("{} = \"$0\",$1", name.as_str()),
+                    Some(AttributeKind::IntList)
+                    | Some(AttributeKind::OutputList)
+                    | Some(AttributeKind::StringList)
+                    | Some(AttributeKind::LabelList) => format!("{} = [$0],$1", name.as_str()),
+                    _ => format!("{} = $0,$1", name.as_str()),
+                };
                 items.push(CompletionItem {
                     label: format!("{}=", name.as_str()),
                     kind: CompletionItemKind::Variable,
-                    mode: Some(CompletionMode::InsertText(format!("{} = ", name.as_str()))),
+                    mode: Some(CompletionMode::InsertText(insert_text)),
                     relevance: CompletionRelevance::Parameter,
+                    insert_text_format: Some(InsertTextFormat::Snippet),
                     filter_text: None,
                 });
             }
@@ -161,18 +173,27 @@ pub(crate) fn completions(
             if !is_loop_variable {
                 add_globals(&mut items);
                 for (name, decl) in names {
+                    let kind = match &decl {
+                        ScopeDef::Callable(_) => CompletionItemKind::Function,
+                        def if def.ty(db).is_callable() => CompletionItemKind::Function,
+                        // All the global values in the Bazel builtins are modules.
+                        ScopeDef::Variable(it) if !it.is_user_defined() => {
+                            CompletionItemKind::Module
+                        }
+                        _ => CompletionItemKind::Variable,
+                    };
+                    let (mode, format) = match kind {
+                        CompletionItemKind::Function => (
+                            Some(CompletionMode::InsertText(format!("{}($0)", name.as_str()))),
+                            Some(InsertTextFormat::Snippet),
+                        ),
+                        _ => (None, None),
+                    };
                     items.push(CompletionItem {
                         label: name.to_string(),
-                        kind: match &decl {
-                            ScopeDef::Callable(_) => CompletionItemKind::Function,
-                            def if def.ty(db).is_callable() => CompletionItemKind::Function,
-                            // All the global values in the Bazel builtins are modules.
-                            ScopeDef::Variable(it) if !it.is_user_defined() => {
-                                CompletionItemKind::Module
-                            }
-                            _ => CompletionItemKind::Variable,
-                        },
-                        mode: None,
+                        kind,
+                        mode,
+                        insert_text_format: format,
                         relevance: if decl.is_user_defined() {
                             CompletionRelevance::VariableOrKeyword
                         } else {
@@ -197,6 +218,7 @@ pub(crate) fn completions(
                         CompletionItemKind::Field
                     },
                     mode: None,
+                    insert_text_format: None,
                     relevance: CompletionRelevance::VariableOrKeyword,
                     filter_text: None,
                 })
@@ -208,6 +230,7 @@ pub(crate) fn completions(
                     label: name.to_string(),
                     kind: CompletionItemKind::Class,
                     mode: None,
+                    insert_text_format: None,
                     relevance: CompletionRelevance::VariableOrKeyword,
                     filter_text: None,
                 })
@@ -256,6 +279,7 @@ pub(crate) fn completions(
                         LoadItemCandidateKind::File => CompletionItemKind::File,
                     },
                     mode: Some(CompletionMode::TextEdit(edit)),
+                    insert_text_format: Some(InsertTextFormat::PlainText),
                     relevance: CompletionRelevance::VariableOrKeyword,
                     filter_text,
                 });
@@ -283,6 +307,7 @@ pub(crate) fn completions(
                         _ => continue,
                     },
                     mode: None,
+                    insert_text_format: Some(InsertTextFormat::PlainText),
                     relevance: CompletionRelevance::VariableOrKeyword,
                     filter_text: None,
                 });
@@ -298,6 +323,7 @@ pub(crate) fn completions(
                     label: key,
                     kind: CompletionItemKind::Constant,
                     mode: None,
+                    insert_text_format: None,
                     relevance: CompletionRelevance::VariableOrKeyword,
                     filter_text: None,
                 });
@@ -317,6 +343,7 @@ pub(crate) fn add_globals(items: &mut Vec<CompletionItem>) {
             mode: None,
             relevance: CompletionRelevance::VariableOrKeyword,
             filter_text: None,
+            insert_text_format: None,
         })
     };
     add_global("True");
@@ -326,12 +353,20 @@ pub(crate) fn add_globals(items: &mut Vec<CompletionItem>) {
 
 fn add_keywords(items: &mut Vec<CompletionItem>, is_in_def: bool, is_in_for: bool) {
     let add_keyword = &mut |keyword: &'static str| {
+        let (mode, insert_text_format) = match keyword {
+            "load" => (
+                Some(CompletionMode::InsertText(format!("{}(\"$0\")", keyword))),
+                Some(InsertTextFormat::Snippet),
+            ),
+            _ => (None, None),
+        };
         items.push(CompletionItem {
             label: keyword.to_string(),
             kind: CompletionItemKind::Keyword,
-            mode: None,
             relevance: CompletionRelevance::VariableOrKeyword,
             filter_text: None,
+            mode,
+            insert_text_format,
         })
     };
     add_keyword("def");

@@ -7,9 +7,15 @@ build --experimental_convenience_symlinks=ignore
 
 build --@rules_rust//rust/toolchain/channel=nightly
 
+# Check rustfmt
 build --@rules_rust//:rustfmt.toml=//:rustfmt.toml
 build --aspects=@rules_rust//rust:defs.bzl%rustfmt_aspect
 build --output_groups=+rustfmt_checks
+
+# Check clippy
+build --aspects=@rules_rust//rust:defs.bzl%rust_clippy_aspect
+build --output_groups=+clippy_checks
+build --@rules_rust//:clippy.toml=//:clippy.toml
 
 build --incompatible_strict_action_env
 

@@ -39,6 +39,7 @@ enum Commands {
         output_base: Option<String>,
     },
     Server(ServerArgs),
+    Version,
 }
 
 #[derive(Args, Default)]
@@ -59,12 +60,21 @@ fn main() -> anyhow::Result<()> {
     match cli.command {
         Some(Commands::Check { paths, output_base }) => run_check(paths, output_base),
         Some(Commands::Server(args)) => run_server(args),
+        Some(Commands::Version) => {
+            println!("{}", get_version());
+            Ok(())
+        }
         None => run_server(Default::default()),
     }
 }
 
+fn get_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
 fn run_server(args: ServerArgs) -> anyhow::Result<()> {
-    eprintln!("server: starpls, v0.1.14");
+    let version = get_version();
+    eprintln!("server: starpls, v{}", version);
 
     // Create the transport over stdio.
     let (connection, io_threads) = Connection::stdio();

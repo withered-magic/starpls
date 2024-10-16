@@ -133,6 +133,29 @@ impl BuiltinFunction {
     where
         I: Iterator<Item = (&'a Argument, &'a Ty)>,
     {
+        let resolve_load_like = |db: &dyn Db, args: &mut I| {
+            let mut next_string_arg = || {
+                args.next().and_then(|(arg, ty)| match (arg, ty.kind()) {
+                    (Argument::Simple { .. }, TyKind::String(Some(s))) => Some(s.value(db)),
+                    _ => None,
+                })
+            };
+
+            let path = next_string_arg()?;
+            let name = next_string_arg()?;
+            let loaded_file = db.load_file(&path, file.dialect(db), file.id(db)).ok()??;
+
+            Some(
+                match Resolver::resolve_export_in_file(db, loaded_file, &Name::from_str(&name))? {
+                    Export::Variable(expr) => InFile {
+                        file: loaded_file,
+                        value: expr.expr,
+                    },
+                    _ => return None,
+                },
+            )
+        };
+
         let db = tcx.db;
         let ret_kind = match (
             self.parent_type(db)
@@ -441,31 +464,24 @@ impl BuiltinFunction {
             }
 
             (None, "use_extension") => {
-                let mut next_string_arg = || {
-                    args.next().and_then(|(arg, ty)| match (arg, ty.kind()) {
-                        (Argument::Simple { .. }, TyKind::String(Some(s))) => Some(s.value(db)),
-                        _ => None,
-                    })
-                };
-
-                let path = next_string_arg()?;
-                let name = next_string_arg()?;
-                let loaded_file = db.load_file(&path, file.dialect(db), file.id(db)).ok()??;
-                let expr = match Resolver::resolve_export_in_file(
-                    db,
-                    loaded_file,
-                    &Name::from_str(&name),
-                )? {
-                    Export::Variable(expr) => expr.expr,
-                    _ => return None,
-                };
-
-                let module_extension = match tcx.infer_expr(loaded_file, expr).kind() {
+                let expr = resolve_load_like(db, &mut args)?;
+                let module_extension = match tcx.infer_expr(expr.file, expr.value).kind() {
                     TyKind::ModuleExtension(module_extension) => module_extension.clone(),
                     _ => return None,
                 };
-
                 TyKind::ModuleExtensionProxy(module_extension)
+            }
+
+            (None, "use_repo_rule") => {
+                let expr = resolve_load_like(db, &mut args)?;
+                let ty = tcx.infer_expr(expr.file, expr.value);
+                return match ty.kind() {
+                    TyKind::Rule(TyRule {
+                        kind: RuleKind::Repository,
+                        ..
+                    }) => Some(ty),
+                    _ => None,
+                };
             }
 
             _ => return None,

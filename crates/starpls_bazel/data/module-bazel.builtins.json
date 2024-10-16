@@ -528,7 +528,7 @@
                         "is_star_star_arg": false
                     }
                 ],
-                "return_type": "None"
+                "return_type": "Unknown"
             }
         }
     ]

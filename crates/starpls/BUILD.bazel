@@ -1,3 +1,4 @@
+load("@aspect_bazel_lib//lib:transitions.bzl", "platform_transition_filegroup")
 load("@crates//:defs.bzl", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_binary")
 
@@ -13,4 +14,10 @@ rust_binary(
         "//crates/starpls_ide",
         "//crates/starpls_syntax",
     ],
+)
+
+platform_transition_filegroup(
+    name = "starpls_arm",
+    srcs = [":starpls"],
+    target_platform = "//:aarch64_linux",
 )

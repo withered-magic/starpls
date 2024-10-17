@@ -17,3 +17,6 @@ build --bes_results_url=https://starpls.buildbuddy.io/invocation/
 build --bes_backend=grpcs://starpls.buildbuddy.io
 build --remote_cache=grpcs://starpls.buildbuddy.io
 build --remote_timeout=3600
+
+build --action_env BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
+build --incompatible_enable_cc_toolchain_resolution

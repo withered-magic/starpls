@@ -1,67 +1,67 @@
 {
   "builtins": [
-      {
-          "name": "repo",
-          "doc": "",
-          "callable": {
-              "params": [
-                  {
-                      "name": "default_applicable_licenses",
-                      "type": "List of Labels",
-                      "doc": "",
-                      "default_value": "[]",
-                      "is_mandatory": false,
-                      "is_star_arg": false,
-                      "is_star_star_arg": false
-                  },
-                  {
-                      "name": "default_visibility",
-                      "type": "List of Labels",
-                      "doc": "",
-                      "default_value": "[]",
-                      "is_mandatory": false,
-                      "is_star_arg": false,
-                      "is_star_star_arg": false
-                  },
-                  {
-                      "name": "default_deprecation",
-                      "type": "string",
-                      "doc": "",
-                      "default_value": "\"\"",
-                      "is_mandatory": false,
-                      "is_star_arg": false,
-                      "is_star_star_arg": false
-                  },
-                  {
-                      "name": "default_package_metadata",
-                      "type": "List of Labels",
-                      "doc": "",
-                      "default_value": "",
-                      "is_mandatory": false,
-                      "is_star_arg": false,
-                      "is_star_star_arg": false
-                  },
-                  {
-                      "name": "default_testonly",
-                      "type": "boolean",
-                      "doc": "",
-                      "default_value": "False",
-                      "is_mandatory": false,
-                      "is_star_arg": false,
-                      "is_star_star_arg": false
-                  },
-                  {
-                      "name": "features",
-                      "type": "List of strings",
-                      "doc": "",
-                      "default_value": "[]",
-                      "is_mandatory": false,
-                      "is_star_arg": false,
-                      "is_star_star_arg": false
-                  }
-              ],
-              "return_type": "None"
+    {
+      "name": "repo",
+      "doc": "",
+      "callable": {
+        "params": [
+          {
+            "name": "default_applicable_licenses",
+            "type": "List of Labels",
+            "doc": "",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "default_visibility",
+            "type": "List of Labels",
+            "doc": "",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "default_deprecation",
+            "type": "string",
+            "doc": "",
+            "default_value": "\"\"",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "default_package_metadata",
+            "type": "List of Labels",
+            "doc": "",
+            "default_value": "",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "default_testonly",
+            "type": "boolean",
+            "doc": "",
+            "default_value": "False",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "features",
+            "type": "List of strings",
+            "doc": "",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
           }
+        ],
+        "return_type": "None"
       }
+    }
   ]
 }

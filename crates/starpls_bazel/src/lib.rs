@@ -130,6 +130,7 @@ pub enum APIContext {
     Repo,
     Workspace,
     Prelude,
+    Cquery,
 }
 
 pub fn load_builtins(path: impl AsRef<Path>) -> anyhow::Result<Builtins> {

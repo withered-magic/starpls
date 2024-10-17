@@ -146,7 +146,9 @@ impl<'a> Resolver<'a> {
         if api_context == APIContext::Repo {
             return resolve_in_api_globals(globals.repo_globals(self.db));
         }
-
+        if api_context == APIContext::Cquery {
+            return resolve_in_api_globals(globals.cquery_globals(self.db));
+        }
         resolve_in_api_globals(globals.bzl_globals(self.db)).or_else(|| match api_context {
             APIContext::Module => resolve_in_api_globals(globals.bzlmod_globals(self.db)),
             APIContext::Workspace => resolve_in_api_globals(globals.workspace_globals(self.db)),
@@ -204,6 +206,8 @@ impl<'a> Resolver<'a> {
 
         if api_context == APIContext::Repo {
             add_builtins(builtin_globals.repo_globals(self.db));
+        } else if api_context == APIContext::Cquery {
+            add_builtins(builtin_globals.cquery_globals(self.db));
         } else {
             add_builtins(builtin_globals.bzl_globals(self.db));
             match api_context {

@@ -743,6 +743,9 @@ pub(crate) fn dialect_and_api_context_for_workspace_path(
         path if path.ends_with(".BUILD.bazel") || path.ends_with(".BUILD") => {
             (Dialect::Bazel, Some(APIContext::Build))
         }
+        path if path.ends_with(".cquery") || path.ends_with(".query.bzl") => {
+            (Dialect::Bazel, Some(APIContext::Cquery))
+        }
         _ => match path.extension().and_then(|ext| ext.to_str()) {
             Some("bzl") => (Dialect::Bazel, Some(APIContext::Bzl)),
             _ => {

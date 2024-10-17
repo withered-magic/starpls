@@ -1,0 +1,40 @@
+{
+  "builtins": [
+    {
+      "name": "build_options",
+      "doc": "`build_options(target)` returns a map whose keys are build option identifiers (see Configurations) and whose values are their Starlark values. Build options whose values are not legal Starlark values are omitted from this map.\n\nIf the target is an input file, `build_options(target)` returns None, as input file targets have a null configuration.",
+      "callable": {
+        "params": [
+          {
+            "name": "target",
+            "type": "Target",
+            "doc": "",
+            "default_value": "",
+            "is_mandatory": true,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          }
+        ],
+        "return_type": "dict"
+      }
+    },
+    {
+      "name": "providers",
+      "doc": "`providers(target)` returns a map whose keys are names of providers (for example, `\"DefaultInfo\"`) and whose values are their Starlark values. Providers whose values are not legal Starlark values are omitted from this map.",
+      "callable": {
+        "params": [
+          {
+            "name": "target",
+            "type": "Target",
+            "doc": "",
+            "default_value": "",
+            "is_mandatory": true,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          }
+        ],
+        "return_type": "dict"
+      }
+    }
+  ]
+}

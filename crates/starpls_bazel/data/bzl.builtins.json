@@ -1,184 +1,184 @@
 {
-    "builtins": [
-        {
-            "name": "licenses",
-            "doc": "`licenses()` specifies the default license type (or types) of the build rules in a `BUILD` file. The `licenses()` directive should appear close to the beginning of the `BUILD` file, before any build rules, as it sets the `BUILD`-file scope default for build rule license types.",
-            "callable": {
-                "params": [
-                    {
-                        "name": "license_types",
-                        "type": "List of strings",
-                        "doc": "The argument, `license_types`, is a list of license-type strings.\n\nValid license types include:\n\n- `restricted` - Requires mandatory source distribution.\n\n- `reciprocal` - Allows usage of software freely in unmodified form. Any modifications must be made freely available.\n\n- `notice` - Original or modified third-party software may be shipped without danger nor encumbering other sources. All of the licenses in this category do, however, have an \"original Copyright notice\" or \"advertising clause\", wherein any external distributions must include the notice or clause specified in the license.\n\n- `permissive` - Code that is under a license but does not require a notice.\n\n- `unencumbered` - Public domain, free for any use.\n\n```python\nlicenses([\"notice\"]) # MIT license exports_files([\"jquery-2.1.1.js\"])\n```\n",
-                        "default_value": "",
-                        "is_mandatory": true,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    }
-                ],
-                "return_type": "None"
-            }
-        },
-        {
-            "name": "module_extension",
-            "doc": "Creates a new module extension. Store it in a global value, so that it can be exported and used in a MODULE.bazel file with `use_extension`.",
-            "callable": {
-                "params": [
-                    {
-                        "name": "implementation",
-                        "type": "Unknown",
-                        "doc": "The function that implements this module extension. Must take a single parameter, `module_ctx`. The function is called once at the beginning of a build to determine the set of available repos.",
-                        "default_value": "",
-                        "is_mandatory": true,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    },
-                    {
-                        "name": "tag_classes",
-                        "type": "Unknown",
-                        "doc": "A dictionary to declare all the tag classes used by the extension. It maps from the name of the tag class to a `tag_class` object.",
-                        "default_value": "{}",
-                        "is_mandatory": false,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    },
-                    {
-                        "name": "doc",
-                        "type": "string; or None",
-                        "doc": "A description of the module extension that can be extracted by documentation generating tools.",
-                        "default_value": "None",
-                        "is_mandatory": false,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    },
-                    {
-                        "name": "environ",
-                        "type": "sequence of strings",
-                        "doc": "Provides a list of environment variable that this module extension depends on. If an environment variable in that list changes, the extension will be re-evaluated.",
-                        "default_value": "[]",
-                        "is_mandatory": false,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    },
-                    {
-                        "name": "os_dependent",
-                        "type": "boolean",
-                        "doc": "Indicates whether this extension is OS-dependent or not",
-                        "default_value": "False",
-                        "is_mandatory": false,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    },
-                    {
-                        "name": "arch_dependent",
-                        "type": "boolean",
-                        "doc": "Indicates whether this extension is architecture-dependent or not",
-                        "default_value": "False",
-                        "is_mandatory": false,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    }
-                ],
-                "return_type": "Unknown"
-            }
-        },
-        {
-            "name": "repository_rule",
-            "doc": "Creates a new repository rule. Store it in a global value, so that it can be loaded and called from a `module extension` implementation function, or used by `use_repo_rule`.",
-            "callable": {
-                "params": [
-                    {
-                        "name": "implementation",
-                        "type": "Unknown",
-                        "doc": "The function that implements this rule. Must have a single parameter, `repository_ctx`. The function is called during the loading phase for each instance of the rule.",
-                        "default_value": "",
-                        "is_mandatory": true,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    },
-                    {
-                        "name": "attrs",
-                        "type": "dict; or None",
-                        "doc": "dictionary to declare all the attributes of the rule. It maps from an attribute name to an attribute object (see attr module). Attributes starting with _ are private, and can be used to add an implicit dependency on a label to a file (a repository rule cannot depend on a generated artifact). The attribute name is implicitly added and must not be specified.",
-                        "default_value": "None",
-                        "is_mandatory": false,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    },
-                    {
-                        "name": "local",
-                        "type": "boolean",
-                        "doc": "Indicate that this rule fetches everything from the local system and should be reevaluated at every fetch.",
-                        "default_value": "None",
-                        "is_mandatory": false,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    },
-                    {
-                        "name": "environ",
-                        "type": "sequence of strings",
-                        "doc": "Deprecated. This parameter has been deprecated. Migrate to `repository_ctx.getenv` instead. Provides a list of environment variable that this repository rule depends on. If an environment variable in that list change, the repository will be refetched.",
-                        "default_value": "[]",
-                        "is_mandatory": false,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    },
-                    {
-                        "name": "configure",
-                        "type": "boolean",
-                        "doc": "Indicate that the repository inspects the system for configuration purpose",
-                        "default_value": "False",
-                        "is_mandatory": false,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    },
-                    {
-                        "name": "remotable",
-                        "type": "boolean",
-                        "doc": "Experimental. This parameter is experimental and may change at any time. Please do not depend on it. It may be enabled on an experimental basis by setting `---experimental_repo_remote_exec`. Compatible with remote execution",
-                        "default_value": "False",
-                        "is_mandatory": false,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    },
-                    {
-                        "name": "doc",
-                        "type": "string; or None",
-                        "doc": "A description of the repository rule that can be extracted by documentation generating tools.",
-                        "default_value": "None",
-                        "is_mandatory": false,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    }
-                ],
-                "return_type": "callable"
-            }
-        },
-        {
-            "name": "tag_class",
-            "doc": "Creates a new `tag_class` object, which defines an attribute schema for a class of tags, which are data objects usable by a module extension.",
-            "callable": {
-                "params": [
-                    {
-                        "name": "attrs",
-                        "type": "dict",
-                        "doc": "A dictionary to declare all the attributes of this tag class. It maps from an attribute name to an attribute object (see attr module).",
-                        "default_value": "{}",
-                        "is_mandatory": false,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    },
-                    {
-                        "name": "doc",
-                        "type": "string; or None",
-                        "doc": "A description of the tag class that can be extracted by documentation generating tools.",
-                        "default_value": "None",
-                        "is_mandatory": false,
-                        "is_star_arg": false,
-                        "is_star_star_arg": false
-                    }
-                ],
-                "return_type": "tag_class"
-            }
-        }
-    ]
+  "builtins": [
+    {
+      "name": "licenses",
+      "doc": "`licenses()` specifies the default license type (or types) of the build rules in a `BUILD` file. The `licenses()` directive should appear close to the beginning of the `BUILD` file, before any build rules, as it sets the `BUILD`-file scope default for build rule license types.",
+      "callable": {
+        "params": [
+          {
+            "name": "license_types",
+            "type": "List of strings",
+            "doc": "The argument, `license_types`, is a list of license-type strings.\n\nValid license types include:\n\n- `restricted` - Requires mandatory source distribution.\n\n- `reciprocal` - Allows usage of software freely in unmodified form. Any modifications must be made freely available.\n\n- `notice` - Original or modified third-party software may be shipped without danger nor encumbering other sources. All of the licenses in this category do, however, have an \"original Copyright notice\" or \"advertising clause\", wherein any external distributions must include the notice or clause specified in the license.\n\n- `permissive` - Code that is under a license but does not require a notice.\n\n- `unencumbered` - Public domain, free for any use.\n\n```python\nlicenses([\"notice\"]) # MIT license exports_files([\"jquery-2.1.1.js\"])\n```\n",
+            "default_value": "",
+            "is_mandatory": true,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          }
+        ],
+        "return_type": "None"
+      }
+    },
+    {
+      "name": "module_extension",
+      "doc": "Creates a new module extension. Store it in a global value, so that it can be exported and used in a MODULE.bazel file with `use_extension`.",
+      "callable": {
+        "params": [
+          {
+            "name": "implementation",
+            "type": "Unknown",
+            "doc": "The function that implements this module extension. Must take a single parameter, `module_ctx`. The function is called once at the beginning of a build to determine the set of available repos.",
+            "default_value": "",
+            "is_mandatory": true,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "tag_classes",
+            "type": "Unknown",
+            "doc": "A dictionary to declare all the tag classes used by the extension. It maps from the name of the tag class to a `tag_class` object.",
+            "default_value": "{}",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "doc",
+            "type": "string; or None",
+            "doc": "A description of the module extension that can be extracted by documentation generating tools.",
+            "default_value": "None",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "environ",
+            "type": "sequence of strings",
+            "doc": "Provides a list of environment variable that this module extension depends on. If an environment variable in that list changes, the extension will be re-evaluated.",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "os_dependent",
+            "type": "boolean",
+            "doc": "Indicates whether this extension is OS-dependent or not",
+            "default_value": "False",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "arch_dependent",
+            "type": "boolean",
+            "doc": "Indicates whether this extension is architecture-dependent or not",
+            "default_value": "False",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          }
+        ],
+        "return_type": "Unknown"
+      }
+    },
+    {
+      "name": "repository_rule",
+      "doc": "Creates a new repository rule. Store it in a global value, so that it can be loaded and called from a `module extension` implementation function, or used by `use_repo_rule`.",
+      "callable": {
+        "params": [
+          {
+            "name": "implementation",
+            "type": "Unknown",
+            "doc": "The function that implements this rule. Must have a single parameter, `repository_ctx`. The function is called during the loading phase for each instance of the rule.",
+            "default_value": "",
+            "is_mandatory": true,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "attrs",
+            "type": "dict; or None",
+            "doc": "dictionary to declare all the attributes of the rule. It maps from an attribute name to an attribute object (see attr module). Attributes starting with _ are private, and can be used to add an implicit dependency on a label to a file (a repository rule cannot depend on a generated artifact). The attribute name is implicitly added and must not be specified.",
+            "default_value": "None",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "local",
+            "type": "boolean",
+            "doc": "Indicate that this rule fetches everything from the local system and should be reevaluated at every fetch.",
+            "default_value": "None",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "environ",
+            "type": "sequence of strings",
+            "doc": "Deprecated. This parameter has been deprecated. Migrate to `repository_ctx.getenv` instead. Provides a list of environment variable that this repository rule depends on. If an environment variable in that list change, the repository will be refetched.",
+            "default_value": "[]",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "configure",
+            "type": "boolean",
+            "doc": "Indicate that the repository inspects the system for configuration purpose",
+            "default_value": "False",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "remotable",
+            "type": "boolean",
+            "doc": "Experimental. This parameter is experimental and may change at any time. Please do not depend on it. It may be enabled on an experimental basis by setting `---experimental_repo_remote_exec`. Compatible with remote execution",
+            "default_value": "False",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "doc",
+            "type": "string; or None",
+            "doc": "A description of the repository rule that can be extracted by documentation generating tools.",
+            "default_value": "None",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          }
+        ],
+        "return_type": "callable"
+      }
+    },
+    {
+      "name": "tag_class",
+      "doc": "Creates a new `tag_class` object, which defines an attribute schema for a class of tags, which are data objects usable by a module extension.",
+      "callable": {
+        "params": [
+          {
+            "name": "attrs",
+            "type": "dict",
+            "doc": "A dictionary to declare all the attributes of this tag class. It maps from an attribute name to an attribute object (see attr module).",
+            "default_value": "{}",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "doc",
+            "type": "string; or None",
+            "doc": "A description of the tag class that can be extracted by documentation generating tools.",
+            "default_value": "None",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          }
+        ],
+        "return_type": "tag_class"
+      }
+    }
+  ]
 }

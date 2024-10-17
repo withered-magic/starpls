@@ -736,6 +736,7 @@ pub(crate) fn dialect_and_api_context_for_workspace_path(
         "BUILD" | "BUILD.bazel" => (Dialect::Bazel, Some(APIContext::Build)),
         "REPO.bazel" => (Dialect::Bazel, Some(APIContext::Repo)),
         "MODULE.bazel" => (Dialect::Bazel, Some(APIContext::Module)),
+        path if path.ends_with(".MODULE.bazel") => (Dialect::Bazel, Some(APIContext::Module)),
         "WORKSPACE" | "WORKSPACE.bazel" | "WORKSPACE.bzlmod" => {
             (Dialect::Bazel, Some(APIContext::Workspace))
         }

@@ -50,12 +50,13 @@ pub(crate) fn did_save_text_document(
         .lookup_by_path_buf(&path)
         .is_some()
     {
-        if let Some("MODULE.bazel" | "WORKSPACE" | "WORKSPACE.bazel" | "WORKSPACE.bzlmod") =
-            path.file_name().and_then(|file_name| file_name.to_str())
-        {
-            server.bazel_client.clear_repo_mappings();
-            server.fetched_repos.clear();
+        match path.file_name().and_then(|file_name| file_name.to_str()) {
+            Some("MODULE.bazel" | "WORKSPACE" | "WORKSPACE.bazel" | "WORKSPACE.bzlmod") => {}
+            Some(file_name) if file_name.ends_with(".MODULE.bazel") => {}
+            _ => return Ok(()),
         }
+        server.bazel_client.clear_repo_mappings();
+        server.fetched_repos.clear();
     }
     Ok(())
 }

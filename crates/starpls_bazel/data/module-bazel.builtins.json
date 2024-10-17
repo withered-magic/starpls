@@ -199,6 +199,60 @@
             }
         },
         {
+            "name": "include",
+            "doc": "Includes the contents of another MODULE.bazel-like file. Effectively, include() behaves as if the included file is textually placed at the location of the include() call, except that variable bindings (such as those used for use_extension) are only ever visible in the file they occur in, not in any included or including files.\n\nOnly the root module may use `include()`; it is an error if a `bazel_dep`'s MODULE file uses `include()`.\n\nOnly files in the main repo may be included.\n\n`include()` allows you to segment the root module file into multiple parts, to avoid having an enormous MODULE.bazel file or to better manage access control for individual semantic segments. ",
+            "callable": {
+                "params": [
+                    {
+                        "name": "label",
+                        "type": "string",
+                        "doc": "The label pointing to the file to include. The label must point to a file in the main repo; in other words, it **must** start with double slashes (`//`).",
+                        "default_value": "",
+                        "is_mandatory": true,
+                        "is_star_arg": false,
+                        "is_star_star_arg": false
+                    }
+                ],
+                "return_type": "None"
+            }
+        },
+        {
+            "name": "inject_repo",
+            "doc": "Injects one or more new repos into the given module extension. This is ignored if the current module is not the root module or `--ignore_dev_dependency` is enabled.\n\nUse `override_repo` instead to override an existing repo.",
+            "callable": {
+                "params": [
+                    {
+                        "name": "extension_proxy",
+                        "type": "module_extension_proxy",
+                        "doc": "A module extension proxy object returned by a `use_extension` call.",
+                        "default_value": "",
+                        "is_mandatory": true,
+                        "is_star_arg": false,
+                        "is_star_star_arg": false
+                    },
+                    {
+                        "name": "args",
+                        "type": "Unknown",
+                        "doc": "The repos visible to the current module that should be injected into the extension under the same name.",
+                        "default_value": "",
+                        "is_mandatory": false,
+                        "is_star_arg": true,
+                        "is_star_star_arg": false
+                    },
+                    {
+                        "name": "kwargs",
+                        "type": "Unknown",
+                        "doc": "The new repos to inject into the extension, where the values are the names of repos in the scope of the current module and the keys are the name they will be visible under in the extension.",
+                        "default_value": "",
+                        "is_mandatory": false,
+                        "is_star_arg": false,
+                        "is_star_star_arg": true
+                    }
+                ],
+                "return_type": "None"
+            }
+        },
+        {
             "name": "local_path_override",
             "doc": "Specifies that a dependency should come from a certain directory on local disk. This directive only takes effect in the root module; in other words, if a module is used as a dependency by others, its own overrides are ignored.",
             "callable": {
@@ -308,6 +362,42 @@
                         "doc": "Overrides the registry for this module; instead of finding this module from the default list of registries, the given registry should be used.",
                         "default_value": "''",
                         "is_mandatory": false,
+                        "is_star_arg": false,
+                        "is_star_star_arg": false
+                    }
+                ],
+                "return_type": "None"
+            }
+        },
+        {
+            "name": "override_repo",
+            "doc": "Overrides one or more repos defined by the given module extension with the given repos visible to the current module. This is ignored if the current module is not the root module or `--ignore_dev_dependency` is enabled.\n\nUse `inject_repo` instead to add a new repo.",
+            "callable": {
+                "params": [
+                    {
+                        "name": "extension_proxy",
+                        "type": "module_extension_proxy",
+                        "doc": "A module extension proxy object returned by a `use_extension` call.",
+                        "default_value": "",
+                        "is_mandatory": true,
+                        "is_star_arg": false,
+                        "is_star_star_arg": false
+                    },
+                    {
+                        "name": "args",
+                        "type": "Unknown",
+                        "doc": "The repos in the extension that should be overridden with the repos of the same name in the current module.",
+                        "default_value": "",
+                        "is_mandatory": true,
+                        "is_star_arg": true,
+                        "is_star_star_arg": false
+                    },
+                    {
+                        "name": "kwargs",
+                        "type": "Unknown",
+                        "doc": "The overrides to apply to the repos generated by the extension, where the values are the names of repos in the scope of the current module and the keys are the names of the repos they will override in the extension.",
+                        "default_value": "",
+                        "is_mandatory": true,
                         "is_star_arg": false,
                         "is_star_star_arg": false
                     }

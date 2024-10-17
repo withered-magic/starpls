@@ -125,6 +125,14 @@ rust_repository_set(
     versions = [rust_version],
 )
 
+rust_repository_set(
+    name = "macos_aarch64",
+    edition = "2021",
+    exec_triple = "aarch64-apple-darwin",
+    extra_target_triples = ["aarch64-unknown-linux-gnu"],
+    versions = [rust_version],
+)
+
 load("@rules_rust//crate_universe:repositories.bzl", "crate_universe_dependencies")
 
 crate_universe_dependencies()

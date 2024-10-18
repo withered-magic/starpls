@@ -797,3 +797,20 @@ foo(3 + \
         "#]],
     )
 }
+
+#[test]
+fn test_escaped_newline_in_string() {
+    check_lexing(
+        r#"
+greeting = "Hello, \
+world!""#,
+        expect![[r#"
+            Token { kind: Newline, len: 1 }
+            Token { kind: Ident, len: 8 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: false } }, len: 17 }
+        "#]],
+    );
+}

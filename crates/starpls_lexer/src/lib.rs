@@ -810,7 +810,10 @@ impl Cursor<'_> {
                         return (true, triple_quoted);
                     }
                 }
-                '\\' if self.first() == '\\' || self.first() == closing_quote => {
+                '\\' if self.first() == '\\'
+                    || self.first() == closing_quote
+                    || self.first() == '\n' =>
+                {
                     // Bump again to skip the escaped character.
                     self.bump();
                 }

@@ -7,10 +7,20 @@ rust_binary(
     name = "starpls",
     srcs = glob(["src/**/*.rs"]),
     compile_data = [":src/builtin/builtin.pb"],
+    rustc_env_files = [":generate_rustc_env_file"],
     deps = all_crate_deps() + [
         "//crates/starpls_bazel",
         "//crates/starpls_common",
         "//crates/starpls_ide",
         "//crates/starpls_syntax",
     ],
+)
+
+genrule(
+    name = "generate_rustc_env_file",
+    srcs = [
+        "Cargo.toml",
+    ],
+    outs = ["rustc_env_file"],
+    cmd = "echo \"CARGO_PKG_VERSION=$$(grep 'version =' $(location :Cargo.toml) | awk '$$1 == \"version\" {print $$3}' | tr -d '\"')\" > $@",
 )

@@ -1,5 +1,7 @@
 //! Partially replicates the "completions" API in the LSP specification.
 
+use std::path;
+
 use rustc_hash::FxHashMap;
 use starpls_common::{parse, FileId, LoadItemCandidateKind};
 use starpls_hir::{Db, Name, Param, ScopeDef, Semantics, Type};
@@ -113,6 +115,9 @@ enum StringContext {
         file_id: FileId,
         lhs: ast::Expression,
     },
+    TargetSrc {
+        pathbuf: path::PathBuf,
+    },
 }
 
 struct CompletionContext {
@@ -123,8 +128,9 @@ pub(crate) fn completions(
     db: &dyn Db,
     pos: FilePosition,
     trigger_character: Option<String>,
+    pathbuf: path::PathBuf,
 ) -> Option<Vec<CompletionItem>> {
-    let ctx = CompletionContext::new(db, pos, trigger_character)?;
+    let ctx = CompletionContext::new(db, pos, trigger_character, pathbuf)?;
     let mut items = Vec::new();
 
     match ctx.analysis {
@@ -303,6 +309,23 @@ pub(crate) fn completions(
                 });
             }
         }
+        CompletionAnalysis::String(StringContext::TargetSrc { pathbuf }) => {
+            pathbuf.parent()?.read_dir().ok()?.for_each(|entry| {
+                if let Ok(entry) = entry {
+                    if let Some(name) = entry.file_name().to_str() {
+                        if entry.file_type().ok().unwrap().is_file() {
+                            items.push(CompletionItem {
+                                label: name.to_string(),
+                                kind: CompletionItemKind::File,
+                                mode: None,
+                                relevance: CompletionRelevance::VariableOrKeyword,
+                                filter_text: None,
+                            });
+                        }
+                    }
+                }
+            });
+        }
         _ => {}
     }
 
@@ -350,7 +373,12 @@ fn add_keywords(items: &mut Vec<CompletionItem>, is_in_def: bool, is_in_for: boo
     }
 }
 
-fn maybe_str_context(file_id: FileId, root: &SyntaxNode, pos: TextSize) -> Option<StringContext> {
+fn maybe_str_context(
+    file_id: FileId,
+    root: &SyntaxNode,
+    pos: TextSize,
+    pathbuf: path::PathBuf,
+) -> Option<StringContext> {
     let token = root.token_at_offset(pos).right_biased()?;
     let text = ast::String::cast(token.clone())?;
     let parent = token.parent()?;
@@ -368,6 +396,12 @@ fn maybe_str_context(file_id: FileId, root: &SyntaxNode, pos: TextSize) -> Optio
                     lhs: index_expr.lhs()?,
                 });
             }
+        } else if let Some(srcs_arr) = ast::ListExpr::cast(expr.syntax().parent()?) {
+            if let Some(srcs_arg) = ast::KeywordArgument::cast(srcs_arr.syntax().parent()?) {
+                if srcs_arg.name()?.syntax().text() == "srcs" {
+                    return Some(StringContext::TargetSrc { pathbuf });
+                }
+            }
         }
     }
 
@@ -379,13 +413,14 @@ impl CompletionContext {
         db: &dyn Db,
         FilePosition { file_id, pos }: FilePosition,
         trigger_character: Option<String>,
+        pathbuf: path::PathBuf,
     ) -> Option<Self> {
         // Reparse the file with a dummy identifier inserted at the current offset.
         let sema = Semantics::new(db);
         let file = db.get_file(file_id)?;
         let parse = parse(db, file);
 
-        if let Some(cx) = maybe_str_context(file_id, &parse.syntax(db), pos) {
+        if let Some(cx) = maybe_str_context(file_id, &parse.syntax(db), pos, pathbuf) {
             return Some(CompletionContext {
                 analysis: CompletionAnalysis::String(cx),
             });

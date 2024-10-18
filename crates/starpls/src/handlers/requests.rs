@@ -87,6 +87,7 @@ pub(crate) fn completion(
             .completion(
                 FilePosition { file_id, pos },
                 params.context.and_then(|cx| cx.trigger_character),
+                path
             )?
             .unwrap_or_else(|| Vec::new())
             .into_iter()

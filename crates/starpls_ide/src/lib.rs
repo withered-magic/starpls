@@ -328,8 +328,9 @@ impl AnalysisSnapshot {
         &self,
         pos: FilePosition,
         trigger_character: Option<String>,
+        pathbuf: PathBuf,
     ) -> Cancellable<Option<Vec<CompletionItem>>> {
-        self.query(|db| completions::completions(db, pos, trigger_character))
+        self.query(|db| completions::completions(db, pos, trigger_character, pathbuf))
     }
 
     pub fn diagnostics(&self, file_id: FileId) -> Cancellable<Vec<Diagnostic>> {

@@ -11,19 +11,7 @@ env:
 
 jobs:
   build:
-    name: Build
-    runs-on: ${{ matrix.target.runs-on }}
-    strategy:
-      matrix:
-        target:
-          - name: linux-amd64
-            runs-on: ubuntu-20.04
-          - name: linux-aarch64
-            runs-on: ubuntu-20.04
-          - name: darwin-arm64
-            runs-on: macos-14
-      fail-fast: true
-
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Prepare for build
@@ -34,11 +22,9 @@ jobs:
         env:
           BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: Build
-        run: bazel build -c opt //crates/starpls:${{ matrix.target.name == 'linux-aarch64' && 'starpls_arm' || 'starpls' }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: starpls-${{ matrix.target.name }}
-          path: bazel-bin/crates/starpls/${{ matrix.target.name == 'linux-aarch64' && 'starpls_arm' || 'starpls' }}
+        run: bazel build //...
+      - name: Run tests
+        run: bazel test --build_tests_only //...
 
   build-windows:
     runs-on: windows-latest

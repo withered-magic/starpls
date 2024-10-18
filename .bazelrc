@@ -14,6 +14,3 @@ build --output_groups=+rustfmt_checks
 build --incompatible_strict_action_env
 
 test --test_output=errors
-
-build --action_env BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
-build --incompatible_enable_cc_toolchain_resolution

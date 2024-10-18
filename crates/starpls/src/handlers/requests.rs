@@ -145,6 +145,15 @@ pub(crate) fn completion(
                     }),
                     sort_text,
                     insert_text,
+                    insert_text_format: match item.insert_text_format {
+                        Some(starpls_ide::InsertTextFormat::Snippet) => {
+                            Some(lsp_types::InsertTextFormat::SNIPPET)
+                        }
+                        Some(starpls_ide::InsertTextFormat::PlainText) => {
+                            Some(lsp_types::InsertTextFormat::PLAIN_TEXT)
+                        }
+                        _ => None,
+                    },
                     text_edit,
                     filter_text: item.filter_text,
                     ..Default::default()

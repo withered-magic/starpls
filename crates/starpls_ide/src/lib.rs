@@ -154,20 +154,17 @@ impl starpls_common::Db for Database {
             ..
         } = resolved_path
         {
-            match self.files.entry(build_file) {
-                Entry::Vacant(entry) => {
-                    entry.insert(File::new(
-                        self,
-                        build_file,
-                        Dialect::Bazel,
-                        Some(FileInfo::Bazel {
-                            api_context: APIContext::Build,
-                            is_external: false,
-                        }),
-                        contents.take().unwrap_or_default(),
-                    ));
-                }
-                _ => {}
+            if let Entry::Vacant(entry) = self.files.entry(build_file) {
+                entry.insert(File::new(
+                    self,
+                    build_file,
+                    Dialect::Bazel,
+                    Some(FileInfo::Bazel {
+                        api_context: APIContext::Build,
+                        is_external: false,
+                    }),
+                    contents.take().unwrap_or_default(),
+                ));
             };
         }
 
@@ -341,17 +338,14 @@ impl AnalysisSnapshot {
     }
 
     pub fn goto_definition(&self, pos: FilePosition) -> Cancellable<Option<Vec<LocationLink>>> {
-        self.query(|db| {
-            let res = goto_definition::goto_definition(db, pos);
-            res
-        })
+        self.query(|db| goto_definition::goto_definition(db, pos))
     }
 
     pub fn hover(&self, pos: FilePosition) -> Cancellable<Option<Hover>> {
         self.query(|db| hover::hover(db, pos))
     }
 
-    pub fn line_index<'a>(&'a self, file_id: FileId) -> Cancellable<Option<&'a LineIndex>> {
+    pub fn line_index(&self, file_id: FileId) -> Cancellable<Option<&LineIndex>> {
         self.query(move |db| line_index::line_index(db, file_id))
     }
 
@@ -398,6 +392,8 @@ pub struct FilePosition {
     pub pos: TextSize,
 }
 
+type StarlarkFile = (FileId, Dialect, Option<FileInfo>, Option<String>);
+
 /// A trait for loading a path and listing its exported symbols.
 pub trait FileLoader: Send + Sync + 'static {
     fn resolve_path(
@@ -413,7 +409,7 @@ pub trait FileLoader: Send + Sync + 'static {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> anyhow::Result<Option<(FileId, Dialect, Option<FileInfo>, Option<String>)>>;
+    ) -> anyhow::Result<Option<StarlarkFile>>;
 
     /// Returns a list of Starlark modules that can be loaded from the given `path`.
     fn list_load_candidates(

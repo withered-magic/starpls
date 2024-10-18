@@ -179,7 +179,7 @@ impl LoadItem {
     pub fn name(&self, db: &dyn Db) -> Name {
         match &module(db, self.file).load_items[self.id] {
             def::LoadItem::Direct { name, .. } | def::LoadItem::Aliased { name, .. } => {
-                Name::from_str(&name)
+                Name::from_str(name)
             }
         }
     }
@@ -344,7 +344,7 @@ impl Type {
         match self.ty.kind() {
             TyKind::BuiltinFunction(func) => Some(func.doc(db).clone()),
             TyKind::BuiltinType(ty, _) => Some(ty.doc(db).clone()),
-            TyKind::Function(func) => return func.doc(db).map(|doc| doc.to_string()),
+            TyKind::Function(func) => func.doc(db).map(|doc| doc.to_string()),
             TyKind::IntrinsicFunction(func, _) => Some(func.doc(db).clone()),
             TyKind::Rule(rule) => rule.doc.as_ref().map(Box::to_string),
             TyKind::Provider(provider) => provider.doc(db),
@@ -434,7 +434,7 @@ impl Type {
     pub fn try_as_inline_struct(&self) -> Option<Struct> {
         match self.ty.kind() {
             TyKind::Struct(strukt) => strukt.as_ref().and_then(|strukt| match strukt {
-                &typeck::Struct::Inline { ref call_expr, .. } => Some(Struct {
+                typeck::Struct::Inline { call_expr, .. } => Some(Struct {
                     call_expr: call_expr.clone(),
                 }),
                 _ => None,
@@ -484,7 +484,7 @@ impl Callable {
             )
             .intern(),
             CallableInner::BuiltinFunction(func) => TyKind::BuiltinFunction(func).intern(),
-            CallableInner::Rule(ref ty) => ty.clone().into(),
+            CallableInner::Rule(ref ty) => ty.clone(),
             CallableInner::Provider(ref provider) => TyKind::Provider(provider.clone()).intern(),
             CallableInner::ProviderRawConstructor(ref name, ref provider) => {
                 TyKind::ProviderRawConstructor(name.clone(), provider.clone()).intern()

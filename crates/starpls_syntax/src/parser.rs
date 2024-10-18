@@ -5,7 +5,7 @@ use starpls_parser::{parse, parse_type_list, StrStep, StrWithTokens, SyntaxKind:
 
 use crate::{LineIndex, Module, StarlarkLanguage, SyntaxNode};
 
-const TYPE_COMMENT_PREFIX_STR: &'static str = "# type: ";
+const TYPE_COMMENT_PREFIX_STR: &str = "# type: ";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyntaxError {

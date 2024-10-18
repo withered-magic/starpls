@@ -285,7 +285,7 @@ fn scan_unicode_escape(chars: &mut Chars<'_>) -> Result<char, EscapeError> {
         }
     }
 
-    char::from_u32(value).ok_or_else(|| {
+    char::from_u32(value).ok_or({
         if value > 0x10FFFF {
             EscapeError::OutOfRangeUnicodeEscape
         } else {

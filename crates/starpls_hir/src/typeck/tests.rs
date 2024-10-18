@@ -96,16 +96,16 @@ fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptio
         .keys()
         .map(|ptr| (ptr, ptr.syntax_node_ptr().text_range()))
         .sorted_by(|(_, lhs), (_, rhs)| {
-            if lhs.contains_range(rhs.clone()) {
+            if lhs.contains_range(*rhs) {
                 Ordering::Greater
-            } else if rhs.contains_range(lhs.clone()) {
+            } else if rhs.contains_range(*lhs) {
                 Ordering::Less
             } else {
                 lhs.start().cmp(&rhs.start())
             }
         })
     {
-        let expr = *source_map.expr_map.get(&ptr).unwrap();
+        let expr = *source_map.expr_map.get(ptr).unwrap();
         let ty = db.gcx().with_tcx(&db, |tcx| tcx.infer_expr(file, expr));
         let node = ptr.to_node(&root);
         writeln!(
@@ -124,16 +124,16 @@ fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptio
         .keys()
         .map(|ptr| (ptr, ptr.syntax_node_ptr().text_range()))
         .sorted_by(|(_, lhs), (_, rhs)| {
-            if lhs.contains_range(rhs.clone()) {
+            if lhs.contains_range(*rhs) {
                 Ordering::Greater
-            } else if rhs.contains_range(lhs.clone()) {
+            } else if rhs.contains_range(*lhs) {
                 Ordering::Less
             } else {
                 lhs.start().cmp(&rhs.start())
             }
         })
     {
-        let param = *source_map.param_map.get(&ptr).unwrap();
+        let param = *source_map.param_map.get(ptr).unwrap();
         db.gcx().with_tcx(&db, |tcx| {
             tcx.infer_param(file, param);
         });

@@ -111,7 +111,7 @@ impl DisplayWithDb for TyKind {
                 f.write_str("tuple[")?;
                 match tuple {
                     Tuple::Simple(tys) => {
-                        delimited(db, f, &tys, ", ")?;
+                        delimited(db, f, tys, ", ")?;
                     }
                     Tuple::Variable(ty) => {
                         ty.fmt(db, f)?;
@@ -233,7 +233,7 @@ impl DisplayWithDb for TyKind {
                             }
                             if let Some(default_value) = default_value {
                                 f.write_str(" = ")?;
-                                f.write_str(&default_value)?;
+                                f.write_str(default_value)?;
                             }
                         }
                         BuiltinFunctionParam::ArgsList { name, type_ref, .. } => {

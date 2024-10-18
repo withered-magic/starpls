@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ops::Index};
+use std::{collections::HashSet, fmt, ops::Index};
 
 use either::Either;
 use id_arena::{Arena, Id};
@@ -238,11 +238,7 @@ impl Expr {
         }
     }
 
-    fn walk_comp_clause_expressions(
-        &self,
-        comp_clauses: &Box<[CompClause]>,
-        mut f: impl FnMut(ExprId),
-    ) {
+    fn walk_comp_clause_expressions(&self, comp_clauses: &[CompClause], mut f: impl FnMut(ExprId)) {
         for comp_clause in comp_clauses.iter() {
             match comp_clause {
                 CompClause::For { iterable, targets } => {
@@ -443,16 +439,18 @@ impl Name {
         self.0.as_str()
     }
 
-    pub fn to_string(&self) -> String {
-        self.0.to_string()
-    }
-
     pub(crate) fn new_inline(name: &'static str) -> Self {
         Self::new(SmolStr::new_inline(name))
     }
 
     fn new(repr: SmolStr) -> Self {
         Self(repr)
+    }
+}
+
+impl fmt::Display for Name {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

@@ -139,7 +139,7 @@ pub fn load_builtins(path: impl AsRef<Path>) -> anyhow::Result<Builtins> {
 }
 
 pub fn decode_builtins(data: &[u8]) -> anyhow::Result<Builtins> {
-    let builtins = Builtins::decode(&data[..])?;
+    let builtins = Builtins::decode(data)?;
     Ok(builtins)
 }
 

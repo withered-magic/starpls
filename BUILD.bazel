@@ -1,7 +1,10 @@
 load("@rules_rust//proto/prost:defs.bzl", "rust_prost_toolchain")
 load("@rules_rust//rust:defs.bzl", "rust_library_group")
 
-exports_files(["rustfmt.toml"])
+exports_files([
+    "clippy.toml",
+    "rustfmt.toml",
+])
 
 rust_library_group(
     name = "prost_runtime",

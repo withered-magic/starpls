@@ -208,7 +208,7 @@ impl std::fmt::Display for TypeRef {
                     }
                     type_ref.fmt(f)?;
                 }
-                return Ok(());
+                Ok(())
             }
             _ => f.write_str("Unknown"),
         }
@@ -352,7 +352,7 @@ impl Ty {
                         .types(db)
                         .get("Label")
                         .cloned()
-                        .unwrap_or_else(|| Ty::unknown());
+                        .unwrap_or_else(Ty::unknown);
                     Fields::Static(iter::once((
                         Field(FieldInner::StaticField {
                             name: "label",
@@ -372,7 +372,7 @@ impl Ty {
         db: &'a dyn Db,
         class: IntrinsicClass,
     ) -> impl Iterator<Item = (Field, Ty)> + 'a {
-        let fields = (0..class.fields(db).len()).into_iter().map(move |index| {
+        let fields = (0..class.fields(db).len()).map(move |index| {
             Field(FieldInner::IntrinsicField {
                 parent: class,
                 index,
@@ -419,7 +419,7 @@ impl Ty {
                 Params::Intrinsic(func.params(db).iter().enumerate().map(|(index, param)| {
                     let ty = param
                         .ty()
-                        .unwrap_or_else(|| Ty::unknown())
+                        .unwrap_or_else(Ty::unknown)
                         .substitute(&subst.args);
                     let param = Param(ParamInner::IntrinsicParam {
                         parent: *func,
@@ -544,7 +544,7 @@ impl Ty {
         Some(match self.kind() {
             TyKind::Function(func) => resolve_type_ref_opt(db, func.ret_type_ref(db)),
             TyKind::IntrinsicFunction(func, subst) => func.ret_ty(db).substitute(&subst.args),
-            TyKind::BuiltinFunction(func) => resolve_type_ref(db, &func.ret_type_ref(db)).0,
+            TyKind::BuiltinFunction(func) => resolve_type_ref(db, func.ret_type_ref(db)).0,
             TyKind::Rule(_) => Ty::none(),
             TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
                 TyKind::ProviderInstance(provider.clone()).intern()
@@ -1385,11 +1385,13 @@ impl Rule {
     }
 }
 
+type CustomProviderField = (Option<InFile<ExprId>>, Box<[ProviderField]>);
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct CustomProvider {
     pub(crate) name: Option<Name>,
     pub(crate) doc: Option<LiteralString>,
-    pub(crate) fields: Option<(Option<InFile<ExprId>>, Box<[ProviderField]>)>,
+    pub(crate) fields: Option<CustomProviderField>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1428,15 +1430,17 @@ pub(crate) enum Struct {
     },
 }
 
+type TagClassPair = (Name, Arc<TagClass>);
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct ModuleExtension {
     pub(crate) doc: Option<Box<str>>,
-    pub(crate) tag_classes: Option<Box<[(Name, Arc<TagClass>)]>>,
+    pub(crate) tag_classes: Option<Box<[TagClassPair]>>,
 }
 
+type AttributePair = (Name, Arc<Attribute>);
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct TagClass {
-    pub(crate) attrs: Option<Box<[(Name, Arc<Attribute>)]>>,
+    pub(crate) attrs: Option<Box<[AttributePair]>>,
     pub(crate) doc: Option<Box<str>>,
 }
 
@@ -1663,9 +1667,8 @@ impl<'a> TypeRefResolver<'a> {
                 }
                 "Union" | "union" => Ty::union(
                     args.iter()
-                        .map(|args| args.iter())
-                        .flatten()
-                        .map(|type_ref| self.resolve_type_ref_inner(&type_ref)),
+                        .flat_map(|args| args.iter())
+                        .map(|type_ref| self.resolve_type_ref_inner(type_ref)),
                 ),
                 "struct" | "structure" => self.resolve_single_arg_type_constructor(args, |ty| {
                     TyKind::Struct(Some(Struct::FieldSignature { ty }))
@@ -1675,7 +1678,7 @@ impl<'a> TypeRefResolver<'a> {
                     Some(args) => {
                         // Handle variable tuples directly. The ellipsis type `...` is valid only when
                         // it is the second of exactly two type arguments.
-                        if args.len() == 2 && &args[1] == &TypeRef::Ellipsis {
+                        if args.len() == 2 && args[1] == TypeRef::Ellipsis {
                             TyKind::Tuple(Tuple::Variable(self.resolve_type_ref_inner(&args[0])))
                                 .intern()
                         } else {
@@ -1699,7 +1702,7 @@ impl<'a> TypeRefResolver<'a> {
             },
             TypeRef::Union(args) => Ty::union(
                 args.iter()
-                    .map(|type_ref| self.resolve_type_ref_inner(&type_ref)),
+                    .map(|type_ref| self.resolve_type_ref_inner(type_ref)),
             ),
             TypeRef::Provider(provider) => TyKind::Provider(Provider::Builtin(*provider)).intern(),
             TypeRef::Ellipsis => {
@@ -1753,7 +1756,7 @@ pub(crate) fn resolve_type_ref(db: &dyn Db, type_ref: &TypeRef) -> (Ty, Vec<Stri
 pub(crate) fn resolve_type_ref_opt(db: &dyn Db, type_ref: Option<TypeRef>) -> Ty {
     type_ref
         .map(|type_ref| resolve_type_ref(db, &type_ref).0)
-        .unwrap_or_else(|| Ty::unknown())
+        .unwrap_or_else(Ty::unknown)
 }
 
 // TODO(withered-magic): This function currently assumes that all types are covariant in their arguments.

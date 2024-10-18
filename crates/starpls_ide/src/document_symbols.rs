@@ -71,7 +71,7 @@ pub(crate) fn document_symbols(db: &Database, file_id: FileId) -> Option<Vec<Doc
                     _ => return None,
                 },
                 tags: None,
-                range: range.clone(),
+                range,
                 selection_range: range,
                 children: None,
             })
@@ -115,7 +115,7 @@ fn add_target_symbols(db: &Database, file: File, acc: &mut Vec<DocumentSymbol>) 
             detail: None,
             kind: SymbolKind::Variable,
             tags: None,
-            range: range.clone(),
+            range,
             selection_range: range,
             children: None,
         })

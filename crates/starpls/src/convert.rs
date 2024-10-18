@@ -18,7 +18,7 @@ pub(crate) fn lsp_diagnostic_from_native(
     line_index: &LineIndex,
 ) -> Option<lsp_types::Diagnostic> {
     Some(lsp_types::Diagnostic {
-        range: lsp_range_from_text_range(diagnostic.range.range, &line_index)?,
+        range: lsp_range_from_text_range(diagnostic.range.range, line_index)?,
         severity: Some(lsp_severity_from_native(diagnostic.severity)),
         code: None,
         code_description: None,

@@ -89,6 +89,8 @@ impl<'a> CodeFlowLowerCtx<'a> {
     }
 
     fn lower_stmt(&mut self, stmt: StmtId) {
+        // Enable when collapsible matching is not experimental: https://github.com/rust-lang/rust/issues/51114
+        #![allow(clippy::collapsible_match)]
         match &self.module[stmt] {
             Stmt::Assign { lhs, rhs, .. } => {
                 self.lower_assignment_target(*lhs, *rhs);
@@ -122,7 +124,7 @@ impl<'a> CodeFlowLowerCtx<'a> {
                     }
                     Some(Either::Right(else_stmts)) => {
                         self.curr_node = pre_if_node;
-                        self.lower_stmts(&else_stmts);
+                        self.lower_stmts(else_stmts);
                         self.push_antecedent(post_if_node, self.curr_node);
                     }
                     _ => {
@@ -251,7 +253,7 @@ impl<'a> CodeFlowLowerCtx<'a> {
     }
 
     fn lower_comp_clauses(&mut self, comp_clauses: &[CompClause]) {
-        for comp_clause in comp_clauses.into_iter() {
+        for comp_clause in comp_clauses.iter() {
             match comp_clause {
                 CompClause::For { iterable, targets } => {
                     self.lower_expr(*iterable);

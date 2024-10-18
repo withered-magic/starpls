@@ -740,42 +740,27 @@ impl Cursor<'_> {
 
     fn eat_octal_digits(&mut self) -> bool {
         let mut has_digits = false;
-        loop {
-            match self.first() {
-                '0'..='7' => {
-                    has_digits = true;
-                    self.bump();
-                }
-                _ => break,
-            }
+        while let '0'..='7' = self.first() {
+            has_digits = true;
+            self.bump();
         }
         has_digits
     }
 
     fn eat_decimal_digits(&mut self) -> bool {
         let mut has_digits = false;
-        loop {
-            match self.first() {
-                '0'..='9' => {
-                    has_digits = true;
-                    self.bump();
-                }
-                _ => break,
-            }
+        while let '0'..='9' = self.first() {
+            has_digits = true;
+            self.bump();
         }
         has_digits
     }
 
     fn eat_hexadecimal_digits(&mut self) -> bool {
         let mut has_digits = false;
-        loop {
-            match self.first() {
-                '0'..='9' | 'a'..='f' | 'A'..='F' => {
-                    has_digits = true;
-                    self.bump();
-                }
-                _ => break,
-            }
+        while let '0'..='9' | 'a'..='f' | 'A'..='F' = self.first() {
+            has_digits = true;
+            self.bump();
         }
         has_digits
     }

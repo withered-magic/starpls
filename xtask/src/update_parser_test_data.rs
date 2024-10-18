@@ -41,10 +41,8 @@ fn extract_comment_blocks(text: &str) -> Vec<CommentBlock> {
     // at which point the intermediate block's contents are pushed to our accumulator, and the intermediate
     // block is reset.
     for line in lines {
-        if line.starts_with(comment_prefix) {
-            current_block
-                .lines
-                .push(line[comment_prefix.len()..].to_string());
+        if let Some(comment_content) = line.strip_prefix(comment_prefix) {
+            current_block.lines.push(comment_content.to_string());
         } else if !current_block.lines.is_empty() {
             blocks.push(mem::take(&mut current_block));
         }
@@ -117,7 +115,7 @@ pub(crate) fn run(filters: &[String]) -> anyhow::Result<()> {
     let source_dir = project_root().join("crates/starpls_parser/src/grammar");
 
     // Collect tests from all `*.rs` files in the `src` directory.
-    for entry in fs::read_dir(&source_dir)? {
+    for entry in fs::read_dir(source_dir)? {
         let entry = entry?;
         let path = entry.path();
 

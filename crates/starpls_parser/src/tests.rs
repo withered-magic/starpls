@@ -95,13 +95,10 @@ fn collect_test_cases(dir: &'static str) -> Result<Vec<TestCase>, Box<dyn error:
                 continue;
             }
         };
-        match filter {
-            Some(ref filter) => {
-                if !test_name.contains(filter) {
-                    continue;
-                }
+        if let Some(ref filter) = filter {
+            if !test_name.contains(filter) {
+                continue;
             }
-            None => (),
         }
 
         // For a Starlark source file `source.star`, the corresponding expect file is `source.rast`.

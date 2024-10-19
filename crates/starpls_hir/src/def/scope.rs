@@ -94,7 +94,7 @@ pub(crate) struct Scope {
     pub(crate) parent: Option<ScopeId>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum ScopeHirId {
     Module,
     Expr(ExprId),

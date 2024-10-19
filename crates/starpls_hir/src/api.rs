@@ -61,7 +61,7 @@ impl<'a> Semantics<'a> {
                 .map(|name| name.text())
                 .map(|text| {
                     with_tcx(self.db, |tcx| {
-                        resolve_type_ref(tcx, &TypeRef::from_str_opt(text)).0
+                        resolve_type_ref(tcx, &TypeRef::from_str_opt(text), None).0
                     })
                 })?
                 .into(),

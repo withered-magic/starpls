@@ -419,8 +419,11 @@ impl TyCtxt<'_> {
                         // Validate argument types.
                         for (param, slot) in params.zip(slots.into_inner()) {
                             let hir_param = &module[param];
-                            let param_ty =
-                                resolve_type_ref_opt(self, hir_param.type_ref(), def.stmt.value);
+                            let param_ty = resolve_type_ref_opt(
+                                self,
+                                hir_param.type_ref(),
+                                Some(def.stmt.value),
+                            );
 
                             // TODO(withered-magic): Deduplicate the following logic for
                             // validating providers, as it's currently shared between
@@ -472,7 +475,7 @@ impl TyCtxt<'_> {
 
                         def.func
                             .ret_type_ref(db)
-                            .map(|type_ref| resolve_type_ref(self, &type_ref).0)
+                            .map(|type_ref| resolve_type_ref(self, &type_ref, None).0)
                             .unwrap_or_else(|| self.unknown_ty())
                     }
                     TyKind::IntrinsicFunction(func, subst) => {
@@ -543,7 +546,7 @@ impl TyCtxt<'_> {
 
                         // Validate argument types.
                         for (param, slot) in params.iter().zip(slots.into_inner()) {
-                            let param_ty = resolve_type_ref_opt(self, param.type_ref());
+                            let param_ty = resolve_type_ref_opt(self, param.type_ref(), None);
                             let mut validate_provider = |provider| match provider {
                                 SlotProvider::Missing => {
                                     if param.is_mandatory() {
@@ -589,7 +592,9 @@ impl TyCtxt<'_> {
                         }
 
                         func.maybe_unique_ret_type(self, file, expr, args_with_ty)
-                            .unwrap_or_else(|| resolve_type_ref(self, &func.ret_type_ref(db)).0)
+                            .unwrap_or_else(|| {
+                                resolve_type_ref(self, &func.ret_type_ref(db), None).0
+                            })
                     }
                     TyKind::Rule(rule) => {
                         let mut slots = Slots::from_rule(db, rule);
@@ -972,7 +977,7 @@ impl TyCtxt<'_> {
                 match &module(db, file)[stmt] {
                     Stmt::Assign { type_ref, .. } => type_ref.as_ref().and_then(|type_ref| {
                         let (expected_ty, errors) =
-                            with_tcx(db, |tcx| resolve_type_ref(tcx, &type_ref.0, stmt));
+                            with_tcx(db, |tcx| resolve_type_ref(tcx, &type_ref.0, Some(stmt)));
                         if errors.is_empty() {
                             Some(expected_ty)
                         } else {
@@ -1046,9 +1051,10 @@ impl TyCtxt<'_> {
     }
 
     fn infer_name(&mut self, file: File, name: &Name, usage: impl Into<ScopeHirId>) -> Option<Ty> {
-        let resolver = Resolver::new_for_hir_execution_scope(self.db, file, usage);
-        let expr_scope = resolver.scope_for_hir_id(usage)?;
-        let curr_execution_scope = resolver.execution_scope_for_hir_id(usage)?;
+        let hir_id = usage.into();
+        let resolver = Resolver::new_for_hir_execution_scope(self.db, file, hir_id);
+        let expr_scope = resolver.scope_for_hir_id(hir_id)?;
+        let curr_execution_scope = resolver.execution_scope_for_hir_id(hir_id)?;
         let (def_execution_scope, effective_ty) = match resolver.resolve_name(name) {
             Some((def_execution_scope, defs)) => {
                 let mut var_defs = Vec::new();
@@ -1151,7 +1157,7 @@ impl TyCtxt<'_> {
         // See if we can narrow the effective type further through code-flow analysis. If not, then
         // fall back to the effective type.
         Some(
-            self.infer_name_from_code_flow(file, name, usage, curr_execution_scope, &start_ty)
+            self.infer_name_from_code_flow(file, name, hir_id, curr_execution_scope, &start_ty)
                 .unwrap_or(fallback_ty),
         )
     }
@@ -1552,10 +1558,10 @@ impl TyCtxt<'_> {
         type_ref: &TypeRef,
         usage: Option<StmtId>,
     ) -> Ty {
-        let (ty, errors) = match usage {
-            Some(usage) => resolve_type_ref(self, type_ref, usage),
-            None => resolve_builtin_type_ref(self.db, type_ref),
-        };
+        let (ty, errors) = usage.map_or_else(
+            || resolve_builtin_type_ref(self.db, type_ref),
+            |usage| resolve_type_ref(self, type_ref, Some(usage)),
+        );
 
         // TODO(withered-magic): This will eventually need to handle diagnostics
         // for other places that type comments can appear.

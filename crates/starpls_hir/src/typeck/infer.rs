@@ -21,10 +21,10 @@ use crate::{
         builtins::builtin_types,
         call::{Slot, SlotProvider, Slots},
         intrinsics::{IntrinsicFunctionParam, IntrinsicTypes},
-        resolve_builtin_type_ref, resolve_type_ref, resolve_type_ref_opt, with_tcx,
-        CodeFlowCacheKey, DictLiteral, FileExprId, FileLoadItemId, FileLoadStmt, FileParamId,
-        Protocol, Provider, RuleKind, Struct, Substitution, Tuple, Ty, TyCtxt, TyData, TyKind,
-        TypeRef, TypecheckCancelled,
+        resolve_builtin_type_ref, resolve_type_ref, resolve_type_ref_opt, CodeFlowCacheKey,
+        DictLiteral, FileExprId, FileLoadItemId, FileLoadStmt, FileParamId, Protocol, Provider,
+        RuleKind, Struct, Substitution, Tuple, Ty, TyCtxt, TyData, TyKind, TypeRef,
+        TypecheckCancelled,
     },
     Name,
 };
@@ -976,9 +976,8 @@ impl TyCtxt<'_> {
             let expected_ty = expected_ty.or_else(|| {
                 match &module(db, file)[stmt] {
                     Stmt::Assign { type_ref, .. } => type_ref.as_ref().and_then(|type_ref| {
-                        let (expected_ty, errors) = with_tcx(db, |tcx| {
-                            resolve_type_ref(tcx, &type_ref.0, Some(InFile { file, value: stmt }))
-                        });
+                        let (expected_ty, errors) =
+                            resolve_type_ref(self, &type_ref.0, Some(InFile { file, value: stmt }));
                         if errors.is_empty() {
                             Some(expected_ty)
                         } else {
@@ -1801,10 +1800,6 @@ impl TyCtxt<'_> {
             _ => return None,
         }
     }
-
-    // pub(crate) fn resolve_type_ref(&self, type_ref: &TypeRef) -> Ty {
-    //     todo!()
-    // }
 
     fn types(&self) -> &IntrinsicTypes {
         self.intrinsics.types(self.db)

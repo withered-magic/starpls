@@ -300,8 +300,8 @@ impl TyCtxt<'_> {
                             (TyKind::BuiltinType(ty, _), _) => match ty.indexable_by(db) {
                                 Some((expected_index_ty, return_ty)) => {
                                     let expected_index_ty =
-                                        self.resolve_type_ref(&expected_index_ty);
-                                    let return_ty = self.resolve_type_ref(&return_ty);
+                                        resolve_builtin_type_ref(db, &expected_index_ty).0;
+                                    let return_ty = resolve_builtin_type_ref(db, &return_ty).0;
                                     if assign_tys(db, &index_ty, &expected_index_ty) {
                                         Some(return_ty)
                                     } else {
@@ -422,7 +422,7 @@ impl TyCtxt<'_> {
                             let param_ty = resolve_type_ref_opt(
                                 self,
                                 hir_param.type_ref(),
-                                Some(def.stmt.value),
+                                Some(def.stmt.clone()),
                             );
 
                             // TODO(withered-magic): Deduplicate the following logic for
@@ -976,8 +976,9 @@ impl TyCtxt<'_> {
             let expected_ty = expected_ty.or_else(|| {
                 match &module(db, file)[stmt] {
                     Stmt::Assign { type_ref, .. } => type_ref.as_ref().and_then(|type_ref| {
-                        let (expected_ty, errors) =
-                            with_tcx(db, |tcx| resolve_type_ref(tcx, &type_ref.0, Some(stmt)));
+                        let (expected_ty, errors) = with_tcx(db, |tcx| {
+                            resolve_type_ref(tcx, &type_ref.0, Some(InFile { file, value: stmt }))
+                        });
                         if errors.is_empty() {
                             Some(expected_ty)
                         } else {
@@ -1050,7 +1051,12 @@ impl TyCtxt<'_> {
         }
     }
 
-    fn infer_name(&mut self, file: File, name: &Name, usage: impl Into<ScopeHirId>) -> Option<Ty> {
+    pub(crate) fn infer_name(
+        &mut self,
+        file: File,
+        name: &Name,
+        usage: impl Into<ScopeHirId>,
+    ) -> Option<Ty> {
         let hir_id = usage.into();
         let resolver = Resolver::new_for_hir_execution_scope(self.db, file, hir_id);
         let expr_scope = resolver.scope_for_hir_id(hir_id)?;
@@ -1560,7 +1566,7 @@ impl TyCtxt<'_> {
     ) -> Ty {
         let (ty, errors) = usage.map_or_else(
             || resolve_builtin_type_ref(self.db, type_ref),
-            |usage| resolve_type_ref(self, type_ref, Some(usage)),
+            |usage| resolve_type_ref(self, type_ref, Some(InFile { file, value: usage })),
         );
 
         // TODO(withered-magic): This will eventually need to handle diagnostics
@@ -1796,9 +1802,9 @@ impl TyCtxt<'_> {
         }
     }
 
-    pub(crate) fn resolve_type_ref(&self, type_ref: &TypeRef) -> Ty {
-        todo!()
-    }
+    // pub(crate) fn resolve_type_ref(&self, type_ref: &TypeRef) -> Ty {
+    //     todo!()
+    // }
 
     fn types(&self) -> &IntrinsicTypes {
         self.intrinsics.types(self.db)

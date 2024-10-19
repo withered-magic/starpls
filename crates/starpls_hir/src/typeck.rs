@@ -17,7 +17,7 @@ use starpls_syntax::ast::SyntaxNodePtr;
 use crate::{
     def::{
         codeflow::FlowNodeId,
-        scope::{ExecutionScopeId, FunctionDef, ScopeHirId},
+        scope::{ExecutionScopeId, FunctionDef},
         ExprId, Function, LiteralString, LoadItemId, LoadStmt, Param as HirDefParam, ParamId,
         StmtId,
     },
@@ -1613,18 +1613,17 @@ pub struct TyCtxt<'a> {
     shared_state: Arc<SharedState>,
 }
 
-struct TypeRefResolver<'a> {
+struct TypeRefResolver<'a, 'b> {
     db: &'a dyn Db,
-    tcx: Option<&'a TyCtxt<'a>>,
+    tcx: Option<&'a mut TyCtxt<'b>>,
+    usage: Option<InFile<StmtId>>,
     errors: Vec<String>,
 }
 
-impl<'a> TypeRefResolver<'a> {
+impl<'a, 'b> TypeRefResolver<'a, 'b> {
     fn resolve_type_ref(mut self, type_ref: &TypeRef) -> (Ty, Vec<String>) {
-        todo!()
-
-        // let ty = self.resolve_type_ref_inner(type_ref);
-        // (ty, self.errors)
+        let ty = self.resolve_type_ref_inner(type_ref);
+        (ty, self.errors)
     }
 
     fn resolve_type_ref_inner(&mut self, type_ref: &TypeRef) -> Ty {
@@ -1633,75 +1632,97 @@ impl<'a> TypeRefResolver<'a> {
         // to get that information from things like the `DisplayWithDb` impl for `TyKind`.
         let builtin_types = builtin_types(self.db, Dialect::Bazel);
         match type_ref {
-            TypeRef::Name(name, args) => match name.as_str() {
-                "Any" => types.any.clone(),
-                "Unknown" | "unknown" => types.unknown.clone(),
-                "None" | "NoneType" => types.none.clone(),
-                "bool" => types.bool.clone(),
-                "int" => types.int.clone(),
-                "float" => types.float.clone(),
-                "string" => types.string.clone(),
-                "bytes" => types.bytes.clone(),
-                "list" => self.resolve_single_arg_type_constructor(args, TyKind::List),
-                "dict" => {
-                    args.as_ref()
-                        .and_then(|args| {
-                            let mut args = args.iter();
-                            match (args.next(), args.next()) {
-                                (Some(key_ty), Some(value_ty)) => Some(TyKind::Dict(
-                                    self.resolve_type_ref_inner(key_ty),
-                                    self.resolve_type_ref_inner(value_ty),
-                                    None,
-                                )),
-                                _ => None,
-                            }
-                        })
-                        .unwrap_or_else(|| TyKind::Dict(types.any.clone(), types.any.clone(), None))
-                }
-                .intern(),
-                "range" => types.range.clone(),
-                "Iterable" | "iterable" => {
-                    self.resolve_single_arg_protocol(args, Protocol::Iterable)
-                }
-                "Sequence" | "sequence" => {
-                    self.resolve_single_arg_protocol(args, Protocol::Sequence)
-                }
-                "Union" | "union" => Ty::union(
-                    args.iter()
-                        .map(|args| args.iter())
-                        .flatten()
-                        .map(|type_ref| self.resolve_type_ref_inner(&type_ref)),
-                ),
-                "struct" | "structure" => self.resolve_single_arg_type_constructor(args, |ty| {
-                    TyKind::Struct(Some(Struct::FieldSignature { ty }))
-                }),
-                "Target" => TyKind::Target.intern(),
-                "tuple" => match args.as_ref() {
-                    Some(args) => {
-                        // Handle variable tuples directly. The ellipsis type `...` is valid only when
-                        // it is the second of exactly two type arguments.
-                        if args.len() == 2 && &args[1] == &TypeRef::Ellipsis {
-                            TyKind::Tuple(Tuple::Variable(self.resolve_type_ref_inner(&args[0])))
-                                .intern()
-                        } else {
-                            TyKind::Tuple(Tuple::Simple(
-                                args.iter()
-                                    .map(|type_ref| self.resolve_type_ref_inner(type_ref))
-                                    .collect(),
-                            ))
-                            .intern()
+            TypeRef::Name(name, args) => {
+                // If `usage` was passed, try to resolve as a custom provider defined in the corresponding scope.
+                if let (Some(tcx), Some(usage)) = (self.tcx.as_mut(), self.usage) {
+                    match tcx.infer_name(usage.file, name, usage.value) {
+                        Some(ty)
+                            if matches!(
+                                ty.kind(),
+                                TyKind::Provider(_) | TyKind::ProviderRawConstructor(_, _)
+                            ) =>
+                        {
+                            return ty;
                         }
+                        _ => {}
                     }
-                    None => TyKind::Tuple(Tuple::Variable(Ty::unknown())).intern(),
-                },
-                name => match builtin_types.types(self.db).get(name).cloned() {
-                    Some(ty) => ty,
-                    None => {
-                        self.errors.push(format!("Unknown type \"{}\"", name));
-                        types.unknown.clone()
+                }
+
+                match name.as_str() {
+                    "Any" => types.any.clone(),
+                    "Unknown" | "unknown" => types.unknown.clone(),
+                    "None" | "NoneType" => types.none.clone(),
+                    "bool" => types.bool.clone(),
+                    "int" => types.int.clone(),
+                    "float" => types.float.clone(),
+                    "string" => types.string.clone(),
+                    "bytes" => types.bytes.clone(),
+                    "list" => self.resolve_single_arg_type_constructor(args, TyKind::List),
+                    "dict" => {
+                        args.as_ref()
+                            .and_then(|args| {
+                                let mut args = args.iter();
+                                match (args.next(), args.next()) {
+                                    (Some(key_ty), Some(value_ty)) => Some(TyKind::Dict(
+                                        self.resolve_type_ref_inner(key_ty),
+                                        self.resolve_type_ref_inner(value_ty),
+                                        None,
+                                    )),
+                                    _ => None,
+                                }
+                            })
+                            .unwrap_or_else(|| {
+                                TyKind::Dict(types.any.clone(), types.any.clone(), None)
+                            })
                     }
-                },
-            },
+                    .intern(),
+                    "range" => types.range.clone(),
+                    "Iterable" | "iterable" => {
+                        self.resolve_single_arg_protocol(args, Protocol::Iterable)
+                    }
+                    "Sequence" | "sequence" => {
+                        self.resolve_single_arg_protocol(args, Protocol::Sequence)
+                    }
+                    "Union" | "union" => Ty::union(
+                        args.iter()
+                            .map(|args| args.iter())
+                            .flatten()
+                            .map(|type_ref| self.resolve_type_ref_inner(&type_ref)),
+                    ),
+                    "struct" | "structure" => self
+                        .resolve_single_arg_type_constructor(args, |ty| {
+                            TyKind::Struct(Some(Struct::FieldSignature { ty }))
+                        }),
+                    "Target" => TyKind::Target.intern(),
+                    "tuple" => match args.as_ref() {
+                        Some(args) => {
+                            // Handle variable tuples directly. The ellipsis type `...` is valid only when
+                            // it is the second of exactly two type arguments.
+                            if args.len() == 2 && &args[1] == &TypeRef::Ellipsis {
+                                TyKind::Tuple(Tuple::Variable(
+                                    self.resolve_type_ref_inner(&args[0]),
+                                ))
+                                .intern()
+                            } else {
+                                TyKind::Tuple(Tuple::Simple(
+                                    args.iter()
+                                        .map(|type_ref| self.resolve_type_ref_inner(type_ref))
+                                        .collect(),
+                                ))
+                                .intern()
+                            }
+                        }
+                        None => TyKind::Tuple(Tuple::Variable(Ty::unknown())).intern(),
+                    },
+                    name => match builtin_types.types(self.db).get(name).cloned() {
+                        Some(ty) => ty,
+                        None => {
+                            self.errors.push(format!("Unknown type \"{}\"", name));
+                            types.unknown.clone()
+                        }
+                    },
+                }
+            }
             TypeRef::Union(args) => Ty::union(
                 args.iter()
                     .map(|type_ref| self.resolve_type_ref_inner(&type_ref)),
@@ -1752,22 +1773,23 @@ impl<'a> TypeRefResolver<'a> {
 }
 
 pub(crate) fn resolve_type_ref(
-    tcx: &TyCtxt,
+    tcx: &mut TyCtxt,
     type_ref: &TypeRef,
-    usage: Option<StmtId>,
+    usage: Option<InFile<StmtId>>,
 ) -> (Ty, Vec<String>) {
     TypeRefResolver {
         db: tcx.db,
         tcx: Some(tcx),
+        usage,
         errors: vec![],
     }
     .resolve_type_ref(type_ref)
 }
 
 pub(crate) fn resolve_type_ref_opt(
-    tcx: &TyCtxt,
+    tcx: &mut TyCtxt,
     type_ref: Option<TypeRef>,
-    usage: Option<StmtId>,
+    usage: Option<InFile<StmtId>>,
 ) -> Ty {
     type_ref
         .map(|type_ref| resolve_type_ref(tcx, &type_ref, usage).0)
@@ -1778,6 +1800,7 @@ pub(crate) fn resolve_builtin_type_ref(db: &dyn Db, type_ref: &TypeRef) -> (Ty, 
     TypeRefResolver {
         db,
         tcx: None,
+        usage: None,
         errors: vec![],
     }
     .resolve_type_ref(type_ref)

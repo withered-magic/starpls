@@ -4,8 +4,8 @@ use crate::{
     def::Param as HirDefParam,
     module,
     typeck::{
-        builtins::BuiltinFunctionParam, intrinsics::IntrinsicFunctionParam, with_tcx, Protocol,
-        RuleKind, Tuple, TyKind, TypeRef,
+        builtins::BuiltinFunctionParam, intrinsics::IntrinsicFunctionParam, resolve_type_ref,
+        with_tcx, Protocol, RuleKind, Tuple, TyKind, TypeRef,
     },
     Db, Name, Ty, Type,
 };
@@ -142,8 +142,10 @@ impl DisplayWithDb for TyKind {
                         f.write_str(", ")?;
                     }
 
-                    let format_type_ref =
-                        |f, type_ref| with_tcx(db, |tcx| tcx.resolve_type_ref(type_ref)).fmt(db, f);
+                    let format_type_ref = |f, type_ref| {
+                        with_tcx(db, |tcx| resolve_type_ref(tcx, type_ref, Some(def.stmt)).0)
+                            .fmt(db, f)
+                    };
 
                     match param {
                         HirDefParam::Simple { name, type_ref, .. } => {

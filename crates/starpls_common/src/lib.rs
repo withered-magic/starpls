@@ -177,3 +177,5 @@ pub struct InFile<T: Clone + Debug> {
     pub file: File,
     pub value: T,
 }
+
+impl<T: Copy + Debug> Copy for InFile<T> {}

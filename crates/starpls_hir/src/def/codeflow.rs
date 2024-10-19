@@ -90,6 +90,9 @@ impl<'a> CodeFlowLowerCtx<'a> {
         match &self.module[stmt] {
             Stmt::Assign { lhs, rhs, .. } => {
                 self.lower_assignment_target(*lhs, *rhs);
+                self.result
+                    .hir_to_flow_node
+                    .insert(stmt.into(), self.curr_node);
             }
 
             Stmt::Def { stmts, .. } => {
@@ -97,6 +100,9 @@ impl<'a> CodeFlowLowerCtx<'a> {
                     this.lower_stmts(stmts);
                     stmt
                 });
+                self.result
+                    .hir_to_flow_node
+                    .insert(stmt.into(), self.curr_node);
             }
 
             Stmt::If {

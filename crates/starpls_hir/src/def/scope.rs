@@ -3,7 +3,7 @@ use std::collections::{hash_map::Entry, VecDeque};
 use either::Either;
 use id_arena::{Arena, Id};
 use rustc_hash::FxHashMap;
-use starpls_common::{Diagnostic, Diagnostics, File, FileRange, Severity};
+use starpls_common::{Diagnostic, Diagnostics, File, FileRange, InFile, Severity};
 
 use crate::{
     def::{CompClause, Expr, ExprId, Function, LoadItem, LoadItemId, Param, ParamId, Stmt, StmtId},
@@ -53,7 +53,7 @@ pub(crate) fn module_scopes(db: &dyn Db, file: File) -> ModuleScopes {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum ScopeDef {
-    Function(Function),
+    Function(FunctionDef),
     IntrinsicFunction(IntrinsicFunction),
     BuiltinFunction(BuiltinFunction),
     Variable(VariableDef),
@@ -81,6 +81,12 @@ pub(crate) struct LoadItemDef {
     pub(crate) load_item: LoadItemId,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct FunctionDef {
+    pub(crate) stmt: InFile<StmtId>,
+    pub(crate) func: Function,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Scope {
     pub(crate) defs: FxHashMap<Name, Vec<ScopeDef>>,
@@ -88,7 +94,7 @@ pub(crate) struct Scope {
     pub(crate) parent: Option<ScopeId>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum ScopeHirId {
     Module,
     Expr(ExprId),
@@ -167,13 +173,19 @@ impl Scopes {
         self.scopes_by_hir_id.get(&id.into()).copied()
     }
 
-    pub(crate) fn execution_scope_for_expr(&self, expr: ExprId) -> Option<ExecutionScopeId> {
-        let scope = self.scope_for_hir_id(expr)?;
+    pub(crate) fn execution_scope_for_hir_id(
+        &self,
+        id: impl Into<ScopeHirId>,
+    ) -> Option<ExecutionScopeId> {
+        let scope = self.scope_for_hir_id(id)?;
         Some(self.scopes[scope].execution_scope)
     }
 
-    pub(crate) fn scope_for_expr_execution_scope(&self, expr: ExprId) -> Option<ScopeId> {
-        let scope = self.scope_for_hir_id(expr)?;
+    pub(crate) fn scope_for_hir_execution_scope(
+        &self,
+        hir: impl Into<ScopeHirId>,
+    ) -> Option<ScopeId> {
+        let scope = self.scope_for_hir_id(hir)?;
         self.scopes_by_execution_scope_id
             .get(&self.scopes[scope].execution_scope)
             .copied()
@@ -275,7 +287,13 @@ impl ScopeCollector<'_> {
                 self.scopes.add_decl(
                     *current,
                     func.name(self.db).clone(),
-                    ScopeDef::Function(*func),
+                    ScopeDef::Function(FunctionDef {
+                        stmt: InFile {
+                            file: self.file,
+                            value: stmt,
+                        },
+                        func: *func,
+                    }),
                 );
                 deferred.push_back(FunctionData {
                     def_stmt: stmt,

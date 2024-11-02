@@ -419,11 +419,8 @@ impl TyCtxt<'_> {
                         // Validate argument types.
                         for (param, slot) in params.zip(slots.into_inner()) {
                             let hir_param = &module[param];
-                            let param_ty = resolve_type_ref_opt(
-                                self,
-                                hir_param.type_ref(),
-                                Some(def.stmt.clone()),
-                            );
+                            let param_ty =
+                                resolve_type_ref_opt(self, hir_param.type_ref(), Some(def.stmt));
 
                             // TODO(withered-magic): Deduplicate the following logic for
                             // validating providers, as it's currently shared between
@@ -475,7 +472,7 @@ impl TyCtxt<'_> {
 
                         def.func
                             .ret_type_ref(db)
-                            .map(|type_ref| resolve_type_ref(self, &type_ref, None).0)
+                            .map(|type_ref| resolve_type_ref(self, &type_ref, Some(def.stmt)).0)
                             .unwrap_or_else(|| self.unknown_ty())
                     }
                     TyKind::IntrinsicFunction(func, subst) => {

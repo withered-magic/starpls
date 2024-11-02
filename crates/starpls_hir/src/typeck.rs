@@ -1253,12 +1253,11 @@ pub(crate) enum TyKind {
     /// Use this instead of the `Attribute` type defined in `builtin.pb`.
     Attribute(Arc<Attribute>),
     /// A Bazel rule (https://bazel.build/rules/lib/builtins/rule).
-    /// The `Ty`s contained in the boxed slice must have kind `TyKind::Attribute`.
     Rule(Rule),
     /// A Bazel provider (https://bazel.build/rules/lib/builtins/Provider.html).
-    /// This is a callable the yields "provider instances".
+    /// This is a callable that yields "provider instances".
     Provider(Provider),
-    /// An instance of a Bazel provider. The contained `Ty` must have kind `TyKind::Provider`.
+    /// An instance of a Bazel provider.
     ProviderInstance(Provider),
     /// The raw constructor for a Bazel provider.
     ProviderRawConstructor(Name, Provider),
@@ -1635,16 +1634,10 @@ impl<'a, 'b> TypeRefResolver<'a, 'b> {
             TypeRef::Name(name, args) => {
                 // If `usage` was passed, try to resolve as a custom provider defined in the corresponding scope.
                 if let (Some(tcx), Some(usage)) = (self.tcx.as_mut(), self.usage) {
-                    match tcx.infer_name(usage.file, name, usage.value) {
-                        Some(ty)
-                            if matches!(
-                                ty.kind(),
-                                TyKind::Provider(_) | TyKind::ProviderRawConstructor(_, _)
-                            ) =>
-                        {
-                            return ty;
+                    if let Some(ty) = tcx.infer_name(usage.file, name, usage.value) {
+                        if let TyKind::Provider(provider) = ty.kind() {
+                            return TyKind::ProviderInstance(provider.clone()).intern();
                         }
-                        _ => {}
                     }
                 }
 

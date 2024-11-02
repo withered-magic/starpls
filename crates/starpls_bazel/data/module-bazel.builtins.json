@@ -33,7 +33,7 @@
             "is_star_star_arg": false
           },
           {
-            "name": "strip-prefix",
+            "name": "strip_prefix",
             "type": "string",
             "doc": "A directory prefix to strip from the extracted files.",
             "default_value": "''",
@@ -190,6 +190,15 @@
             "type": "boolean",
             "doc": "Whether submodules in the fetched repo should be recursively initialized.",
             "default_value": "False",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "strip_prefix",
+            "type": "string",
+            "doc": "A directory prefix to strip from the extracted files. This can be used to target a subdirectory of the git repo. Note that the subdirectory must have its own `MODULE.bazel` file with a module name that is the same as the `module_name` arg passed to this `git_override`.",
+            "default_value": "''",
             "is_mandatory": false,
             "is_star_arg": false,
             "is_star_star_arg": false
@@ -477,6 +486,15 @@
             "name": "version",
             "type": "string",
             "doc": "Overrides the declared version of this module in the dependency graph. In other words, this module will be \"pinned\" to this override version. This attribute can be omitted if all one wants to override is the registry or the patches.",
+            "default_value": "''",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "registry",
+            "type": "string",
+            "doc": "Overrides the registry for this module; instead of finding this module from the default list of registries, the given registry should be used.",
             "default_value": "''",
             "is_mandatory": false,
             "is_star_arg": false,

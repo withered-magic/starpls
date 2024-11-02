@@ -3,7 +3,7 @@ use std::sync::Arc;
 use starpls_common::{parse, Diagnostic, Diagnostics, File, InFile};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr, SyntaxNodePtr},
-    TextSize,
+    TextSize, T,
 };
 
 pub use crate::typeck::{Field, Param};
@@ -53,7 +53,36 @@ impl<'a> Semantics<'a> {
         }
     }
 
-    pub fn resolve_type(&self, type_: &ast::NamedType) -> Option<Type> {
+    pub fn resolve_type(&self, file: File, type_: &ast::NamedType) -> Option<Type> {
+        let usage = type_
+            .syntax()
+            .ancestors()
+            .find_map(ast::TypeComment::cast)
+            .and_then(|type_comment| {
+                let parent = type_comment.syntax().parent()?;
+                let ptr = if ast::Suite::can_cast(parent.kind()) {
+                    let grandparent = parent.parent()?;
+                    if ast::DefStmt::can_cast(grandparent.kind()) {
+                        AstPtr::new(&ast::Statement::cast(grandparent)?)
+                    } else {
+                        return None;
+                    }
+                } else if let Some(assign_stmt) = type_comment
+                    .syntax()
+                    .siblings_with_tokens(ast::Direction::Prev)
+                    .take_while(|el| !matches!(el.kind(), T!['\n'] | T![;]))
+                    .filter_map(|el| el.into_node())
+                    .find_map(ast::AssignStmt::cast)
+                {
+                    AstPtr::new(&ast::Statement::Assign(assign_stmt))
+                } else {
+                    return None;
+                };
+
+                let stmt = source_map(self.db, file).stmt_map.get(&ptr)?;
+                Some(InFile { file, value: *stmt })
+            });
+
         Some(
             type_
                 .name()
@@ -61,7 +90,7 @@ impl<'a> Semantics<'a> {
                 .map(|name| name.text())
                 .map(|text| {
                     with_tcx(self.db, |tcx| {
-                        resolve_type_ref(tcx, &TypeRef::from_str_opt(text), None).0
+                        resolve_type_ref(tcx, &TypeRef::from_str_opt(text), usage).0
                     })
                 })?
                 .into(),
@@ -360,7 +389,7 @@ impl Type {
             TyKind::Function(def) => return def.func.doc(db).map(|doc| doc.to_string()),
             TyKind::IntrinsicFunction(func, _) => Some(func.doc(db).clone()),
             TyKind::Rule(rule) => rule.doc.as_ref().map(Box::to_string),
-            TyKind::Provider(provider) => provider.doc(db),
+            TyKind::Provider(provider) | TyKind::ProviderInstance(provider) => provider.doc(db),
             TyKind::ModuleExtension(module_extension)
             | TyKind::ModuleExtensionProxy(module_extension) => {
                 module_extension.doc.as_ref().map(Box::to_string)

@@ -829,6 +829,58 @@ def foo(foo, bar, baz):
 }
 
 #[test]
+fn test_provider_type_comments() {
+    check_infer(
+        r#"
+DataInfo = provider(
+    fields = {
+        "foo": "The foo field",
+    },
+)
+
+def a():
+    return DataInfo(foo = "abc")
+
+def f(info):
+    # type: (DataInfo) -> list[DataInfo]
+    print(info.foo)
+    return [info]
+
+info1 = a() # type: DataInfo
+info2 = a() # type: DataInfo | None
+infos = f(info1)
+"#,
+        expect![[r#"
+            1..9 "DataInfo": Provider[DataInfo]
+            12..20 "provider": def provider(*args, **kwargs) -> Unknown
+            45..50 "\"foo\"": Literal["foo"]
+            52..67 "\"The foo field\"": Literal["The foo field"]
+            35..74 "{\n        \"foo\": \"The foo field\",\n    }": dict[string, string]
+            12..77 "provider(\n    fields = {\n        \"foo\": \"The foo field\",\n    },\n)": Provider[DataInfo]
+            99..107 "DataInfo": Provider[DataInfo]
+            114..119 "\"abc\"": Literal["abc"]
+            99..120 "DataInfo(foo = \"abc\")": DataInfo
+            180..185 "print": def print(*args: Any, str: string = None) -> None
+            186..190 "info": DataInfo
+            186..194 "info.foo": Unknown
+            180..195 "print(info.foo)": None
+            208..212 "info": DataInfo
+            207..213 "[info]": list[DataInfo]
+            215..220 "info1": DataInfo
+            223..224 "a": def a() -> Unknown
+            223..226 "a()": Unknown
+            244..249 "info2": DataInfo | None
+            252..253 "a": def a() -> Unknown
+            252..255 "a()": Unknown
+            280..285 "infos": list[DataInfo]
+            288..289 "f": def f(info: DataInfo) -> list[DataInfo]
+            290..295 "info1": DataInfo
+            288..296 "f(info1)": list[DataInfo]
+        "#]],
+    );
+}
+
+#[test]
 fn test_unary_expr() {
     check_infer(
         r#"

@@ -38,7 +38,6 @@ pub(crate) enum FlowNode {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct CodeFlowGraph {
     pub(crate) flow_nodes: Arena<FlowNode>,
-    pub(crate) expr_to_node: FxHashMap<ExprId, FlowNodeId>,
     pub(crate) hir_to_flow_node: FxHashMap<ScopeHirId, FlowNodeId>,
 }
 
@@ -60,7 +59,6 @@ impl<'a> CodeFlowLowerCtx<'a> {
         let curr_node = flow_nodes.alloc(FlowNode::Start);
         let cfg = CodeFlowGraph {
             flow_nodes,
-            expr_to_node: Default::default(),
             hir_to_flow_node: Default::default(),
         };
         CodeFlowLowerCtx {
@@ -92,6 +90,9 @@ impl<'a> CodeFlowLowerCtx<'a> {
         match &self.module[stmt] {
             Stmt::Assign { lhs, rhs, .. } => {
                 self.lower_assignment_target(*lhs, *rhs);
+                self.result
+                    .hir_to_flow_node
+                    .insert(stmt.into(), self.curr_node);
             }
 
             Stmt::Def { stmts, .. } => {
@@ -99,6 +100,9 @@ impl<'a> CodeFlowLowerCtx<'a> {
                     this.lower_stmts(stmts);
                     stmt
                 });
+                self.result
+                    .hir_to_flow_node
+                    .insert(stmt.into(), self.curr_node);
             }
 
             Stmt::If {
@@ -202,7 +206,9 @@ impl<'a> CodeFlowLowerCtx<'a> {
     fn lower_expr(&mut self, expr: ExprId) {
         match &self.module[expr] {
             Expr::Name { .. } => {
-                self.result.expr_to_node.insert(expr, self.curr_node);
+                self.result
+                    .hir_to_flow_node
+                    .insert(expr.into(), self.curr_node);
             }
             Expr::DictComp {
                 entry,
@@ -229,12 +235,14 @@ impl<'a> CodeFlowLowerCtx<'a> {
                 let assign_node = self.new_flow_node(FlowNode::Assign {
                     expr,
                     name: name.clone(),
-                    execution_scope: self.scopes.execution_scope_for_expr(expr).unwrap(),
+                    execution_scope: self.scopes.execution_scope_for_hir_id(expr).unwrap(),
                     source,
                     antecedent: self.curr_node,
                 });
                 self.curr_node = assign_node;
-                self.result.expr_to_node.insert(expr, self.curr_node);
+                self.result
+                    .hir_to_flow_node
+                    .insert(expr.into(), self.curr_node);
             }
             Expr::Paren { expr } => {
                 self.lower_assignment_target(*expr, source);

@@ -5,7 +5,7 @@ use crate::{
     module,
     typeck::{
         builtins::BuiltinFunctionParam, intrinsics::IntrinsicFunctionParam, resolve_type_ref,
-        Protocol, RuleKind, Tuple, TyKind, TypeRef,
+        with_tcx, Protocol, RuleKind, Tuple, TyKind, TypeRef,
     },
     Db, Name, Ty, Type,
 };
@@ -128,10 +128,11 @@ impl DisplayWithDb for TyKind {
                 return f.write_char(']');
             }
             TyKind::Range => "range",
-            TyKind::Function(func) => {
-                let module = module(db, func.file(db));
-                write!(f, "def {}(", func.name(db).as_str())?;
-                for (i, param) in func
+            TyKind::Function(def) => {
+                let module = module(db, def.func.file(db));
+                write!(f, "def {}(", def.func.name(db).as_str())?;
+                for (i, param) in def
+                    .func
                     .params(db)
                     .iter()
                     .map(|param| &module[*param])
@@ -141,7 +142,10 @@ impl DisplayWithDb for TyKind {
                         f.write_str(", ")?;
                     }
 
-                    let format_type_ref = |f, type_ref| resolve_type_ref(db, type_ref).0.fmt(db, f);
+                    let format_type_ref = |f, type_ref| {
+                        with_tcx(db, |tcx| resolve_type_ref(tcx, type_ref, Some(def.stmt)).0)
+                            .fmt(db, f)
+                    };
 
                     match param {
                         HirDefParam::Simple { name, type_ref, .. } => {
@@ -178,7 +182,7 @@ impl DisplayWithDb for TyKind {
                 return write!(
                     f,
                     ") -> {}",
-                    func.ret_type_ref(db).unwrap_or(TypeRef::Unknown)
+                    def.func.ret_type_ref(db).unwrap_or(TypeRef::Unknown)
                 );
             }
             TyKind::IntrinsicFunction(func, subst) => {

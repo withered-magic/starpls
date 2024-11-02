@@ -150,7 +150,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             return Some(text.into());
         }
     } else if let Some(type_) = ast::NamedType::cast(parent.clone()) {
-        let ty = sema.resolve_type(&type_)?;
+        let ty = sema.resolve_type(file, &type_)?;
         let mut text = format!("```python\n(type) {}\n```\n", ty.display(db));
         if let Some(doc) = ty.doc(db) {
             text.push_str(&unindent_doc(&doc));

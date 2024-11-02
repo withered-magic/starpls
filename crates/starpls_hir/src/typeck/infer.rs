@@ -12,7 +12,7 @@ use crate::{
         resolver::{Export, Resolver},
         scope::{ExecutionScopeId, LoadItemDef, ParameterDef, ScopeDef, ScopeHirId, VariableDef},
         Argument, Expr, ExprId, Literal, LiteralString, LoadItem, LoadItemId, LoadStmt, Param,
-        ParamId, Stmt,
+        ParamId, Stmt, StmtId,
     },
     display::DisplayWithDb,
     module, source_map,
@@ -21,9 +21,10 @@ use crate::{
         builtins::builtin_types,
         call::{Slot, SlotProvider, Slots},
         intrinsics::{IntrinsicFunctionParam, IntrinsicTypes},
-        resolve_type_ref, resolve_type_ref_opt, CodeFlowCacheKey, DictLiteral, FileExprId,
-        FileLoadItemId, FileLoadStmt, FileParamId, Protocol, Provider, RuleKind, Struct,
-        Substitution, Tuple, Ty, TyCtxt, TyData, TyKind, TypeRef, TypecheckCancelled,
+        resolve_builtin_type_ref, resolve_type_ref, resolve_type_ref_opt, CodeFlowCacheKey,
+        DictLiteral, FileExprId, FileLoadItemId, FileLoadStmt, FileParamId, Protocol, Provider,
+        RuleKind, Struct, Substitution, Tuple, Ty, TyCtxt, TyData, TyKind, TypeRef,
+        TypecheckCancelled,
     },
     Name,
 };
@@ -96,7 +97,7 @@ impl TyCtxt<'_> {
         let ty = match &curr_module[expr] {
             Expr::Name { name } => {
                 let ty = self
-                    .infer_name_expr(file, expr, name)
+                    .infer_name(file, name, expr)
                     .unwrap_or_else(|| self.unbound_ty());
 
                 // Report unbound and possibly unbound variables.
@@ -299,8 +300,8 @@ impl TyCtxt<'_> {
                             (TyKind::BuiltinType(ty, _), _) => match ty.indexable_by(db) {
                                 Some((expected_index_ty, return_ty)) => {
                                     let expected_index_ty =
-                                        resolve_type_ref(db, &expected_index_ty).0;
-                                    let return_ty = resolve_type_ref(db, &return_ty).0;
+                                        resolve_builtin_type_ref(db, &expected_index_ty).0;
+                                    let return_ty = resolve_builtin_type_ref(db, &return_ty).0;
                                     if assign_tys(db, &index_ty, &expected_index_ty) {
                                         Some(return_ty)
                                     } else {
@@ -399,9 +400,9 @@ impl TyCtxt<'_> {
                 let args_with_ty = args.iter().zip(arg_tys.iter());
 
                 match callee_ty.kind() {
-                    TyKind::Function(func) => {
-                        let module = module(db, func.file(db));
-                        let params = func.params(db).iter().copied();
+                    TyKind::Function(def) => {
+                        let module = module(db, def.func.file(db));
+                        let params = def.func.params(db).iter().copied();
                         let mut slots: Slots = params
                             .clone()
                             .map(|param| module[param].clone())
@@ -418,7 +419,8 @@ impl TyCtxt<'_> {
                         // Validate argument types.
                         for (param, slot) in params.zip(slots.into_inner()) {
                             let hir_param = &module[param];
-                            let param_ty = resolve_type_ref_opt(db, hir_param.type_ref());
+                            let param_ty =
+                                resolve_type_ref_opt(self, hir_param.type_ref(), Some(def.stmt));
 
                             // TODO(withered-magic): Deduplicate the following logic for
                             // validating providers, as it's currently shared between
@@ -468,8 +470,9 @@ impl TyCtxt<'_> {
                             self.add_expr_diagnostic_error(file, expr, message);
                         }
 
-                        func.ret_type_ref(db)
-                            .map(|type_ref| resolve_type_ref(db, &type_ref).0)
+                        def.func
+                            .ret_type_ref(db)
+                            .map(|type_ref| resolve_type_ref(self, &type_ref, Some(def.stmt)).0)
                             .unwrap_or_else(|| self.unknown_ty())
                     }
                     TyKind::IntrinsicFunction(func, subst) => {
@@ -540,7 +543,7 @@ impl TyCtxt<'_> {
 
                         // Validate argument types.
                         for (param, slot) in params.iter().zip(slots.into_inner()) {
-                            let param_ty = resolve_type_ref_opt(db, param.type_ref());
+                            let param_ty = resolve_type_ref_opt(self, param.type_ref(), None);
                             let mut validate_provider = |provider| match provider {
                                 SlotProvider::Missing => {
                                     if param.is_mandatory() {
@@ -586,7 +589,9 @@ impl TyCtxt<'_> {
                         }
 
                         func.maybe_unique_ret_type(self, file, expr, args_with_ty)
-                            .unwrap_or_else(|| resolve_type_ref(db, &func.ret_type_ref(db)).0)
+                            .unwrap_or_else(|| {
+                                resolve_type_ref(self, &func.ret_type_ref(db), None).0
+                            })
                     }
                     TyKind::Rule(rule) => {
                         let mut slots = Slots::from_rule(db, rule);
@@ -964,10 +969,12 @@ impl TyCtxt<'_> {
         // Handle standard assigments, e.g. `x, y = 1, 2`.
         if let Some(node) = ast::AssignStmt::cast(parent.clone()) {
             let ptr = AstPtr::new(&ast::Statement::Assign(node.clone()));
+            let stmt = *source_map.stmt_map.get(&ptr).unwrap();
             let expected_ty = expected_ty.or_else(|| {
-                match &module(db, file)[*source_map.stmt_map.get(&ptr).unwrap()] {
+                match &module(db, file)[stmt] {
                     Stmt::Assign { type_ref, .. } => type_ref.as_ref().and_then(|type_ref| {
-                        let (expected_ty, errors) = resolve_type_ref(db, &type_ref.0);
+                        let (expected_ty, errors) =
+                            resolve_type_ref(self, &type_ref.0, Some(InFile { file, value: stmt }));
                         if errors.is_empty() {
                             Some(expected_ty)
                         } else {
@@ -1040,10 +1047,16 @@ impl TyCtxt<'_> {
         }
     }
 
-    fn infer_name_expr(&mut self, file: File, expr: ExprId, name: &Name) -> Option<Ty> {
-        let resolver = Resolver::new_for_expr_execution_scope(self.db, file, expr);
-        let expr_scope = resolver.scope_for_expr(expr)?;
-        let curr_execution_scope = resolver.execution_scope_for_expr(expr)?;
+    pub(crate) fn infer_name(
+        &mut self,
+        file: File,
+        name: &Name,
+        usage: impl Into<ScopeHirId>,
+    ) -> Option<Ty> {
+        let hir_id = usage.into();
+        let resolver = Resolver::new_for_hir_execution_scope(self.db, file, hir_id);
+        let expr_scope = resolver.scope_for_hir_id(hir_id)?;
+        let curr_execution_scope = resolver.execution_scope_for_hir_id(hir_id)?;
         let (def_execution_scope, effective_ty) = match resolver.resolve_name(name) {
             Some((def_execution_scope, defs)) => {
                 let mut var_defs = Vec::new();
@@ -1062,7 +1075,7 @@ impl TyCtxt<'_> {
                                 self.infer_assign(*file, *expr, *source, None)
                             }
                         }
-                        ScopeDef::Function(func) => func.ty().into(),
+                        ScopeDef::Function(def) => TyKind::Function(def.clone()).intern().into(),
                         ScopeDef::Parameter(ParameterDef { func, index }) => func
                             .map(|func| self.infer_param(file, func.params(self.db)[*index]))
                             .unwrap_or_else(|| self.unknown_ty()),
@@ -1110,7 +1123,7 @@ impl TyCtxt<'_> {
                         }
                         ScopeDef::BuiltinFunction(func) => TyKind::BuiltinFunction(*func).intern(),
                         ScopeDef::BuiltinVariable(type_ref) => {
-                            resolve_type_ref(self.db, &type_ref).0
+                            resolve_builtin_type_ref(self.db, type_ref).0
                         }
                         // This should be unreachable.
                         _ => return None,
@@ -1146,23 +1159,23 @@ impl TyCtxt<'_> {
         // See if we can narrow the effective type further through code-flow analysis. If not, then
         // fall back to the effective type.
         Some(
-            self.infer_expr_from_code_flow(file, expr, curr_execution_scope, name, &start_ty)
+            self.infer_name_from_code_flow(file, name, hir_id, curr_execution_scope, &start_ty)
                 .unwrap_or(fallback_ty),
         )
     }
 
-    fn infer_expr_from_code_flow(
+    fn infer_name_from_code_flow(
         &mut self,
         file: File,
-        expr: ExprId,
-        execution_scope: ExecutionScopeId,
         name: &Name,
+        usage: impl Into<ScopeHirId>,
+        execution_scope: ExecutionScopeId,
         start_ty: &Ty,
     ) -> Option<Ty> {
         // If an expression is missing its corresponding node in the code flow graph, that
         // means the expression is unreachable. We use the `Never` type to represent this case.
         let cfg = code_flow_graph(self.db, file).cfg(self.db);
-        let start_node = match cfg.expr_to_node.get(&expr) {
+        let start_node = match cfg.hir_to_flow_node.get(&usage.into()) {
             Some(start_node) => start_node,
             None => return Some(TyKind::Never.intern()),
         };
@@ -1478,27 +1491,31 @@ impl TyCtxt<'_> {
             .infer_ctx_attributes
             .then(|| self.infer_param_from_rule_usage(file, param))
             .and_then(|ty| ty)
-            .unwrap_or_else(|| match &module(self.db, file)[param] {
-                Param::Simple { type_ref, .. } => type_ref
-                    .as_ref()
-                    .map(|type_ref| self.lower_param_type_ref(file, param, &type_ref))
-                    .unwrap_or_else(|| self.unknown_ty()),
-                Param::ArgsList { type_ref, .. } => TyKind::Tuple(Tuple::Variable(
-                    type_ref
+            .unwrap_or_else(|| {
+                let module = module(self.db, file);
+                let usage = module.param_to_def_stmt.get(&param).copied();
+                match &module[param] {
+                    Param::Simple { type_ref, .. } => type_ref
                         .as_ref()
-                        .map(|type_ref| self.lower_param_type_ref(file, param, type_ref))
+                        .map(|type_ref| self.lower_param_type_ref(file, param, &type_ref, usage))
                         .unwrap_or_else(|| self.unknown_ty()),
-                ))
-                .intern(),
-                Param::KwargsDict { type_ref, .. } => TyKind::Dict(
-                    self.string_ty(),
-                    type_ref
-                        .as_ref()
-                        .map(|type_ref| self.lower_param_type_ref(file, param, type_ref))
-                        .unwrap_or_else(|| self.unknown_ty()),
-                    None,
-                )
-                .intern(),
+                    Param::ArgsList { type_ref, .. } => TyKind::Tuple(Tuple::Variable(
+                        type_ref
+                            .as_ref()
+                            .map(|type_ref| self.lower_param_type_ref(file, param, type_ref, usage))
+                            .unwrap_or_else(|| self.unknown_ty()),
+                    ))
+                    .intern(),
+                    Param::KwargsDict { type_ref, .. } => TyKind::Dict(
+                        self.string_ty(),
+                        type_ref
+                            .as_ref()
+                            .map(|type_ref| self.lower_param_type_ref(file, param, type_ref, usage))
+                            .unwrap_or_else(|| self.unknown_ty()),
+                        None,
+                    )
+                    .intern(),
+                }
             });
 
         self.cx
@@ -1536,8 +1553,17 @@ impl TyCtxt<'_> {
         }
     }
 
-    fn lower_param_type_ref(&mut self, file: File, param: ParamId, type_ref: &TypeRef) -> Ty {
-        let (ty, errors) = resolve_type_ref(self.db, type_ref);
+    fn lower_param_type_ref(
+        &mut self,
+        file: File,
+        param: ParamId,
+        type_ref: &TypeRef,
+        usage: Option<StmtId>,
+    ) -> Ty {
+        let (ty, errors) = usage.map_or_else(
+            || resolve_builtin_type_ref(self.db, type_ref),
+            |usage| resolve_type_ref(self, type_ref, Some(InFile { file, value: usage })),
+        );
 
         // TODO(withered-magic): This will eventually need to handle diagnostics
         // for other places that type comments can appear.
@@ -1643,7 +1669,9 @@ impl TyCtxt<'_> {
                                 Some(Export::Variable(expr)) => {
                                     tcx.infer_expr(loaded_file, expr.expr)
                                 }
-                                Some(Export::Function(func)) => func.ty(),
+                                Some(Export::Function(def)) => {
+                                    TyKind::Function(def).intern().into()
+                                }
                                 None => {
                                     tcx.add_diagnostic_for_range(
                                         file,
@@ -1745,9 +1773,9 @@ impl TyCtxt<'_> {
 
                 let callee_ty = self.infer_expr(file, *callee);
                 let mut slots: Slots = match callee_ty.kind() {
-                    TyKind::Function(func) => {
-                        let module = module(db, func.file(db));
-                        let params = func.params(db).iter().copied();
+                    TyKind::Function(def) => {
+                        let module = module(db, def.func.file(db));
+                        let params = def.func.params(db).iter().copied();
                         params
                             .clone()
                             .map(|param| module[param].clone())

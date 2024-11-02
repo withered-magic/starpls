@@ -360,7 +360,7 @@ impl AssignStmt {
     pub fn type_comment(&self) -> Option<TypeComment> {
         self.syntax
             .siblings_with_tokens(Direction::Next)
-            .take_while(|el| !matches!(el.kind(), SEMI | NEWLINE))
+            .take_while(|el| !matches!(el.kind(), T![;] | T!['\n']))
             .filter_map(|el| el.into_node())
             .find_map(TypeComment::cast)
     }

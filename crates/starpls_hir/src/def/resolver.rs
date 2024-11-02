@@ -8,10 +8,10 @@ use starpls_syntax::{TextRange, TextSize};
 use crate::{
     def::{
         scope::{
-            module_scopes, ExecutionScopeId, Scope, ScopeDef, ScopeHirId, ScopeId, Scopes,
-            VariableDef,
+            module_scopes, ExecutionScopeId, FunctionDef, Scope, ScopeDef, ScopeHirId, ScopeId,
+            Scopes, VariableDef,
         },
-        ExprId, Function, ModuleSourceMap,
+        ExprId, ModuleSourceMap,
     },
     source_map,
     typeck::{
@@ -34,7 +34,7 @@ pub(crate) struct Resolver<'a> {
 #[derive(Clone, Debug)]
 pub(crate) enum Export {
     Variable(VariableDef),
-    Function(Function),
+    Function(FunctionDef),
 }
 
 impl From<Export> for ScopeDef {
@@ -68,7 +68,7 @@ impl<'a> Resolver<'a> {
                 .and_then(|decl| {
                     Some(match decl {
                         ScopeDef::Variable(def) => Export::Variable(def.clone()),
-                        ScopeDef::Function(func) => Export::Function(*func),
+                        ScopeDef::Function(def) => Export::Function(def.clone()),
                         _ => return None,
                     })
                 })
@@ -267,9 +267,13 @@ impl<'a> Resolver<'a> {
         Self::from_parts(db, file, scopes, scope)
     }
 
-    pub(crate) fn new_for_expr_execution_scope(db: &'a dyn Db, file: File, expr: ExprId) -> Self {
+    pub(crate) fn new_for_hir_execution_scope(
+        db: &'a dyn Db,
+        file: File,
+        hir: impl Into<ScopeHirId>,
+    ) -> Self {
         let scopes = module_scopes(db, file).scopes(db);
-        let scope = scopes.scope_for_expr_execution_scope(expr);
+        let scope = scopes.scope_for_hir_execution_scope(hir);
         Self::from_parts(db, file, scopes, scope)
     }
 
@@ -303,12 +307,15 @@ impl<'a> Resolver<'a> {
         Self::from_parts(db, file, scopes, scope)
     }
 
-    pub(crate) fn scope_for_expr(&self, expr: ExprId) -> Option<ScopeId> {
-        self.scopes.scope_for_hir_id(expr)
+    pub(crate) fn scope_for_hir_id(&self, hir: impl Into<ScopeHirId>) -> Option<ScopeId> {
+        self.scopes.scope_for_hir_id(hir)
     }
 
-    pub(crate) fn execution_scope_for_expr(&self, expr: ExprId) -> Option<ExecutionScopeId> {
-        self.scopes.execution_scope_for_expr(expr)
+    pub(crate) fn execution_scope_for_hir_id(
+        &self,
+        hir: impl Into<ScopeHirId>,
+    ) -> Option<ExecutionScopeId> {
+        self.scopes.execution_scope_for_hir_id(hir)
     }
 
     fn from_parts(db: &'a dyn Db, file: File, scopes: &'a Scopes, scope: Option<ScopeId>) -> Self {

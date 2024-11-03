@@ -341,17 +341,14 @@ impl AnalysisSnapshot {
     }
 
     pub fn goto_definition(&self, pos: FilePosition) -> Cancellable<Option<Vec<LocationLink>>> {
-        self.query(|db| {
-            let res = goto_definition::goto_definition(db, pos);
-            res
-        })
+        self.query(|db| goto_definition::goto_definition(db, pos))
     }
 
     pub fn hover(&self, pos: FilePosition) -> Cancellable<Option<Hover>> {
         self.query(|db| hover::hover(db, pos))
     }
 
-    pub fn line_index<'a>(&'a self, file_id: FileId) -> Cancellable<Option<&'a LineIndex>> {
+    pub fn line_index(&self, file_id: FileId) -> Cancellable<Option<&LineIndex>> {
         self.query(move |db| line_index::line_index(db, file_id))
     }
 

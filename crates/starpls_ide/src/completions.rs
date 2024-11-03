@@ -12,7 +12,7 @@ use starpls_syntax::{
 
 use crate::FilePosition;
 
-const COMPLETION_MARKER: &'static str = "__STARPLS_COMPLETION_MARKER";
+const COMPLETION_MARKER: &str = "__STARPLS_COMPLETION_MARKER";
 
 const BUILTIN_TYPE_NAMES: &[&str] = &[
     "NoneType", "bool", "int", "float", "string", "bytes", "list", "tuple", "dict", "range",
@@ -391,10 +391,7 @@ impl CompletionContext {
             });
         }
 
-        if matches!(
-            trigger_character.as_ref().map(|c| c.as_str()),
-            Some("/" | ":" | "@")
-        ) {
+        if matches!(trigger_character.as_deref(), Some("/" | ":" | "@")) {
             return None;
         }
 
@@ -418,9 +415,9 @@ impl CompletionContext {
             let args = name_ref
                 .syntax()
                 .parent()
-                .and_then(|parent| ast::SimpleArgument::cast(parent))
+                .and_then(ast::SimpleArgument::cast)
                 .and_then(|arg| arg.syntax().parent())
-                .and_then(|parent| ast::Arguments::cast(parent));
+                .and_then(ast::Arguments::cast);
 
             let keyword_args = args
                 .as_ref()
@@ -435,11 +432,11 @@ impl CompletionContext {
                         })
                         .collect::<Vec<_>>()
                 })
-                .unwrap_or_else(|| Vec::new());
+                .unwrap_or_else(Vec::new);
 
             let params = args
                 .and_then(|arg| arg.syntax().parent())
-                .and_then(|parent| ast::CallExpr::cast(parent))
+                .and_then(ast::CallExpr::cast)
                 .and_then(|expr| expr.callee())
                 .and_then(|expr| sema.type_of_expr(file, &expr))
                 .map(|ty| {
@@ -455,7 +452,7 @@ impl CompletionContext {
                         })
                         .collect()
                 })
-                .unwrap_or_else(|| vec![]);
+                .unwrap_or_else(std::vec::Vec::new);
 
             let scope = sema.scope_for_offset(file, pos);
 
@@ -487,7 +484,7 @@ impl CompletionContext {
             let parent = name.syntax().parent()?;
             CompletionAnalysis::Name(if let Some(expr) = ast::DotExpr::cast(parent) {
                 NameContext::Dot {
-                    receiver_ty: sema.type_of_expr(file, &expr.expr()?.into())?,
+                    receiver_ty: sema.type_of_expr(file, &expr.expr()?)?,
                 }
             } else {
                 NameContext::Def

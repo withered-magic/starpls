@@ -140,7 +140,7 @@ impl Parse {
 
 #[salsa::tracked]
 pub fn parse(db: &dyn Db, file: File) -> Parse {
-    let parse = parse_module(&file.contents(db), &mut |err| {
+    let parse = parse_module(file.contents(db), &mut |err| {
         Diagnostics::push(
             db,
             Diagnostic {
@@ -164,7 +164,7 @@ struct LineIndexResult {
 
 #[salsa::tracked]
 fn line_index_query(db: &dyn Db, file: File) -> LineIndexResult {
-    let line_index = syntax_line_index(&file.contents(db));
+    let line_index = syntax_line_index(file.contents(db));
     LineIndexResult::new(db, line_index)
 }
 

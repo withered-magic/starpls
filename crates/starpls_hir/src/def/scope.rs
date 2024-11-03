@@ -225,7 +225,7 @@ impl ScopeCollector<'_> {
         while let Some(DeferredScope { parent, data }) = self.deferred.pop_front() {
             self.curr_execution_scope = ExecutionScopeId::Def(data.def_stmt);
             let scope = self.alloc_scope(parent);
-            for (index, param) in data.params.into_iter().copied().enumerate() {
+            for (index, param) in data.params.iter().copied().enumerate() {
                 match &self.module.params[param] {
                     Param::Simple { name, .. }
                     | Param::ArgsList { name, .. }
@@ -339,7 +339,7 @@ impl ScopeCollector<'_> {
                 *current = self.alloc_scope(*current);
                 for item in items.iter() {
                     let name: &str = match &self.module.load_items[*item] {
-                        LoadItem::Direct { name, .. } => &name,
+                        LoadItem::Direct { name, .. } => name,
                         LoadItem::Aliased { alias, .. } => alias.as_str(),
                     };
                     self.scopes.add_decl(
@@ -422,7 +422,7 @@ impl ScopeCollector<'_> {
                 }
                 Expr::Lambda { params, body } => {
                     let scope = self.alloc_scope(current);
-                    for (index, param) in params.into_iter().copied().enumerate() {
+                    for (index, param) in params.iter().copied().enumerate() {
                         match &self.module.params[param] {
                             Param::Simple { name, .. }
                             | Param::ArgsList { name, .. }
@@ -494,7 +494,7 @@ impl ScopeCollector<'_> {
     }
 
     fn collect_comp_clauses(&mut self, comp_clauses: &Box<[CompClause]>, current: &mut ScopeId) {
-        for comp_clause in comp_clauses.into_iter() {
+        for comp_clause in comp_clauses.iter() {
             match comp_clause {
                 CompClause::For { iterable, targets } => {
                     self.collect_expr(*iterable, *current, None);

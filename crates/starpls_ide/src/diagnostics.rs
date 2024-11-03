@@ -20,6 +20,6 @@ pub(crate) fn diagnostics(db: &Database, file_id: FileId) -> Vec<Diagnostic> {
     // is really wrong with the file being analyzed.
     diagnostics_for_file(db, file)
         .take(128)
-        .chain(diagnostics.into_iter())
+        .chain(diagnostics)
         .collect()
 }

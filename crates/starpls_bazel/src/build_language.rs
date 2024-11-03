@@ -7,7 +7,7 @@ use crate::{
 };
 
 pub fn decode_rules(build_language_output: &[u8]) -> anyhow::Result<Builtins> {
-    let build_language = BuildLanguage::decode(&build_language_output[..])?;
+    let build_language = BuildLanguage::decode(build_language_output)?;
     Ok(Builtins {
         global: build_language
             .rule
@@ -21,11 +21,11 @@ pub fn decode_rules(build_language_output: &[u8]) -> anyhow::Result<Builtins> {
                  }| {
                     Value {
                         name,
-                        doc: documentation.unwrap_or_else(|| String::new()),
+                        doc: documentation.unwrap_or_else(String::new),
                         callable: Some(Callable {
                             param: attribute
                                 .into_iter()
-                                .filter(|attr| !attr.name.starts_with(&['$', ':']))
+                                .filter(|attr| !attr.name.starts_with(['$', ':']))
                                 .map(|attr| {
                                     let doc = attr.documentation().to_string();
                                     let r#type =

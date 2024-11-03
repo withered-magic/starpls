@@ -164,7 +164,7 @@ impl<'a> LoweringContext<'a> {
                 }
             }
             ast::Statement::Load(stmt) => {
-                let ptr = SyntaxNodePtr::new(&stmt.syntax());
+                let ptr = SyntaxNodePtr::new(stmt.syntax());
                 let module = self.lower_string_opt(stmt.module().and_then(|module| module.name()));
                 let load_stmt = LoadStmt::new(self.db, module, ptr);
                 let items = self.lower_load_items(load_stmt, stmt.items());
@@ -429,7 +429,7 @@ impl<'a> LoweringContext<'a> {
             .and_then(|name| name.name())
             .as_ref()
             .map(|token| token.text())
-            .map_or_else(|| Name::missing(), |text| Name::from_str(text))
+            .map_or_else(Name::missing, Name::from_str)
     }
 
     fn lower_name_ref_opt(&mut self, syntax: Option<ast::NameRef>) -> Name {
@@ -437,7 +437,7 @@ impl<'a> LoweringContext<'a> {
             .and_then(|name| name.name())
             .as_ref()
             .map(|token| token.text())
-            .map_or_else(|| Name::missing(), |text| Name::from_str(text))
+            .map_or_else(Name::missing, Name::from_str)
     }
 
     fn lower_suite_opt(&mut self, syntax: Option<ast::Suite>) -> Box<[StmtId]> {
@@ -522,7 +522,7 @@ impl<'a> LoweringContext<'a> {
 
     fn lower_string_opt(&self, syntax: Option<SyntaxToken>) -> Box<str> {
         syntax
-            .and_then(|name| ast::String::cast(name))
+            .and_then(ast::String::cast)
             .and_then(|name| name.value())
             .unwrap_or_else(|| String::new().into_boxed_str())
     }

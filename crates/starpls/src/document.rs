@@ -121,7 +121,7 @@ impl DocumentManager {
     }
 
     pub(crate) fn close(&mut self, path: &PathBuf) {
-        if let Some(file_id) = self.path_interner.lookup_by_path_buf(&path) {
+        if let Some(file_id) = self.path_interner.lookup_by_path_buf(path) {
             self.has_closed_or_opened_documents = true;
             if let Some(document) = self.documents.get_mut(&file_id) {
                 document.source = DocumentSource::Disk;
@@ -284,9 +284,7 @@ impl DefaultFileLoader {
                     canonical_repo_res = Some(label.repo().to_string());
                 }
 
-                if self.workspace_name.as_ref().map(|name| name.as_str()) == Some(label.repo())
-                    || label.repo().is_empty()
-                {
+                if self.workspace_name.as_deref() == Some(label.repo()) || label.repo().is_empty() {
                     (self.workspace.clone(), PathBuf::new())
                 } else {
                     (self.external_output_base.join(label.repo()), PathBuf::new())
@@ -295,7 +293,7 @@ impl DefaultFileLoader {
             RepoKind::Current => {
                 // Find the Bazel workspace root.
                 let from_path = self.interner.lookup_by_file_id(from);
-                match starpls_bazel::resolve_workspace(&from_path)? {
+                match starpls_bazel::resolve_workspace(from_path)? {
                     Some(root) => root,
                     None => {
                         bail!("not in a Bazel workspace")
@@ -358,7 +356,7 @@ impl DefaultFileLoader {
         Ok((file_id, contents))
     }
 
-    fn repo_for_path<'a>(&'a self, path: &'a PathBuf) -> Option<&str> {
+    fn repo_for_path<'a>(&'a self, path: &'a Path) -> Option<&str> {
         match path.strip_prefix(&self.external_output_base) {
             Ok(stripped) => stripped
                 .components()
@@ -498,10 +496,8 @@ impl FileLoader for DefaultFileLoader {
                 let from_dir = from_path.parent().unwrap();
                 let has_trailing_slash = path.ends_with(MAIN_SEPARATOR);
                 let mut path = from_dir.join(path);
-                if !has_trailing_slash {
-                    if !path.pop() {
-                        return Ok(None);
-                    }
+                if !has_trailing_slash && !path.pop() {
+                    return Ok(None);
                 }
 
                 let path = path.canonicalize()?;
@@ -554,7 +550,6 @@ impl FileLoader for DefaultFileLoader {
                         ),
                         RepoKind::Canonical | RepoKind::Apparent => Some(
                             fs::read_dir(&self.external_output_base)?
-                                .into_iter()
                                 .filter_map(|entry| {
                                     let entry = entry.ok()?;
                                     entry.file_type().ok()?.is_dir().then(|| LoadItemCandidate {
@@ -586,8 +581,7 @@ impl FileLoader for DefaultFileLoader {
                             } else {
                                 self.external_output_base.join(canonical_repo)
                             }
-                        } else if self.workspace_name.as_ref().map(|name| name.as_str())
-                            == Some(label.repo())
+                        } else if self.workspace_name.as_deref() == Some(label.repo())
                             || label.repo().is_empty()
                         {
                             self.workspace.clone()
@@ -653,7 +647,7 @@ fn read_dir_packages_and_targets(
     has_trailing_slash: bool,
 ) -> anyhow::Result<Vec<LoadItemCandidate>> {
     Ok(fs::read_dir(path)?
-        .flat_map(|entry| entry)
+        .flatten()
         .filter_map(|entry| {
             entry
                 .file_type()
@@ -689,7 +683,7 @@ fn read_dir_packages_and_targets(
 
 fn read_dir_targets(path: impl AsRef<Path>) -> anyhow::Result<Vec<LoadItemCandidate>> {
     Ok(fs::read_dir(path)?
-        .flat_map(|entry| entry)
+        .flatten()
         .filter_map(|entry| {
             entry
                 .file_type()

@@ -326,7 +326,7 @@ impl Server {
         let files = mem::take(&mut self.pending_files);
         let bazel_client = self.bazel_client.clone();
         self.is_fetching_repos = true;
-        self.fetched_repos.extend(repos.clone().into_iter());
+        self.fetched_repos.extend(repos.clone());
         self.task_pool_handle.spawn_with_sender(move |sender| {
             sender
                 .send(Task::FetchExternalRepos(FetchExternalReposProgress::Begin(

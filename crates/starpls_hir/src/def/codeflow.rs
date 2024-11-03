@@ -126,7 +126,7 @@ impl<'a> CodeFlowLowerCtx<'a> {
                     }
                     Some(Either::Right(else_stmts)) => {
                         self.curr_node = pre_if_node;
-                        self.lower_stmts(&else_stmts);
+                        self.lower_stmts(else_stmts);
                         self.push_antecedent(post_if_node, self.curr_node);
                     }
                     _ => {
@@ -259,7 +259,7 @@ impl<'a> CodeFlowLowerCtx<'a> {
     }
 
     fn lower_comp_clauses(&mut self, comp_clauses: &[CompClause]) {
-        for comp_clause in comp_clauses.into_iter() {
+        for comp_clause in comp_clauses.iter() {
             match comp_clause {
                 CompClause::For { iterable, targets } => {
                     self.lower_expr(*iterable);

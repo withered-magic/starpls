@@ -117,7 +117,7 @@ pub(crate) fn run(filters: &[String]) -> anyhow::Result<()> {
     let source_dir = project_root().join("crates/starpls_parser/src/grammar");
 
     // Collect tests from all `*.rs` files in the `src` directory.
-    for entry in fs::read_dir(&source_dir)? {
+    for entry in fs::read_dir(source_dir)? {
         let entry = entry?;
         let path = entry.path();
 

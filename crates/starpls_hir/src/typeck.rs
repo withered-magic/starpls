@@ -210,7 +210,7 @@ impl std::fmt::Display for TypeRef {
                     }
                     type_ref.fmt(f)?;
                 }
-                return Ok(());
+                Ok(())
             }
             _ => f.write_str("Unknown"),
         }
@@ -354,7 +354,7 @@ impl Ty {
                         .types(db)
                         .get("Label")
                         .cloned()
-                        .unwrap_or_else(|| Ty::unknown());
+                        .unwrap_or_else(Ty::unknown);
                     Fields::Static(iter::once((
                         Field(FieldInner::StaticField {
                             name: "label",
@@ -374,7 +374,7 @@ impl Ty {
         db: &'a dyn Db,
         class: IntrinsicClass,
     ) -> impl Iterator<Item = (Field, Ty)> + 'a {
-        let fields = (0..class.fields(db).len()).into_iter().map(move |index| {
+        let fields = (0..class.fields(db).len()).map(move |index| {
             Field(FieldInner::IntrinsicField {
                 parent: class,
                 index,
@@ -421,7 +421,7 @@ impl Ty {
                 Params::Intrinsic(func.params(db).iter().enumerate().map(|(index, param)| {
                     let ty = param
                         .ty()
-                        .unwrap_or_else(|| Ty::unknown())
+                        .unwrap_or_else(Ty::unknown)
                         .substitute(&subst.args);
                     let param = Param(ParamInner::IntrinsicParam {
                         parent: *func,
@@ -546,7 +546,7 @@ impl Ty {
         Some(match self.kind() {
             TyKind::Function(def) => resolve_builtin_type_ref_opt(db, def.func.ret_type_ref(db)),
             TyKind::IntrinsicFunction(func, subst) => func.ret_ty(db).substitute(&subst.args),
-            TyKind::BuiltinFunction(func) => resolve_builtin_type_ref(db, &func.ret_type_ref(db)).0,
+            TyKind::BuiltinFunction(func) => resolve_builtin_type_ref(db, func.ret_type_ref(db)).0,
             TyKind::Rule(_) => Ty::none(),
             TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
                 TyKind::ProviderInstance(provider.clone()).intern()
@@ -1678,9 +1678,8 @@ impl<'a, 'b> TypeRefResolver<'a, 'b> {
                     }
                     "Union" | "union" => Ty::union(
                         args.iter()
-                            .map(|args| args.iter())
-                            .flatten()
-                            .map(|type_ref| self.resolve_type_ref_inner(&type_ref)),
+                            .flat_map(|args| args.iter())
+                            .map(|type_ref| self.resolve_type_ref_inner(type_ref)),
                     ),
                     "struct" | "structure" => self
                         .resolve_single_arg_type_constructor(args, |ty| {
@@ -1718,7 +1717,7 @@ impl<'a, 'b> TypeRefResolver<'a, 'b> {
             }
             TypeRef::Union(args) => Ty::union(
                 args.iter()
-                    .map(|type_ref| self.resolve_type_ref_inner(&type_ref)),
+                    .map(|type_ref| self.resolve_type_ref_inner(type_ref)),
             ),
             TypeRef::Provider(provider) => TyKind::Provider(Provider::Builtin(*provider)).intern(),
             TypeRef::Ellipsis => {
@@ -1786,7 +1785,7 @@ pub(crate) fn resolve_type_ref_opt(
 ) -> Ty {
     type_ref
         .map(|type_ref| resolve_type_ref(tcx, &type_ref, usage).0)
-        .unwrap_or_else(|| Ty::unknown())
+        .unwrap_or_else(Ty::unknown)
 }
 
 pub(crate) fn resolve_builtin_type_ref(db: &dyn Db, type_ref: &TypeRef) -> (Ty, Vec<String>) {
@@ -1802,7 +1801,7 @@ pub(crate) fn resolve_builtin_type_ref(db: &dyn Db, type_ref: &TypeRef) -> (Ty, 
 pub(crate) fn resolve_builtin_type_ref_opt(db: &dyn Db, type_ref: Option<TypeRef>) -> Ty {
     type_ref
         .map(|type_ref| resolve_builtin_type_ref(db, &type_ref).0)
-        .unwrap_or_else(|| Ty::unknown())
+        .unwrap_or_else(Ty::unknown)
 }
 
 // TODO(withered-magic): This function currently assumes that all types are covariant in their arguments.

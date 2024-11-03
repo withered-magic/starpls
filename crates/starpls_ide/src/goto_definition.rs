@@ -36,8 +36,8 @@ pub(crate) fn goto_definition(
                         let range = def.value.syntax_node_ptr(db, def.file)?.text_range();
                         Some(LocationLink::Local {
                             origin_selection_range: None,
-                            target_range: range.clone(),
-                            target_selection_range: range.clone(),
+                            target_range: range,
+                            target_selection_range: range,
                             target_file_id: def.file.id(db),
                         })
                     }
@@ -73,7 +73,7 @@ pub(crate) fn goto_definition(
                             let range = name.syntax().text_range();
                             vec![LocationLink::Local {
                                 origin_selection_range: None,
-                                target_range: range.clone(),
+                                target_range: range,
                                 target_selection_range: range,
                                 target_file_id: struct_call_expr.file.id(db),
                             }]
@@ -128,7 +128,7 @@ pub(crate) fn goto_definition(
         let range = def.value.syntax_node_ptr(db, def.file)?.text_range();
         return Some(vec![LocationLink::Local {
             origin_selection_range: None,
-            target_range: range.clone(),
+            target_range: range,
             target_selection_range: range,
             target_file_id: def.file.id(db),
         }]);
@@ -187,7 +187,7 @@ pub(crate) fn goto_definition(
                 let range = call_expr.syntax().text_range();
                 Some(vec![LocationLink::Local {
                     origin_selection_range: Some(token.text_range()),
-                    target_range: range.clone(),
+                    target_range: range,
                     target_selection_range: range,
                     target_file_id: build_file_id,
                 }])

@@ -16,8 +16,7 @@ jobs:
       - uses: actions/checkout@v3
       - name: Prepare for build
         run: |
-          cp bazel/remote-cache.bazelrc .bazelrc
-          echo "build --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >> .bazelrc
+          bazel/setup-ci.sh
           mkdir -p editors/code/dist
         env:
           BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}

@@ -248,7 +248,7 @@ impl ScopeCollector<'_> {
         self.scopes
     }
 
-    fn collect_stmts_defer(&mut self, stmts: &Box<[StmtId]>, mut current: ScopeId) -> ScopeId {
+    fn collect_stmts_defer(&mut self, stmts: &[StmtId], mut current: ScopeId) -> ScopeId {
         let mut deferred = VecDeque::new();
         for stmt in stmts.iter().copied() {
             self.collect_stmt(&mut deferred, stmt, &mut current);
@@ -266,7 +266,7 @@ impl ScopeCollector<'_> {
     fn collect_stmts(
         &mut self,
         deferred: &mut VecDeque<FunctionData>,
-        stmts: &Box<[StmtId]>,
+        stmts: &[StmtId],
         current: &mut ScopeId,
     ) {
         for stmt in stmts.iter().copied() {
@@ -493,7 +493,7 @@ impl ScopeCollector<'_> {
             .insert(self.curr_execution_scope, scope);
     }
 
-    fn collect_comp_clauses(&mut self, comp_clauses: &Box<[CompClause]>, current: &mut ScopeId) {
+    fn collect_comp_clauses(&mut self, comp_clauses: &[CompClause], current: &mut ScopeId) {
         for comp_clause in comp_clauses.iter() {
             match comp_clause {
                 CompClause::For { iterable, targets } => {
@@ -510,15 +510,15 @@ impl ScopeCollector<'_> {
         }
     }
 
-    fn collect_params(&mut self, params: &Box<[ParamId]>, current: ScopeId) {
+    fn collect_params(&mut self, params: &[ParamId], current: ScopeId) {
         for param in params.iter().copied() {
             let param = &self.module[param];
-            match param {
-                Param::Simple {
-                    default: Some(expr),
-                    ..
-                } => self.collect_expr(*expr, current, None),
-                _ => {}
+            if let Param::Simple {
+                default: Some(expr),
+                ..
+            } = param
+            {
+                self.collect_expr(*expr, current, None)
             }
         }
     }

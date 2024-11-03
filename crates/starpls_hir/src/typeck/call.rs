@@ -220,8 +220,8 @@ impl Slots {
                 .attrs
                 .iter()
                 .flat_map(|attrs| attrs.iter())
-                .map(|(name, _)| Slot::Keyword {
-                    name: name.clone(),
+                .map(|data| Slot::Keyword {
+                    name: data.name.clone(),
                     provider: SlotProvider::Missing,
                     positional: false,
                 })
@@ -258,7 +258,7 @@ impl Slots {
                     .fields
                     .iter()
                     .flat_map(|fields| {
-                        fields.1.iter().map(|field| Slot::Keyword {
+                        fields.fields.iter().map(|field| Slot::Keyword {
                             name: field.name.clone(),
                             provider: SlotProvider::Missing,
                             positional: false,

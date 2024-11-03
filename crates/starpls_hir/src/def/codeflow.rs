@@ -137,10 +137,8 @@ impl<'a> CodeFlowLowerCtx<'a> {
                 self.curr_node = post_if_node;
             }
 
-            Stmt::Return { expr } => {
-                if let Some(expr) = expr {
-                    self.lower_expr(*expr);
-                }
+            Stmt::Return { expr: Some(expr) } => {
+                self.lower_expr(*expr);
             }
 
             Stmt::Expr { expr } => {

@@ -431,7 +431,7 @@ impl Type {
                 let dict_expr = match provider {
                     Provider::Builtin(_) => return None,
                     Provider::Custom(provider) => {
-                        provider.fields.as_ref().and_then(|fields| fields.0)?
+                        provider.fields.as_ref().and_then(|fields| fields.expr)?
                     }
                 };
                 source_map(db, dict_expr.file)

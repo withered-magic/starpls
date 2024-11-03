@@ -19,8 +19,9 @@ use crate::{
     },
     source_map,
     typeck::{
-        Attribute, AttributeKind, CustomProvider, ModuleExtension, Provider, ProviderField,
-        Rule as TyRule, RuleKind, Struct, TagClass, Tuple,
+        Attribute, AttributeData, AttributeKind, CustomProvider, CustomProviderFields,
+        ModuleExtension, Provider, ProviderField, Rule as TyRule, RuleKind, Struct, TagClass,
+        TagClassData, Tuple,
     },
     Db, ExprId, Name, Ty, TyCtxt, TyKind, TypeRef,
 };
@@ -195,9 +196,10 @@ impl BuiltinFunction {
                             }
                             "fields" => {
                                 if let TyKind::Dict(_, _, Some(lit)) = ty.kind() {
-                                    fields = Some((
-                                        lit.expr,
-                                        lit.known_keys
+                                    fields = Some(CustomProviderFields {
+                                        expr: lit.expr,
+                                        fields: lit
+                                            .known_keys
                                             .iter()
                                             .flat_map(|(key, value)| {
                                                 let name = &key.value(db);
@@ -218,7 +220,7 @@ impl BuiltinFunction {
                                                 }
                                             })
                                             .collect(),
-                                    ));
+                                    });
                                 }
                             }
                             "init" => {
@@ -402,10 +404,10 @@ impl BuiltinFunction {
                                         lit.known_keys
                                             .iter()
                                             .filter_map(|(name, ty)| match ty.kind() {
-                                                TyKind::Attribute(attr) => Some((
-                                                    Name::from_str(&name.value(db)),
-                                                    attr.clone(),
-                                                )),
+                                                TyKind::Attribute(attr) => Some(AttributeData {
+                                                    name: Name::from_str(&name.value(db)),
+                                                    attr: attr.clone(),
+                                                }),
                                                 _ => None,
                                             })
                                             .collect::<Vec<_>>()
@@ -447,10 +449,10 @@ impl BuiltinFunction {
                                     lit.known_keys
                                         .iter()
                                         .filter_map(|(name, ty)| match ty.kind() {
-                                            TyKind::TagClass(tag_class) => Some((
-                                                Name::from_str(&name.value(db)),
-                                                tag_class.clone(),
-                                            )),
+                                            TyKind::TagClass(tag_class) => Some(TagClassData {
+                                                name: Name::from_str(&name.value(db)),
+                                                tag_class: tag_class.clone(),
+                                            }),
                                             _ => None,
                                         })
                                         .collect::<Vec<_>>()
@@ -1001,8 +1003,8 @@ fn parse_type_ref(text: &str) -> TypeRef {
             match (
                 parts.next(),
                 parts.next().map(|element| {
-                    if element.ends_with('s') {
-                        &element[..element.len() - 1]
+                    if let Some(stripped) = element.strip_suffix('s') {
+                        stripped
                     } else {
                         element
                     }

@@ -175,7 +175,7 @@ pub(crate) fn goto_definition(
                                             })
                                             .and_then(|expr| match expr.kind() {
                                                 ast::LiteralKind::String(s) => {
-                                                    s.value().map(|value| &*value == target)
+                                                    s.value().map(|value| *value == target)
                                                 }
                                                 _ => None,
                                             })

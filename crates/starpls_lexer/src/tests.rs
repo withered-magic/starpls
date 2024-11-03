@@ -1,11 +1,14 @@
+use std::fmt::Write;
+
 use expect_test::{expect, Expect};
 
 use super::*;
 
 fn check_lexing(input: &str, expect: Expect) {
-    let actual: String = tokenize(input)
-        .map(|token| format!("{:?}\n", token))
-        .collect();
+    let actual = tokenize(input).fold(String::new(), |mut acc, token| {
+        writeln!(acc, "{:?}", token).unwrap();
+        acc
+    });
     expect.assert_eq(&actual);
 }
 

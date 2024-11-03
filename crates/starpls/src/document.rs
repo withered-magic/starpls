@@ -22,7 +22,7 @@ use starpls_bazel::{
 use starpls_common::{
     Dialect, FileId, FileInfo, LoadItemCandidate, LoadItemCandidateKind, ResolvedPath,
 };
-use starpls_ide::FileLoader;
+use starpls_ide::{FileLoader, LoadFileResult};
 
 use crate::event_loop::{FetchExternalRepoRequest, Task};
 
@@ -434,7 +434,7 @@ impl FileLoader for DefaultFileLoader {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> anyhow::Result<Option<(FileId, Dialect, Option<FileInfo>, Option<String>)>> {
+    ) -> anyhow::Result<Option<LoadFileResult>> {
         let (path, info, canonical_repo) = match dialect {
             Dialect::Standard => {
                 // Find the importing file's directory.
@@ -481,7 +481,12 @@ impl FileLoader for DefaultFileLoader {
         };
 
         let (file_id, contents) = self.maybe_intern_file(path, from, canonical_repo)?;
-        Ok(Some((file_id, dialect, info, contents)))
+        Ok(Some(LoadFileResult {
+            file_id,
+            dialect,
+            info,
+            contents,
+        }))
     }
 
     fn list_load_candidates(

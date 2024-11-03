@@ -1202,17 +1202,17 @@ ast_token! {
 impl Int {
     pub fn value(&self) -> Option<u64> {
         let text = self.syntax.text();
-        if text.starts_with('0') {
+        if let Some(stripped) = text.strip_prefix('0') {
             return Some(if text.len() == 1 {
                 0
             } else {
-                u64::from_str_radix(&text[1..], 8).ok()?
+                u64::from_str_radix(stripped, 8).ok()?
             });
         }
-        if text.starts_with("0x") {
-            return u64::from_str_radix(&text[2..], 16).ok();
+        if let Some(stripped) = text.strip_prefix("0x") {
+            return u64::from_str_radix(stripped, 16).ok();
         }
-        u64::from_str_radix(text, 10).ok()
+        text.parse::<u64>().ok()
     }
 }
 

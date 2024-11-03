@@ -41,10 +41,8 @@ fn extract_comment_blocks(text: &str) -> Vec<CommentBlock> {
     // at which point the intermediate block's contents are pushed to our accumulator, and the intermediate
     // block is reset.
     for line in lines {
-        if line.starts_with(comment_prefix) {
-            current_block
-                .lines
-                .push(line[comment_prefix.len()..].to_string());
+        if let Some(stripped) = line.strip_prefix(comment_prefix) {
+            current_block.lines.push(stripped.to_string());
         } else if !current_block.lines.is_empty() {
             blocks.push(mem::take(&mut current_block));
         }

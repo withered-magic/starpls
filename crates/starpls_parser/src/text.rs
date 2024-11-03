@@ -144,6 +144,10 @@ impl<'a> StrWithTokens<'a> {
         self.token_kinds.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn lexer_errors(&self) -> impl Iterator<Item = &LexerError> {
         self.lexer_errors.iter()
     }

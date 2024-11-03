@@ -560,6 +560,7 @@ impl<'a> LoweringContext<'a> {
         })
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn lower_type(&self, type_: ast::Type) -> TypeRef {
         match type_ {
             ast::Type::NamedType(type_) => type_.name().map(|name| {

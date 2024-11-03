@@ -602,8 +602,8 @@ impl TyCtxt<'_> {
                         // Validate argument types.
                         for ((name, attr), slot) in rule.attrs(db).zip(slots.into_inner()) {
                             let expected_ty = attr.expected_ty();
-                            match slot {
-                                Slot::Keyword { provider, .. } => match provider {
+                            if let Slot::Keyword { provider, .. } = slot {
+                                match provider {
                                     SlotProvider::Single(expr, index) => {
                                         let ty = &arg_tys[index];
                                         if !assign_tys(db, ty, &expected_ty) {
@@ -616,8 +616,7 @@ impl TyCtxt<'_> {
                                         }
                                     }
                                     _ => {}
-                                },
-                                _ => {}
+                                }
                             }
                         }
 
@@ -649,15 +648,15 @@ impl TyCtxt<'_> {
                         let mut missing_attrs = Vec::new();
 
                         // Validate argument types.
-                        for ((name, attr), slot) in tag_class
+                        for (data, slot) in tag_class
                             .attrs
                             .iter()
                             .flat_map(|attrs| attrs.iter())
                             .zip(slots.into_inner())
                         {
-                            let expected_ty = attr.expected_ty();
-                            match slot {
-                                Slot::Keyword { provider, .. } => match provider {
+                            let expected_ty = data.attr.expected_ty();
+                            if let Slot::Keyword { provider, .. } = slot {
+                                match provider {
                                     SlotProvider::Single(expr, index) => {
                                         let ty = &arg_tys[index];
                                         if !assign_tys(db, ty, &expected_ty) {
@@ -665,13 +664,12 @@ impl TyCtxt<'_> {
                                         }
                                     }
                                     SlotProvider::Missing => {
-                                        if attr.mandatory {
-                                            missing_attrs.push(name);
+                                        if data.attr.mandatory {
+                                            missing_attrs.push(&data.name);
                                         }
                                     }
                                     _ => {}
-                                },
-                                _ => {}
+                                }
                             }
                         }
 

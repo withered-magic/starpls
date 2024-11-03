@@ -62,7 +62,7 @@ pub(crate) fn goto_definition(
         snapshot
             .analysis_snapshot
             .goto_definition(FilePosition { file_id, pos })?
-            .unwrap_or_else(|| Vec::new())
+            .unwrap_or_else(Vec::new)
             .into_iter(),
     );
     Ok(Some(resp))
@@ -88,7 +88,7 @@ pub(crate) fn completion(
                 FilePosition { file_id, pos },
                 params.context.and_then(|cx| cx.trigger_character),
             )?
-            .unwrap_or_else(|| Vec::new())
+            .unwrap_or_else(Vec::new)
             .into_iter()
             .flat_map(|item| {
                 let sort_text = Some(item.sort_text());

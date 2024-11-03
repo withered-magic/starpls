@@ -70,7 +70,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
         let name_token = name.name()?;
         let name_text = name_token.text();
         if let Some(expr) = ast::DotExpr::cast(parent.clone()) {
-            let ty = sema.type_of_expr(file, &expr.expr()?.into())?;
+            let ty = sema.type_of_expr(file, &expr.expr()?)?;
             let fields = ty.fields(db);
             let (field, field_ty) = fields.into_iter().find_map(|(field, ty)| {
                 if field.name(db).as_str() == name_text {
@@ -122,9 +122,9 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             let call = arg
                 .syntax()
                 .parent()
-                .and_then(|parent| ast::Arguments::cast(parent))
+                .and_then(ast::Arguments::cast)
                 .and_then(|args| args.syntax().parent())
-                .and_then(|parent| ast::CallExpr::cast(parent))?;
+                .and_then(ast::CallExpr::cast)?;
             let func = sema.resolve_call_expr(file, &call)?;
             let (name, param, ty) = func.params(db).into_iter().find_map(|(param, ty)| {
                 let name = param.name(db)?;

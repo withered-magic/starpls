@@ -1,17 +1,4 @@
-# honor the setting of `skipLibCheck` in the tsconfig.json file
-build --@aspect_rules_ts//ts:skipLibCheck=honor_tsconfig
-fetch --@aspect_rules_ts//ts:skipLibCheck=honor_tsconfig
-query --@aspect_rules_ts//ts:skipLibCheck=honor_tsconfig
-
-build --@rules_rust//rust/toolchain/channel=nightly
-
-build --@rules_rust//:rustfmt.toml=//:rustfmt.toml
-build --aspects=@rules_rust//rust:defs.bzl%rustfmt_aspect
-build --output_groups=+rustfmt_checks
-
-build --incompatible_strict_action_env
-
-test --test_output=errors
+build --experimental_convenience_symlinks=normal
 
 build --bes_results_url=https://starpls.buildbuddy.io/invocation/
 build --bes_backend=grpcs://starpls.buildbuddy.io

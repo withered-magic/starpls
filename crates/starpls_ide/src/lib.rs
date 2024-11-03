@@ -105,18 +105,18 @@ impl starpls_common::Db for Database {
         dialect: Dialect,
         from: FileId,
     ) -> anyhow::Result<Option<File>> {
-        let (file_id, dialect, info, contents) = match self.loader.load_file(path, dialect, from)? {
+        let res = match self.loader.load_file(path, dialect, from)? {
             Some(res) => res,
             None => return Ok(None),
         };
-        Ok(Some(match self.files.entry(file_id) {
+        Ok(Some(match self.files.entry(res.file_id) {
             Entry::Occupied(entry) => *entry.get(),
             Entry::Vacant(entry) => *entry.insert(File::new(
                 self,
-                file_id,
+                res.file_id,
                 dialect,
-                info,
-                contents.unwrap_or_default(),
+                res.info,
+                res.contents.unwrap_or_default(),
             )),
         }))
     }
@@ -154,21 +154,18 @@ impl starpls_common::Db for Database {
             ..
         } = resolved_path
         {
-            match self.files.entry(build_file) {
-                Entry::Vacant(entry) => {
-                    entry.insert(File::new(
-                        self,
-                        build_file,
-                        Dialect::Bazel,
-                        Some(FileInfo::Bazel {
-                            api_context: APIContext::Build,
-                            is_external: false,
-                        }),
-                        contents.take().unwrap_or_default(),
-                    ));
-                }
-                _ => {}
-            };
+            if let Entry::Vacant(entry) = self.files.entry(build_file) {
+                entry.insert(File::new(
+                    self,
+                    build_file,
+                    Dialect::Bazel,
+                    Some(FileInfo::Bazel {
+                        api_context: APIContext::Build,
+                        is_external: false,
+                    }),
+                    contents.take().unwrap_or_default(),
+                ));
+            }
         }
 
         Ok(Some(resolved_path))
@@ -341,17 +338,14 @@ impl AnalysisSnapshot {
     }
 
     pub fn goto_definition(&self, pos: FilePosition) -> Cancellable<Option<Vec<LocationLink>>> {
-        self.query(|db| {
-            let res = goto_definition::goto_definition(db, pos);
-            res
-        })
+        self.query(|db| goto_definition::goto_definition(db, pos))
     }
 
     pub fn hover(&self, pos: FilePosition) -> Cancellable<Option<Hover>> {
         self.query(|db| hover::hover(db, pos))
     }
 
-    pub fn line_index<'a>(&'a self, file_id: FileId) -> Cancellable<Option<&'a LineIndex>> {
+    pub fn line_index(&self, file_id: FileId) -> Cancellable<Option<&LineIndex>> {
         self.query(move |db| line_index::line_index(db, file_id))
     }
 
@@ -398,6 +392,14 @@ pub struct FilePosition {
     pub pos: TextSize,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LoadFileResult {
+    pub file_id: FileId,
+    pub dialect: Dialect,
+    pub info: Option<FileInfo>,
+    pub contents: Option<String>,
+}
+
 /// A trait for loading a path and listing its exported symbols.
 pub trait FileLoader: Send + Sync + 'static {
     fn resolve_path(
@@ -413,7 +415,7 @@ pub trait FileLoader: Send + Sync + 'static {
         path: &str,
         dialect: Dialect,
         from: FileId,
-    ) -> anyhow::Result<Option<(FileId, Dialect, Option<FileInfo>, Option<String>)>>;
+    ) -> anyhow::Result<Option<LoadFileResult>>;
 
     /// Returns a list of Starlark modules that can be loaded from the given `path`.
     fn list_load_candidates(
@@ -442,11 +444,16 @@ impl FileLoader for SimpleFileLoader {
         path: &str,
         dialect: Dialect,
         _from: FileId,
-    ) -> anyhow::Result<Option<(FileId, Dialect, Option<FileInfo>, Option<String>)>> {
+    ) -> anyhow::Result<Option<LoadFileResult>> {
         Ok(self
             .file_set
             .get(path)
-            .map(|(file_id, contents)| (*file_id, dialect, None, Some(contents.clone()))))
+            .map(|(file_id, contents)| LoadFileResult {
+                file_id: *file_id,
+                dialect,
+                info: None,
+                contents: Some(contents.clone()),
+            }))
     }
 
     fn list_load_candidates(

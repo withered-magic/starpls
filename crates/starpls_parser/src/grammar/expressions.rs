@@ -209,10 +209,8 @@ fn slice_or_index_expr(p: &mut Parser, m: Marker) -> CompletedMarker {
         if p.at_kinds(EXPR_START) {
             test(p);
         }
-        if p.eat(T![:]) {
-            if p.at_kinds(EXPR_START) {
-                test(p);
-            }
+        if p.eat(T![:]) && p.at_kinds(EXPR_START) {
+            test(p);
         }
     }
     if !p.eat(T![']']) {

@@ -489,7 +489,7 @@ impl CompletionContext {
             } else {
                 NameContext::Def
             })
-        } else if ast::NamedType::cast(parent).is_some() {
+        } else if ast::PathType::cast(parent).is_some() {
             CompletionAnalysis::Type
         } else {
             return None;

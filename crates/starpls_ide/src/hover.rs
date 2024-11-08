@@ -149,8 +149,9 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             }
             return Some(text.into());
         }
-    } else if let Some(type_) = ast::NamedType::cast(parent.clone()) {
-        let ty = sema.resolve_type(file, &type_)?;
+    } else if let Some(segment) = ast::PathSegment::cast(parent.clone()) {
+        let path_ty = ast::PathType::cast(segment.syntax().parent()?)?;
+        let ty = sema.resolve_path_type(file, &path_ty)?;
         let mut text = format!("```python\n(type) {}\n```\n", ty.display(db));
         if let Some(doc) = ty.doc(db) {
             text.push_str(&unindent_doc(&doc));

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use smallvec::SmallVec;
 use starpls_common::{parse, Diagnostic, Diagnostics, File, InFile};
 use starpls_syntax::{
     ast::{self, AstNode, AstPtr, SyntaxNodePtr},
@@ -38,8 +39,8 @@ impl<'a> Semantics<'a> {
         Self { db }
     }
 
-    pub fn callable_for_def(&self, file: File, stmt: ast::DefStmt) -> Option<Callable> {
-        let ptr = AstPtr::new(&ast::Statement::cast(stmt.syntax().clone())?);
+    pub fn callable_for_def(&self, file: File, node: ast::DefStmt) -> Option<Callable> {
+        let ptr = AstPtr::new(&ast::Statement::cast(node.syntax().clone())?);
         let stmt = source_map(self.db, file).stmt_map.get(&ptr)?;
         match &module(self.db, file)[*stmt] {
             Stmt::Def { func, .. } => Some(
@@ -53,8 +54,8 @@ impl<'a> Semantics<'a> {
         }
     }
 
-    pub fn resolve_type(&self, file: File, type_: &ast::NamedType) -> Option<Type> {
-        let usage = type_
+    pub fn resolve_path_type(&self, file: File, node: &ast::PathType) -> Option<Type> {
+        let usage = node
             .syntax()
             .ancestors()
             .find_map(ast::TypeComment::cast)
@@ -82,18 +83,17 @@ impl<'a> Semantics<'a> {
                 let stmt = source_map(self.db, file).stmt_map.get(&ptr)?;
                 Some(InFile { file, value: *stmt })
             });
-
+        let segments = node
+            .segments()
+            .flat_map(|segment| segment.value())
+            .map(|token| Name::from_str(token.text()))
+            .collect::<SmallVec<_>>();
         Some(
-            type_
-                .name()
-                .as_ref()
-                .map(|name| name.text())
-                .map(|text| {
-                    with_tcx(self.db, |tcx| {
-                        resolve_type_ref(tcx, &TypeRef::from_str_opt(text), usage).0
-                    })
-                })?
-                .into(),
+            with_tcx(self.db, |tcx| {
+                // TODO(withered-magic): The clone here is a bit ugly but should be fine.
+                resolve_type_ref(tcx, &TypeRef::Path(segments.clone(), None), usage).0
+            })
+            .into(),
         )
     }
 

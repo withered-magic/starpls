@@ -134,8 +134,9 @@ pub enum SyntaxKind {
     UNION_TYPE,    // int | None
     ELLIPSIS_TYPE, // ...
 
-    NAMED_TYPE,        // tuple[int, int, string]
+    PATH_TYPE,         // tuple[int, int, string], java_common.JavaRuntimeInfo
     GENERIC_ARGUMENTS, // [int, int, string] in the type above
+    PATH_SEGMENT,
 
     IGNORE_TYPE,
     FUNCTION_TYPE,              // e.g. (int, int) -> int

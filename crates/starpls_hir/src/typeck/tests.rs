@@ -881,6 +881,38 @@ infos = f(info1)
 }
 
 #[test]
+fn test_path_type_comments() {
+    check_infer(
+        r#"
+DataInfo = provider()
+api = struct(DataInfo = DataInfo)
+
+def foo(info):
+    # type: (api.DataInfo) -> api.DataInfo
+    return info
+
+res = foo(api.DataInfo())
+"#,
+        expect![[r#"
+            1..9 "DataInfo": Provider[DataInfo]
+            12..20 "provider": def provider(*args, **kwargs) -> Unknown
+            12..22 "provider()": Provider[DataInfo]
+            23..26 "api": struct
+            29..35 "struct": def struct(*args, **kwargs) -> Unknown
+            47..55 "DataInfo": Provider[DataInfo]
+            29..56 "struct(DataInfo = DataInfo)": struct
+            127..131 "info": DataInfo
+            133..136 "res": DataInfo
+            139..142 "foo": def foo(info: DataInfo) -> DataInfo
+            143..146 "api": struct
+            143..155 "api.DataInfo": Provider[DataInfo]
+            143..157 "api.DataInfo()": DataInfo
+            139..158 "foo(api.DataInfo())": DataInfo
+        "#]],
+    );
+}
+
+#[test]
 fn test_unary_expr() {
     check_infer(
         r#"
@@ -948,7 +980,7 @@ o = ~m
             120..126 Operator "~" is not supported for type "Literal["abc"]"
             164..166 Operator "~" is not supported for type "int | float"
         "#]],
-    )
+    );
 }
 
 #[test]

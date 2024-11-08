@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use starpls_common::{line_index, parse, Diagnostic, File, FileRange, InFile, Severity};
 use starpls_syntax::{
-    ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, BitwiseOp, UnaryOp},
+    ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, BitwiseOp, LogicOp, UnaryOp},
     TextRange,
 };
 
@@ -854,6 +854,20 @@ impl TyCtxt<'_> {
                 ) => Ty::list(Ty::union([ty1.clone(), ty2.clone()].into_iter())),
                 (TyKind::String(_), TyKind::Int(_), ArithOp::Mul)
                 | (TyKind::Int(_), TyKind::String(_), ArithOp::Mul) => self.string_ty(),
+                (TyKind::Tuple(Tuple::Simple(tys)), TyKind::Int(_), ArithOp::Mul)
+                | (TyKind::Int(_), TyKind::Tuple(Tuple::Simple(tys)), ArithOp::Mul) => {
+                    TyKind::Tuple(Tuple::Variable(Ty::union(tys.iter().cloned()))).intern()
+                }
+                (
+                    TyKind::Bytes | TyKind::List(_) | TyKind::Tuple(Tuple::Variable(_)),
+                    TyKind::Int(_),
+                    ArithOp::Mul,
+                ) => lhs,
+                (
+                    TyKind::Int(_),
+                    TyKind::Bytes | TyKind::List(_) | TyKind::Tuple(Tuple::Variable(_)),
+                    ArithOp::Mul,
+                ) => rhs,
                 (TyKind::Int(Some(x1)), TyKind::Int(Some(x2)), ArithOp::Add) => {
                     TyKind::Int(Some(x1 + x2)).intern()
                 }
@@ -900,6 +914,23 @@ impl TyCtxt<'_> {
                 }
                 self.bool_ty()
             }
+            BinaryOp::Logic(LogicOp::Or) => match (lhs_kind, rhs_kind) {
+                // TODO(withered-magic): Strip None from optional types once we implement narrowing.
+                (TyKind::Bool(Some(lhs)), TyKind::Bool(Some(rhs))) => {
+                    TyKind::Bool(Some(*lhs || *rhs)).intern()
+                }
+                (TyKind::Bool(Some(false)) | TyKind::Int(Some(0)) | TyKind::None, _) => rhs,
+                (TyKind::Tuple(Tuple::Simple(tys)), _) if tys.is_empty() => rhs,
+                _ => Ty::union([lhs, rhs].into_iter()),
+            },
+            BinaryOp::Logic(LogicOp::And) => match (lhs_kind, rhs_kind) {
+                (TyKind::Bool(Some(lhs)), TyKind::Bool(Some(rhs))) => {
+                    TyKind::Bool(Some(*lhs && *rhs)).intern()
+                }
+                (TyKind::Bool(Some(false)) | TyKind::Int(Some(0)) | TyKind::None, _) => lhs,
+                (TyKind::Tuple(Tuple::Simple(tys)), _) if tys.is_empty() => lhs,
+                _ => Ty::union([lhs, rhs].into_iter()),
+            },
             _ => self.bool_ty(),
         }
     }

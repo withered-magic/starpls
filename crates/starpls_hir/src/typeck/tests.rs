@@ -647,11 +647,21 @@ j = [i] + [""]
 }
 
 #[test]
-fn test_string_repetition() {
+fn test_sequence_repetition() {
     check_infer(
         r#"
 "abc" * 3
 3 * "abc"
+b"abc" * 3
+3 * b"abc"
+[1] * 3
+3 * [1]
+x = (1, "") # type: tuple[int, string]
+x * 3
+3 * x
+y = (1, "") # type: tuple[int | string, ...]
+y * 3
+3 * y
 "#,
         expect![[r#"
             1..6 "\"abc\"": Literal["abc"]
@@ -660,6 +670,40 @@ fn test_string_repetition() {
             11..12 "3": Literal[3]
             15..20 "\"abc\"": Literal["abc"]
             11..20 "3 * \"abc\"": string
+            21..27 "b\"abc\"": bytes
+            30..31 "3": Literal[3]
+            21..31 "b\"abc\" * 3": bytes
+            32..33 "3": Literal[3]
+            36..42 "b\"abc\"": bytes
+            32..42 "3 * b\"abc\"": bytes
+            44..45 "1": Literal[1]
+            43..46 "[1]": list[int]
+            49..50 "3": Literal[3]
+            43..50 "[1] * 3": list[int]
+            51..52 "3": Literal[3]
+            56..57 "1": Literal[1]
+            55..58 "[1]": list[int]
+            51..58 "3 * [1]": list[int]
+            59..60 "x": tuple[int, string]
+            64..65 "1": Literal[1]
+            67..69 "\"\"": Literal[""]
+            63..70 "(1, \"\")": tuple[Literal[1], Literal[""]]
+            98..99 "x": tuple[int, string]
+            102..103 "3": Literal[3]
+            98..103 "x * 3": tuple[int | string, ...]
+            104..105 "3": Literal[3]
+            108..109 "x": tuple[int, string]
+            104..109 "3 * x": tuple[int | string, ...]
+            110..111 "y": tuple[int | string, ...]
+            115..116 "1": Literal[1]
+            118..120 "\"\"": Literal[""]
+            114..121 "(1, \"\")": tuple[Literal[1], Literal[""]]
+            155..156 "y": tuple[int | string, ...]
+            159..160 "3": Literal[3]
+            155..160 "y * 3": tuple[int | string, ...]
+            161..162 "3": Literal[3]
+            165..166 "y": tuple[int | string, ...]
+            161..166 "3 * y": tuple[int | string, ...]
         "#]],
     )
 }
@@ -1435,6 +1479,80 @@ e = (1, 2) # type: tuple[int, ..., int]
             70..87 "..." is not allowed in this context
             99..117 "..." is not allowed in this context
             129..157 "..." is not allowed in this context
+        "#]],
+    );
+}
+
+#[test]
+fn test_logic_operators() {
+    check_infer(
+        r#"
+x = 3 # type: int
+greeting = "hello" # type: string
+
+True or False
+False or []
+0 or []
+None or []
+() or []
+True or greeting
+x or greeting
+
+True and False
+False and []
+0 and []
+None and []
+() and []
+True and greeting
+x and greeting
+"#,
+        expect![[r#"
+            1..2 "x": int
+            5..6 "3": Literal[3]
+            19..27 "greeting": string
+            30..37 "\"hello\"": Literal["hello"]
+            54..58 "True": Literal[True]
+            62..67 "False": Literal[False]
+            54..67 "True or False": Literal[True]
+            68..73 "False": Literal[False]
+            77..79 "[]": list[Unknown]
+            68..79 "False or []": list[Unknown]
+            80..81 "0": Literal[0]
+            85..87 "[]": list[Unknown]
+            80..87 "0 or []": list[Unknown]
+            88..92 "None": None
+            96..98 "[]": list[Unknown]
+            88..98 "None or []": list[Unknown]
+            99..101 "()": tuple[]
+            105..107 "[]": list[Unknown]
+            99..107 "() or []": list[Unknown]
+            108..112 "True": Literal[True]
+            116..124 "greeting": string
+            108..124 "True or greeting": bool | string
+            125..126 "x": int
+            130..138 "greeting": string
+            125..138 "x or greeting": int | string
+            140..144 "True": Literal[True]
+            149..154 "False": Literal[False]
+            140..154 "True and False": Literal[False]
+            155..160 "False": Literal[False]
+            165..167 "[]": list[Unknown]
+            155..167 "False and []": Literal[False]
+            168..169 "0": Literal[0]
+            174..176 "[]": list[Unknown]
+            168..176 "0 and []": Literal[0]
+            177..181 "None": None
+            186..188 "[]": list[Unknown]
+            177..188 "None and []": None
+            189..191 "()": tuple[]
+            196..198 "[]": list[Unknown]
+            189..198 "() and []": tuple[]
+            199..203 "True": Literal[True]
+            208..216 "greeting": string
+            199..216 "True and greeting": bool | string
+            217..218 "x": int
+            223..231 "greeting": string
+            217..231 "x and greeting": int | string
         "#]],
     );
 }

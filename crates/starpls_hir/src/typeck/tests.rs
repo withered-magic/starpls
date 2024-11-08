@@ -1440,6 +1440,80 @@ e = (1, 2) # type: tuple[int, ..., int]
 }
 
 #[test]
+fn test_logic_operators() {
+    check_infer(
+        r#"
+x = 3 # type: int
+greeting = "hello" # type: string
+
+True or False
+False or []
+0 or []
+None or []
+() or []
+True or greeting
+x or greeting
+
+True and False
+False and []
+0 and []
+None and []
+() and []
+True and greeting
+x and greeting
+"#,
+        expect![[r#"
+            1..2 "x": int
+            5..6 "3": Literal[3]
+            19..27 "greeting": string
+            30..37 "\"hello\"": Literal["hello"]
+            54..58 "True": Literal[True]
+            62..67 "False": Literal[False]
+            54..67 "True or False": Literal[True]
+            68..73 "False": Literal[False]
+            77..79 "[]": list[Unknown]
+            68..79 "False or []": list[Unknown]
+            80..81 "0": Literal[0]
+            85..87 "[]": list[Unknown]
+            80..87 "0 or []": list[Unknown]
+            88..92 "None": None
+            96..98 "[]": list[Unknown]
+            88..98 "None or []": list[Unknown]
+            99..101 "()": tuple[]
+            105..107 "[]": list[Unknown]
+            99..107 "() or []": list[Unknown]
+            108..112 "True": Literal[True]
+            116..124 "greeting": string
+            108..124 "True or greeting": bool | string
+            125..126 "x": int
+            130..138 "greeting": string
+            125..138 "x or greeting": int | string
+            140..144 "True": Literal[True]
+            149..154 "False": Literal[False]
+            140..154 "True and False": Literal[False]
+            155..160 "False": Literal[False]
+            165..167 "[]": list[Unknown]
+            155..167 "False and []": Literal[False]
+            168..169 "0": Literal[0]
+            174..176 "[]": list[Unknown]
+            168..176 "0 and []": Literal[0]
+            177..181 "None": None
+            186..188 "[]": list[Unknown]
+            177..188 "None and []": None
+            189..191 "()": tuple[]
+            196..198 "[]": list[Unknown]
+            189..198 "() and []": tuple[]
+            199..203 "True": Literal[True]
+            208..216 "greeting": string
+            199..216 "True and greeting": bool | string
+            217..218 "x": int
+            223..231 "greeting": string
+            217..231 "x and greeting": int | string
+        "#]],
+    );
+}
+
+#[test]
 fn test_if_else_stmts() {
     check_infer_with_code_flow_analysis(
         r#"

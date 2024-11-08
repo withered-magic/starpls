@@ -854,6 +854,20 @@ impl TyCtxt<'_> {
                 ) => Ty::list(Ty::union([ty1.clone(), ty2.clone()].into_iter())),
                 (TyKind::String(_), TyKind::Int(_), ArithOp::Mul)
                 | (TyKind::Int(_), TyKind::String(_), ArithOp::Mul) => self.string_ty(),
+                (TyKind::Tuple(Tuple::Simple(tys)), TyKind::Int(_), ArithOp::Mul)
+                | (TyKind::Int(_), TyKind::Tuple(Tuple::Simple(tys)), ArithOp::Mul) => {
+                    TyKind::Tuple(Tuple::Variable(Ty::union(tys.iter().cloned()))).intern()
+                }
+                (
+                    TyKind::Bytes | TyKind::List(_) | TyKind::Tuple(Tuple::Variable(_)),
+                    TyKind::Int(_),
+                    ArithOp::Mul,
+                ) => lhs,
+                (
+                    TyKind::Int(_),
+                    TyKind::Bytes | TyKind::List(_) | TyKind::Tuple(Tuple::Variable(_)),
+                    ArithOp::Mul,
+                ) => rhs,
                 (TyKind::Int(Some(x1)), TyKind::Int(Some(x2)), ArithOp::Add) => {
                     TyKind::Int(Some(x1 + x2)).intern()
                 }

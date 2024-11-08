@@ -647,11 +647,21 @@ j = [i] + [""]
 }
 
 #[test]
-fn test_string_repetition() {
+fn test_sequence_repetition() {
     check_infer(
         r#"
 "abc" * 3
 3 * "abc"
+b"abc" * 3
+3 * b"abc"
+[1] * 3
+3 * [1]
+x = (1, "") # type: tuple[int, string]
+x * 3
+3 * x
+y = (1, "") # type: tuple[int | string, ...]
+y * 3
+3 * y
 "#,
         expect![[r#"
             1..6 "\"abc\"": Literal["abc"]
@@ -660,6 +670,40 @@ fn test_string_repetition() {
             11..12 "3": Literal[3]
             15..20 "\"abc\"": Literal["abc"]
             11..20 "3 * \"abc\"": string
+            21..27 "b\"abc\"": bytes
+            30..31 "3": Literal[3]
+            21..31 "b\"abc\" * 3": bytes
+            32..33 "3": Literal[3]
+            36..42 "b\"abc\"": bytes
+            32..42 "3 * b\"abc\"": bytes
+            44..45 "1": Literal[1]
+            43..46 "[1]": list[int]
+            49..50 "3": Literal[3]
+            43..50 "[1] * 3": list[int]
+            51..52 "3": Literal[3]
+            56..57 "1": Literal[1]
+            55..58 "[1]": list[int]
+            51..58 "3 * [1]": list[int]
+            59..60 "x": tuple[int, string]
+            64..65 "1": Literal[1]
+            67..69 "\"\"": Literal[""]
+            63..70 "(1, \"\")": tuple[Literal[1], Literal[""]]
+            98..99 "x": tuple[int, string]
+            102..103 "3": Literal[3]
+            98..103 "x * 3": tuple[int | string, ...]
+            104..105 "3": Literal[3]
+            108..109 "x": tuple[int, string]
+            104..109 "3 * x": tuple[int | string, ...]
+            110..111 "y": tuple[int | string, ...]
+            115..116 "1": Literal[1]
+            118..120 "\"\"": Literal[""]
+            114..121 "(1, \"\")": tuple[Literal[1], Literal[""]]
+            155..156 "y": tuple[int | string, ...]
+            159..160 "3": Literal[3]
+            155..160 "y * 3": tuple[int | string, ...]
+            161..162 "3": Literal[3]
+            165..166 "y": tuple[int | string, ...]
+            161..166 "3 * y": tuple[int | string, ...]
         "#]],
     )
 }

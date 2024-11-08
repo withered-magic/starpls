@@ -539,7 +539,7 @@ impl<'a> LoweringContext<'a> {
 
     fn lower_type_comment(&self, node: ast::TypeComment) -> TypeRef {
         node.type_()
-            .map(|type_| self.lower_type(type_))
+            .map(Self::lower_type)
             .unwrap_or_else(|| TypeRef::Unknown)
     }
 
@@ -554,37 +554,39 @@ impl<'a> LoweringContext<'a> {
             };
             let ret_type_ref = func_type
                 .ret_type()
-                .map(|type_| self.lower_type(type_))
+                .map(Self::lower_type)
                 .unwrap_or(TypeRef::Unknown);
             FunctionTypeRef(params, ret_type_ref)
         })
     }
 
-    #[allow(clippy::only_used_in_recursion)]
-    fn lower_type(&self, type_: ast::Type) -> TypeRef {
-        match type_ {
-            ast::Type::NamedType(type_) => type_.name().map(|name| {
-                TypeRef::Name(
-                    Name::from_str(name.text()),
-                    type_.generic_arguments().map(|args| {
-                        let args = args.types().map(|type_| self.lower_type(type_));
+    fn lower_type(node: ast::Type) -> TypeRef {
+        match node {
+            ast::Type::PathType(node) => {
+                let segments = node
+                    .segments()
+                    .flat_map(|segment| segment.value())
+                    .map(|token| Name::from_str(token.text()))
+                    .collect();
+                Some(TypeRef::Path(
+                    segments,
+                    node.generic_arguments().map(|args| {
+                        let args = args.types().map(Self::lower_type);
                         args.collect::<Vec<_>>().into_boxed_slice()
                     }),
-                )
-            }),
-            ast::Type::UnionType(type_) => Some(TypeRef::Union(
-                type_.types().map(|type_| self.lower_type(type_)).collect(),
-            )),
+                ))
+            }
+            ast::Type::UnionType(node) => {
+                Some(TypeRef::Union(node.types().map(Self::lower_type).collect()))
+            }
             ast::Type::NoneType(_) => Some(TypeRef::Name(Name::new_inline("None"), None)),
             ast::Type::EllipsisType(_) => Some(TypeRef::Ellipsis),
         }
         .unwrap_or_else(|| TypeRef::Unknown)
     }
 
-    fn lower_type_opt(&self, type_: Option<ast::Type>) -> TypeRef {
-        type_
-            .map(|type_| self.lower_type(type_))
-            .unwrap_or(TypeRef::Unknown)
+    fn lower_type_opt(&self, node: Option<ast::Type>) -> TypeRef {
+        node.map(Self::lower_type).unwrap_or(TypeRef::Unknown)
     }
 
     fn alloc_stmt(&mut self, stmt: Stmt, ptr: StmtPtr) -> StmtId {

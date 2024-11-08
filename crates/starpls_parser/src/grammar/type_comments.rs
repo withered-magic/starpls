@@ -87,7 +87,14 @@ pub(crate) fn type_(p: &mut Parser) -> Option<CompletedMarker> {
         }
         T![ident] => {
             let m = p.start();
-            p.bump(T![ident]);
+            path_segment(p);
+            while p.eat(T![.]) {
+                if !p.at(T![ident]) {
+                    p.error_recover_until("Expected type segment", EMPTY);
+                    return Some(m.complete(p, PATH_TYPE));
+                }
+                path_segment(p);
+            }
             if p.at(T!['[']) {
                 let m = p.start();
                 p.bump(T!['[']);
@@ -95,7 +102,7 @@ pub(crate) fn type_(p: &mut Parser) -> Option<CompletedMarker> {
                 p.eat(T![']']);
                 m.complete(p, GENERIC_ARGUMENTS);
             }
-            m.complete(p, NAMED_TYPE)
+            m.complete(p, PATH_TYPE)
         }
         T!['('] => function_type(p),
         ELLIPSIS => {
@@ -128,4 +135,10 @@ pub(crate) fn function_type(p: &mut Parser) -> CompletedMarker {
     }
     type_(p);
     m.complete(p, FUNCTION_TYPE)
+}
+
+pub(crate) fn path_segment(p: &mut Parser) {
+    let m = p.start();
+    p.bump(T![ident]);
+    m.complete(p, PATH_SEGMENT);
 }

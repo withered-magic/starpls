@@ -1354,7 +1354,7 @@ ast_node! {
 }
 
 pub enum Type {
-    NamedType(NamedType),
+    PathType(PathType),
     UnionType(UnionType),
     NoneType(NoneType),
     EllipsisType(EllipsisType),
@@ -1367,7 +1367,7 @@ impl AstNode for Type {
     where
         Self: Sized,
     {
-        matches!(kind, NAMED_TYPE | UNION_TYPE | NONE_TYPE | ELLIPSIS_TYPE)
+        matches!(kind, PATH_TYPE | UNION_TYPE | NONE_TYPE | ELLIPSIS_TYPE)
     }
 
     fn cast(syntax: SyntaxNode) -> Option<Self>
@@ -1375,7 +1375,7 @@ impl AstNode for Type {
         Self: Sized,
     {
         Some(match syntax.kind() {
-            NAMED_TYPE => Self::NamedType(NamedType { syntax }),
+            PATH_TYPE => Self::PathType(PathType { syntax }),
             UNION_TYPE => Self::UnionType(UnionType { syntax }),
             NONE_TYPE => Self::NoneType(NoneType { syntax }),
             ELLIPSIS_TYPE => Self::EllipsisType(EllipsisType { syntax }),
@@ -1385,7 +1385,7 @@ impl AstNode for Type {
 
     fn syntax(&self) -> &rowan::SyntaxNode<Self::Language> {
         match self {
-            Type::NamedType(type_) => type_.syntax(),
+            Type::PathType(type_) => type_.syntax(),
             Type::UnionType(type_) => type_.syntax(),
             Type::NoneType(type_) => type_.syntax(),
             Type::EllipsisType(type_) => type_.syntax(),
@@ -1394,9 +1394,9 @@ impl AstNode for Type {
 }
 
 ast_node! {
-    NamedType => NAMED_TYPE
+    PathType => PATH_TYPE
     child generic_arguments -> GenericArguments;
-    child_token name -> IDENT;
+    children segments -> PathSegment;
 }
 
 ast_node! {
@@ -1415,6 +1415,11 @@ ast_node! {
 ast_node! {
     GenericArguments => GENERIC_ARGUMENTS
     children types -> Type;
+}
+
+ast_node! {
+    PathSegment => PATH_SEGMENT
+    child_token value -> IDENT;
 }
 
 ast_node! {

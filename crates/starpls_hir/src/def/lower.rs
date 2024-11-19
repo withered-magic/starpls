@@ -10,6 +10,7 @@ use starpls_syntax::ast::AstPtr;
 use starpls_syntax::ast::AstToken;
 use starpls_syntax::ast::SyntaxNodePtr;
 use starpls_syntax::ast::{self};
+use starpls_syntax::SyntaxNode;
 use starpls_syntax::SyntaxToken;
 use starpls_syntax::TextRange;
 
@@ -85,11 +86,11 @@ impl<'a> LoweringContext<'a> {
             match &self.module.stmts[stmt] {
                 Stmt::If { .. } => self.add_error_diagnostic(
                     "Starlark does not allow top-level if statements",
-                    statement.syntax().text_range(),
+                    statement.syntax(),
                 ),
                 Stmt::For { .. } => self.add_error_diagnostic(
                     "Starlark does not allow top-level for statements",
-                    statement.syntax().text_range(),
+                    statement.syntax(),
                 ),
                 _ => {}
             }
@@ -121,6 +122,9 @@ impl<'a> LoweringContext<'a> {
                     params,
                 );
                 let stmt = self.alloc_stmt(Stmt::Def { func, stmts }, ptr);
+                for param in func.params(self.db).iter() {
+                    self.module.param_to_def_stmt.insert(*param, stmt);
+                }
                 return stmt;
             }
             ast::Statement::If(stmt) => {
@@ -369,6 +373,14 @@ impl<'a> LoweringContext<'a> {
         let mut saw_star_arg = false;
         let mut saw_star_star_arg = false;
         let mut saw_default_param = false;
+        let mut saw_names = vec![];
+        let mut check_duplicate_param = |cx: &mut Self, name: &Name, syntax: &SyntaxNode| {
+            if !name.is_missing() && saw_names.contains(name) {
+                cx.add_error_diagnostic(&format!("Duplicate parameter {}", name.as_str()), syntax);
+            } else {
+                saw_names.push(name.clone());
+            }
+        };
 
         for (i, param) in syntax
             .iter()
@@ -386,22 +398,23 @@ impl<'a> LoweringContext<'a> {
                     let doc = find_doc(name.as_str());
                     let default = self.lower_expr_maybe(param.default());
 
+                    check_duplicate_param(self, &name, param.syntax());
                     if saw_default_param && !saw_star_arg && default.is_none() {
                         self.add_error_diagnostic(
                             "Non-default parameter cannot follow default parameter",
-                            param.syntax().text_range(),
+                            param.syntax(),
                         );
                     }
-
                     if default.is_some() {
                         saw_default_param = true;
                     }
                     if saw_star_star_arg {
                         self.add_error_diagnostic(
                             "Parameter cannot follow \"**\" parameter",
-                            param.syntax().text_range(),
+                            param.syntax(),
                         );
                     }
+
                     Param::Simple {
                         name,
                         default,
@@ -413,16 +426,17 @@ impl<'a> LoweringContext<'a> {
                     let name = self.lower_name_opt(param.name());
                     let doc = find_doc(name.as_str());
 
+                    check_duplicate_param(self, &name, param.syntax());
                     if saw_star_arg {
                         self.add_error_diagnostic(
                             "Only one \"*\" parameter is allowed",
-                            param.syntax().text_range(),
+                            param.syntax(),
                         );
                     }
                     if saw_star_star_arg {
                         self.add_error_diagnostic(
                             "Parameter cannot follow \"**\" parameter",
-                            param.syntax().text_range(),
+                            param.syntax(),
                         );
                     }
                     saw_star_arg = true;
@@ -437,10 +451,11 @@ impl<'a> LoweringContext<'a> {
                     let name = self.lower_name_opt(param.name());
                     let doc = find_doc(name.as_str());
 
+                    check_duplicate_param(self, &name, param.syntax());
                     if saw_star_star_arg {
                         self.add_error_diagnostic(
-                            "Only one \"**\" parameter allowed",
-                            param.syntax().text_range(),
+                            "Only one \"**\" parameter is allowed",
+                            param.syntax(),
                         );
                     }
                     saw_star_star_arg = true;
@@ -678,7 +693,7 @@ impl<'a> LoweringContext<'a> {
         id
     }
 
-    fn add_error_diagnostic(&self, message: &str, range: TextRange) {
+    fn add_error_diagnostic(&self, message: &str, syntax: &SyntaxNode) {
         Diagnostics::push(
             self.db,
             Diagnostic {
@@ -686,7 +701,7 @@ impl<'a> LoweringContext<'a> {
                 severity: Severity::Error,
                 range: FileRange {
                     file_id: self.file.id(self.db),
-                    range,
+                    range: syntax.text_range(),
                 },
             },
         );

@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::Command,
     str,
 };
 
@@ -155,11 +155,7 @@ impl BazelClient for BazelCLI {
     }
 
     fn null_query_external_repo_targets(&self, repo: &str) -> anyhow::Result<()> {
-        Command::new(&self.executable)
-            .args(["query", "--keep_going", &format!("@@{}//...", repo)])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()?;
+        self.run_command(&["query", "--keep_going", &format!("@@{}//...", repo)])?;
         Ok(())
     }
 

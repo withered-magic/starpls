@@ -1554,12 +1554,12 @@ pub enum Protocol {
 }
 
 #[derive(Default)]
-pub struct GlobalCtxt {
+pub struct GlobalContext {
     shared_state: Arc<SharedState>,
-    cx: Arc<Mutex<InferenceCtxt>>,
+    cx: Arc<Mutex<InferenceContext>>,
 }
 
-impl GlobalCtxt {
+impl GlobalContext {
     pub fn new(options: InferenceOptions) -> Self {
         Self {
             shared_state: Arc::new(SharedState {
@@ -1576,10 +1576,10 @@ impl GlobalCtxt {
 
     pub fn with_tcx<F, T>(&self, db: &dyn Db, mut f: F) -> T
     where
-        F: FnMut(&mut TyCtxt) -> T + std::panic::UnwindSafe,
+        F: FnMut(&mut TyContext) -> T + std::panic::UnwindSafe,
     {
         let mut cx = self.cx.lock();
-        let mut tcx = TyCtxt {
+        let mut tcx = TyContext {
             db,
             cx: &mut cx,
             intrinsics: intrinsic_types(db),
@@ -1591,7 +1591,7 @@ impl GlobalCtxt {
 
 pub(crate) fn with_tcx<F, T>(db: &dyn Db, f: F) -> T
 where
-    F: FnMut(&mut TyCtxt) -> T + std::panic::UnwindSafe,
+    F: FnMut(&mut TyContext) -> T + std::panic::UnwindSafe,
 {
     db.gcx().with_tcx(db, f)
 }
@@ -1606,7 +1606,7 @@ pub(crate) struct CodeFlowCacheKey {
 
 #[allow(unused)]
 #[derive(Default)]
-pub(crate) struct InferenceCtxt {
+pub(crate) struct InferenceContext {
     pub(crate) diagnostics: Vec<Diagnostic>,
     pub(crate) resolved_load_stmts: FxHashMap<FileLoadStmt, Option<File>>,
     pub(crate) load_resolution_stack: Vec<(File, LoadStmt)>,
@@ -1618,12 +1618,12 @@ pub(crate) struct InferenceCtxt {
 }
 
 pub struct CancelGuard<'a> {
-    gcx: &'a GlobalCtxt,
-    cx: &'a Mutex<InferenceCtxt>,
+    gcx: &'a GlobalContext,
+    cx: &'a Mutex<InferenceContext>,
 }
 
 impl<'a> CancelGuard<'a> {
-    fn new(gcx: &'a GlobalCtxt) -> Self {
+    fn new(gcx: &'a GlobalContext) -> Self {
         gcx.shared_state.cancelled.store(true);
         Self { gcx, cx: &gcx.cx }
     }
@@ -1637,16 +1637,16 @@ impl Drop for CancelGuard<'_> {
     }
 }
 
-pub struct TyCtxt<'a> {
+pub struct TyContext<'a> {
     db: &'a dyn Db,
-    cx: &'a mut InferenceCtxt,
+    cx: &'a mut InferenceContext,
     intrinsics: Intrinsics,
     shared_state: Arc<SharedState>,
 }
 
 struct TypeRefResolver<'a, 'b> {
     db: &'a dyn Db,
-    tcx: Option<&'a mut TyCtxt<'b>>,
+    tcx: Option<&'a mut TyContext<'b>>,
     usage: Option<InFile<StmtId>>,
     errors: Vec<String>,
 }
@@ -1835,7 +1835,7 @@ impl<'a, 'b> TypeRefResolver<'a, 'b> {
 }
 
 pub(crate) fn resolve_type_ref(
-    tcx: &mut TyCtxt,
+    tcx: &mut TyContext,
     type_ref: &TypeRef,
     usage: Option<InFile<StmtId>>,
 ) -> (Ty, Vec<String>) {
@@ -1849,7 +1849,7 @@ pub(crate) fn resolve_type_ref(
 }
 
 pub(crate) fn resolve_type_ref_opt(
-    tcx: &mut TyCtxt,
+    tcx: &mut TyContext,
     type_ref: Option<TypeRef>,
     usage: Option<InFile<StmtId>>,
 ) -> Ty {

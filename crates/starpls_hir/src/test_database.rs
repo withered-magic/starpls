@@ -5,7 +5,7 @@ use starpls_bazel::Builtins;
 use starpls_common::{File, FileId, FileInfo, LoadItemCandidate, ResolvedPath};
 use starpls_test_util::{make_test_builtins, FixtureType};
 
-use crate::{BuiltinDefs, Db, Dialect, GlobalCtxt, InferenceOptions};
+use crate::{BuiltinDefs, Db, Dialect, GlobalContext, InferenceOptions};
 
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, crate::Jar)]
@@ -14,7 +14,7 @@ pub(crate) struct TestDatabase {
     storage: salsa::Storage<Self>,
     files: Arc<DashMap<FileId, File>>,
     prelude_file: Option<FileId>,
-    pub(crate) gcx: Arc<GlobalCtxt>,
+    pub(crate) gcx: Arc<GlobalContext>,
 }
 
 impl TestDatabase {
@@ -118,7 +118,7 @@ impl crate::Db for TestDatabase {
         self.prelude_file
     }
 
-    fn gcx(&self) -> &GlobalCtxt {
+    fn gcx(&self) -> &GlobalContext {
         &self.gcx
     }
 }
@@ -152,7 +152,7 @@ impl TestDatabaseBuilder {
 
     pub fn build(self) -> TestDatabase {
         let mut db = TestDatabase {
-            gcx: Arc::new(GlobalCtxt::new(self.options)),
+            gcx: Arc::new(GlobalContext::new(self.options)),
             ..Default::default()
         };
         db.set_builtin_defs(

@@ -23,13 +23,13 @@ use crate::{
         intrinsics::{IntrinsicFunctionParam, IntrinsicTypes},
         resolve_builtin_type_ref, resolve_type_ref, resolve_type_ref_opt, CodeFlowCacheKey,
         DictLiteral, FileExprId, FileLoadItemId, FileLoadStmt, FileParamId, Protocol, Provider,
-        RuleKind, Struct, Substitution, Tuple, Ty, TyCtxt, TyData, TyKind, TypeRef,
+        RuleKind, Struct, Substitution, Tuple, Ty, TyContext, TyData, TyKind, TypeRef,
         TypecheckCancelled,
     },
     Name,
 };
 
-impl TyCtxt<'_> {
+impl TyContext<'_> {
     pub fn infer_all_exprs(&mut self, file: File) {
         for (expr, _) in module(self.db, file).exprs.iter() {
             self.infer_expr(file, expr);

@@ -90,7 +90,6 @@ impl TyContext<'_> {
 
     pub fn infer_all_load_items(&mut self, file: File) {
         let module = module(self.db, file);
-
         for stmt in module.top_level.iter().copied() {
             if let Stmt::Load { load_stmt, items } = &module.stmts[stmt] {
                 self.resolve_load_stmt(file, *load_stmt);

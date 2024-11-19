@@ -29,8 +29,10 @@ struct Cli {
     command: Option<Commands>,
 }
 
+/// Starpls is an LSP implementation for Starlark, the configuration language used by Bazel and Buck2.
 #[derive(Subcommand)]
 enum Commands {
+    /// Analyze the specified Starlark files and report errors.
     Check {
         /// Paths to typecheck.
         paths: Vec<String>,
@@ -38,7 +40,9 @@ enum Commands {
         #[clap(long = "output_base")]
         output_base: Option<String>,
     },
+    /// Start the language server.
     Server(ServerArgs),
+    /// Print version information and exit.
     Version,
 }
 
@@ -50,6 +54,7 @@ pub(crate) struct ServerArgs {
     /// Infer attributes on a rule implementation function's context parameter.
     #[clap(long = "experimental_infer_ctx_attributes", default_value_t = false)]
     infer_ctx_attributes: bool,
+    /// Enable code-flow analysis during typechecking.
     #[clap(long = "experimental_use_code_flow_analysis", default_value_t = false)]
     use_code_flow_analysis: bool,
 }

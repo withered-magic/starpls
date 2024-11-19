@@ -7,7 +7,7 @@ use starpls_bazel::{APIContext, Builtins};
 use starpls_common::{
     Db, Diagnostic, Dialect, File, FileId, FileInfo, LoadItemCandidate, ResolvedPath,
 };
-use starpls_hir::{BuiltinDefs, Db as _, GlobalCtxt};
+use starpls_hir::{BuiltinDefs, Db as _, GlobalContext};
 pub use starpls_hir::{Cancelled, InferenceOptions};
 use starpls_syntax::{LineIndex, TextRange, TextSize};
 use starpls_test_util::make_test_builtins;
@@ -40,7 +40,7 @@ pub(crate) struct Database {
     storage: salsa::Storage<Self>,
     files: Arc<DashMap<FileId, File>>,
     loader: Arc<dyn FileLoader>,
-    gcx: Arc<GlobalCtxt>,
+    gcx: Arc<GlobalContext>,
     prelude_file: Option<FileId>,
 }
 
@@ -203,7 +203,7 @@ impl starpls_hir::Db for Database {
         self.prelude_file
     }
 
-    fn gcx(&self) -> &GlobalCtxt {
+    fn gcx(&self) -> &GlobalContext {
         &self.gcx
     }
 }
@@ -262,7 +262,7 @@ impl Analysis {
             db: Database {
                 builtin_defs: Default::default(),
                 files: Default::default(),
-                gcx: Arc::new(GlobalCtxt::new(options)),
+                gcx: Arc::new(GlobalContext::new(options)),
                 storage: Default::default(),
                 loader,
                 prelude_file: None,

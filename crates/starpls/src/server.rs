@@ -334,14 +334,23 @@ impl Server {
                 )))
                 .unwrap();
 
+            let mut failed_repos = vec![];
+
             for repo in &repos {
                 eprintln!("server: fetching external repository \"@@{}\"", repo);
-                let _ = bazel_client.null_query_external_repo_targets(repo);
+                if let Err(err) = bazel_client.null_query_external_repo_targets(repo) {
+                    failed_repos.push(repo.clone());
+                    eprintln!(
+                        "server: failed to fetch external repository \"@@{}\": {}",
+                        repo, err
+                    );
+                }
             }
 
             sender
                 .send(Task::FetchExternalRepos(FetchExternalReposProgress::End(
                     files,
+                    failed_repos,
                 )))
                 .unwrap();
         });

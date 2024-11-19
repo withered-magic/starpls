@@ -23,7 +23,7 @@ use crate::{
         ModuleExtension, Provider, ProviderField, Rule as TyRule, RuleKind, Struct, TagClass,
         TagClassData, Tuple,
     },
-    Db, ExprId, Name, Ty, TyCtxt, TyKind, TypeRef,
+    Db, ExprId, Name, Ty, TyContext, TyKind, TypeRef,
 };
 
 const DEFAULT_DOC: &str = "See the [Bazel Build Encyclopedia](https://bazel.build/reference/be/overview) for more details.";
@@ -128,7 +128,7 @@ pub(crate) struct BuiltinFunction {
 impl BuiltinFunction {
     pub(crate) fn maybe_unique_ret_type<'a, I>(
         &'a self,
-        tcx: &'a mut TyCtxt,
+        tcx: &'a mut TyContext,
         file: File,
         call_expr: ExprId,
         mut args: I,

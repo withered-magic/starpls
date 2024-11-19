@@ -31,7 +31,7 @@ macro_rules! match_notification {
 #[derive(Debug)]
 pub(crate) enum FetchExternalReposProgress {
     Begin(FxHashSet<String>),
-    End(FxHashSet<FileId>),
+    End(FxHashSet<FileId>, Vec<String>),
 }
 
 #[derive(Debug)]
@@ -262,9 +262,16 @@ impl Server {
                             ..Default::default()
                         })
                     }
-                    FetchExternalReposProgress::End(files) => {
+                    FetchExternalReposProgress::End(files, failed_repos) => {
                         self.is_fetching_repos = false;
                         self.force_analysis_for_files.extend(files);
+                        if !failed_repos.is_empty() {
+                            self.send_error_message(&format!(
+                                "Failed to fetch external repositories: {}. Please check the server logs for more details.",
+                                failed_repos.join(", ")
+                            ));
+                        }
+
                         lsp_types::WorkDoneProgress::End(lsp_types::WorkDoneProgressEnd {
                             message: None,
                         })

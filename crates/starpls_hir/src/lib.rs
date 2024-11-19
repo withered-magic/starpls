@@ -5,7 +5,7 @@ pub use crate::{
     api::*,
     def::Name,
     display::{DisplayWithDb, DisplayWithDbWrapper},
-    typeck::{builtins::BuiltinDefs, Cancelled, GlobalCtxt, InferenceOptions, Ty, TyCtxt},
+    typeck::{builtins::BuiltinDefs, Cancelled, GlobalContext, InferenceOptions, Ty, TyContext},
 };
 use crate::{
     def::{ExprId, Module, ModuleSourceMap},
@@ -63,7 +63,7 @@ pub struct Jar(
 );
 
 pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
-    fn gcx(&self) -> &GlobalCtxt;
+    fn gcx(&self) -> &GlobalContext;
     fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins, rules: Builtins);
     fn get_builtin_defs(&self, dialect: &Dialect) -> BuiltinDefs;
     fn set_bazel_prelude_file(&mut self, file_id: FileId);

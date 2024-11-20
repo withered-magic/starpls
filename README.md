@@ -70,7 +70,7 @@ Install using homebrew as described above, then do the following in your init.lu
 require("lspconfig").starpls.setup { }
 ```
 
-You can see the config info [here](https://github.com/neovim/nvim-lspconfig/blob/master/lua/lspconfig/server_configurations/starpls.lua).
+You can see the config info [here](https://github.com/neovim/nvim-lspconfig/blob/master/lua/lspconfig/configs/starpls.lua).
 
 ## Tips and Tricks
 

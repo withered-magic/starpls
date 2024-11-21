@@ -142,11 +142,25 @@ impl<'a> Semantics<'a> {
         Some(with_tcx(self.db, |tcx| tcx.infer_expr(file, *expr).into()))
     }
 
-    pub fn type_of_param(&self, file: File, param: &ast::Parameter) -> Option<Type> {
+    pub fn resolve_param(&self, file: File, param: &ast::Parameter) -> Option<(Param, Type)> {
+        let module = module(self.db, file);
         let param = source_map(self.db, file)
             .param_map
             .get(&AstPtr::new(param))?;
-        Some(with_tcx(self.db, |tcx| tcx.infer_param(file, *param)).into())
+        let (func, index) = module
+            .param_to_def_stmt
+            .get(param)
+            .and_then(|(stmt, index)| match module[*stmt] {
+                Stmt::Def { func, .. } => Some((func, index)),
+                _ => None,
+            })?;
+        Some((
+            Param(ParamInner::Param {
+                parent: Some(func),
+                index: *index,
+            }),
+            with_tcx(self.db, |tcx| tcx.infer_param(file, *param)).into(),
+        ))
     }
 
     pub fn resolve_load_stmt(&self, file: File, load_stmt: &ast::LoadStmt) -> Option<File> {

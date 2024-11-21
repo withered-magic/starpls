@@ -112,15 +112,24 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
             }
             return Some(text.into());
         } else if let Some(param) = ast::Parameter::cast(parent.clone()) {
-            let ty = sema.type_of_param(file, &param)?;
-            return Some(
-                format!(
-                    "```python\n(parameter) {}: {}\n```\n",
-                    param.name()?,
-                    ty.display(db)
-                )
-                .into(),
-            );
+            let (param, ty) = sema.resolve_param(file, &param)?;
+            let mut text = String::from("```python\n(parameter) ");
+            write!(
+                text,
+                "{}: {}\n```\n",
+                param
+                    .name(db)
+                    .as_ref()
+                    .map(|name| name.as_str())
+                    .unwrap_or(""),
+                ty.display(db)
+            )
+            .ok()?;
+            if let Some(doc) = param.doc(db) {
+                text.push_str(&unindent_doc(&doc));
+                text.push('\n');
+            }
+            return Some(text.into());
         } else if let Some(arg) = ast::Argument::cast(parent) {
             let call = arg
                 .syntax()

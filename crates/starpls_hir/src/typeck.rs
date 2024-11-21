@@ -18,7 +18,7 @@ use crate::{
     def::{
         codeflow::FlowNodeId,
         scope::{ExecutionScopeId, FunctionDef},
-        ExprId, Function, LiteralString, LoadItemId, LoadStmt, Param as HirDefParam, ParamId,
+        Expr, ExprId, Function, LiteralString, LoadItemId, LoadStmt, Param as HirDefParam, ParamId,
         StmtId,
     },
     module, source_map,
@@ -425,7 +425,7 @@ impl Ty {
                     let file = def.func.file(db);
                     let ty = with_tcx(db, |tcx| tcx.infer_param(file, *param));
                     let param = Param(ParamInner::Param {
-                        parent: Some(def.func),
+                        parent: def.func,
                         index,
                     });
                     (param, ty)
@@ -734,7 +734,11 @@ pub struct Param(pub(crate) ParamInner);
 #[derive(Clone, Debug)]
 pub(crate) enum ParamInner {
     Param {
-        parent: Option<Function>,
+        parent: Function,
+        index: usize,
+    },
+    LambdaParam {
+        parent: InFile<ExprId>,
         index: usize,
     },
     IntrinsicParam {
@@ -782,9 +786,15 @@ impl Param {
     pub fn name(&self, db: &dyn Db) -> Option<Name> {
         match self.0 {
             ParamInner::Param { parent, index } => {
-                let parent = parent?;
                 let module = module(db, parent.file(db));
                 Some(module[parent.params(db)[index]].name().clone())
+            }
+            ParamInner::LambdaParam { parent, index } => {
+                let module = module(db, parent.file);
+                match &module[parent.value] {
+                    Expr::Lambda { params, .. } => Some(module[params[index]].name().clone()),
+                    _ => None,
+                }
             }
             ParamInner::IntrinsicParam { parent, index } => {
                 let param = &parent.params(db)[index];
@@ -834,7 +844,6 @@ impl Param {
     pub fn doc(&self, db: &dyn Db) -> Option<String> {
         Some(match &self.0 {
             ParamInner::Param { parent, index } => {
-                let parent = parent.as_ref()?;
                 let module = module(db, parent.file(db));
                 return module[parent.params(db)[*index]]
                     .doc()
@@ -879,10 +888,6 @@ impl Param {
         match self.0 {
             // TODO(withered-magic): Handle lambda parameters.
             ParamInner::Param { parent, index } => {
-                let parent = match parent {
-                    Some(parent) => parent,
-                    None => return false,
-                };
                 let module = module(db, parent.file(db));
                 matches!(
                     module[parent.params(db)[index]],
@@ -905,10 +910,6 @@ impl Param {
         match self.0 {
             // TODO(withered-magic): Handle lambda parameters.
             ParamInner::Param { parent, index } => {
-                let parent = match parent {
-                    Some(parent) => parent,
-                    None => return false,
-                };
                 let module = module(db, parent.file(db));
                 matches!(
                     module[parent.params(db)[index]],
@@ -940,13 +941,19 @@ impl Param {
 
     pub fn syntax_node_ptr(&self, db: &dyn Db) -> Option<SyntaxNodePtr> {
         match self.0 {
-            ParamInner::Param { parent, index } => parent.and_then(|parent| {
-                source_map(db, parent.file(db))
-                    .param_map_back
-                    .get(&parent.params(db)[index])
-                    .map(|ptr| ptr.syntax_node_ptr())
-            }),
-
+            ParamInner::Param { parent, index } => source_map(db, parent.file(db))
+                .param_map_back
+                .get(&parent.params(db)[index])
+                .map(|ptr| ptr.syntax_node_ptr()),
+            ParamInner::LambdaParam { parent, index } => {
+                match &module(db, parent.file)[parent.value] {
+                    Expr::Lambda { params, .. } => source_map(db, parent.file)
+                        .param_map_back
+                        .get(&params[index])
+                        .map(|ptr| ptr.syntax_node_ptr()),
+                    _ => None,
+                }
+            }
             _ => None,
         }
     }

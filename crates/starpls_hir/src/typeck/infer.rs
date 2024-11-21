@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use either::Either;
 use starpls_common::{line_index, parse, Diagnostic, File, FileRange, InFile, Severity};
 use starpls_syntax::{
     ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, BitwiseOp, LogicOp, UnaryOp},
@@ -1105,9 +1106,19 @@ impl TyContext<'_> {
                             }
                         }
                         ScopeDef::Function(def) => TyKind::Function(def.clone()).intern(),
-                        ScopeDef::Parameter(ParameterDef { func, index }) => func
-                            .map(|func| self.infer_param(file, func.params(self.db)[*index]))
-                            .unwrap_or_else(|| self.unknown_ty()),
+                        ScopeDef::Parameter(ParameterDef { parent, index }) => match parent {
+                            Either::Left(parent) => {
+                                self.infer_param(file, parent.params(self.db)[*index])
+                            }
+                            Either::Right(parent) => {
+                                match &module(self.db, parent.file)[parent.value] {
+                                    Expr::Lambda { params, .. } => {
+                                        self.infer_param(parent.file, params[*index])
+                                    }
+                                    _ => return None,
+                                }
+                            }
+                        },
                         ScopeDef::LoadItem(LoadItemDef { load_item, .. }) => {
                             self.infer_load_item(file, *load_item)
                         }
@@ -1166,7 +1177,7 @@ impl TyContext<'_> {
             let hir_id = match def_execution_scope {
                 ExecutionScopeId::Module => ScopeHirId::Module,
                 ExecutionScopeId::Def(stmt) => stmt.into(),
-                ExecutionScopeId::Comp(expr) => expr.into(),
+                ExecutionScopeId::Comp(expr) | ExecutionScopeId::Lambda(expr) => expr.into(),
             };
             let start_node = cfg.hir_to_flow_node.get(&hir_id)?;
             let start_ty = self

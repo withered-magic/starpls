@@ -1558,6 +1558,23 @@ x and greeting
 }
 
 #[test]
+fn test_lambda() {
+    check_infer(
+        r#"
+lambda x, y, z: x + y + z
+"#,
+        expect![[r#"
+            17..18 "x": Unknown
+            21..22 "y": Unknown
+            17..22 "x + y": Unknown
+            25..26 "z": Unknown
+            17..26 "x + y + z": Unknown
+            1..26 "lambda x, y, z: x + y + z": Unknown
+        "#]],
+    );
+}
+
+#[test]
 fn test_if_else_stmts() {
     check_infer_with_code_flow_analysis(
         r#"

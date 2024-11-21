@@ -19,18 +19,7 @@ pub(crate) enum ExecutionScopeId {
     Module,
     Def(StmtId),
     Comp(ExprId),
-}
-
-impl From<StmtId> for ExecutionScopeId {
-    fn from(value: StmtId) -> Self {
-        Self::Def(value)
-    }
-}
-
-impl From<ExprId> for ExecutionScopeId {
-    fn from(value: ExprId) -> Self {
-        Self::Comp(value)
-    }
+    Lambda(ExprId),
 }
 
 #[salsa::tracked]
@@ -72,7 +61,7 @@ pub(crate) struct VariableDef {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ParameterDef {
     pub(crate) index: usize,
-    pub(crate) func: Option<Function>,
+    pub(crate) parent: Either<Function, InFile<ExprId>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -235,7 +224,7 @@ impl ScopeCollector<'_> {
                             name.clone(),
                             ScopeDef::Parameter(ParameterDef {
                                 index,
-                                func: Some(data.func),
+                                parent: either::Left(data.func),
                             }),
                         );
                     }
@@ -421,22 +410,31 @@ impl ScopeCollector<'_> {
                     self.record_expr_scope(expr, current);
                 }
                 Expr::Lambda { params, body } => {
-                    let scope = self.alloc_scope(current);
-                    for (index, param) in params.iter().copied().enumerate() {
-                        match &self.module.params[param] {
-                            Param::Simple { name, .. }
-                            | Param::ArgsList { name, .. }
-                            | Param::KwargsDict { name, .. } => {
-                                self.scopes.add_decl(
-                                    scope,
-                                    name.clone(),
-                                    ScopeDef::Parameter(ParameterDef { index, func: None }),
-                                );
+                    self.with_execution_scope(ExecutionScopeId::Lambda(expr), |this| {
+                        let scope = this.alloc_scope(current);
+                        for (index, param) in params.iter().copied().enumerate() {
+                            match &this.module.params[param] {
+                                Param::Simple { name, .. }
+                                | Param::ArgsList { name, .. }
+                                | Param::KwargsDict { name, .. } => {
+                                    this.scopes.add_decl(
+                                        scope,
+                                        name.clone(),
+                                        ScopeDef::Parameter(ParameterDef {
+                                            parent: Either::Right(InFile {
+                                                file: this.file,
+                                                value: expr,
+                                            }),
+                                            index,
+                                        }),
+                                    );
+                                }
                             }
                         }
-                    }
-                    self.collect_expr(*body, scope, None);
-                    self.record_expr_scope(expr, current);
+                        this.collect_expr(*body, scope, None);
+                        this.finish_execution_scope(scope);
+                        this.record_expr_scope(expr, current);
+                    });
                 }
                 Expr::Tuple { exprs } => {
                     exprs.iter().copied().for_each(|expr| {
@@ -457,7 +455,7 @@ impl ScopeCollector<'_> {
                 Expr::DictComp {
                     entry,
                     comp_clauses,
-                } => self.with_execution_scope(expr, |this| {
+                } => self.with_execution_scope(ExecutionScopeId::Comp(expr), |this| {
                     let mut comp = current;
                     this.collect_comp_clauses(comp_clauses, &mut comp);
                     this.collect_expr(entry.key, comp, None);
@@ -468,7 +466,7 @@ impl ScopeCollector<'_> {
                 Expr::ListComp {
                     expr: list_expr,
                     comp_clauses,
-                } => self.with_execution_scope(expr, |this| {
+                } => self.with_execution_scope(ExecutionScopeId::Comp(expr), |this| {
                     let mut comp = current;
                     this.collect_comp_clauses(comp_clauses, &mut comp);
                     this.collect_expr(*list_expr, comp, None);
@@ -523,12 +521,12 @@ impl ScopeCollector<'_> {
         }
     }
 
-    fn with_execution_scope<F>(&mut self, hir: impl Into<ExecutionScopeId>, mut f: F)
+    fn with_execution_scope<F>(&mut self, execution_scope: ExecutionScopeId, mut f: F)
     where
         F: FnMut(&mut Self),
     {
         let prev_execution_scope = self.curr_execution_scope;
-        self.curr_execution_scope = hir.into();
+        self.curr_execution_scope = execution_scope;
         f(self);
         self.curr_execution_scope = prev_execution_scope;
     }

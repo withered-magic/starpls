@@ -1,13 +1,13 @@
+use std::fs;
 use std::io;
 use std::path::Path;
-use std::{fs, path::PathBuf};
+use std::path::PathBuf;
 
 use prost::Message;
 
-pub use crate::{
-    builtin::Builtins,
-    label::{Label, ParseError},
-};
+pub use crate::builtin::Builtins;
+pub use crate::label::Label;
+pub use crate::label::ParseError;
 
 pub mod attr;
 pub mod build_language;

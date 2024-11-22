@@ -2,28 +2,48 @@ use std::sync::Arc;
 
 use either::Either;
 use smallvec::SmallVec;
-use starpls_common::{parse, Diagnostic, Diagnostics, File, InFile};
-use starpls_syntax::{
-    ast::{self, AstNode, AstPtr, SyntaxNodePtr},
-    TextSize, T,
-};
+use starpls_common::parse;
+use starpls_common::Diagnostic;
+use starpls_common::Diagnostics;
+use starpls_common::File;
+use starpls_common::InFile;
+use starpls_syntax::ast::AstNode;
+use starpls_syntax::ast::AstPtr;
+use starpls_syntax::ast::SyntaxNodePtr;
+use starpls_syntax::ast::{self};
+use starpls_syntax::TextSize;
+use starpls_syntax::T;
 
-pub use crate::typeck::{Field, Param};
-use crate::{
-    def::{
-        self,
-        resolver::Resolver,
-        scope::{self, module_scopes, FunctionDef, ParameterDef},
-        LoadItemId, Stmt,
-    },
-    module, source_map,
-    typeck::{
-        self, builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref, with_tcx,
-        FieldInner, ParamInner, Provider, Struct as DefStruct, Substitution, TagClass, Tuple, Ty,
-        TypeRef,
-    },
-    Db, ExprId, Name, TyKind,
-};
+use crate::def::resolver::Resolver;
+use crate::def::scope::module_scopes;
+use crate::def::scope::FunctionDef;
+use crate::def::scope::ParameterDef;
+use crate::def::scope::{self};
+use crate::def::LoadItemId;
+use crate::def::Stmt;
+use crate::def::{self};
+use crate::module;
+use crate::source_map;
+use crate::typeck::builtins::BuiltinFunction;
+use crate::typeck::intrinsics::IntrinsicFunction;
+use crate::typeck::resolve_type_ref;
+use crate::typeck::with_tcx;
+pub use crate::typeck::Field;
+use crate::typeck::FieldInner;
+pub use crate::typeck::Param;
+use crate::typeck::ParamInner;
+use crate::typeck::Provider;
+use crate::typeck::Struct as DefStruct;
+use crate::typeck::Substitution;
+use crate::typeck::TagClass;
+use crate::typeck::Tuple;
+use crate::typeck::Ty;
+use crate::typeck::TypeRef;
+use crate::typeck::{self};
+use crate::Db;
+use crate::ExprId;
+use crate::Name;
+use crate::TyKind;
 
 const TARGET_DOC: &str = "The BUILD target for a dependency. Appears in the fields of `ctx.attr` corresponding to dependency attributes (`label` or `label_list`).";
 

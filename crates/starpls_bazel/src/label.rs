@@ -293,7 +293,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 #[cfg(test)]
 mod tests {
-    use super::{RepoKind::*, *};
+    use super::RepoKind::*;
+    use super::*;
 
     fn check(
         input: &str,

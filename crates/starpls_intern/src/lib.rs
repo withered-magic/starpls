@@ -3,15 +3,19 @@
 //!
 //! Eventually this should probably be replaced with salsa-based interning.
 
-use std::{
-    fmt::{self, Debug, Display},
-    hash::{BuildHasherDefault, Hash, Hasher},
-    ops::Deref,
-    sync::OnceLock,
-};
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::{self};
+use std::hash::BuildHasherDefault;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::ops::Deref;
+use std::sync::OnceLock;
 
-use dashmap::{DashMap, SharedValue};
-use hashbrown::{hash_map::RawEntryMut, HashMap};
+use dashmap::DashMap;
+use dashmap::SharedValue;
+use hashbrown::hash_map::RawEntryMut;
+use hashbrown::HashMap;
 use rustc_hash::FxHasher;
 use triomphe::Arc;
 

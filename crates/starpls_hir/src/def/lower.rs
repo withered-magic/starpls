@@ -1,19 +1,42 @@
 use either::Either;
-use starpls_common::{line_index, Diagnostic, Diagnostics, File, FileRange, Severity};
-use starpls_syntax::{
-    ast::{self, AstNode, AstPtr, AstToken, SyntaxNodePtr},
-    SyntaxToken, TextRange,
-};
+use starpls_common::line_index;
+use starpls_common::Diagnostic;
+use starpls_common::Diagnostics;
+use starpls_common::File;
+use starpls_common::FileRange;
+use starpls_common::Severity;
+use starpls_syntax::ast::AstNode;
+use starpls_syntax::ast::AstPtr;
+use starpls_syntax::ast::AstToken;
+use starpls_syntax::ast::SyntaxNodePtr;
+use starpls_syntax::ast::{self};
+use starpls_syntax::SyntaxToken;
+use starpls_syntax::TextRange;
 
-use crate::{
-    def::{
-        Argument, CompClause, DictEntry, Expr, ExprId, ExprPtr, Function, Literal, LoadItem,
-        LoadItemId, LoadItemPtr, LoadStmt, Module, ModuleSourceMap, Name, Param, ParamId, ParamPtr,
-        Stmt, StmtId, StmtPtr,
-    },
-    typeck::FunctionTypeRef,
-    Db, TypeRef,
-};
+use crate::def::Argument;
+use crate::def::CompClause;
+use crate::def::DictEntry;
+use crate::def::Expr;
+use crate::def::ExprId;
+use crate::def::ExprPtr;
+use crate::def::Function;
+use crate::def::Literal;
+use crate::def::LoadItem;
+use crate::def::LoadItemId;
+use crate::def::LoadItemPtr;
+use crate::def::LoadStmt;
+use crate::def::Module;
+use crate::def::ModuleSourceMap;
+use crate::def::Name;
+use crate::def::Param;
+use crate::def::ParamId;
+use crate::def::ParamPtr;
+use crate::def::Stmt;
+use crate::def::StmtId;
+use crate::def::StmtPtr;
+use crate::typeck::FunctionTypeRef;
+use crate::Db;
+use crate::TypeRef;
 
 pub(super) fn lower_module(
     db: &dyn Db,

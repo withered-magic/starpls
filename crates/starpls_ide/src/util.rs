@@ -1,4 +1,6 @@
-use starpls_syntax::{SyntaxKind, SyntaxToken, TokenAtOffset};
+use starpls_syntax::SyntaxKind;
+use starpls_syntax::SyntaxToken;
+use starpls_syntax::TokenAtOffset;
 
 pub(crate) fn pick_best_token(
     tokens: TokenAtOffset<SyntaxToken>,

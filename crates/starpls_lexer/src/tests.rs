@@ -1,6 +1,7 @@
 use std::fmt::Write;
 
-use expect_test::{expect, Expect};
+use expect_test::expect;
+use expect_test::Expect;
 
 use super::*;
 

@@ -1,29 +1,40 @@
-use std::{
-    fs, mem, panic,
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::Duration,
-};
+use std::fs;
+use std::mem;
+use std::panic;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 
-use lsp_server::{Connection, ReqQueue};
+use lsp_server::Connection;
+use lsp_server::ReqQueue;
 use parking_lot::RwLock;
 use rustc_hash::FxHashSet;
-use starpls_bazel::{
-    build_language::decode_rules,
-    client::{BazelCLI, BazelClient},
-    decode_builtins, APIContext, Builtins,
-};
-use starpls_common::{Dialect, FileId, FileInfo};
-use starpls_ide::{Analysis, AnalysisSnapshot, Change, InferenceOptions};
+use starpls_bazel::build_language::decode_rules;
+use starpls_bazel::client::BazelCLI;
+use starpls_bazel::client::BazelClient;
+use starpls_bazel::decode_builtins;
+use starpls_bazel::APIContext;
+use starpls_bazel::Builtins;
+use starpls_common::Dialect;
+use starpls_common::FileId;
+use starpls_common::FileInfo;
+use starpls_ide::Analysis;
+use starpls_ide::AnalysisSnapshot;
+use starpls_ide::Change;
+use starpls_ide::InferenceOptions;
 
-use crate::{
-    config::ServerConfig,
-    debouncer::AnalysisDebouncer,
-    diagnostics::DiagnosticsManager,
-    document::{DefaultFileLoader, DocumentChangeKind, DocumentManager, PathInterner},
-    event_loop::{FetchExternalReposProgress, Task},
-    task_pool::{TaskPool, TaskPoolHandle},
-};
+use crate::config::ServerConfig;
+use crate::debouncer::AnalysisDebouncer;
+use crate::diagnostics::DiagnosticsManager;
+use crate::document::DefaultFileLoader;
+use crate::document::DocumentChangeKind;
+use crate::document::DocumentManager;
+use crate::document::PathInterner;
+use crate::event_loop::FetchExternalReposProgress;
+use crate::event_loop::Task;
+use crate::task_pool::TaskPool;
+use crate::task_pool::TaskPoolHandle;
 
 const DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
 

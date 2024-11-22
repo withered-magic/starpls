@@ -1,39 +1,53 @@
-use std::{
-    fmt::Write,
-    iter,
-    panic::{self, UnwindSafe},
-    sync::Arc,
-};
+use std::fmt::Write;
+use std::iter;
+use std::panic::UnwindSafe;
+use std::panic::{self};
+use std::sync::Arc;
 
 use crossbeam::atomic::AtomicCell;
 use either::Either;
 use parking_lot::Mutex;
-use rustc_hash::{FxHashMap, FxHashSet};
-use smallvec::{smallvec, SmallVec};
-use starpls_common::{parse, Diagnostic, Dialect, File, InFile};
-use starpls_intern::{impl_internable, Interned};
+use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
+use smallvec::smallvec;
+use smallvec::SmallVec;
+use starpls_common::parse;
+use starpls_common::Diagnostic;
+use starpls_common::Dialect;
+use starpls_common::File;
+use starpls_common::InFile;
+use starpls_intern::impl_internable;
+use starpls_intern::Interned;
 use starpls_syntax::ast::SyntaxNodePtr;
 
-use crate::{
-    def::{
-        codeflow::FlowNodeId,
-        scope::{ExecutionScopeId, FunctionDef},
-        Expr, ExprId, Function, LiteralString, LoadItemId, LoadStmt, Param as HirDefParam, ParamId,
-        StmtId,
-    },
-    module, source_map,
-    typeck::{
-        builtins::{
-            builtin_types, common_attributes_query, BuiltinFunction, BuiltinFunctionParam,
-            BuiltinProvider, BuiltinType,
-        },
-        intrinsics::{
-            intrinsic_field_types, intrinsic_types, IntrinsicClass, IntrinsicFunction,
-            IntrinsicFunctionParam, Intrinsics,
-        },
-    },
-    Db, Name,
-};
+use crate::def::codeflow::FlowNodeId;
+use crate::def::scope::ExecutionScopeId;
+use crate::def::scope::FunctionDef;
+use crate::def::Expr;
+use crate::def::ExprId;
+use crate::def::Function;
+use crate::def::LiteralString;
+use crate::def::LoadItemId;
+use crate::def::LoadStmt;
+use crate::def::Param as HirDefParam;
+use crate::def::ParamId;
+use crate::def::StmtId;
+use crate::module;
+use crate::source_map;
+use crate::typeck::builtins::builtin_types;
+use crate::typeck::builtins::common_attributes_query;
+use crate::typeck::builtins::BuiltinFunction;
+use crate::typeck::builtins::BuiltinFunctionParam;
+use crate::typeck::builtins::BuiltinProvider;
+use crate::typeck::builtins::BuiltinType;
+use crate::typeck::intrinsics::intrinsic_field_types;
+use crate::typeck::intrinsics::intrinsic_types;
+use crate::typeck::intrinsics::IntrinsicClass;
+use crate::typeck::intrinsics::IntrinsicFunction;
+use crate::typeck::intrinsics::IntrinsicFunctionParam;
+use crate::typeck::intrinsics::Intrinsics;
+use crate::Db;
+use crate::Name;
 
 mod call;
 mod infer;

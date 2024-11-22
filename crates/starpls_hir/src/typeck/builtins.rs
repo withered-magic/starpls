@@ -1,30 +1,52 @@
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
+use std::sync::Arc;
 
 use either::Either;
 use rustc_hash::FxHashMap;
 use smallvec::smallvec;
-use starpls_bazel::{
-    attr,
-    builtin::{Callable, Param, Type, Value},
-    env::{self, make_workspace_builtins},
-    Builtins, BUILTINS_TYPES_DENY_LIST, BUILTINS_VALUES_DENY_LIST, KNOWN_PROVIDER_TYPES,
-};
-use starpls_common::{parse, Dialect, File, InFile};
-use starpls_syntax::ast::{self, AstNode};
+use starpls_bazel::attr;
+use starpls_bazel::builtin::Callable;
+use starpls_bazel::builtin::Param;
+use starpls_bazel::builtin::Type;
+use starpls_bazel::builtin::Value;
+use starpls_bazel::env::make_workspace_builtins;
+use starpls_bazel::env::{self};
+use starpls_bazel::Builtins;
+use starpls_bazel::BUILTINS_TYPES_DENY_LIST;
+use starpls_bazel::BUILTINS_VALUES_DENY_LIST;
+use starpls_bazel::KNOWN_PROVIDER_TYPES;
+use starpls_common::parse;
+use starpls_common::Dialect;
+use starpls_common::File;
+use starpls_common::InFile;
+use starpls_syntax::ast::AstNode;
+use starpls_syntax::ast::{self};
 
-use crate::{
-    def::{
-        resolver::{Export, Resolver},
-        Argument,
-    },
-    source_map,
-    typeck::{
-        Attribute, AttributeData, AttributeKind, CustomProvider, CustomProviderFields,
-        ModuleExtension, Provider, ProviderField, Rule as TyRule, RuleKind, Struct, TagClass,
-        TagClassData, Tuple,
-    },
-    Db, ExprId, Name, Ty, TyContext, TyKind, TypeRef,
-};
+use crate::def::resolver::Export;
+use crate::def::resolver::Resolver;
+use crate::def::Argument;
+use crate::source_map;
+use crate::typeck::Attribute;
+use crate::typeck::AttributeData;
+use crate::typeck::AttributeKind;
+use crate::typeck::CustomProvider;
+use crate::typeck::CustomProviderFields;
+use crate::typeck::ModuleExtension;
+use crate::typeck::Provider;
+use crate::typeck::ProviderField;
+use crate::typeck::Rule as TyRule;
+use crate::typeck::RuleKind;
+use crate::typeck::Struct;
+use crate::typeck::TagClass;
+use crate::typeck::TagClassData;
+use crate::typeck::Tuple;
+use crate::Db;
+use crate::ExprId;
+use crate::Name;
+use crate::Ty;
+use crate::TyContext;
+use crate::TyKind;
+use crate::TypeRef;
 
 const DEFAULT_DOC: &str = "See the [Bazel Build Encyclopedia](https://bazel.build/reference/be/overview) for more details.";
 

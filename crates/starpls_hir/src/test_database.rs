@@ -1,11 +1,21 @@
 use std::sync::Arc;
 
-use dashmap::{mapref::entry::Entry, DashMap};
+use dashmap::mapref::entry::Entry;
+use dashmap::DashMap;
 use starpls_bazel::Builtins;
-use starpls_common::{File, FileId, FileInfo, LoadItemCandidate, ResolvedPath};
-use starpls_test_util::{make_test_builtins, FixtureType};
+use starpls_common::File;
+use starpls_common::FileId;
+use starpls_common::FileInfo;
+use starpls_common::LoadItemCandidate;
+use starpls_common::ResolvedPath;
+use starpls_test_util::make_test_builtins;
+use starpls_test_util::FixtureType;
 
-use crate::{BuiltinDefs, Db, Dialect, GlobalContext, InferenceOptions};
+use crate::BuiltinDefs;
+use crate::Db;
+use crate::Dialect;
+use crate::GlobalContext;
+use crate::InferenceOptions;
 
 #[derive(Default)]
 #[salsa::db(starpls_common::Jar, crate::Jar)]

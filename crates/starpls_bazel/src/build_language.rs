@@ -1,10 +1,12 @@
 use prost::Message;
 
-use crate::{
-    build::{attribute::Discriminator, BuildLanguage, RuleDefinition},
-    builtin::{Callable, Param, Value},
-    Builtins,
-};
+use crate::build::attribute::Discriminator;
+use crate::build::BuildLanguage;
+use crate::build::RuleDefinition;
+use crate::builtin::Callable;
+use crate::builtin::Param;
+use crate::builtin::Value;
+use crate::Builtins;
 
 pub fn decode_rules(build_language_output: &[u8]) -> anyhow::Result<Builtins> {
     let build_language = BuildLanguage::decode(build_language_output)?;

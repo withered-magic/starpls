@@ -1,16 +1,23 @@
-use std::{collections::HashSet, fmt, ops::Index};
+use std::collections::HashSet;
+use std::fmt;
+use std::ops::Index;
 
 use either::Either;
-use id_arena::{Arena, Id};
+use id_arena::Arena;
+use id_arena::Id;
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 use starpls_common::File;
-use starpls_syntax::{
-    ast::{self, AssignOp, AstPtr, BinaryOp, SyntaxNodePtr, UnaryOp},
-    TextRange,
-};
+use starpls_syntax::ast::AssignOp;
+use starpls_syntax::ast::AstPtr;
+use starpls_syntax::ast::BinaryOp;
+use starpls_syntax::ast::SyntaxNodePtr;
+use starpls_syntax::ast::UnaryOp;
+use starpls_syntax::ast::{self};
+use starpls_syntax::TextRange;
 
-use crate::{typeck::TypeRef, Db};
+use crate::typeck::TypeRef;
+use crate::Db;
 
 pub(crate) mod codeflow;
 mod lower;

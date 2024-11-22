@@ -1,4 +1,6 @@
-use crate::{convert, server::Server, utils::apply_document_content_changes};
+use crate::convert;
+use crate::server::Server;
+use crate::utils::apply_document_content_changes;
 
 pub(crate) fn did_open_text_document(
     server: &mut Server,

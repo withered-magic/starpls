@@ -1,9 +1,21 @@
 use std::marker::PhantomData;
 
-use rowan::{ast::AstNode, GreenNode, GreenNodeBuilder, Language, TextRange, TextSize};
-use starpls_parser::{parse, parse_type_list, StrStep, StrWithTokens, SyntaxKind::*};
+use rowan::ast::AstNode;
+use rowan::GreenNode;
+use rowan::GreenNodeBuilder;
+use rowan::Language;
+use rowan::TextRange;
+use rowan::TextSize;
+use starpls_parser::parse;
+use starpls_parser::parse_type_list;
+use starpls_parser::StrStep;
+use starpls_parser::StrWithTokens;
+use starpls_parser::SyntaxKind::*;
 
-use crate::{LineIndex, Module, StarlarkLanguage, SyntaxNode};
+use crate::LineIndex;
+use crate::Module;
+use crate::StarlarkLanguage;
+use crate::SyntaxNode;
 
 const TYPE_COMMENT_PREFIX_STR: &str = "# type: ";
 

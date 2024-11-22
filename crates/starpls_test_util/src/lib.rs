@@ -1,8 +1,10 @@
-use starpls_bazel::{
-    builtin::{Callable, Param, Type, Value},
-    Builtins,
-};
-use starpls_syntax::{TextRange, TextSize};
+use starpls_bazel::builtin::Callable;
+use starpls_bazel::builtin::Param;
+use starpls_bazel::builtin::Type;
+use starpls_bazel::builtin::Value;
+use starpls_bazel::Builtins;
+use starpls_syntax::TextRange;
+use starpls_syntax::TextSize;
 
 pub const CURSOR_MARKER: &str = "$0";
 

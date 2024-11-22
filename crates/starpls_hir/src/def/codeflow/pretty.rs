@@ -1,6 +1,8 @@
 use std::fmt::Write;
 
-use crate::def::codeflow::{CodeFlowGraph, FlowNode, FlowNodeId};
+use crate::def::codeflow::CodeFlowGraph;
+use crate::def::codeflow::FlowNode;
+use crate::def::codeflow::FlowNodeId;
 
 macro_rules! w {
     ($dst:expr, $($arg:tt)*) => {

@@ -1,30 +1,37 @@
-use std::{
-    collections::HashMap,
-    fs,
-    hash::BuildHasherDefault,
-    mem,
-    path::{Path, PathBuf, MAIN_SEPARATOR},
-    sync::Arc,
-};
+use std::collections::HashMap;
+use std::fs;
+use std::hash::BuildHasherDefault;
+use std::mem;
+use std::path::Path;
+use std::path::PathBuf;
+use std::path::MAIN_SEPARATOR;
+use std::sync::Arc;
 
-use anyhow::{anyhow, bail};
+use anyhow::anyhow;
+use anyhow::bail;
 use crossbeam_channel::Sender;
 use dashmap::DashMap;
 use indexmap::IndexSet;
 use parking_lot::RwLock;
 use rustc_hash::FxHasher;
-use starpls_bazel::{
-    self,
-    client::BazelClient,
-    label::{PartialParse, RepoKind},
-    APIContext, Label, ParseError,
-};
-use starpls_common::{
-    Dialect, FileId, FileInfo, LoadItemCandidate, LoadItemCandidateKind, ResolvedPath,
-};
-use starpls_ide::{FileLoader, LoadFileResult};
+use starpls_bazel::client::BazelClient;
+use starpls_bazel::label::PartialParse;
+use starpls_bazel::label::RepoKind;
+use starpls_bazel::APIContext;
+use starpls_bazel::Label;
+use starpls_bazel::ParseError;
+use starpls_bazel::{self};
+use starpls_common::Dialect;
+use starpls_common::FileId;
+use starpls_common::FileInfo;
+use starpls_common::LoadItemCandidate;
+use starpls_common::LoadItemCandidateKind;
+use starpls_common::ResolvedPath;
+use starpls_ide::FileLoader;
+use starpls_ide::LoadFileResult;
 
-use crate::event_loop::{FetchExternalRepoRequest, Task};
+use crate::event_loop::FetchExternalRepoRequest;
+use crate::event_loop::Task;
 
 macro_rules! try_opt {
     ($expr:expr) => {

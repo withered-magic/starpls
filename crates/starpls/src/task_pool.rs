@@ -1,5 +1,7 @@
-use crossbeam_channel::{Receiver, Sender};
-use rayon::{ThreadPool, ThreadPoolBuilder};
+use crossbeam_channel::Receiver;
+use crossbeam_channel::Sender;
+use rayon::ThreadPool;
+use rayon::ThreadPoolBuilder;
 
 pub(crate) struct TaskPool<T> {
     sender: Sender<T>,

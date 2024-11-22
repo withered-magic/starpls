@@ -1,10 +1,13 @@
 use starpls_bazel::APIContext;
-use starpls_common::{parse, Db, File, FileId};
-use starpls_hir::{ScopeDef, Semantics};
-use starpls_syntax::{
-    ast::{self, AstNode},
-    TextRange,
-};
+use starpls_common::parse;
+use starpls_common::Db;
+use starpls_common::File;
+use starpls_common::FileId;
+use starpls_hir::ScopeDef;
+use starpls_hir::Semantics;
+use starpls_syntax::ast::AstNode;
+use starpls_syntax::ast::{self};
+use starpls_syntax::TextRange;
 
 use crate::Database;
 
@@ -125,9 +128,11 @@ fn add_target_symbols(db: &Database, file: File, acc: &mut Vec<DocumentSymbol>) 
 
 #[cfg(test)]
 mod tests {
-    use expect_test::{expect, Expect};
+    use expect_test::expect;
+    use expect_test::Expect;
     use starpls_bazel::APIContext;
-    use starpls_common::{Dialect, FileInfo};
+    use starpls_common::Dialect;
+    use starpls_common::FileInfo;
 
     use crate::AnalysisSnapshot;
 

@@ -1,19 +1,20 @@
 use crossbeam_channel::select;
 use lsp_server::Connection;
-use lsp_types::{InitializeParams, WorkDoneProgressCreateParams};
+use lsp_types::InitializeParams;
+use lsp_types::WorkDoneProgressCreateParams;
 use rustc_hash::FxHashSet;
 use starpls_common::FileId;
 
-use crate::{
-    config::ServerConfig,
-    convert,
-    dispatcher::RequestDispatcher,
-    document::DocumentSource,
-    extensions,
-    handlers::{notifications, requests},
-    server::{Server, ServerSnapshot},
-    ServerArgs,
-};
+use crate::config::ServerConfig;
+use crate::convert;
+use crate::dispatcher::RequestDispatcher;
+use crate::document::DocumentSource;
+use crate::extensions;
+use crate::handlers::notifications;
+use crate::handlers::requests;
+use crate::server::Server;
+use crate::server::ServerSnapshot;
+use crate::ServerArgs;
 
 #[macro_export]
 macro_rules! match_notification {

@@ -1,17 +1,20 @@
 use std::fmt::Write;
 
-use starpls_common::{parse, Db as _};
-use starpls_hir::{DisplayWithDb, Semantics, Type};
-use starpls_syntax::{
-    ast::{self, AstNode},
-    SyntaxKind::*,
-    TextRange, T,
-};
+use starpls_common::parse;
+use starpls_common::Db as _;
+use starpls_hir::DisplayWithDb;
+use starpls_hir::Semantics;
+use starpls_hir::Type;
+use starpls_syntax::ast::AstNode;
+use starpls_syntax::ast::{self};
+use starpls_syntax::SyntaxKind::*;
+use starpls_syntax::TextRange;
+use starpls_syntax::T;
 
-use crate::{
-    util::{pick_best_token, unindent_doc},
-    Database, FilePosition,
-};
+use crate::util::pick_best_token;
+use crate::util::unindent_doc;
+use crate::Database;
+use crate::FilePosition;
 
 mod docs;
 

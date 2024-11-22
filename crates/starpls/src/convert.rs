@@ -1,10 +1,17 @@
 use std::path::PathBuf;
 
 use anyhow::anyhow;
-use line_index::{LineIndex, WideEncoding, WideLineCol};
-use starpls_common::{Diagnostic, FileId, Severity};
-use starpls_ide::{DocumentSymbol, SymbolKind, SymbolTag};
-use starpls_syntax::{TextRange, TextSize};
+use line_index::LineIndex;
+use line_index::WideEncoding;
+use line_index::WideLineCol;
+use starpls_common::Diagnostic;
+use starpls_common::FileId;
+use starpls_common::Severity;
+use starpls_ide::DocumentSymbol;
+use starpls_ide::SymbolKind;
+use starpls_ide::SymbolTag;
+use starpls_syntax::TextRange;
+use starpls_syntax::TextSize;
 
 use crate::server::ServerSnapshot;
 

@@ -1,8 +1,10 @@
-use crate::{
-    grammar::*,
-    marker::{CompletedMarker, Marker},
-    Parser, SyntaxKind, SyntaxKindSet, T,
-};
+use crate::grammar::*;
+use crate::marker::CompletedMarker;
+use crate::marker::Marker;
+use crate::Parser;
+use crate::SyntaxKind;
+use crate::SyntaxKindSet;
+use crate::T;
 
 /// Set of all tokens that can start a primary expression.
 pub(crate) const PRIMARY_EXPR_START: SyntaxKindSet = SyntaxKindSet::new(&[

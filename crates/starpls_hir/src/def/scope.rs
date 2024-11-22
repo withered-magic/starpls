@@ -1,16 +1,36 @@
-use std::collections::{hash_map::Entry, VecDeque};
+use std::collections::hash_map::Entry;
+use std::collections::VecDeque;
 
 use either::Either;
-use id_arena::{Arena, Id};
+use id_arena::Arena;
+use id_arena::Id;
 use rustc_hash::FxHashMap;
-use starpls_common::{Diagnostic, Diagnostics, File, FileRange, InFile, Severity};
+use starpls_common::Diagnostic;
+use starpls_common::Diagnostics;
+use starpls_common::File;
+use starpls_common::FileRange;
+use starpls_common::InFile;
+use starpls_common::Severity;
 
-use crate::{
-    def::{CompClause, Expr, ExprId, Function, LoadItem, LoadItemId, Param, ParamId, Stmt, StmtId},
-    lower,
-    typeck::{builtins::BuiltinFunction, intrinsics::IntrinsicFunction, TypeRef},
-    Db, Module, ModuleInfo, ModuleSourceMap, Name,
-};
+use crate::def::CompClause;
+use crate::def::Expr;
+use crate::def::ExprId;
+use crate::def::Function;
+use crate::def::LoadItem;
+use crate::def::LoadItemId;
+use crate::def::Param;
+use crate::def::ParamId;
+use crate::def::Stmt;
+use crate::def::StmtId;
+use crate::lower;
+use crate::typeck::builtins::BuiltinFunction;
+use crate::typeck::intrinsics::IntrinsicFunction;
+use crate::typeck::TypeRef;
+use crate::Db;
+use crate::Module;
+use crate::ModuleInfo;
+use crate::ModuleSourceMap;
+use crate::Name;
 
 pub(crate) type ScopeId = Id<Scope>;
 

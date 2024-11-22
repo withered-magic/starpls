@@ -1,4 +1,5 @@
-use starpls_common::{Db as _, FileId};
+use starpls_common::Db as _;
+use starpls_common::FileId;
 use starpls_syntax::LineIndex;
 
 use crate::Database;

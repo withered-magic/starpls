@@ -253,7 +253,7 @@ impl<'a> LoweringContext<'a> {
                 let func = Function::new(
                     self.db,
                     self.file,
-                    Name::missing(),
+                    Name::new_inline("lambda"),
                     None,
                     None,
                     ptr.syntax_node_ptr(),

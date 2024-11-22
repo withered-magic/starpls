@@ -91,9 +91,30 @@ pub(crate) struct LoadItemDef {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct FunctionDef {
-    pub(crate) stmt: InFile<StmtId>,
-    pub(crate) func: Function,
+pub(crate) enum FunctionDef {
+    Def {
+        func: Function,
+        stmt: InFile<StmtId>,
+    },
+    Lambda {
+        func: Function,
+    },
+}
+
+impl FunctionDef {
+    pub(crate) fn func(&self) -> Function {
+        match self {
+            FunctionDef::Def { func, .. } => *func,
+            FunctionDef::Lambda { func } => *func,
+        }
+    }
+
+    pub(crate) fn stmt(&self) -> Option<InFile<StmtId>> {
+        match self {
+            FunctionDef::Def { stmt, .. } => Some(*stmt),
+            FunctionDef::Lambda { .. } => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -296,7 +317,7 @@ impl ScopeCollector<'_> {
                 self.scopes.add_decl(
                     *current,
                     func.name(self.db).clone(),
-                    ScopeDef::Function(FunctionDef {
+                    ScopeDef::Function(FunctionDef::Def {
                         stmt: InFile {
                             file: self.file,
                             value: stmt,

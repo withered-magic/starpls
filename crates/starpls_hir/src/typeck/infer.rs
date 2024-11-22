@@ -24,6 +24,7 @@ use crate::def::codeflow::FlowNodeId;
 use crate::def::resolver::Export;
 use crate::def::resolver::Resolver;
 use crate::def::scope::ExecutionScopeId;
+use crate::def::scope::FunctionDef;
 use crate::def::scope::LoadItemDef;
 use crate::def::scope::ParameterDef;
 use crate::def::scope::ScopeDef;
@@ -446,8 +447,8 @@ impl TyContext<'_> {
 
                 match callee_ty.kind() {
                     TyKind::Function(def) => {
-                        let module = module(db, def.func.file(db));
-                        let params = def.func.params(db).iter().copied();
+                        let module = module(db, def.func().file(db));
+                        let params = def.func().params(db).iter().copied();
                         let mut slots: Slots = params
                             .clone()
                             .map(|param| module[param].clone())
@@ -465,7 +466,7 @@ impl TyContext<'_> {
                         for (param, slot) in params.zip(slots.into_inner()) {
                             let hir_param = &module[param];
                             let param_ty =
-                                resolve_type_ref_opt(self, hir_param.type_ref(), Some(def.stmt));
+                                resolve_type_ref_opt(self, hir_param.type_ref(), def.stmt());
 
                             // TODO(withered-magic): Deduplicate the following logic for
                             // validating providers, as it's currently shared between
@@ -515,9 +516,9 @@ impl TyContext<'_> {
                             self.add_expr_diagnostic_error(file, expr, message);
                         }
 
-                        def.func
+                        def.func()
                             .ret_type_ref(db)
-                            .map(|type_ref| resolve_type_ref(self, &type_ref, Some(def.stmt)).0)
+                            .map(|type_ref| resolve_type_ref(self, &type_ref, def.stmt()).0)
                             .unwrap_or_else(|| self.unknown_ty())
                     }
                     TyKind::IntrinsicFunction(func, subst) => {
@@ -805,6 +806,9 @@ impl TyContext<'_> {
                 }
             }
             Expr::Paren { expr } => self.infer_expr(file, *expr),
+            Expr::Lambda { func, .. } => {
+                TyKind::Function(FunctionDef::Lambda { func: *func }).intern()
+            }
             _ => self.unknown_ty(),
         };
         self.set_expr_type(file, expr, ty)
@@ -1841,8 +1845,8 @@ impl TyContext<'_> {
                 let callee_ty = self.infer_expr(file, *callee);
                 let mut slots: Slots = match callee_ty.kind() {
                     TyKind::Function(def) => {
-                        let module = module(db, def.func.file(db));
-                        let params = def.func.params(db).iter().copied();
+                        let module = module(db, def.func().file(db));
+                        let params = def.func().params(db).iter().copied();
                         params
                             .clone()
                             .map(|param| module[param].clone())

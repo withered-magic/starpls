@@ -137,10 +137,10 @@ impl DisplayWithDb for TyKind {
             }
             TyKind::Range => "range",
             TyKind::Function(def) => {
-                let module = module(db, def.func.file(db));
-                write!(f, "def {}(", def.func.name(db).as_str())?;
+                let module = module(db, def.func().file(db));
+                write!(f, "def {}(", def.func().name(db).as_str())?;
                 for (i, param) in def
-                    .func
+                    .func()
                     .params(db)
                     .iter()
                     .map(|param| &module[*param])
@@ -151,8 +151,7 @@ impl DisplayWithDb for TyKind {
                     }
 
                     let format_type_ref = |f, type_ref| {
-                        with_tcx(db, |tcx| resolve_type_ref(tcx, type_ref, Some(def.stmt)).0)
-                            .fmt(db, f)
+                        with_tcx(db, |tcx| resolve_type_ref(tcx, type_ref, def.stmt()).0).fmt(db, f)
                     };
 
                     match param {
@@ -190,7 +189,7 @@ impl DisplayWithDb for TyKind {
                 return write!(
                     f,
                     ") -> {}",
-                    def.func.ret_type_ref(db).unwrap_or(TypeRef::Unknown)
+                    def.func().ret_type_ref(db).unwrap_or(TypeRef::Unknown)
                 );
             }
             TyKind::IntrinsicFunction(func, subst) => {

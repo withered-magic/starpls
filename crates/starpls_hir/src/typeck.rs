@@ -433,12 +433,12 @@ impl Ty {
         db: &'a dyn Db,
     ) -> Option<impl Iterator<Item = (Param, Ty)> + 'a> {
         Some(match self.kind() {
-            TyKind::Function(def) => Params::Simple(def.func.params(db).iter().enumerate().map(
+            TyKind::Function(def) => Params::Simple(def.func().params(db).iter().enumerate().map(
                 |(index, param)| {
-                    let file = def.func.file(db);
+                    let file = def.func().file(db);
                     let ty = with_tcx(db, |tcx| tcx.infer_param(file, *param));
                     let param = Param(ParamInner::Param {
-                        func: def.func,
+                        func: def.func(),
                         index,
                     });
                     (param, ty)
@@ -571,7 +571,7 @@ impl Ty {
 
     pub(crate) fn ret_ty(&self, db: &dyn Db) -> Option<Ty> {
         Some(match self.kind() {
-            TyKind::Function(def) => resolve_builtin_type_ref_opt(db, def.func.ret_type_ref(db)),
+            TyKind::Function(def) => resolve_builtin_type_ref_opt(db, def.func().ret_type_ref(db)),
             TyKind::IntrinsicFunction(func, subst) => func.ret_ty(db).substitute(&subst.args),
             TyKind::BuiltinFunction(func) => resolve_builtin_type_ref(db, func.ret_type_ref(db)).0,
             TyKind::Rule(_) => Ty::none(),

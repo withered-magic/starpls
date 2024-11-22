@@ -1,8 +1,7 @@
-use crate::{
-    cursor::{Cursor, CursorState},
-    LiteralKind::*,
-    TokenKind::*,
-};
+use crate::cursor::Cursor;
+use crate::cursor::CursorState;
+use crate::LiteralKind::*;
+use crate::TokenKind::*;
 
 mod cursor;
 

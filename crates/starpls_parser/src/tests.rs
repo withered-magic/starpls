@@ -1,9 +1,16 @@
-use std::{env, error, fmt::Write, fs, path::PathBuf};
+use std::env;
+use std::error;
+use std::fmt::Write;
+use std::fs;
+use std::path::PathBuf;
 
-use expect_test::{expect_file, ExpectFile};
+use expect_test::expect_file;
+use expect_test::ExpectFile;
 use runfiles::find_runfiles_dir;
 
-use crate::{parse, StrStep, StrWithTokens};
+use crate::parse;
+use crate::StrStep;
+use crate::StrWithTokens;
 
 fn check(input: &str, expected: ExpectFile) {
     let str_with_tokens = StrWithTokens::new(input);

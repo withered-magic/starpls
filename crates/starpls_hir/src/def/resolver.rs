@@ -1,25 +1,29 @@
-use std::{collections::hash_map::Entry, iter};
+use std::collections::hash_map::Entry;
+use std::iter;
 
 use rustc_hash::FxHashMap;
 use starpls_bazel::APIContext;
 use starpls_common::File;
-use starpls_syntax::{TextRange, TextSize};
+use starpls_syntax::TextRange;
+use starpls_syntax::TextSize;
 
-use crate::{
-    def::{
-        scope::{
-            module_scopes, ExecutionScopeId, FunctionDef, Scope, ScopeDef, ScopeHirId, ScopeId,
-            Scopes, VariableDef,
-        },
-        ExprId, ModuleSourceMap,
-    },
-    source_map,
-    typeck::{
-        builtins::{builtin_globals, APIGlobals},
-        intrinsics::intrinsic_functions,
-    },
-    Db, Name,
-};
+use crate::def::scope::module_scopes;
+use crate::def::scope::ExecutionScopeId;
+use crate::def::scope::FunctionDef;
+use crate::def::scope::Scope;
+use crate::def::scope::ScopeDef;
+use crate::def::scope::ScopeHirId;
+use crate::def::scope::ScopeId;
+use crate::def::scope::Scopes;
+use crate::def::scope::VariableDef;
+use crate::def::ExprId;
+use crate::def::ModuleSourceMap;
+use crate::source_map;
+use crate::typeck::builtins::builtin_globals;
+use crate::typeck::builtins::APIGlobals;
+use crate::typeck::intrinsics::intrinsic_functions;
+use crate::Db;
+use crate::Name;
 
 /// Resolves things like variables, function definition, etc. For now this is implemented as a simple list
 /// of "module" scopes that hold variable declarations, but will need to be updated later to support other

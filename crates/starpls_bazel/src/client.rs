@@ -1,11 +1,11 @@
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-    process::Command,
-    str,
-};
+use std::collections::HashMap;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
+use std::str;
 
-use anyhow::{anyhow, bail};
+use anyhow::anyhow;
+use anyhow::bail;
 use parking_lot::RwLock;
 use serde_json::Deserializer;
 

@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use crossbeam_channel::{RecvError, RecvTimeoutError, Sender};
+use crossbeam_channel::RecvError;
+use crossbeam_channel::RecvTimeoutError;
+use crossbeam_channel::Sender;
 use rustc_hash::FxHashSet;
 use starpls_common::FileId;
 

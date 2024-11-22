@@ -3,16 +3,19 @@
 //! but with a couple of modifications for handling "*args" and "**kwargs" arguments.
 use std::iter;
 
-use smallvec::{smallvec, SmallVec};
+use smallvec::smallvec;
+use smallvec::SmallVec;
 
-use crate::{
-    def::{Argument, Param},
-    typeck::{
-        builtins::BuiltinFunctionParam, intrinsics::IntrinsicFunctionParam, Provider, Rule,
-        TagClass,
-    },
-    Db, ExprId, Name,
-};
+use crate::def::Argument;
+use crate::def::Param;
+use crate::typeck::builtins::BuiltinFunctionParam;
+use crate::typeck::intrinsics::IntrinsicFunctionParam;
+use crate::typeck::Provider;
+use crate::typeck::Rule;
+use crate::typeck::TagClass;
+use crate::Db;
+use crate::ExprId;
+use crate::Name;
 
 pub(crate) struct ArgError {
     pub(crate) expr: ExprId,

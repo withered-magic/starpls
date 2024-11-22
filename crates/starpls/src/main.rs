@@ -1,10 +1,15 @@
 use check::run_check;
-use clap::{Args, Parser, Subcommand};
+use clap::Args;
+use clap::Parser;
+use clap::Subcommand;
 use lsp_server::Connection;
-use lsp_types::{
-    CompletionOptions, HoverProviderCapability, OneOf, ServerCapabilities, SignatureHelpOptions,
-    TextDocumentSyncCapability, TextDocumentSyncKind,
-};
+use lsp_types::CompletionOptions;
+use lsp_types::HoverProviderCapability;
+use lsp_types::OneOf;
+use lsp_types::ServerCapabilities;
+use lsp_types::SignatureHelpOptions;
+use lsp_types::TextDocumentSyncCapability;
+use lsp_types::TextDocumentSyncKind;
 
 mod check;
 mod config;

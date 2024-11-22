@@ -1,25 +1,46 @@
-use std::{fmt::Debug, panic, path::PathBuf, sync::Arc};
+use std::fmt::Debug;
+use std::panic;
+use std::path::PathBuf;
+use std::sync::Arc;
 
-use dashmap::{mapref::entry::Entry, DashMap};
+use dashmap::mapref::entry::Entry;
+use dashmap::DashMap;
 use rustc_hash::FxHashMap;
 use salsa::ParallelDatabase;
-use starpls_bazel::{APIContext, Builtins};
-use starpls_common::{
-    Db, Diagnostic, Dialect, File, FileId, FileInfo, LoadItemCandidate, ResolvedPath,
-};
-use starpls_hir::{BuiltinDefs, Db as _, GlobalContext};
-pub use starpls_hir::{Cancelled, InferenceOptions};
-use starpls_syntax::{LineIndex, TextRange, TextSize};
+use starpls_bazel::APIContext;
+use starpls_bazel::Builtins;
+use starpls_common::Db;
+use starpls_common::Diagnostic;
+use starpls_common::Dialect;
+use starpls_common::File;
+use starpls_common::FileId;
+use starpls_common::FileInfo;
+use starpls_common::LoadItemCandidate;
+use starpls_common::ResolvedPath;
+use starpls_hir::BuiltinDefs;
+pub use starpls_hir::Cancelled;
+use starpls_hir::Db as _;
+use starpls_hir::GlobalContext;
+pub use starpls_hir::InferenceOptions;
+use starpls_syntax::LineIndex;
+use starpls_syntax::TextRange;
+use starpls_syntax::TextSize;
 use starpls_test_util::make_test_builtins;
 
-pub use crate::{
-    completions::{
-        CompletionItem, CompletionItemKind, CompletionMode, Edit, InsertReplaceEdit, TextEdit,
-    },
-    document_symbols::{DocumentSymbol, SymbolKind, SymbolTag},
-    hover::{Hover, Markup},
-    signature_help::{ParameterInfo, SignatureHelp, SignatureInfo},
-};
+pub use crate::completions::CompletionItem;
+pub use crate::completions::CompletionItemKind;
+pub use crate::completions::CompletionMode;
+pub use crate::completions::Edit;
+pub use crate::completions::InsertReplaceEdit;
+pub use crate::completions::TextEdit;
+pub use crate::document_symbols::DocumentSymbol;
+pub use crate::document_symbols::SymbolKind;
+pub use crate::document_symbols::SymbolTag;
+pub use crate::hover::Hover;
+pub use crate::hover::Markup;
+pub use crate::signature_help::ParameterInfo;
+pub use crate::signature_help::SignatureHelp;
+pub use crate::signature_help::SignatureInfo;
 
 mod completions;
 mod diagnostics;

@@ -1,34 +1,79 @@
 use std::sync::Arc;
 
-use either::Either;
-use starpls_common::{line_index, parse, Diagnostic, File, FileRange, InFile, Severity};
-use starpls_syntax::{
-    ast::{self, ArithOp, AstNode, AstPtr, BinaryOp, BitwiseOp, LogicOp, UnaryOp},
-    TextRange,
-};
+use starpls_common::line_index;
+use starpls_common::parse;
+use starpls_common::Diagnostic;
+use starpls_common::File;
+use starpls_common::FileRange;
+use starpls_common::InFile;
+use starpls_common::Severity;
+use starpls_syntax::ast::ArithOp;
+use starpls_syntax::ast::AstNode;
+use starpls_syntax::ast::AstPtr;
+use starpls_syntax::ast::BinaryOp;
+use starpls_syntax::ast::BitwiseOp;
+use starpls_syntax::ast::LogicOp;
+use starpls_syntax::ast::UnaryOp;
+use starpls_syntax::ast::{self};
+use starpls_syntax::TextRange;
 
-use crate::{
-    def::{
-        codeflow::{code_flow_graph, CodeFlowGraph, FlowNode, FlowNodeId},
-        resolver::{Export, Resolver},
-        scope::{ExecutionScopeId, LoadItemDef, ParameterDef, ScopeDef, ScopeHirId, VariableDef},
-        Argument, Expr, ExprId, Literal, LiteralString, LoadItem, LoadItemId, LoadStmt, Param,
-        ParamId, Stmt, StmtId,
-    },
-    display::DisplayWithDb,
-    module, source_map,
-    typeck::{
-        assign_tys,
-        builtins::builtin_types,
-        call::{Slot, SlotProvider, Slots},
-        intrinsics::{IntrinsicFunctionParam, IntrinsicTypes},
-        resolve_builtin_type_ref, resolve_type_ref, resolve_type_ref_opt, CodeFlowCacheKey,
-        DictLiteral, FileExprId, FileLoadItemId, FileLoadStmt, FileParamId, Protocol, Provider,
-        RuleKind, Struct, Substitution, Tuple, Ty, TyContext, TyData, TyKind, TypeRef,
-        TypecheckCancelled,
-    },
-    Name,
-};
+use crate::def::codeflow::code_flow_graph;
+use crate::def::codeflow::CodeFlowGraph;
+use crate::def::codeflow::FlowNode;
+use crate::def::codeflow::FlowNodeId;
+use crate::def::resolver::Export;
+use crate::def::resolver::Resolver;
+use crate::def::scope::ExecutionScopeId;
+use crate::def::scope::FunctionDef;
+use crate::def::scope::LoadItemDef;
+use crate::def::scope::ParameterDef;
+use crate::def::scope::ScopeDef;
+use crate::def::scope::ScopeHirId;
+use crate::def::scope::VariableDef;
+use crate::def::Argument;
+use crate::def::Expr;
+use crate::def::ExprId;
+use crate::def::Literal;
+use crate::def::LiteralString;
+use crate::def::LoadItem;
+use crate::def::LoadItemId;
+use crate::def::LoadStmt;
+use crate::def::Param;
+use crate::def::ParamId;
+use crate::def::Stmt;
+use crate::def::StmtId;
+use crate::display::DisplayWithDb;
+use crate::module;
+use crate::source_map;
+use crate::typeck::assign_tys;
+use crate::typeck::builtins::builtin_types;
+use crate::typeck::call::Slot;
+use crate::typeck::call::SlotProvider;
+use crate::typeck::call::Slots;
+use crate::typeck::intrinsics::IntrinsicFunctionParam;
+use crate::typeck::intrinsics::IntrinsicTypes;
+use crate::typeck::resolve_builtin_type_ref;
+use crate::typeck::resolve_type_ref;
+use crate::typeck::resolve_type_ref_opt;
+use crate::typeck::CodeFlowCacheKey;
+use crate::typeck::DictLiteral;
+use crate::typeck::FileExprId;
+use crate::typeck::FileLoadItemId;
+use crate::typeck::FileLoadStmt;
+use crate::typeck::FileParamId;
+use crate::typeck::Protocol;
+use crate::typeck::Provider;
+use crate::typeck::RuleKind;
+use crate::typeck::Struct;
+use crate::typeck::Substitution;
+use crate::typeck::Tuple;
+use crate::typeck::Ty;
+use crate::typeck::TyContext;
+use crate::typeck::TyData;
+use crate::typeck::TyKind;
+use crate::typeck::TypeRef;
+use crate::typeck::TypecheckCancelled;
+use crate::Name;
 
 impl TyContext<'_> {
     pub fn infer_all_exprs(&mut self, file: File) {
@@ -402,8 +447,8 @@ impl TyContext<'_> {
 
                 match callee_ty.kind() {
                     TyKind::Function(def) => {
-                        let module = module(db, def.func.file(db));
-                        let params = def.func.params(db).iter().copied();
+                        let module = module(db, def.func().file(db));
+                        let params = def.func().params(db).iter().copied();
                         let mut slots: Slots = params
                             .clone()
                             .map(|param| module[param].clone())
@@ -421,7 +466,7 @@ impl TyContext<'_> {
                         for (param, slot) in params.zip(slots.into_inner()) {
                             let hir_param = &module[param];
                             let param_ty =
-                                resolve_type_ref_opt(self, hir_param.type_ref(), Some(def.stmt));
+                                resolve_type_ref_opt(self, hir_param.type_ref(), def.stmt());
 
                             // TODO(withered-magic): Deduplicate the following logic for
                             // validating providers, as it's currently shared between
@@ -471,9 +516,9 @@ impl TyContext<'_> {
                             self.add_expr_diagnostic_error(file, expr, message);
                         }
 
-                        def.func
+                        def.func()
                             .ret_type_ref(db)
-                            .map(|type_ref| resolve_type_ref(self, &type_ref, Some(def.stmt)).0)
+                            .map(|type_ref| resolve_type_ref(self, &type_ref, def.stmt()).0)
                             .unwrap_or_else(|| self.unknown_ty())
                     }
                     TyKind::IntrinsicFunction(func, subst) => {
@@ -761,6 +806,9 @@ impl TyContext<'_> {
                 }
             }
             Expr::Paren { expr } => self.infer_expr(file, *expr),
+            Expr::Lambda { func, .. } => {
+                TyKind::Function(FunctionDef::Lambda { func: *func }).intern()
+            }
             _ => self.unknown_ty(),
         };
         self.set_expr_type(file, expr, ty)
@@ -1106,19 +1154,9 @@ impl TyContext<'_> {
                             }
                         }
                         ScopeDef::Function(def) => TyKind::Function(def.clone()).intern(),
-                        ScopeDef::Parameter(ParameterDef { parent, index }) => match parent {
-                            Either::Left(parent) => {
-                                self.infer_param(file, parent.params(self.db)[*index])
-                            }
-                            Either::Right(parent) => {
-                                match &module(self.db, parent.file)[parent.value] {
-                                    Expr::Lambda { params, .. } => {
-                                        self.infer_param(parent.file, params[*index])
-                                    }
-                                    _ => return None,
-                                }
-                            }
-                        },
+                        ScopeDef::Parameter(ParameterDef { func, index }) => {
+                            self.infer_param(file, func.params(self.db)[*index])
+                        }
                         ScopeDef::LoadItem(LoadItemDef { load_item, .. }) => {
                             self.infer_load_item(file, *load_item)
                         }
@@ -1807,8 +1845,8 @@ impl TyContext<'_> {
                 let callee_ty = self.infer_expr(file, *callee);
                 let mut slots: Slots = match callee_ty.kind() {
                     TyKind::Function(def) => {
-                        let module = module(db, def.func.file(db));
-                        let params = def.func.params(db).iter().copied();
+                        let module = module(db, def.func().file(db));
+                        let params = def.func().params(db).iter().copied();
                         params
                             .clone()
                             .map(|param| module[param].clone())

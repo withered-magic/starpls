@@ -1,29 +1,48 @@
 use std::sync::Arc;
 
-use either::Either;
 use smallvec::SmallVec;
-use starpls_common::{parse, Diagnostic, Diagnostics, File, InFile};
-use starpls_syntax::{
-    ast::{self, AstNode, AstPtr, SyntaxNodePtr},
-    TextSize, T,
-};
+use starpls_common::parse;
+use starpls_common::Diagnostic;
+use starpls_common::Diagnostics;
+use starpls_common::File;
+use starpls_common::InFile;
+use starpls_syntax::ast::AstNode;
+use starpls_syntax::ast::AstPtr;
+use starpls_syntax::ast::SyntaxNodePtr;
+use starpls_syntax::ast::{self};
+use starpls_syntax::TextSize;
+use starpls_syntax::T;
 
-pub use crate::typeck::{Field, Param};
-use crate::{
-    def::{
-        self,
-        resolver::Resolver,
-        scope::{self, module_scopes, FunctionDef, ParameterDef},
-        LoadItemId, Stmt,
-    },
-    module, source_map,
-    typeck::{
-        self, builtins::BuiltinFunction, intrinsics::IntrinsicFunction, resolve_type_ref, with_tcx,
-        FieldInner, ParamInner, Provider, Struct as DefStruct, Substitution, TagClass, Tuple, Ty,
-        TypeRef,
-    },
-    Db, ExprId, Name, TyKind,
-};
+use crate::def::resolver::Resolver;
+use crate::def::scope::module_scopes;
+use crate::def::scope::FunctionDef;
+use crate::def::scope::ParameterDef;
+use crate::def::scope::{self};
+use crate::def::LoadItemId;
+use crate::def::Stmt;
+use crate::def::{self};
+use crate::module;
+use crate::source_map;
+use crate::typeck::builtins::BuiltinFunction;
+use crate::typeck::intrinsics::IntrinsicFunction;
+use crate::typeck::resolve_type_ref;
+use crate::typeck::with_tcx;
+pub use crate::typeck::Field;
+use crate::typeck::FieldInner;
+pub use crate::typeck::Param;
+use crate::typeck::ParamInner;
+use crate::typeck::Provider;
+use crate::typeck::Struct as DefStruct;
+use crate::typeck::Substitution;
+use crate::typeck::TagClass;
+use crate::typeck::Tuple;
+use crate::typeck::Ty;
+use crate::typeck::TypeRef;
+use crate::typeck::{self};
+use crate::Db;
+use crate::ExprId;
+use crate::Name;
+use crate::TyKind;
 
 const TARGET_DOC: &str = "The BUILD target for a dependency. Appears in the fields of `ctx.attr` corresponding to dependency attributes (`label` or `label_list`).";
 
@@ -45,9 +64,9 @@ impl<'a> Semantics<'a> {
         let stmt = source_map(self.db, file).stmt_map.get(&ptr)?;
         match &module(self.db, file)[*stmt] {
             Stmt::Def { func, .. } => Some(
-                FunctionDef {
-                    stmt: InFile { file, value: *stmt },
+                FunctionDef::Def {
                     func: *func,
+                    stmt: InFile { file, value: *stmt },
                 }
                 .into(),
             ),
@@ -242,7 +261,7 @@ impl ScopeDef {
     pub fn syntax_node_ptr(&self, db: &dyn Db, file: File) -> Option<SyntaxNodePtr> {
         let source_map = source_map(db, file);
         match self {
-            ScopeDef::Callable(Callable(CallableInner::HirDef(def))) => Some(def.func.ptr(db)),
+            ScopeDef::Callable(Callable(CallableInner::HirDef(def))) => Some(def.func().ptr(db)),
             ScopeDef::Variable(Variable {
                 id: Some((_, expr)),
             }) => source_map
@@ -298,11 +317,8 @@ impl From<scope::ScopeDef> for ScopeDef {
                 )),
                 _ => ScopeDef::Variable(Variable { id: None }),
             },
-            scope::ScopeDef::Parameter(ParameterDef { parent, index }) => {
-                ScopeDef::Parameter(Param(match parent {
-                    Either::Left(parent) => ParamInner::Param { parent, index },
-                    Either::Right(parent) => ParamInner::LambdaParam { parent, index },
-                }))
+            scope::ScopeDef::Parameter(ParameterDef { func, index }) => {
+                ScopeDef::Parameter(Param(ParamInner::Param { func, index }))
             }
             scope::ScopeDef::LoadItem(it) => ScopeDef::LoadItem(LoadItem {
                 file: it.file,
@@ -389,7 +405,7 @@ impl Type {
         match self.ty.kind() {
             TyKind::BuiltinFunction(func) => Some(func.doc(db).clone()),
             TyKind::BuiltinType(ty, _) => Some(ty.doc(db).clone()),
-            TyKind::Function(def) => def.func.doc(db).map(|doc| doc.to_string()),
+            TyKind::Function(def) => def.func().doc(db).map(|doc| doc.to_string()),
             TyKind::IntrinsicFunction(func, _) => Some(func.doc(db).clone()),
             TyKind::Rule(rule) => rule.doc.as_ref().map(Box::to_string),
             TyKind::Provider(provider) | TyKind::ProviderInstance(provider) => provider.doc(db),
@@ -500,7 +516,7 @@ pub struct Callable(CallableInner);
 impl Callable {
     pub fn name(&self, db: &dyn Db) -> Name {
         match self.0 {
-            CallableInner::HirDef(ref def) => def.func.name(db),
+            CallableInner::HirDef(ref def) => def.func().name(db),
             CallableInner::IntrinsicFunction(func, _) => func.name(db),
             CallableInner::BuiltinFunction(func) => func.name(db),
             CallableInner::Rule(_) => Name::new_inline("rule"),
@@ -548,7 +564,7 @@ impl Callable {
 
     pub fn doc(&self, db: &dyn Db) -> Option<String> {
         match self.0 {
-            CallableInner::HirDef(ref def) => def.func.doc(db).map(|doc| doc.to_string()),
+            CallableInner::HirDef(ref def) => def.func().doc(db).map(|doc| doc.to_string()),
             CallableInner::BuiltinFunction(func) => Some(func.doc(db).clone()),
             CallableInner::IntrinsicFunction(func, _) => Some(func.doc(db).clone()),
             CallableInner::Rule(ref ty) => match ty.kind() {

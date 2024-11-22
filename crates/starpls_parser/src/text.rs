@@ -1,11 +1,16 @@
 use std::mem;
 
-use starpls_lexer::{
-    unescape::{unescape_byte_string, unescape_string, EscapeError},
-    LiteralKind, Token, TokenKind,
-};
+use starpls_lexer::unescape::unescape_byte_string;
+use starpls_lexer::unescape::unescape_string;
+use starpls_lexer::unescape::EscapeError;
+use starpls_lexer::LiteralKind;
+use starpls_lexer::Token;
+use starpls_lexer::TokenKind;
 
-use crate::{step::Step, syntax_kind::SyntaxKind, Input, Output};
+use crate::step::Step;
+use crate::syntax_kind::SyntaxKind;
+use crate::Input;
+use crate::Output;
 
 pub enum StrStep<'a> {
     Start {

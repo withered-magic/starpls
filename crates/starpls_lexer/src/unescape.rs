@@ -1,4 +1,5 @@
-use std::{ops::Range, str::Chars};
+use std::ops::Range;
+use std::str::Chars;
 
 #[cfg(test)]
 mod tests;

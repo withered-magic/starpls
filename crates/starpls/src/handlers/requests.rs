@@ -1,16 +1,16 @@
 use anyhow::Ok;
-use starpls_ide::{
-    CompletionItemKind,
-    CompletionMode::{InsertText, TextEdit},
-    Edit, FilePosition,
-};
+use starpls_ide::CompletionItemKind;
+use starpls_ide::CompletionMode::InsertText;
+use starpls_ide::CompletionMode::TextEdit;
+use starpls_ide::Edit;
+use starpls_ide::FilePosition;
 
-use crate::{
-    convert::{self, path_buf_from_url},
-    extensions::{ShowHirParams, ShowSyntaxTreeParams},
-    server::ServerSnapshot,
-    utils::response_from_locations,
-};
+use crate::convert::path_buf_from_url;
+use crate::convert::{self};
+use crate::extensions::ShowHirParams;
+use crate::extensions::ShowSyntaxTreeParams;
+use crate::server::ServerSnapshot;
+use crate::utils::response_from_locations;
 
 macro_rules! try_opt {
     ($expr:expr) => {

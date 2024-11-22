@@ -1,11 +1,18 @@
-use std::{fmt::Debug, path::PathBuf};
+use std::fmt::Debug;
+use std::path::PathBuf;
 
 use starpls_bazel::APIContext;
-use starpls_syntax::{
-    line_index as syntax_line_index, parse_module, LineIndex, Module, ParseTree, SyntaxNode,
-};
+use starpls_syntax::line_index as syntax_line_index;
+use starpls_syntax::parse_module;
+use starpls_syntax::LineIndex;
+use starpls_syntax::Module;
+use starpls_syntax::ParseTree;
+use starpls_syntax::SyntaxNode;
 
-pub use crate::diagnostics::{Diagnostic, Diagnostics, FileRange, Severity};
+pub use crate::diagnostics::Diagnostic;
+pub use crate::diagnostics::Diagnostics;
+pub use crate::diagnostics::FileRange;
+pub use crate::diagnostics::Severity;
 
 mod diagnostics;
 mod util;

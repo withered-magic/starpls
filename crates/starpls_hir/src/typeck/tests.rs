@@ -1,15 +1,23 @@
-use std::{cmp::Ordering, fmt::Write};
+use std::cmp::Ordering;
+use std::fmt::Write;
 
-use expect_test::{expect, Expect};
+use expect_test::expect;
+use expect_test::Expect;
 use itertools::Itertools;
 use starpls_bazel::APIContext;
-use starpls_common::{parse, Db as _, Dialect, FileId, FileInfo};
+use starpls_common::parse;
+use starpls_common::Db as _;
+use starpls_common::Dialect;
+use starpls_common::FileId;
+use starpls_common::FileInfo;
 use starpls_syntax::ast::AstNode;
 use starpls_test_util::FixtureType;
 
-use crate::{
-    source_map, test_database::TestDatabaseBuilder, Db as _, DisplayWithDb, InferenceOptions,
-};
+use crate::source_map;
+use crate::test_database::TestDatabaseBuilder;
+use crate::Db as _;
+use crate::DisplayWithDb;
+use crate::InferenceOptions;
 
 fn check_infer(input: &str, expect: Expect) {
     check_infer_with_options(input, expect, Default::default())
@@ -1569,7 +1577,7 @@ lambda x, y, z: x + y + z
             17..22 "x + y": Unknown
             25..26 "z": Unknown
             17..26 "x + y + z": Unknown
-            1..26 "lambda x, y, z: x + y + z": Unknown
+            1..26 "lambda x, y, z: x + y + z": def lambda(x, y, z) -> Unknown
         "#]],
     );
 }

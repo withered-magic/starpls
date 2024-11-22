@@ -1,4 +1,6 @@
-use starpls_common::{Db, Diagnostic, FileId};
+use starpls_common::Db;
+use starpls_common::Diagnostic;
+use starpls_common::FileId;
 use starpls_hir::diagnostics_for_file;
 
 use crate::Database;

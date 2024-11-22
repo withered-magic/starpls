@@ -1,14 +1,23 @@
 //! Partially replicates the "completions" API in the LSP specification.
 
 use rustc_hash::FxHashMap;
-use starpls_common::{parse, FileId, LoadItemCandidateKind};
-use starpls_hir::{Db, Name, Param, ScopeDef, Semantics, Type};
-use starpls_syntax::{
-    ast::{self, AstNode, AstToken},
-    parse_module,
-    SyntaxKind::*,
-    SyntaxNode, TextRange, TextSize,
-};
+use starpls_common::parse;
+use starpls_common::FileId;
+use starpls_common::LoadItemCandidateKind;
+use starpls_hir::Db;
+use starpls_hir::Name;
+use starpls_hir::Param;
+use starpls_hir::ScopeDef;
+use starpls_hir::Semantics;
+use starpls_hir::Type;
+use starpls_syntax::ast::AstNode;
+use starpls_syntax::ast::AstToken;
+use starpls_syntax::ast::{self};
+use starpls_syntax::parse_module;
+use starpls_syntax::SyntaxKind::*;
+use starpls_syntax::SyntaxNode;
+use starpls_syntax::TextRange;
+use starpls_syntax::TextSize;
 
 use crate::FilePosition;
 
@@ -339,6 +348,7 @@ fn add_keywords(items: &mut Vec<CompletionItem>, is_in_def: bool, is_in_for: boo
     add_keyword("for");
     add_keyword("load");
     add_keyword("pass");
+    add_keyword("lambda");
 
     if is_in_def {
         add_keyword("return");

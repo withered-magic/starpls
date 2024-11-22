@@ -1,16 +1,25 @@
 use starpls_bazel::Builtins;
-use starpls_common::{parse, Dialect, File, FileId, Parse};
+use starpls_common::parse;
+use starpls_common::Dialect;
+use starpls_common::File;
+use starpls_common::FileId;
+use starpls_common::Parse;
 
-pub use crate::{
-    api::*,
-    def::Name,
-    display::{DisplayWithDb, DisplayWithDbWrapper},
-    typeck::{builtins::BuiltinDefs, Cancelled, GlobalContext, InferenceOptions, Ty, TyContext},
-};
-use crate::{
-    def::{ExprId, Module, ModuleSourceMap},
-    typeck::{TyKind, TypeRef},
-};
+pub use crate::api::*;
+use crate::def::ExprId;
+use crate::def::Module;
+use crate::def::ModuleSourceMap;
+pub use crate::def::Name;
+pub use crate::display::DisplayWithDb;
+pub use crate::display::DisplayWithDbWrapper;
+pub use crate::typeck::builtins::BuiltinDefs;
+pub use crate::typeck::Cancelled;
+pub use crate::typeck::GlobalContext;
+pub use crate::typeck::InferenceOptions;
+pub use crate::typeck::Ty;
+pub use crate::typeck::TyContext;
+use crate::typeck::TyKind;
+use crate::typeck::TypeRef;
 
 mod api;
 mod def;

@@ -1,15 +1,23 @@
-use std::{fmt::Write, fs, path::PathBuf, process, sync::Arc};
+use std::fmt::Write;
+use std::fs;
+use std::path::PathBuf;
+use std::process;
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use rustc_hash::FxHashMap;
-use starpls_bazel::client::{BazelCLI, BazelClient};
-use starpls_common::{FileInfo, Severity};
-use starpls_ide::{Analysis, Change};
+use starpls_bazel::client::BazelCLI;
+use starpls_bazel::client::BazelClient;
+use starpls_common::FileInfo;
+use starpls_common::Severity;
+use starpls_ide::Analysis;
+use starpls_ide::Change;
 
-use crate::{
-    document::{self, DefaultFileLoader, PathInterner},
-    server::{load_bazel_build_language, load_bazel_builtins},
-};
+use crate::document::DefaultFileLoader;
+use crate::document::PathInterner;
+use crate::document::{self};
+use crate::server::load_bazel_build_language;
+use crate::server::load_bazel_builtins;
 
 pub(crate) fn run_check(paths: Vec<String>, output_base: Option<String>) -> anyhow::Result<()> {
     let bazel_client = Arc::new(BazelCLI::default());

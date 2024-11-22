@@ -1,4 +1,5 @@
-use std::{collections::HashMap, mem};
+use std::collections::HashMap;
+use std::mem;
 
 use lsp_types::Diagnostic;
 use starpls_common::FileId;

@@ -1,16 +1,36 @@
-use std::collections::{hash_map::Entry, VecDeque};
+use std::collections::hash_map::Entry;
+use std::collections::VecDeque;
 
 use either::Either;
-use id_arena::{Arena, Id};
+use id_arena::Arena;
+use id_arena::Id;
 use rustc_hash::FxHashMap;
-use starpls_common::{Diagnostic, Diagnostics, File, FileRange, InFile, Severity};
+use starpls_common::Diagnostic;
+use starpls_common::Diagnostics;
+use starpls_common::File;
+use starpls_common::FileRange;
+use starpls_common::InFile;
+use starpls_common::Severity;
 
-use crate::{
-    def::{CompClause, Expr, ExprId, Function, LoadItem, LoadItemId, Param, ParamId, Stmt, StmtId},
-    lower,
-    typeck::{builtins::BuiltinFunction, intrinsics::IntrinsicFunction, TypeRef},
-    Db, Module, ModuleInfo, ModuleSourceMap, Name,
-};
+use crate::def::CompClause;
+use crate::def::Expr;
+use crate::def::ExprId;
+use crate::def::Function;
+use crate::def::LoadItem;
+use crate::def::LoadItemId;
+use crate::def::Param;
+use crate::def::ParamId;
+use crate::def::Stmt;
+use crate::def::StmtId;
+use crate::lower;
+use crate::typeck::builtins::BuiltinFunction;
+use crate::typeck::intrinsics::IntrinsicFunction;
+use crate::typeck::TypeRef;
+use crate::Db;
+use crate::Module;
+use crate::ModuleInfo;
+use crate::ModuleSourceMap;
+use crate::Name;
 
 pub(crate) type ScopeId = Id<Scope>;
 
@@ -61,7 +81,7 @@ pub(crate) struct VariableDef {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ParameterDef {
     pub(crate) index: usize,
-    pub(crate) parent: Either<Function, InFile<ExprId>>,
+    pub(crate) func: Function,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -71,9 +91,30 @@ pub(crate) struct LoadItemDef {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct FunctionDef {
-    pub(crate) stmt: InFile<StmtId>,
-    pub(crate) func: Function,
+pub(crate) enum FunctionDef {
+    Def {
+        func: Function,
+        stmt: InFile<StmtId>,
+    },
+    Lambda {
+        func: Function,
+    },
+}
+
+impl FunctionDef {
+    pub(crate) fn func(&self) -> Function {
+        match self {
+            FunctionDef::Def { func, .. } => *func,
+            FunctionDef::Lambda { func } => *func,
+        }
+    }
+
+    pub(crate) fn stmt(&self) -> Option<InFile<StmtId>> {
+        match self {
+            FunctionDef::Def { stmt, .. } => Some(*stmt),
+            FunctionDef::Lambda { .. } => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -224,7 +265,7 @@ impl ScopeCollector<'_> {
                             name.clone(),
                             ScopeDef::Parameter(ParameterDef {
                                 index,
-                                parent: either::Left(data.func),
+                                func: data.func,
                             }),
                         );
                     }
@@ -276,7 +317,7 @@ impl ScopeCollector<'_> {
                 self.scopes.add_decl(
                     *current,
                     func.name(self.db).clone(),
-                    ScopeDef::Function(FunctionDef {
+                    ScopeDef::Function(FunctionDef::Def {
                         stmt: InFile {
                             file: self.file,
                             value: stmt,
@@ -409,10 +450,10 @@ impl ScopeCollector<'_> {
                 Expr::Name { .. } => {
                     self.record_expr_scope(expr, current);
                 }
-                Expr::Lambda { params, body } => {
+                Expr::Lambda { func, body } => {
                     self.with_execution_scope(ExecutionScopeId::Lambda(expr), |this| {
                         let scope = this.alloc_scope(current);
-                        for (index, param) in params.iter().copied().enumerate() {
+                        for (index, param) in func.params(self.db).iter().copied().enumerate() {
                             match &this.module.params[param] {
                                 Param::Simple { name, .. }
                                 | Param::ArgsList { name, .. }
@@ -420,13 +461,7 @@ impl ScopeCollector<'_> {
                                     this.scopes.add_decl(
                                         scope,
                                         name.clone(),
-                                        ScopeDef::Parameter(ParameterDef {
-                                            parent: Either::Right(InFile {
-                                                file: this.file,
-                                                value: expr,
-                                            }),
-                                            index,
-                                        }),
+                                        ScopeDef::Parameter(ParameterDef { func: *func, index }),
                                     );
                                 }
                             }

@@ -1,14 +1,22 @@
-use std::fmt::{self, Display, Write};
+use std::fmt::Display;
+use std::fmt::Write;
+use std::fmt::{self};
 
-use crate::{
-    def::Param as HirDefParam,
-    module,
-    typeck::{
-        builtins::BuiltinFunctionParam, intrinsics::IntrinsicFunctionParam, resolve_type_ref,
-        with_tcx, Protocol, RuleKind, Tuple, TyKind, TypeRef,
-    },
-    Db, Name, Ty, Type,
-};
+use crate::def::Param as HirDefParam;
+use crate::module;
+use crate::typeck::builtins::BuiltinFunctionParam;
+use crate::typeck::intrinsics::IntrinsicFunctionParam;
+use crate::typeck::resolve_type_ref;
+use crate::typeck::with_tcx;
+use crate::typeck::Protocol;
+use crate::typeck::RuleKind;
+use crate::typeck::Tuple;
+use crate::typeck::TyKind;
+use crate::typeck::TypeRef;
+use crate::Db;
+use crate::Name;
+use crate::Ty;
+use crate::Type;
 
 pub trait DisplayWithDb {
     fn fmt(&self, db: &dyn Db, f: &mut fmt::Formatter<'_>) -> fmt::Result;
@@ -129,10 +137,10 @@ impl DisplayWithDb for TyKind {
             }
             TyKind::Range => "range",
             TyKind::Function(def) => {
-                let module = module(db, def.func.file(db));
-                write!(f, "def {}(", def.func.name(db).as_str())?;
+                let module = module(db, def.func().file(db));
+                write!(f, "def {}(", def.func().name(db).as_str())?;
                 for (i, param) in def
-                    .func
+                    .func()
                     .params(db)
                     .iter()
                     .map(|param| &module[*param])
@@ -143,8 +151,7 @@ impl DisplayWithDb for TyKind {
                     }
 
                     let format_type_ref = |f, type_ref| {
-                        with_tcx(db, |tcx| resolve_type_ref(tcx, type_ref, Some(def.stmt)).0)
-                            .fmt(db, f)
+                        with_tcx(db, |tcx| resolve_type_ref(tcx, type_ref, def.stmt()).0).fmt(db, f)
                     };
 
                     match param {
@@ -182,7 +189,7 @@ impl DisplayWithDb for TyKind {
                 return write!(
                     f,
                     ") -> {}",
-                    def.func.ret_type_ref(db).unwrap_or(TypeRef::Unknown)
+                    def.func().ret_type_ref(db).unwrap_or(TypeRef::Unknown)
                 );
             }
             TyKind::IntrinsicFunction(func, subst) => {

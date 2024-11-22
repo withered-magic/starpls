@@ -1,11 +1,14 @@
 use std::ops::Range;
 
 use anyhow::format_err;
-use line_index::{LineIndex, WideEncoding, WideLineCol};
+use line_index::LineIndex;
+use line_index::WideEncoding;
+use line_index::WideLineCol;
 use starpls_common::FileId;
 use starpls_ide::LocationLink;
 
-use crate::{convert, server::ServerSnapshot};
+use crate::convert;
+use crate::server::ServerSnapshot;
 
 pub(crate) fn text_offset(
     line_index: &LineIndex,

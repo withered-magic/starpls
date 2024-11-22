@@ -1,4 +1,5 @@
-use crate::{grammar::*, syntax_kind::SyntaxKindSet};
+use crate::grammar::*;
+use crate::syntax_kind::SyntaxKindSet;
 
 pub(crate) const PARAMETER_START: SyntaxKindSet = SyntaxKindSet::new(&[T![ident], T![*], T![**]]);
 

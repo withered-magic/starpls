@@ -1,4 +1,5 @@
-use crate::{grammar::*, syntax_kind::SyntaxKindSet};
+use crate::grammar::*;
+use crate::syntax_kind::SyntaxKindSet;
 
 pub(crate) const ARGUMENT_START: SyntaxKindSet =
     EXPR_START.union(SyntaxKindSet::new(&[T![**], T![*]]));

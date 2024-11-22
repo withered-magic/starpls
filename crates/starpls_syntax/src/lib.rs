@@ -1,12 +1,15 @@
-pub use {
-    crate::{
-        ast::Module,
-        parser::{line_index, parse_module, ParseTree, SyntaxError},
-    },
-    line_index::LineIndex,
-    rowan::{TextRange, TextSize, TokenAtOffset},
-    starpls_parser::{SyntaxKind, T},
-};
+pub use line_index::LineIndex;
+pub use rowan::TextRange;
+pub use rowan::TextSize;
+pub use rowan::TokenAtOffset;
+pub use starpls_parser::SyntaxKind;
+pub use starpls_parser::T;
+
+pub use crate::ast::Module;
+pub use crate::parser::line_index;
+pub use crate::parser::parse_module;
+pub use crate::parser::ParseTree;
+pub use crate::parser::SyntaxError;
 
 pub mod ast;
 mod parser;

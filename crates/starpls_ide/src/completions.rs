@@ -348,6 +348,7 @@ fn add_keywords(items: &mut Vec<CompletionItem>, is_in_def: bool, is_in_for: boo
     add_keyword("for");
     add_keyword("load");
     add_keyword("pass");
+    add_keyword("lambda");
 
     if is_in_def {
         add_keyword("return");

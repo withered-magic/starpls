@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use either::Either;
 use starpls_common::line_index;
 use starpls_common::parse;
 use starpls_common::Diagnostic;
@@ -1151,19 +1150,9 @@ impl TyContext<'_> {
                             }
                         }
                         ScopeDef::Function(def) => TyKind::Function(def.clone()).intern(),
-                        ScopeDef::Parameter(ParameterDef { parent, index }) => match parent {
-                            Either::Left(parent) => {
-                                self.infer_param(file, parent.params(self.db)[*index])
-                            }
-                            Either::Right(parent) => {
-                                match &module(self.db, parent.file)[parent.value] {
-                                    Expr::Lambda { params, .. } => {
-                                        self.infer_param(parent.file, params[*index])
-                                    }
-                                    _ => return None,
-                                }
-                            }
-                        },
+                        ScopeDef::Parameter(ParameterDef { func, index }) => {
+                            self.infer_param(file, func.params(self.db)[*index])
+                        }
                         ScopeDef::LoadItem(LoadItemDef { load_item, .. }) => {
                             self.infer_load_item(file, *load_item)
                         }

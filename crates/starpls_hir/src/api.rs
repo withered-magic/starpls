@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use either::Either;
 use smallvec::SmallVec;
 use starpls_common::parse;
 use starpls_common::Diagnostic;
@@ -318,11 +317,8 @@ impl From<scope::ScopeDef> for ScopeDef {
                 )),
                 _ => ScopeDef::Variable(Variable { id: None }),
             },
-            scope::ScopeDef::Parameter(ParameterDef { parent, index }) => {
-                ScopeDef::Parameter(Param(match parent {
-                    Either::Left(parent) => ParamInner::Param { parent, index },
-                    Either::Right(parent) => ParamInner::LambdaParam { parent, index },
-                }))
+            scope::ScopeDef::Parameter(ParameterDef { func, index }) => {
+                ScopeDef::Parameter(Param(ParamInner::Param { func, index }))
             }
             scope::ScopeDef::LoadItem(it) => ScopeDef::LoadItem(LoadItem {
                 file: it.file,

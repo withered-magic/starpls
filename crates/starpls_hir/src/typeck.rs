@@ -23,7 +23,6 @@ use starpls_syntax::ast::SyntaxNodePtr;
 use crate::def::codeflow::FlowNodeId;
 use crate::def::scope::ExecutionScopeId;
 use crate::def::scope::FunctionDef;
-use crate::def::Expr;
 use crate::def::ExprId;
 use crate::def::Function;
 use crate::def::LiteralString;
@@ -439,7 +438,7 @@ impl Ty {
                     let file = def.func.file(db);
                     let ty = with_tcx(db, |tcx| tcx.infer_param(file, *param));
                     let param = Param(ParamInner::Param {
-                        parent: def.func,
+                        func: def.func,
                         index,
                     });
                     (param, ty)
@@ -748,11 +747,7 @@ pub struct Param(pub(crate) ParamInner);
 #[derive(Clone, Debug)]
 pub(crate) enum ParamInner {
     Param {
-        parent: Function,
-        index: usize,
-    },
-    LambdaParam {
-        parent: InFile<ExprId>,
+        func: Function,
         index: usize,
     },
     IntrinsicParam {
@@ -799,16 +794,9 @@ impl From<TagParam> for ParamInner {
 impl Param {
     pub fn name(&self, db: &dyn Db) -> Option<Name> {
         match self.0 {
-            ParamInner::Param { parent, index } => {
-                let module = module(db, parent.file(db));
-                Some(module[parent.params(db)[index]].name().clone())
-            }
-            ParamInner::LambdaParam { parent, index } => {
-                let module = module(db, parent.file);
-                match &module[parent.value] {
-                    Expr::Lambda { params, .. } => Some(module[params[index]].name().clone()),
-                    _ => None,
-                }
+            ParamInner::Param { func, index } => {
+                let module = module(db, func.file(db));
+                Some(module[func.params(db)[index]].name().clone())
             }
             ParamInner::IntrinsicParam { parent, index } => {
                 let param = &parent.params(db)[index];
@@ -857,9 +845,9 @@ impl Param {
 
     pub fn doc(&self, db: &dyn Db) -> Option<String> {
         Some(match &self.0 {
-            ParamInner::Param { parent, index } => {
-                let module = module(db, parent.file(db));
-                return module[parent.params(db)[*index]]
+            ParamInner::Param { func, index } => {
+                let module = module(db, func.file(db));
+                return module[func.params(db)[*index]]
                     .doc()
                     .map(|doc| doc.to_string());
             }
@@ -901,12 +889,9 @@ impl Param {
     pub fn is_args_list(&self, db: &dyn Db) -> bool {
         match self.0 {
             // TODO(withered-magic): Handle lambda parameters.
-            ParamInner::Param { parent, index } => {
-                let module = module(db, parent.file(db));
-                matches!(
-                    module[parent.params(db)[index]],
-                    HirDefParam::ArgsList { .. }
-                )
+            ParamInner::Param { func, index } => {
+                let module = module(db, func.file(db));
+                matches!(module[func.params(db)[index]], HirDefParam::ArgsList { .. })
             }
             ParamInner::IntrinsicParam { parent, index } => matches!(
                 parent.params(db)[index],
@@ -923,10 +908,10 @@ impl Param {
     pub fn is_kwargs_dict(&self, db: &dyn Db) -> bool {
         match self.0 {
             // TODO(withered-magic): Handle lambda parameters.
-            ParamInner::Param { parent, index } => {
-                let module = module(db, parent.file(db));
+            ParamInner::Param { func, index } => {
+                let module = module(db, func.file(db));
                 matches!(
-                    module[parent.params(db)[index]],
+                    module[func.params(db)[index]],
                     HirDefParam::KwargsDict { .. }
                 )
             }
@@ -955,19 +940,10 @@ impl Param {
 
     pub fn syntax_node_ptr(&self, db: &dyn Db) -> Option<SyntaxNodePtr> {
         match self.0 {
-            ParamInner::Param { parent, index } => source_map(db, parent.file(db))
+            ParamInner::Param { func, index } => source_map(db, func.file(db))
                 .param_map_back
-                .get(&parent.params(db)[index])
+                .get(&func.params(db)[index])
                 .map(|ptr| ptr.syntax_node_ptr()),
-            ParamInner::LambdaParam { parent, index } => {
-                match &module(db, parent.file)[parent.value] {
-                    Expr::Lambda { params, .. } => source_map(db, parent.file)
-                        .param_map_back
-                        .get(&params[index])
-                        .map(|ptr| ptr.syntax_node_ptr()),
-                    _ => None,
-                }
-            }
             _ => None,
         }
     }

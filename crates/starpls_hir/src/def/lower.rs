@@ -250,8 +250,17 @@ impl<'a> LoweringContext<'a> {
             }
             ast::Expression::Lambda(node) => {
                 let params = self.lower_params_opt(node.parameters(), &[], &None);
+                let func = Function::new(
+                    self.db,
+                    self.file,
+                    Name::missing(),
+                    None,
+                    None,
+                    ptr.syntax_node_ptr(),
+                    params,
+                );
                 let body = self.lower_expr_opt(node.body());
-                Expr::Lambda { params, body }
+                Expr::Lambda { func, body }
             }
             ast::Expression::List(node) => {
                 let exprs = node

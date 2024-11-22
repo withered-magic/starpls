@@ -132,7 +132,7 @@ pub(crate) enum Expr {
         op: Option<BinaryOp>,
     },
     Lambda {
-        params: Box<[ParamId]>,
+        func: Function,
         body: ExprId,
     },
     List {
@@ -466,6 +466,7 @@ pub(crate) struct LiteralString {
     pub(crate) value: Box<str>,
 }
 
+/// Used for both function definitions and lambda expressions.
 #[salsa::tracked]
 pub(crate) struct Function {
     pub(crate) file: File,

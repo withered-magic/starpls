@@ -81,7 +81,7 @@ pub(crate) struct VariableDef {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ParameterDef {
     pub(crate) index: usize,
-    pub(crate) parent: Either<Function, InFile<ExprId>>,
+    pub(crate) func: Function,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -244,7 +244,7 @@ impl ScopeCollector<'_> {
                             name.clone(),
                             ScopeDef::Parameter(ParameterDef {
                                 index,
-                                parent: either::Left(data.func),
+                                func: data.func,
                             }),
                         );
                     }
@@ -429,10 +429,10 @@ impl ScopeCollector<'_> {
                 Expr::Name { .. } => {
                     self.record_expr_scope(expr, current);
                 }
-                Expr::Lambda { params, body } => {
+                Expr::Lambda { func, body } => {
                     self.with_execution_scope(ExecutionScopeId::Lambda(expr), |this| {
                         let scope = this.alloc_scope(current);
-                        for (index, param) in params.iter().copied().enumerate() {
+                        for (index, param) in func.params(self.db).iter().copied().enumerate() {
                             match &this.module.params[param] {
                                 Param::Simple { name, .. }
                                 | Param::ArgsList { name, .. }
@@ -440,13 +440,7 @@ impl ScopeCollector<'_> {
                                     this.scopes.add_decl(
                                         scope,
                                         name.clone(),
-                                        ScopeDef::Parameter(ParameterDef {
-                                            parent: Either::Right(InFile {
-                                                file: this.file,
-                                                value: expr,
-                                            }),
-                                            index,
-                                        }),
+                                        ScopeDef::Parameter(ParameterDef { func: *func, index }),
                                     );
                                 }
                             }

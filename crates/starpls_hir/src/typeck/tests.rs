@@ -1577,7 +1577,7 @@ lambda x, y, z: x + y + z
             17..22 "x + y": Unknown
             25..26 "z": Unknown
             17..26 "x + y + z": Unknown
-            1..26 "lambda x, y, z: x + y + z": Unknown
+            1..26 "lambda x, y, z: x + y + z": def lambda(x, y, z) -> Unknown
         "#]],
     );
 }

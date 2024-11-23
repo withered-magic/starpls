@@ -61,59 +61,86 @@ pub(crate) fn goto_definition(
     }
 
     if let Some(name) = ast::Name::cast(parent.clone()) {
-        let dot_expr = ast::DotExpr::cast(name.syntax().parent()?)?;
-        let ty = sema.type_of_expr(file, &dot_expr.expr()?)?;
+        let parent = name.syntax().parent()?;
 
-        // Check for struct field definition.
-        if let Some(strukt) = ty.try_as_inline_struct() {
-            let struct_call_expr = strukt.call_expr(db)?;
-            return struct_call_expr
-                .value
-                .arguments()
-                .into_iter()
-                .flat_map(|args| args.arguments())
-                .find_map(|arg| match arg {
-                    ast::Argument::Keyword(kwarg) => {
-                        let name = kwarg.name()?;
-                        (name.name()?.text() == token.text()).then(|| {
-                            let range = name.syntax().text_range();
-                            vec![LocationLink::Local {
-                                origin_selection_range: None,
-                                target_range: range,
-                                target_selection_range: range,
-                                target_file_id: struct_call_expr.file.id(db),
-                            }]
-                        })
-                    }
-                    _ => None,
-                });
-        }
+        if let Some(dot_expr) = ast::DotExpr::cast(parent.clone()) {
+            let ty = sema.type_of_expr(file, &dot_expr.expr()?)?;
 
-        // Check for provider field definition. This only handles the case where the provider
-        // fields are specified in a dictionary literal.
-        if let Some(provider_fields) = ty.provider_fields_source(db) {
-            return provider_fields.value.entries().find_map(|entry| {
-                entry
-                    .key()
-                    .as_ref()
-                    .and_then(|entry| match entry {
-                        ast::Expression::Literal(lit) => Some((lit.syntax(), lit.kind())),
-                        _ => None,
-                    })
-                    .and_then(|(syntax, kind)| match kind {
-                        ast::LiteralKind::String(s)
-                            if s.value().as_deref() == Some(token.text()) =>
-                        {
-                            Some(vec![LocationLink::Local {
-                                origin_selection_range: None,
-                                target_range: syntax.text_range(),
-                                target_selection_range: syntax.text_range(),
-                                target_file_id: provider_fields.file.id(db),
-                            }])
+            // Check for struct field definition.
+            if let Some(strukt) = ty.try_as_inline_struct() {
+                let struct_call_expr = strukt.call_expr(db)?;
+                return struct_call_expr
+                    .value
+                    .arguments()
+                    .into_iter()
+                    .flat_map(|args| args.arguments())
+                    .find_map(|arg| match arg {
+                        ast::Argument::Keyword(kwarg) => {
+                            let name = kwarg.name()?;
+                            (name.name()?.text() == token.text()).then(|| {
+                                let range = name.syntax().text_range();
+                                vec![LocationLink::Local {
+                                    origin_selection_range: None,
+                                    target_range: range,
+                                    target_selection_range: range,
+                                    target_file_id: struct_call_expr.file.id(db),
+                                }]
+                            })
                         }
                         _ => None,
-                    })
-            });
+                    });
+            }
+
+            // Check for provider field definition. This only handles the case where the provider
+            // fields are specified in a dictionary literal.
+            if let Some(provider_fields) = ty.provider_fields_source(db) {
+                return provider_fields.value.entries().find_map(|entry| {
+                    entry
+                        .key()
+                        .as_ref()
+                        .and_then(|entry| match entry {
+                            ast::Expression::Literal(lit) => Some((lit.syntax(), lit.kind())),
+                            _ => None,
+                        })
+                        .and_then(|(syntax, kind)| match kind {
+                            ast::LiteralKind::String(s)
+                                if s.value().as_deref() == Some(token.text()) =>
+                            {
+                                Some(vec![LocationLink::Local {
+                                    origin_selection_range: None,
+                                    target_range: syntax.text_range(),
+                                    target_selection_range: syntax.text_range(),
+                                    target_file_id: provider_fields.file.id(db),
+                                }])
+                            }
+                            _ => None,
+                        })
+                });
+            }
+        } else if let Some(arg) = ast::KeywordArgument::cast(parent) {
+            let call_expr = arg
+                .syntax()
+                .parent()
+                .and_then(ast::Arguments::cast)
+                .and_then(|args| args.syntax().parent())
+                .and_then(ast::CallExpr::cast)?;
+            let callable = sema.resolve_call_expr(file, &call_expr)?;
+            let (param, _) = callable.params(db).into_iter().find(|(param, _)| {
+                param.name(db).as_ref().map(|name| name.as_str())
+                    == arg
+                        .name()
+                        .and_then(|name| name.name())
+                        .as_ref()
+                        .map(|name| name.text())
+            })?;
+            let range = param.syntax_node_ptr(db)?.text_range();
+
+            return Some(vec![LocationLink::Local {
+                origin_selection_range: None,
+                target_range: range,
+                target_selection_range: range,
+                target_file_id: callable.file()?.id(db),
+            }]);
         }
     }
 
@@ -209,16 +236,16 @@ mod tests {
     use starpls_bazel::APIContext;
     use starpls_common::Dialect;
     use starpls_common::FileInfo;
-    use starpls_test_util::parse_fixture;
+    use starpls_test_util::Fixture;
 
     use crate::AnalysisSnapshot;
     use crate::FilePosition;
     use crate::LocationLink;
 
     fn check_goto_definition(fixture: &str) {
-        let (contents, pos, expected) = parse_fixture(fixture);
+        let fixture = Fixture::parse(fixture);
         let (snap, file_id) = AnalysisSnapshot::from_single_file(
-            &contents,
+            &fixture.contents,
             Dialect::Bazel,
             Some(FileInfo::Bazel {
                 api_context: APIContext::Bzl,
@@ -226,7 +253,10 @@ mod tests {
             }),
         );
         let actual = snap
-            .goto_definition(FilePosition { file_id, pos })
+            .goto_definition(FilePosition {
+                file_id,
+                pos: fixture.cursor_pos,
+            })
             .unwrap()
             .unwrap()
             .into_iter()
@@ -235,7 +265,7 @@ mod tests {
                 _ => panic!("expected local location"),
             })
             .collect::<Vec<_>>();
-        assert_eq!(expected, actual);
+        assert_eq!(fixture.selected_ranges, actual);
     }
 
     #[test]
@@ -278,6 +308,19 @@ def f(abc):
             r#"
 lambda abc: print(a$0bc)
        #^^
+"#,
+        );
+    }
+
+    #[test]
+    fn test_keyword_argument() {
+        check_goto_definition(
+            r#"
+def foo(abc):
+        #^^
+        print(abc)
+
+foo(a$0bc = 123)
 "#,
         );
     }

@@ -7,7 +7,7 @@ use starpls_common::Db as _;
 use starpls_common::Dialect;
 use starpls_common::FileId;
 use starpls_common::FileInfo;
-use starpls_test_util::parse_fixture;
+use starpls_test_util::Fixture;
 
 use crate::def::resolver::Resolver;
 use crate::test_database::TestDatabase;
@@ -21,7 +21,7 @@ fn check_scope(fixture: &str, expected: &[&str]) {
 fn check_scope_full(fixture: &str, expected: &[&str], prelude: Option<&str>) {
     let mut test_db: TestDatabase = Default::default();
     let file_id = FileId(0);
-    let (text, offset, _) = parse_fixture(fixture);
+    let fixture = Fixture::parse(fixture);
     let file = test_db.create_file(
         file_id,
         Dialect::Bazel,
@@ -29,7 +29,7 @@ fn check_scope_full(fixture: &str, expected: &[&str], prelude: Option<&str>) {
             api_context: APIContext::Build,
             is_external: false,
         }),
-        text,
+        fixture.contents,
     );
 
     if let Some(prelude) = prelude {
@@ -66,7 +66,7 @@ fn check_scope_full(fixture: &str, expected: &[&str], prelude: Option<&str>) {
         )
         .collect::<HashSet<_>>();
 
-    let resolver = Resolver::new_for_offset(&test_db, file, offset);
+    let resolver = Resolver::new_for_offset(&test_db, file, fixture.cursor_pos);
     let names = resolver.names();
     let mut actual = names
         .keys()

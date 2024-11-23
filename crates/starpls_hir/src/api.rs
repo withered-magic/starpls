@@ -580,6 +580,13 @@ impl Callable {
         }
     }
 
+    pub fn file(&self) -> Option<File> {
+        match self.0 {
+            CallableInner::HirDef(ref def) => def.stmt().map(|stmt| stmt.file),
+            _ => None,
+        }
+    }
+
     pub fn is_user_defined(&self) -> bool {
         matches!(self.0, CallableInner::HirDef(_))
     }

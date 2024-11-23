@@ -273,6 +273,16 @@ def f(abc):
     }
 
     #[test]
+    fn test_lambda_param() {
+        check_goto_definition(
+            r#"
+lambda abc: print(a$0bc)
+       #^^
+"#,
+        );
+    }
+
+    #[test]
     fn test_struct_field() {
         check_goto_definition(
             r#"

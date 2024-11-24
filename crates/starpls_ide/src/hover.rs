@@ -422,4 +422,28 @@ foo.b$0ar
             "#]],
         );
     }
+
+    #[test]
+    fn check_rule_attr() {
+        check_hover(
+            r#"
+foo = rule(
+    attrs = {
+        "bar": attr.string(doc = "The bar attr"),
+    },
+)
+
+foo(
+    name = "foo",
+    b$0ar = "bar",
+)
+"#,
+            expect![[r#"
+                ```python
+                (parameter) bar: string
+                ```
+                The bar attr  
+            "#]],
+        );
+    }
 }

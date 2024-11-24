@@ -371,6 +371,7 @@ impl AnalysisSnapshot {
         info: Option<FileInfo>,
     ) -> (Self, FileId) {
         use starpls_test_util::make_test_builtins;
+        use starpls_test_util::FixtureType;
 
         let mut file_set = FxHashMap::default();
         let file_id = FileId(0);
@@ -386,8 +387,8 @@ impl AnalysisSnapshot {
 
         // Add builtins here as needed for tests.
         let functions = vec!["provider", "rule", "struct"];
-        let globals = vec![];
-        let types = vec![];
+        let globals = vec![("attr", "attr")];
+        let types = vec![FixtureType::new("attr", vec![], vec!["int", "string"])];
 
         analysis.db.set_builtin_defs(
             Dialect::Bazel,

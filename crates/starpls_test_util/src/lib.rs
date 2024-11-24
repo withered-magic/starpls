@@ -8,13 +8,27 @@ use starpls_syntax::TextSize;
 
 pub const CURSOR_MARKER: &str = "$0";
 
-pub fn parse_fixture(fixture: &str) -> (String, TextSize, Vec<TextRange>) {
-    let offset = fixture.find(CURSOR_MARKER).unwrap();
-    let mut contents = String::new();
-    contents.push_str(&fixture[..offset]);
-    contents.push_str(&fixture[offset + CURSOR_MARKER.len()..]);
-    let selected_ranges = find_selected_ranges(&contents);
-    (contents, (offset as u32).into(), selected_ranges)
+pub struct Fixture {
+    pub contents: String,
+    pub cursor_pos: TextSize,
+    pub selected_ranges: Vec<TextRange>,
+}
+
+impl Fixture {
+    pub fn parse(input: &str) -> Self {
+        let offset = input.find(CURSOR_MARKER).unwrap();
+        let mut contents = String::new();
+        contents.push_str(&input[..offset]);
+        contents.push_str(&input[offset + CURSOR_MARKER.len()..]);
+
+        let selected_ranges = find_selected_ranges(&contents);
+
+        Self {
+            contents,
+            cursor_pos: (offset as u32).into(),
+            selected_ranges,
+        }
+    }
 }
 
 fn find_selected_ranges(contents: &str) -> Vec<TextRange> {
@@ -57,7 +71,7 @@ impl FixtureType {
 }
 
 pub fn make_test_builtins(
-    functions: Vec<String>,
+    functions: Vec<impl ToString>,
     globals: Vec<(String, String)>,
     types: Vec<FixtureType>,
 ) -> Builtins {

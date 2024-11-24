@@ -32,6 +32,7 @@ use crate::typeck::FieldInner;
 pub use crate::typeck::Param;
 use crate::typeck::ParamInner;
 use crate::typeck::Provider;
+use crate::typeck::Rule;
 use crate::typeck::Struct as DefStruct;
 use crate::typeck::Substitution;
 use crate::typeck::TagClass;
@@ -125,7 +126,7 @@ impl<'a> Semantics<'a> {
                 Callable(CallableInner::IntrinsicFunction(*func, Some(subst.clone())))
             }
             TyKind::BuiltinFunction(func) => (*func).into(),
-            TyKind::Rule(_) => Callable(CallableInner::Rule(ty.ty.clone())),
+            TyKind::Rule(rule) => Callable(CallableInner::Rule(rule.clone())),
             TyKind::Provider(provider) => Callable(CallableInner::Provider(provider.clone())),
             TyKind::ProviderRawConstructor(name, provider) => Callable(
                 CallableInner::ProviderRawConstructor(name.clone(), provider.clone()),
@@ -430,7 +431,7 @@ impl Type {
 
         // TODO(withered-magic): This ideally should be handled in `Ty::fields()` instead.
         if let TyKind::Struct(Some(DefStruct::Attributes { attrs })) = self.ty.kind() {
-            fields.extend(attrs.iter().map(|(name, attr)| {
+            fields.extend(attrs.attrs.iter().map(|(name, attr)| {
                 (
                     Field(FieldInner::StructField {
                         name: name.clone(),
@@ -544,7 +545,7 @@ impl Callable {
             )
             .intern(),
             CallableInner::BuiltinFunction(func) => TyKind::BuiltinFunction(func).intern(),
-            CallableInner::Rule(ref ty) => ty.clone(),
+            CallableInner::Rule(ref rule) => TyKind::Rule(rule.clone()).intern(),
             CallableInner::Provider(ref provider) => TyKind::Provider(provider.clone()).intern(),
             CallableInner::ProviderRawConstructor(ref name, ref provider) => {
                 TyKind::ProviderRawConstructor(name.clone(), provider.clone()).intern()
@@ -567,16 +568,20 @@ impl Callable {
             CallableInner::HirDef(ref def) => def.func().doc(db).map(|doc| doc.to_string()),
             CallableInner::BuiltinFunction(func) => Some(func.doc(db).clone()),
             CallableInner::IntrinsicFunction(func, _) => Some(func.doc(db).clone()),
-            CallableInner::Rule(ref ty) => match ty.kind() {
-                TyKind::Rule(rule) => rule.doc.as_ref().map(Box::to_string),
-                _ => None,
-            },
+            CallableInner::Rule(ref rule) => rule.doc.as_ref().map(Box::to_string),
             CallableInner::Provider(ref provider)
             | CallableInner::ProviderRawConstructor(_, ref provider) => match provider {
                 Provider::Builtin(provider) => Some(provider.doc(db).clone()),
                 Provider::Custom(provider) => provider.doc.map(|doc| doc.value(db).to_string()),
             },
             CallableInner::Tag(ref tag_class) => tag_class.doc.as_ref().map(|doc| doc.to_string()),
+        }
+    }
+
+    pub fn file(&self) -> Option<File> {
+        match self.0 {
+            CallableInner::HirDef(ref def) => def.stmt().map(|stmt| stmt.file),
+            _ => None,
         }
     }
 
@@ -590,6 +595,24 @@ impl Callable {
 
     pub fn is_tag(&self) -> bool {
         matches!(self.0, CallableInner::Tag(_))
+    }
+
+    pub fn rule_attrs_source(&self, db: &dyn Db) -> Option<InFile<ast::DictExpr>> {
+        let attrs_expr = match self.0 {
+            CallableInner::Rule(ref rule) => rule.attrs.as_ref()?.expr,
+            _ => return None,
+        };
+
+        source_map(db, attrs_expr.file)
+            .expr_map_back
+            .get(&attrs_expr.value)
+            .and_then(|ptr| ptr.clone().cast::<ast::DictExpr>())
+            .and_then(|ptr| {
+                Some(InFile {
+                    file: attrs_expr.file,
+                    value: ptr.try_to_node(&parse(db, attrs_expr.file).syntax(db))?,
+                })
+            })
     }
 }
 
@@ -610,7 +633,7 @@ enum CallableInner {
     HirDef(FunctionDef),
     IntrinsicFunction(IntrinsicFunction, Option<Substitution>),
     BuiltinFunction(BuiltinFunction),
-    Rule(Ty),
+    Rule(Rule),
     Provider(Provider),
     ProviderRawConstructor(Name, Provider),
     Tag(Arc<TagClass>),

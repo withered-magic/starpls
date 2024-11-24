@@ -265,6 +265,7 @@ impl TyContext<'_> {
                                     }
                                     TyKind::Struct(Some(Struct::Attributes { attrs })) => {
                                         return attrs
+                                            .attrs
                                             .iter()
                                             .find_map(|(name, attr)| {
                                                 if name == field {
@@ -1617,10 +1618,9 @@ impl TyContext<'_> {
                         RuleKind::Build => "ctx",
                         RuleKind::Repository => "repository_ctx",
                     })?;
-                match ty.kind() {
-                    TyKind::BuiltinType(ty, _) => Some(
-                        TyKind::BuiltinType(*ty, Some(TyData::Attributes(rule.attrs.clone())))
-                            .intern(),
+                match (ty.kind(), &rule.attrs) {
+                    (TyKind::BuiltinType(ty, _), Some(attrs)) => Some(
+                        TyKind::BuiltinType(*ty, Some(TyData::Attributes(attrs.clone()))).intern(),
                     ),
                     _ => None,
                 }

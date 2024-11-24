@@ -25,7 +25,6 @@ pub use starpls_hir::InferenceOptions;
 use starpls_syntax::LineIndex;
 use starpls_syntax::TextRange;
 use starpls_syntax::TextSize;
-use starpls_test_util::make_test_builtins;
 
 pub use crate::completions::CompletionItem;
 pub use crate::completions::CompletionItemKind;
@@ -315,33 +314,6 @@ pub struct AnalysisSnapshot {
 }
 
 impl AnalysisSnapshot {
-    pub fn from_single_file(
-        contents: &str,
-        dialect: Dialect,
-        info: Option<FileInfo>,
-    ) -> (Self, FileId) {
-        let mut file_set = FxHashMap::default();
-        let file_id = FileId(0);
-        file_set.insert("main.star".to_string(), (file_id, contents.to_string()));
-        let mut change = Change::default();
-        change.create_file(file_id, dialect, info, contents.to_string());
-        let mut analysis = Analysis::new(
-            Arc::new(SimpleFileLoader::from_file_set(file_set)),
-            Default::default(),
-        );
-        analysis.db.set_builtin_defs(
-            Dialect::Bazel,
-            make_test_builtins(
-                vec!["provider".to_string(), "struct".to_string()],
-                vec![],
-                vec![],
-            ),
-            Builtins::default(),
-        );
-        analysis.apply_change(change);
-        (analysis.snapshot(), file_id)
-    }
-
     pub fn completion(
         &self,
         pos: FilePosition,
@@ -388,6 +360,42 @@ impl AnalysisSnapshot {
         F: FnOnce(&'a Database) -> T + panic::UnwindSafe,
     {
         starpls_hir::Cancelled::catch(|| f(&self.db))
+    }
+
+    /// This should only be used as a convenient way to create analysis snapshots
+    /// from test data.
+    #[cfg(test)]
+    pub fn from_single_file(
+        contents: &str,
+        dialect: Dialect,
+        info: Option<FileInfo>,
+    ) -> (Self, FileId) {
+        use starpls_test_util::make_test_builtins;
+
+        let mut file_set = FxHashMap::default();
+        let file_id = FileId(0);
+        file_set.insert("main.star".to_string(), (file_id, contents.to_string()));
+
+        let mut change = Change::default();
+        change.create_file(file_id, dialect, info, contents.to_string());
+
+        let mut analysis = Analysis::new(
+            Arc::new(SimpleFileLoader::from_file_set(file_set)),
+            Default::default(),
+        );
+
+        // Add builtins here as needed for tests.
+        let functions = vec!["provider", "rule", "struct"];
+        let globals = vec![];
+        let types = vec![];
+
+        analysis.db.set_builtin_defs(
+            Dialect::Bazel,
+            make_test_builtins(functions, globals, types),
+            Builtins::default(),
+        );
+        analysis.apply_change(change);
+        (analysis.snapshot(), file_id)
     }
 }
 
@@ -454,6 +462,7 @@ pub(crate) struct SimpleFileLoader {
 
 impl SimpleFileLoader {
     /// Creates a [`SimpleFileLoader`] from a static set of files.
+    #[cfg(test)]
     pub(crate) fn from_file_set(file_set: FxHashMap<String, (FileId, String)>) -> Self {
         Self { file_set }
     }

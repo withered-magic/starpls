@@ -35,6 +35,7 @@ use crate::typeck::ModuleExtension;
 use crate::typeck::Provider;
 use crate::typeck::ProviderField;
 use crate::typeck::Rule as TyRule;
+use crate::typeck::RuleAttributes;
 use crate::typeck::RuleKind;
 use crate::typeck::Struct;
 use crate::typeck::TagClass;
@@ -335,8 +336,10 @@ impl BuiltinFunction {
                             }
                             "attrs" => {
                                 if let TyKind::Dict(_, _, Some(lit)) = ty.kind() {
-                                    attrs = Some(
-                                        lit.known_keys
+                                    let expr = lit.expr?;
+                                    attrs = Some(RuleAttributes {
+                                        attrs: lit
+                                            .known_keys
                                             .iter()
                                             .filter_map(|(name, ty)| match ty.kind() {
                                                 TyKind::Attribute(attr) => Some((
@@ -346,7 +349,8 @@ impl BuiltinFunction {
                                                 _ => None,
                                             })
                                             .collect::<Vec<_>>(),
-                                    )
+                                        expr,
+                                    })
                                 }
                             }
                             _ => {}
@@ -361,7 +365,7 @@ impl BuiltinFunction {
                         RuleKind::Repository
                     },
                     doc: doc.map(|doc| doc.value(db).clone()),
-                    attrs: Arc::new(attrs.unwrap_or_default()),
+                    attrs: attrs.map(Arc::new),
                 })
             }
 

@@ -1570,7 +1570,7 @@ impl TyContext<'_> {
             .and_then(|ty| ty)
             .unwrap_or_else(|| {
                 let module = module(self.db, file);
-                let usage = module.param_to_def_stmt.get(&param).copied();
+                let usage = module.param_to_def_stmt.get(&param).map(|(stmt, _)| *stmt);
                 match &module[param] {
                     Param::Simple { type_ref, .. } => type_ref
                         .as_ref()
@@ -1603,7 +1603,7 @@ impl TyContext<'_> {
 
     fn infer_param_from_rule_usage(&mut self, file: File, param: ParamId) -> Option<Ty> {
         let module = module(self.db, file);
-        let name = match module[*module.param_to_def_stmt.get(&param)?] {
+        let name = match module[module.param_to_def_stmt.get(&param)?.0] {
             Stmt::Def { func, .. } if func.params(self.db).len() == 1 => func.name(self.db),
             _ => return None,
         };

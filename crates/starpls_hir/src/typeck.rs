@@ -1382,7 +1382,7 @@ pub enum RuleKind {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct RuleAttributes {
     pub(crate) attrs: Vec<(Name, Arc<Attribute>)>,
-    pub(crate) expr: InFile<ExprId>,
+    pub(crate) expr: Option<InFile<ExprId>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

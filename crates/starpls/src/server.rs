@@ -66,7 +66,7 @@ pub(crate) struct ServerSnapshot {
 
 impl Server {
     pub(crate) fn new(connection: Connection, config: ServerConfig) -> anyhow::Result<Self> {
-        // Create the task pool for processin incoming requests.
+        // Create the task pool for processing incoming requests.
         let (task_pool_sender, task_pool_receiver) = crossbeam_channel::unbounded();
         let task_pool = TaskPool::with_num_threads(task_pool_sender.clone(), 4)?;
         let task_pool_handle = TaskPoolHandle::new(task_pool_receiver, task_pool);

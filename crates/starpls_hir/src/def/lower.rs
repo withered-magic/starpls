@@ -122,8 +122,8 @@ impl<'a> LoweringContext<'a> {
                     params,
                 );
                 let stmt = self.alloc_stmt(Stmt::Def { func, stmts }, ptr);
-                for param in func.params(self.db).iter() {
-                    self.module.param_to_def_stmt.insert(*param, stmt);
+                for (i, param) in func.params(self.db).iter().enumerate() {
+                    self.module.param_to_def_stmt.insert(*param, (stmt, i));
                 }
                 return stmt;
             }
@@ -361,11 +361,8 @@ impl<'a> LoweringContext<'a> {
             doc.as_ref().and_then(|doc| {
                 doc.lines().find_map(|line| {
                     let line = line.trim().trim_start_matches('*');
-                    if line.starts_with(&prefix) {
-                        Some(line[prefix.len()..].to_string().into_boxed_str())
-                    } else {
-                        None
-                    }
+                    line.strip_prefix(&prefix)
+                        .map(|stripped| stripped.trim().to_string().into_boxed_str())
                 })
             })
         };

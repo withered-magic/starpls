@@ -50,7 +50,7 @@ pub(crate) struct Module {
     pub(crate) top_level: Box<[StmtId]>,
     pub(crate) type_ignore_comment_lines: HashSet<u32>,
     pub(crate) call_expr_with_impl_fn: FxHashMap<Name, ExprId>,
-    pub(crate) param_to_def_stmt: FxHashMap<ParamId, StmtId>,
+    pub(crate) param_to_def_stmt: FxHashMap<ParamId, (StmtId, usize)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

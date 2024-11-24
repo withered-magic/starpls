@@ -1,6 +1,7 @@
 use starpls_common::parse as parse_query;
 use starpls_common::Db;
 use starpls_common::File;
+use starpls_common::InFile;
 use starpls_hir::Name;
 use starpls_hir::ScopeDef;
 use starpls_hir::Semantics;
@@ -130,28 +131,7 @@ impl<'a> GotoDefinitionHandler<'a> {
         } else if let Some(provider_fields) = ty.provider_fields_source(self.db) {
             // Check for provider field definition. This only handles the case where the provider
             // fields are specified in a dictionary literal.
-            provider_fields.value.entries().find_map(|entry| {
-                entry
-                    .key()
-                    .as_ref()
-                    .and_then(|entry| match entry {
-                        ast::Expression::Literal(lit) => Some((lit.syntax(), lit.kind())),
-                        _ => None,
-                    })
-                    .and_then(|(syntax, kind)| match kind {
-                        ast::LiteralKind::String(s)
-                            if s.value().as_deref() == Some(self.token.text()) =>
-                        {
-                            Some(vec![LocationLink::Local {
-                                origin_selection_range: None,
-                                target_range: syntax.text_range(),
-                                target_selection_range: syntax.text_range(),
-                                target_file_id: provider_fields.file.id(self.db),
-                            }])
-                        }
-                        _ => None,
-                    })
-            })
+            return self.find_name_in_dict_expr(provider_fields);
         } else {
             None
         }
@@ -165,6 +145,12 @@ impl<'a> GotoDefinitionHandler<'a> {
             .and_then(|args| args.syntax().parent())
             .and_then(ast::CallExpr::cast)?;
         let callable = self.sema.resolve_call_expr(self.file, &call_expr)?;
+
+        // If the callable is a rule, link to the dictionary where its attributes are declared.
+        if let Some(attrs_expr) = callable.rule_attrs_source(self.db) {
+            return self.find_name_in_dict_expr(attrs_expr);
+        }
+
         let (param, _) = callable.params(self.db).into_iter().find(|(param, _)| {
             param.name(self.db).as_ref().map(|name| name.as_str())
                 == arg
@@ -270,6 +256,34 @@ impl<'a> GotoDefinitionHandler<'a> {
                 }])
             }
         }
+    }
+
+    fn find_name_in_dict_expr(
+        &self,
+        dict_expr: InFile<ast::DictExpr>,
+    ) -> Option<Vec<LocationLink>> {
+        dict_expr.value.entries().find_map(|entry| {
+            entry
+                .key()
+                .as_ref()
+                .and_then(|entry| match entry {
+                    ast::Expression::Literal(lit) => Some((lit.syntax(), lit.kind())),
+                    _ => None,
+                })
+                .and_then(|(syntax, kind)| match kind {
+                    ast::LiteralKind::String(s)
+                        if s.value().as_deref() == Some(self.token.text()) =>
+                    {
+                        Some(vec![LocationLink::Local {
+                            origin_selection_range: None,
+                            target_range: syntax.text_range(),
+                            target_selection_range: syntax.text_range(),
+                            target_file_id: dict_expr.file.id(self.db),
+                        }])
+                    }
+                    _ => None,
+                })
+        })
     }
 }
 

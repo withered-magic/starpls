@@ -494,18 +494,26 @@ impl Ty {
                     common_attrs
                         .next()
                         .into_iter()
-                        .chain(attrs.iter().map(|(name, attr)| {
-                            (
-                                Param(
-                                    RuleParam::Keyword {
-                                        name: name.clone(),
-                                        attr: attr.clone(),
-                                    }
-                                    .into(),
-                                ),
-                                attr.expected_ty(),
-                            )
-                        }))
+                        .chain(
+                            attrs
+                                .as_ref()
+                                .map(|attrs| {
+                                    attrs.attrs.iter().map(|(name, attr)| {
+                                        (
+                                            Param(
+                                                RuleParam::Keyword {
+                                                    name: name.clone(),
+                                                    attr: attr.clone(),
+                                                }
+                                                .into(),
+                                            ),
+                                            attr.expected_ty(),
+                                        )
+                                    })
+                                })
+                                .into_iter()
+                                .flatten(),
+                        )
                         .chain(common_attrs)
                         .chain(iter::once((
                             Param(RuleParam::Kwargs.into()),
@@ -1198,7 +1206,7 @@ where
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum TyData {
-    Attributes(Arc<Vec<(Name, Arc<Attribute>)>>),
+    Attributes(Arc<RuleAttributes>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1372,10 +1380,16 @@ pub enum RuleKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct RuleAttributes {
+    pub(crate) attrs: Vec<(Name, Arc<Attribute>)>,
+    pub(crate) expr: InFile<ExprId>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct Rule {
     pub(crate) kind: RuleKind,
     pub(crate) doc: Option<Box<str>>,
-    pub(crate) attrs: Arc<Vec<(Name, Arc<Attribute>)>>,
+    pub(crate) attrs: Option<Arc<RuleAttributes>>,
 }
 
 impl Rule {
@@ -1392,7 +1406,13 @@ impl Rule {
         common_attrs
             .next()
             .into_iter()
-            .chain(self.attrs.iter().map(|(name, attr)| (name, &**attr)))
+            .chain(
+                self.attrs
+                    .as_ref()
+                    .map(|attrs| attrs.attrs.iter().map(|(name, attr)| (name, &**attr)))
+                    .into_iter()
+                    .flatten(),
+            )
             .chain(common_attrs)
     }
 }
@@ -1442,7 +1462,7 @@ pub(crate) enum Struct {
         ty: Ty,
     },
     Attributes {
-        attrs: Arc<Vec<(Name, Arc<Attribute>)>>,
+        attrs: Arc<RuleAttributes>,
     },
 }
 

@@ -1,10 +1,13 @@
 use starpls_common::parse as parse_query;
 use starpls_common::Db;
+use starpls_common::File;
 use starpls_hir::Name;
 use starpls_hir::ScopeDef;
 use starpls_hir::Semantics;
 use starpls_syntax::ast::AstNode;
 use starpls_syntax::ast::{self};
+use starpls_syntax::match_ast;
+use starpls_syntax::SyntaxToken;
 use starpls_syntax::T;
 
 use crate::util::pick_best_token;
@@ -13,170 +16,210 @@ use crate::FilePosition;
 use crate::LocationLink;
 use crate::ResolvedPath;
 
-pub(crate) fn goto_definition(
-    db: &Database,
-    FilePosition { file_id, pos }: FilePosition,
-) -> Option<Vec<LocationLink>> {
-    let sema = Semantics::new(db);
-    let file = db.get_file(file_id)?;
-    let parse = parse_query(db, file);
-    let token = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
-        T![ident] => 2,
-        T!['('] | T![')'] | T!['['] | T![']'] | T!['{'] | T!['}'] => 0,
-        kind if kind.is_trivia_token() => 0,
-        _ => 1,
-    })?;
-    let parent = token.parent()?;
+struct GotoDefinitionHandler<'a> {
+    db: &'a Database,
+    sema: Semantics<'a>,
+    file: File,
+    token: SyntaxToken,
+}
 
-    if let Some(name_ref) = ast::NameRef::cast(parent.clone()) {
+impl<'a> GotoDefinitionHandler<'a> {
+    fn new(db: &'a Database, FilePosition { file_id, pos }: FilePosition) -> Option<Self> {
+        let sema = Semantics::new(db);
+        let file = db.get_file(file_id)?;
+        let parse = parse_query(db, file);
+        let token = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
+            T![ident] => 2,
+            T!['('] | T![')'] | T!['['] | T![']'] | T!['{'] | T!['}'] => 0,
+            kind if kind.is_trivia_token() => 0,
+            _ => 1,
+        })?;
+
+        Some(Self {
+            db,
+            sema,
+            file,
+            token,
+        })
+    }
+
+    fn handle_goto_definition(&self) -> Option<Vec<LocationLink>> {
+        let parent = self.token.parent()?;
+
+        match_ast! {
+            match parent {
+                ast::NameRef(name_ref) => self.handle_name_ref(name_ref),
+                ast::Name(name) => {
+                    let parent = name.syntax().parent()?;
+                    match_ast! {
+                        match parent {
+                            ast::DotExpr(dot_expr) => self.handle_dot_expr(dot_expr),
+                            ast::KeywordArgument(arg) => self.handle_keyword_argument(arg),
+                            _ => None
+                        }
+                    }
+                },
+                ast::LoadModule(load_module) => self.handle_load_module(load_module),
+                ast::LoadItem(load_item) => self.handle_load_item(load_item),
+                ast::LiteralExpr(lit) => self.handle_literal_expr(lit),
+                _ => None
+            }
+        }
+    }
+
+    fn handle_name_ref(&self, name_ref: ast::NameRef) -> Option<Vec<LocationLink>> {
         let name = Name::from_ast_node(name_ref.clone());
-        let scope =
-            sema.scope_for_expr(file, &ast::Expression::cast(name_ref.syntax().clone())?)?;
-        return Some(
+        let scope = self.sema.scope_for_expr(
+            self.file,
+            &ast::Expression::cast(name_ref.syntax().clone())?,
+        )?;
+        Some(
             scope
                 .resolve_name(&name)
                 .into_iter()
                 .flat_map(|def| match def {
                     ScopeDef::LoadItem(load_item) => {
-                        let def = sema.def_for_load_item(&load_item)?;
-                        let range = def.value.syntax_node_ptr(db, def.file)?.text_range();
+                        let def = self.sema.def_for_load_item(&load_item)?;
+                        let range = def.value.syntax_node_ptr(self.db, def.file)?.text_range();
                         Some(LocationLink::Local {
                             origin_selection_range: None,
                             target_range: range,
                             target_selection_range: range,
-                            target_file_id: def.file.id(db),
+                            target_file_id: def.file.id(self.db),
                         })
                     }
                     _ => def
-                        .syntax_node_ptr(db, file)
+                        .syntax_node_ptr(self.db, self.file)
                         .map(|ptr| LocationLink::Local {
                             origin_selection_range: None,
                             target_range: ptr.text_range(),
                             target_selection_range: ptr.text_range(),
-                            target_file_id: file_id,
+                            target_file_id: self.file.id(self.db),
                         }),
                 })
                 .collect(),
-        );
+        )
     }
 
-    if let Some(name) = ast::Name::cast(parent.clone()) {
-        let parent = name.syntax().parent()?;
+    fn handle_dot_expr(&self, dot_expr: ast::DotExpr) -> Option<Vec<LocationLink>> {
+        let ty = self.sema.type_of_expr(self.file, &dot_expr.expr()?)?;
 
-        if let Some(dot_expr) = ast::DotExpr::cast(parent.clone()) {
-            let ty = sema.type_of_expr(file, &dot_expr.expr()?)?;
-
+        if let Some(strukt) = ty.try_as_inline_struct() {
             // Check for struct field definition.
-            if let Some(strukt) = ty.try_as_inline_struct() {
-                let struct_call_expr = strukt.call_expr(db)?;
-                return struct_call_expr
-                    .value
-                    .arguments()
-                    .into_iter()
-                    .flat_map(|args| args.arguments())
-                    .find_map(|arg| match arg {
-                        ast::Argument::Keyword(kwarg) => {
-                            let name = kwarg.name()?;
-                            (name.name()?.text() == token.text()).then(|| {
-                                let range = name.syntax().text_range();
-                                vec![LocationLink::Local {
-                                    origin_selection_range: None,
-                                    target_range: range,
-                                    target_selection_range: range,
-                                    target_file_id: struct_call_expr.file.id(db),
-                                }]
-                            })
-                        }
-                        _ => None,
-                    });
-            }
-
+            let struct_call_expr = strukt.call_expr(self.db)?;
+            struct_call_expr
+                .value
+                .arguments()
+                .into_iter()
+                .flat_map(|args| args.arguments())
+                .find_map(|arg| match arg {
+                    ast::Argument::Keyword(kwarg) => {
+                        let name = kwarg.name()?;
+                        (name.name()?.text() == self.token.text()).then(|| {
+                            let range = name.syntax().text_range();
+                            vec![LocationLink::Local {
+                                origin_selection_range: None,
+                                target_range: range,
+                                target_selection_range: range,
+                                target_file_id: struct_call_expr.file.id(self.db),
+                            }]
+                        })
+                    }
+                    _ => None,
+                })
+        } else if let Some(provider_fields) = ty.provider_fields_source(self.db) {
             // Check for provider field definition. This only handles the case where the provider
             // fields are specified in a dictionary literal.
-            if let Some(provider_fields) = ty.provider_fields_source(db) {
-                return provider_fields.value.entries().find_map(|entry| {
-                    entry
-                        .key()
-                        .as_ref()
-                        .and_then(|entry| match entry {
-                            ast::Expression::Literal(lit) => Some((lit.syntax(), lit.kind())),
-                            _ => None,
-                        })
-                        .and_then(|(syntax, kind)| match kind {
-                            ast::LiteralKind::String(s)
-                                if s.value().as_deref() == Some(token.text()) =>
-                            {
-                                Some(vec![LocationLink::Local {
-                                    origin_selection_range: None,
-                                    target_range: syntax.text_range(),
-                                    target_selection_range: syntax.text_range(),
-                                    target_file_id: provider_fields.file.id(db),
-                                }])
-                            }
-                            _ => None,
-                        })
-                });
-            }
-        } else if let Some(arg) = ast::KeywordArgument::cast(parent) {
-            let call_expr = arg
-                .syntax()
-                .parent()
-                .and_then(ast::Arguments::cast)
-                .and_then(|args| args.syntax().parent())
-                .and_then(ast::CallExpr::cast)?;
-            let callable = sema.resolve_call_expr(file, &call_expr)?;
-            let (param, _) = callable.params(db).into_iter().find(|(param, _)| {
-                param.name(db).as_ref().map(|name| name.as_str())
-                    == arg
-                        .name()
-                        .and_then(|name| name.name())
-                        .as_ref()
-                        .map(|name| name.text())
-            })?;
-            let range = param.syntax_node_ptr(db)?.text_range();
-
-            return Some(vec![LocationLink::Local {
-                origin_selection_range: None,
-                target_range: range,
-                target_selection_range: range,
-                target_file_id: callable.file()?.id(db),
-            }]);
+            provider_fields.value.entries().find_map(|entry| {
+                entry
+                    .key()
+                    .as_ref()
+                    .and_then(|entry| match entry {
+                        ast::Expression::Literal(lit) => Some((lit.syntax(), lit.kind())),
+                        _ => None,
+                    })
+                    .and_then(|(syntax, kind)| match kind {
+                        ast::LiteralKind::String(s)
+                            if s.value().as_deref() == Some(self.token.text()) =>
+                        {
+                            Some(vec![LocationLink::Local {
+                                origin_selection_range: None,
+                                target_range: syntax.text_range(),
+                                target_selection_range: syntax.text_range(),
+                                target_file_id: provider_fields.file.id(self.db),
+                            }])
+                        }
+                        _ => None,
+                    })
+            })
+        } else {
+            None
         }
     }
 
-    if let Some(load_module) = ast::LoadModule::cast(parent.clone()) {
-        let load_stmt = ast::LoadStmt::cast(load_module.syntax().parent()?)?;
-        let file = sema.resolve_load_stmt(file, &load_stmt)?;
-        return Some(vec![LocationLink::Local {
-            origin_selection_range: Some(token.text_range()),
-            target_range: Default::default(),
-            target_selection_range: Default::default(),
-            target_file_id: file.id(db),
-        }]);
-    }
+    fn handle_keyword_argument(&self, arg: ast::KeywordArgument) -> Option<Vec<LocationLink>> {
+        let call_expr = arg
+            .syntax()
+            .parent()
+            .and_then(ast::Arguments::cast)
+            .and_then(|args| args.syntax().parent())
+            .and_then(ast::CallExpr::cast)?;
+        let callable = self.sema.resolve_call_expr(self.file, &call_expr)?;
+        let (param, _) = callable.params(self.db).into_iter().find(|(param, _)| {
+            param.name(self.db).as_ref().map(|name| name.as_str())
+                == arg
+                    .name()
+                    .and_then(|name| name.name())
+                    .as_ref()
+                    .map(|name| name.text())
+        })?;
+        let range = param.syntax_node_ptr(self.db)?.text_range();
 
-    if let Some(load_item) = ast::LoadItem::cast(parent.clone()) {
-        let load_item = sema.resolve_load_item(file, &load_item)?;
-        let def = sema.def_for_load_item(&load_item)?;
-        let range = def.value.syntax_node_ptr(db, def.file)?.text_range();
-        return Some(vec![LocationLink::Local {
+        Some(vec![LocationLink::Local {
             origin_selection_range: None,
             target_range: range,
             target_selection_range: range,
-            target_file_id: def.file.id(db),
-        }]);
+            target_file_id: callable.file()?.id(self.db),
+        }])
     }
 
-    if let Some(lit) = ast::LiteralExpr::cast(parent) {
+    fn handle_load_module(&self, load_module: ast::LoadModule) -> Option<Vec<LocationLink>> {
+        let load_stmt = ast::LoadStmt::cast(load_module.syntax().parent()?)?;
+        let file = self.sema.resolve_load_stmt(self.file, &load_stmt)?;
+        Some(vec![LocationLink::Local {
+            origin_selection_range: Some(self.token.text_range()),
+            target_range: Default::default(),
+            target_selection_range: Default::default(),
+            target_file_id: file.id(self.db),
+        }])
+    }
+
+    fn handle_load_item(&self, load_item: ast::LoadItem) -> Option<Vec<LocationLink>> {
+        let load_item = self.sema.resolve_load_item(self.file, &load_item)?;
+        let def = self.sema.def_for_load_item(&load_item)?;
+        let range = def.value.syntax_node_ptr(self.db, def.file)?.text_range();
+        Some(vec![LocationLink::Local {
+            origin_selection_range: None,
+            target_range: range,
+            target_selection_range: range,
+            target_file_id: def.file.id(self.db),
+        }])
+    }
+
+    fn handle_literal_expr(&self, lit: ast::LiteralExpr) -> Option<Vec<LocationLink>> {
         let value = match lit.kind() {
             ast::LiteralKind::String(s) => s.value()?,
             _ => return None,
         };
-        let resolved_path = db.resolve_path(&value, file.dialect(db), file_id).ok()??;
-        return match resolved_path {
+        let resolved_path = self
+            .db
+            .resolve_path(&value, self.file.dialect(self.db), self.file.id(self.db))
+            .ok()??;
+
+        match resolved_path {
             ResolvedPath::Source { path } => path.try_exists().ok()?.then(|| {
                 vec![LocationLink::External {
-                    origin_selection_range: Some(token.text_range()),
+                    origin_selection_range: Some(self.token.text_range()),
                     target_path: path,
                 }]
             }),
@@ -185,8 +228,8 @@ pub(crate) fn goto_definition(
                 target,
                 ..
             } => {
-                let build_file = db.get_file(build_file_id)?;
-                let parse = parse_query(db, build_file).syntax(db);
+                let build_file = self.db.get_file(build_file_id)?;
+                let parse = parse_query(self.db, build_file).syntax(self.db);
                 let call_expr = parse
                     .children()
                     .filter_map(ast::CallExpr::cast)
@@ -217,18 +260,21 @@ pub(crate) fn goto_definition(
                                 _ => false,
                             })
                     })?;
+
                 let range = call_expr.syntax().text_range();
                 Some(vec![LocationLink::Local {
-                    origin_selection_range: Some(token.text_range()),
+                    origin_selection_range: Some(self.token.text_range()),
                     target_range: range,
                     target_selection_range: range,
                     target_file_id: build_file_id,
                 }])
             }
-        };
+        }
     }
+}
 
-    None
+pub(crate) fn goto_definition(db: &Database, pos: FilePosition) -> Option<Vec<LocationLink>> {
+    GotoDefinitionHandler::new(db, pos)?.handle_goto_definition()
 }
 
 #[cfg(test)]

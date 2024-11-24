@@ -78,7 +78,11 @@ fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptio
         vec![],
     ));
     builder.add_type(FixtureType::new("CcInfo", vec![], vec![]));
-    builder.add_type(FixtureType::new("attr", vec![], vec!["label_list"]));
+    builder.add_type(FixtureType::new(
+        "attr",
+        vec![],
+        vec!["int", "label_list", "string"],
+    ));
     builder.add_global("attr", "attr");
     builder.add_global("config_common", "config_common");
     builder.add_global("PyInfo", "PyInfo");
@@ -1377,6 +1381,52 @@ my_rule = rule(
             150..167 "attr.label_list()": Attribute
             132..174 "{\n        \"srcs\": attr.label_list(),\n    }": dict[string, Attribute]
             81..177 "rule(\n    implementation = _rule_impl,\n    attrs = {\n        \"srcs\": attr.label_list(),\n    },\n)": rule
+        "#]],
+    );
+}
+
+#[test]
+fn test_rule_attr_typecheck() {
+    check_infer(
+        r#"
+def _foo_impl(ctx):
+    pass
+
+foo = rule(
+    implementation = _foo_impl,
+    attrs = {
+        "bar": attr.string(),
+        "baz": attr.int(),
+    },
+)
+
+foo(
+    name = "foo",
+    bar = "bar",
+    baz = "baz",
+)
+"#,
+        expect![[r#"
+            31..34 "foo": rule
+            37..41 "rule": def rule(*args, **kwargs) -> Unknown
+            64..73 "_foo_impl": def _foo_impl(ctx) -> Unknown
+            97..102 "\"bar\"": Literal["bar"]
+            104..108 "attr": attr
+            104..115 "attr.string": def string(*args, **kwargs) -> Unknown
+            104..117 "attr.string()": Attribute
+            127..132 "\"baz\"": Literal["baz"]
+            134..138 "attr": attr
+            134..142 "attr.int": def int(*args, **kwargs) -> Unknown
+            134..144 "attr.int()": Attribute
+            87..151 "{\n        \"bar\": attr.string(),\n        \"baz\": attr.int(),\n    }": dict[string, Attribute]
+            37..154 "rule(\n    implementation = _foo_impl,\n    attrs = {\n        \"bar\": attr.string(),\n        \"baz\": attr.int(),\n    },\n)": rule
+            156..159 "foo": rule
+            172..177 "\"foo\"": Literal["foo"]
+            189..194 "\"bar\"": Literal["bar"]
+            206..211 "\"baz\"": Literal["baz"]
+            156..214 "foo(\n    name = \"foo\",\n    bar = \"bar\",\n    baz = \"baz\",\n)": None
+
+            206..211 Argument of type "Literal["baz"]" cannot be assigned to parameter of type "int"
         "#]],
     );
 }

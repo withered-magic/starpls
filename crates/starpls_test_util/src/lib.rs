@@ -71,7 +71,7 @@ impl FixtureType {
 }
 
 pub fn make_test_builtins(
-    functions: Vec<String>,
+    functions: Vec<impl ToString>,
     globals: Vec<(String, String)>,
     types: Vec<FixtureType>,
 ) -> Builtins {

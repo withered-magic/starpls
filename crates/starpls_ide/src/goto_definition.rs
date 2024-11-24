@@ -386,6 +386,29 @@ foo(a$0bc = 123)
     }
 
     #[test]
+    fn test_rule_attribute() {
+        check_goto_definition(
+            r#"
+def _foo_impl(ctx):
+    pass
+
+foo = rule(
+    implementation = _foo_impl,
+    attrs = {
+        "bar": attr.string(),
+        #^^^^
+    },
+)
+
+foo(
+    name = "foo",
+    b$0ar = "baz",
+)
+"#,
+        );
+    }
+
+    #[test]
     fn test_struct_field() {
         check_goto_definition(
             r#"

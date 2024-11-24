@@ -156,7 +156,7 @@ impl<'a> Semantics<'a> {
             })?;
         Some((
             Param(ParamInner::Param {
-                parent: Some(func),
+                func,
                 index: *index,
             }),
             with_tcx(self.db, |tcx| tcx.infer_param(file, *param)).into(),
@@ -613,7 +613,7 @@ impl Callable {
 
     pub fn rule_attrs_source(&self, db: &dyn Db) -> Option<InFile<ast::DictExpr>> {
         let attrs_expr = match self.0 {
-            CallableInner::Rule(ref rule) => rule.attrs.as_ref()?.expr,
+            CallableInner::Rule(ref rule) => rule.attrs.as_ref()?.expr?,
             _ => return None,
         };
 

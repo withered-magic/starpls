@@ -211,3 +211,215 @@ fn format_for_name(db: &Database, name: &str, ty: &Type) -> String {
 
     text
 }
+
+#[cfg(test)]
+mod tests {
+    use expect_test::expect;
+    use expect_test::Expect;
+    use starpls_bazel::APIContext;
+    use starpls_common::Dialect;
+    use starpls_common::FileInfo;
+    use starpls_test_util::Fixture;
+
+    use crate::AnalysisSnapshot;
+    use crate::FilePosition;
+
+    fn check_hover(fixture: &str, expect: Expect) {
+        let fixture = Fixture::parse(fixture);
+        let (snap, file_id) = AnalysisSnapshot::from_single_file(
+            &fixture.contents,
+            Dialect::Bazel,
+            Some(FileInfo::Bazel {
+                api_context: APIContext::Bzl,
+                is_external: false,
+            }),
+        );
+
+        let hover = snap
+            .hover(FilePosition {
+                file_id,
+                pos: fixture.cursor_pos,
+            })
+            .unwrap()
+            .unwrap();
+
+        expect.assert_eq(&hover.contents.value);
+    }
+
+    #[test]
+    fn check_variable() {
+        check_hover(
+            r#"
+a$0bc = 123
+"#,
+            expect![[r#"
+                ```python
+                (variable) abc: Literal[123]
+                ```
+            "#]],
+        );
+    }
+
+    #[test]
+    fn check_def_stmt() {
+        check_hover(
+            r#"
+def f$0oo(x, y):
+    """Doc string"""
+    pass
+"#,
+            expect![[r#"
+                ```python
+                (function) def foo(x, y) -> Unknown
+                ```
+                Doc string  
+            "#]],
+        );
+    }
+
+    #[test]
+    fn check_call_expr() {
+        check_hover(
+            r#"
+def foo(x, y):
+    """Doc string"""
+    pass
+
+f$0oo(1, 2)
+"#,
+            expect![[r#"
+                ```python
+                (function) def foo(x, y) -> Unknown
+                ```
+                Doc string  
+            "#]],
+        );
+    }
+
+    #[test]
+    fn check_type() {
+        check_hover(
+            r#"
+x = 1 # type: i$0nt
+"#,
+            expect![[r#"
+                ```python
+                (type) int
+                ```
+            "#]],
+        );
+    }
+
+    #[test]
+    fn check_param() {
+        check_hover(
+            r#"
+def foo(a$0bc):
+    """
+    Args:
+        abc: Easy as 123!
+    """
+    pass
+"#,
+            expect![[r#"
+                ```python
+                (parameter) abc: Unknown
+                ```
+                Easy as 123!  
+            "#]],
+        );
+    }
+
+    #[test]
+    fn check_arg() {
+        check_hover(
+            r#"
+def foo(abc):
+    """
+    Args:
+        abc: Easy as 123!
+    """
+    pass
+
+foo(a$0bc = 123)
+"#,
+            expect![[r#"
+                ```python
+                (parameter) abc: Unknown
+                ```
+                Easy as 123!  
+            "#]],
+        );
+    }
+
+    #[test]
+    fn check_field() {
+        check_hover(
+            r#"
+foo = struct(bar = 123)
+foo.b$0ar
+"#,
+            expect![[r#"
+                ```python
+                (field) bar: Literal[123]
+                ```
+            "#]],
+        );
+    }
+
+    #[test]
+    fn check_method() {
+        check_hover(
+            r#"
+def bar():
+    pass
+
+foo = struct(bar = bar)
+foo.b$0ar
+"#,
+            expect![[r#"
+                ```python
+                (method) def bar() -> Unknown
+                ```
+            "#]],
+        );
+    }
+
+    #[test]
+    fn check_provider_doc() {
+        check_hover(
+            r#"
+Foo$0Info = provider(doc = "The foo provider")
+"#,
+            expect![[r#"
+                ```python
+                (variable) FooInfo: Provider[FooInfo]
+                ```
+                The foo provider  
+            "#]],
+        );
+    }
+
+    #[test]
+    fn check_provider_field_doc() {
+        check_hover(
+            r#"
+FooInfo = provider(
+    doc = "The foo provider",
+    fields = {
+        "bar": "The bar field",
+    },
+)
+
+foo = FooInfo(bar = "bar")
+foo.b$0ar
+"#,
+            expect![[r#"
+                ```python
+                (field) bar: Unknown
+                ```
+                The bar field  
+            "#]],
+        );
+    }
+}

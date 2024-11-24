@@ -336,7 +336,6 @@ impl BuiltinFunction {
                             }
                             "attrs" => {
                                 if let TyKind::Dict(_, _, Some(lit)) = ty.kind() {
-                                    let expr = lit.expr?;
                                     attrs = Some(RuleAttributes {
                                         attrs: lit
                                             .known_keys
@@ -349,7 +348,7 @@ impl BuiltinFunction {
                                                 _ => None,
                                             })
                                             .collect::<Vec<_>>(),
-                                        expr,
+                                        expr: lit.expr,
                                     })
                                 }
                             }

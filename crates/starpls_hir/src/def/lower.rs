@@ -362,7 +362,7 @@ impl<'a> LoweringContext<'a> {
                 doc.lines().find_map(|line| {
                     let line = line.trim().trim_start_matches('*');
                     line.strip_prefix(&prefix)
-                        .map(|stripped| stripped.to_string().into_boxed_str())
+                        .map(|stripped| stripped.trim().to_string().into_boxed_str())
                 })
             })
         };

@@ -1663,8 +1663,7 @@ pub struct TyContext<'a> {
 
 struct TypeRefResolver<'a, 'b> {
     db: &'a dyn Db,
-    tcx: Option<&'a mut TyContext<'b>>,
-    usage: Option<InFile<StmtId>>,
+    context: Option<(&'a mut TyContext<'b>, InFile<StmtId>)>,
     errors: Vec<String>,
 }
 
@@ -1704,9 +1703,9 @@ impl<'a, 'b> TypeRefResolver<'a, 'b> {
         mut next: &'c Name,
         mut segments: impl Iterator<Item = &'c Name>,
     ) -> Option<Ty> {
-        let (tcx, usage) = match (self.tcx.as_mut(), self.usage) {
-            (Some(tcx), Some(usage)) => (tcx, usage),
-            _ => return None,
+        let (tcx, usage) = match &mut self.context {
+            Some(context) => context,
+            None => return None,
         };
         let mut ty = tcx.infer_name(usage.file, name, usage.value)?;
         loop {
@@ -1744,7 +1743,7 @@ impl<'a, 'b> TypeRefResolver<'a, 'b> {
         }
 
         // If `usage` was passed, try to resolve as a custom provider defined in the corresponding scope.
-        if let (Some(tcx), Some(usage)) = (self.tcx.as_mut(), self.usage) {
+        if let Some((tcx, usage)) = &mut self.context {
             if let Some(ty) = tcx.infer_name(usage.file, name, usage.value) {
                 if let TyKind::Provider(provider) = ty.kind() {
                     return TyKind::ProviderInstance(provider.clone()).intern();
@@ -1858,8 +1857,7 @@ pub(crate) fn resolve_type_ref(
 ) -> (Ty, Vec<String>) {
     TypeRefResolver {
         db: tcx.db,
-        tcx: Some(tcx),
-        usage,
+        context: usage.map(|usage| (tcx, usage)),
         errors: vec![],
     }
     .resolve_type_ref(type_ref)
@@ -1878,8 +1876,7 @@ pub(crate) fn resolve_type_ref_opt(
 pub(crate) fn resolve_builtin_type_ref(db: &dyn Db, type_ref: &TypeRef) -> (Ty, Vec<String>) {
     TypeRefResolver {
         db,
-        tcx: None,
-        usage: None,
+        context: None,
         errors: vec![],
     }
     .resolve_type_ref(type_ref)

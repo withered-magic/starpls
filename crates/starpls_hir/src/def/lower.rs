@@ -10,6 +10,7 @@ use starpls_syntax::ast::AstPtr;
 use starpls_syntax::ast::AstToken;
 use starpls_syntax::ast::SyntaxNodePtr;
 use starpls_syntax::ast::{self};
+use starpls_syntax::SyntaxNode;
 use starpls_syntax::SyntaxToken;
 use starpls_syntax::TextRange;
 
@@ -83,27 +84,13 @@ impl<'a> LoweringContext<'a> {
             let stmt = self.lower_stmt(statement.clone());
             top_level.push(stmt);
             match &self.module.stmts[stmt] {
-                Stmt::If { .. } => Diagnostics::push(
-                    self.db,
-                    Diagnostic {
-                        message: "Starlark does not allow top-level if statements".to_string(),
-                        severity: Severity::Error,
-                        range: FileRange {
-                            file_id: self.file.id(self.db),
-                            range: statement.syntax().text_range(),
-                        },
-                    },
+                Stmt::If { .. } => self.add_error_diagnostic(
+                    "Starlark does not allow top-level if statements",
+                    statement.syntax(),
                 ),
-                Stmt::For { .. } => Diagnostics::push(
-                    self.db,
-                    Diagnostic {
-                        message: "Starlark does not allow top-level for statements".to_string(),
-                        severity: Severity::Error,
-                        range: FileRange {
-                            file_id: self.file.id(self.db),
-                            range: statement.syntax().text_range(),
-                        },
-                    },
+                Stmt::For { .. } => self.add_error_diagnostic(
+                    "Starlark does not allow top-level for statements",
+                    statement.syntax(),
                 ),
                 _ => {}
             }
@@ -383,6 +370,18 @@ impl<'a> LoweringContext<'a> {
             })
         };
 
+        let mut saw_star_arg = false;
+        let mut saw_star_star_arg = false;
+        let mut saw_default_param = false;
+        let mut saw_names = vec![];
+        let mut check_duplicate_param = |cx: &mut Self, name: &Name, syntax: &SyntaxNode| {
+            if !name.is_missing() && saw_names.contains(name) {
+                cx.add_error_diagnostic(&format!("Duplicate parameter {}", name.as_str()), syntax);
+            } else {
+                saw_names.push(name.clone());
+            }
+        };
+
         for (i, param) in syntax
             .iter()
             .flat_map(|params| params.parameters())
@@ -398,6 +397,24 @@ impl<'a> LoweringContext<'a> {
                     let name = self.lower_name_opt(param.name());
                     let doc = find_doc(name.as_str());
                     let default = self.lower_expr_maybe(param.default());
+
+                    check_duplicate_param(self, &name, param.syntax());
+                    if saw_default_param && !saw_star_arg && default.is_none() {
+                        self.add_error_diagnostic(
+                            "Non-default parameter cannot follow default parameter",
+                            param.syntax(),
+                        );
+                    }
+                    if default.is_some() {
+                        saw_default_param = true;
+                    }
+                    if saw_star_star_arg {
+                        self.add_error_diagnostic(
+                            "Parameter cannot follow \"**\" parameter",
+                            param.syntax(),
+                        );
+                    }
+
                     Param::Simple {
                         name,
                         default,
@@ -408,6 +425,22 @@ impl<'a> LoweringContext<'a> {
                 ast::Parameter::ArgsList(param) => {
                     let name = self.lower_name_opt(param.name());
                     let doc = find_doc(name.as_str());
+
+                    check_duplicate_param(self, &name, param.syntax());
+                    if saw_star_arg {
+                        self.add_error_diagnostic(
+                            "Only one \"*\" parameter is allowed",
+                            param.syntax(),
+                        );
+                    }
+                    if saw_star_star_arg {
+                        self.add_error_diagnostic(
+                            "Parameter cannot follow \"**\" parameter",
+                            param.syntax(),
+                        );
+                    }
+                    saw_star_arg = true;
+
                     Param::ArgsList {
                         name,
                         type_ref,
@@ -417,6 +450,16 @@ impl<'a> LoweringContext<'a> {
                 ast::Parameter::KwargsDict(param) => {
                     let name = self.lower_name_opt(param.name());
                     let doc = find_doc(name.as_str());
+
+                    check_duplicate_param(self, &name, param.syntax());
+                    if saw_star_star_arg {
+                        self.add_error_diagnostic(
+                            "Only one \"**\" parameter is allowed",
+                            param.syntax(),
+                        );
+                    }
+                    saw_star_star_arg = true;
+
                     Param::KwargsDict {
                         name,
                         type_ref,
@@ -424,6 +467,7 @@ impl<'a> LoweringContext<'a> {
                     }
                 }
             };
+
             params.push(self.alloc_param(param, ptr));
         }
         params.into_boxed_slice()
@@ -647,5 +691,19 @@ impl<'a> LoweringContext<'a> {
         self.source_map.load_item_map.insert(ptr.clone(), id);
         self.source_map.load_item_map_back.insert(id, ptr.clone());
         id
+    }
+
+    fn add_error_diagnostic(&self, message: &str, syntax: &SyntaxNode) {
+        Diagnostics::push(
+            self.db,
+            Diagnostic {
+                message: message.into(),
+                severity: Severity::Error,
+                range: FileRange {
+                    file_id: self.file.id(self.db),
+                    range: syntax.text_range(),
+                },
+            },
+        );
     }
 }

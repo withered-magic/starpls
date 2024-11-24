@@ -27,18 +27,6 @@ pub(crate) struct TestDatabase {
     pub(crate) gcx: Arc<GlobalContext>,
 }
 
-impl TestDatabase {
-    #[allow(dead_code)]
-    pub(crate) fn infer_all_exprs(&self, file: File) {
-        self.gcx.with_tcx(self, |tcx| tcx.infer_all_exprs(file));
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn infer_all_params(&self, file: File) {
-        self.gcx.with_tcx(self, |tcx| tcx.infer_all_params(file));
-    }
-}
-
 impl salsa::Database for TestDatabase {}
 
 impl starpls_common::Db for TestDatabase {

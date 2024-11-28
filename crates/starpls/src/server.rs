@@ -58,6 +58,7 @@ pub(crate) struct Server {
     pub(crate) fetched_repos: FxHashSet<String>,
     pub(crate) is_fetching_repos: bool,
     pub(crate) is_refreshing_all_workspace_targets: bool,
+    pub(crate) bzlmod_enabled: bool,
 }
 
 pub(crate) struct ServerSnapshot {
@@ -251,6 +252,7 @@ impl Server {
             fetched_repos: Default::default(),
             is_fetching_repos: false,
             is_refreshing_all_workspace_targets: false,
+            bzlmod_enabled,
         };
 
         if has_bazel_init_err {
@@ -358,6 +360,7 @@ impl Server {
         let repos = mem::take(&mut self.pending_repos);
         let files = mem::take(&mut self.pending_files);
         let bazel_client = self.bazel_client.clone();
+        let bzlmod_enabled = self.bzlmod_enabled;
 
         self.is_fetching_repos = true;
         self.fetched_repos.extend(repos.clone());
@@ -372,7 +375,11 @@ impl Server {
 
             for repo in &repos {
                 eprintln!("server: fetching external repository \"@@{}\"", repo);
-                if let Err(err) = bazel_client.null_query_external_repo_targets(repo) {
+                if let Err(err) = if bzlmod_enabled {
+                    bazel_client.fetch_repo(repo)
+                } else {
+                    bazel_client.null_query_external_repo_targets(repo)
+                } {
                     failed_repos.push(repo.clone());
                     eprintln!(
                         "server: failed to fetch external repository \"@@{}\": {}",

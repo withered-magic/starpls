@@ -1,5 +1,5 @@
 {
-  "checksum": "aa4183f50d35cd7fa6a16521c4fafbf6ee44ddbd19e693d1f2ad4d5bd6606bf0",
+  "checksum": "04de1dc77e4ab66d50d5c04298186bc930e9e64a82e1d13ce0d764ed25ec588e",
   "crates": {
     "addr2line 0.21.0": {
       "name": "addr2line",
@@ -7527,9 +7527,9 @@
       },
       "license": "MIT/Apache-2.0"
     },
-    "starpls 0.1.16": {
+    "starpls 0.1.17": {
       "name": "starpls",
-      "version": "0.1.16",
+      "version": "0.1.17",
       "repository": null,
       "targets": [],
       "library_target_name": null,
@@ -7595,7 +7595,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.1.16"
+        "version": "0.1.17"
       },
       "license": null
     },
@@ -10840,7 +10840,7 @@
   ],
   "workspace_members": {
     "runfiles 0.38.0": "vendor/runfiles",
-    "starpls 0.1.16": "crates/starpls",
+    "starpls 0.1.17": "crates/starpls",
     "starpls_bazel 0.1.0": "crates/starpls_bazel",
     "starpls_common 0.1.0": "crates/starpls_common",
     "starpls_hir 0.1.0": "crates/starpls_hir",

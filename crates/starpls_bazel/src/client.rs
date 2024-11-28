@@ -32,6 +32,7 @@ pub trait BazelClient: Send + Sync + 'static {
     fn null_query_external_repo_targets(&self, repo: &str) -> anyhow::Result<()>;
     fn repo_mapping_keys(&self, from_repo: &str) -> anyhow::Result<Vec<String>>;
     fn query_all_workspace_targets(&self) -> anyhow::Result<Vec<String>>;
+    fn fetch_repo(&self, repo: &str) -> anyhow::Result<()>;
 }
 
 pub struct BazelCLI {
@@ -47,7 +48,11 @@ impl BazelCLI {
         }
     }
 
-    fn run_command(&self, args: &[&str]) -> anyhow::Result<Vec<u8>> {
+    fn run_command<I, S>(&self, args: I) -> anyhow::Result<Vec<u8>>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
+    {
         let output = Command::new(&self.executable).args(args).output()?;
         if !output.status.success() {
             bail!(
@@ -177,12 +182,17 @@ impl BazelClient for BazelCLI {
     }
 
     fn query_all_workspace_targets(&self) -> anyhow::Result<Vec<String>> {
-        let output = self.run_command(&["query", "kind('.* rule', ...)"])?;
+        let output = self.run_command(["query", "kind('.* rule', ...)"])?;
         let targets = str::from_utf8(&output)?
             .lines()
             .map(|line| line.to_string())
             .collect();
         Ok(targets)
+    }
+
+    fn fetch_repo(&self, repo: &str) -> anyhow::Result<()> {
+        self.run_command(["fetch", "--repo", &format!("@@{}", repo)])?;
+        Ok(())
     }
 }
 

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use starpls_bazel::Builtins;
 use starpls_common::parse;
 use starpls_common::Dialect;
@@ -77,6 +79,8 @@ pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
     fn get_builtin_defs(&self, dialect: &Dialect) -> BuiltinDefs;
     fn set_bazel_prelude_file(&mut self, file_id: FileId);
     fn get_bazel_prelude_file(&self) -> Option<FileId>;
+    fn set_all_workspace_targets(&mut self, targets: Vec<String>);
+    fn get_all_workspace_targets(&self) -> Arc<Vec<String>>;
 }
 
 #[salsa::tracked]

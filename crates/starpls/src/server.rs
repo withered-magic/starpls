@@ -32,6 +32,7 @@ use crate::document::DocumentChangeKind;
 use crate::document::DocumentManager;
 use crate::document::PathInterner;
 use crate::event_loop::FetchExternalReposProgress;
+use crate::event_loop::RefreshAllWorkspaceTargetsProgress;
 use crate::event_loop::Task;
 use crate::task_pool::TaskPool;
 use crate::task_pool::TaskPoolHandle;
@@ -56,6 +57,7 @@ pub(crate) struct Server {
     pub(crate) force_analysis_for_files: FxHashSet<FileId>,
     pub(crate) fetched_repos: FxHashSet<String>,
     pub(crate) is_fetching_repos: bool,
+    pub(crate) is_refreshing_all_workspace_targets: bool,
 }
 
 pub(crate) struct ServerSnapshot {
@@ -171,6 +173,24 @@ impl Server {
             }
         };
 
+        // Query for all targets in the current workspace, to use for label completion.
+        let targets = if config.args.enable_label_completions {
+            eprintln!("server: querying for all targets in the current workspace");
+            match bazel_client.query_all_workspace_targets() {
+                Ok(targets) => {
+                    eprintln!("server: successfully queried for all targets");
+                    targets
+                }
+                Err(err) => {
+                    eprintln!("server: failed to query all workspace targets: {}", err);
+                    has_bazel_init_err = true;
+                    Default::default()
+                }
+            }
+        } else {
+            Default::default()
+        };
+
         let path_interner = Arc::new(PathInterner::default());
         let loader = DefaultFileLoader::new(
             bazel_client.clone(),
@@ -189,6 +209,7 @@ impl Server {
             },
         );
 
+        analysis.set_all_workspace_targets(targets);
         analysis.set_builtin_defs(builtins, rules);
 
         // Check for a prelude file. We skip verifying that `//tools/build_tools` is actually a package (i.e.
@@ -229,6 +250,7 @@ impl Server {
             force_analysis_for_files: Default::default(),
             fetched_repos: Default::default(),
             is_fetching_repos: false,
+            is_refreshing_all_workspace_targets: false,
         };
 
         if has_bazel_init_err {
@@ -336,6 +358,7 @@ impl Server {
         let repos = mem::take(&mut self.pending_repos);
         let files = mem::take(&mut self.pending_files);
         let bazel_client = self.bazel_client.clone();
+
         self.is_fetching_repos = true;
         self.fetched_repos.extend(repos.clone());
         self.task_pool_handle.spawn_with_sender(move |sender| {
@@ -363,6 +386,37 @@ impl Server {
                     files,
                     failed_repos,
                 )))
+                .unwrap();
+        });
+    }
+
+    pub(crate) fn refresh_all_workspace_targets(&mut self) {
+        if self.is_refreshing_all_workspace_targets || !self.config.args.enable_label_completions {
+            return;
+        }
+
+        let bazel_client = self.bazel_client.clone();
+
+        self.is_refreshing_all_workspace_targets = true;
+        self.task_pool_handle.spawn_with_sender(move |sender| {
+            sender
+                .send(Task::RefreshAllWorkspaceTargets(
+                    RefreshAllWorkspaceTargetsProgress::Begin,
+                ))
+                .unwrap();
+
+            let targets = match bazel_client.query_all_workspace_targets() {
+                Ok(targets) => Some(targets),
+                Err(err) => {
+                    eprintln!("server: failed to query all workspace targets: {}", err);
+                    None
+                }
+            };
+
+            sender
+                .send(Task::RefreshAllWorkspaceTargets(
+                    RefreshAllWorkspaceTargetsProgress::End(targets),
+                ))
                 .unwrap();
         });
     }

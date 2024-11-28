@@ -84,7 +84,7 @@ pub(crate) fn completion(
     Ok(Some(
         snapshot
             .analysis_snapshot
-            .completion(
+            .completions(
                 FilePosition { file_id, pos },
                 params.context.and_then(|cx| cx.trigger_character),
             )?

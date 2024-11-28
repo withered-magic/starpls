@@ -42,6 +42,12 @@ pub(crate) struct FetchExternalRepoRequest {
 }
 
 #[derive(Debug)]
+pub(crate) enum RefreshAllWorkspaceTargetsProgress {
+    Begin,
+    End(Option<Vec<String>>),
+}
+
+#[derive(Debug)]
 pub(crate) enum Task {
     AnalysisRequested(Vec<FileId>),
     /// A new set of diagnostics has been processed and is ready for forwarding.
@@ -54,6 +60,8 @@ pub(crate) enum Task {
     FetchExternalRepos(FetchExternalReposProgress),
     /// A request to fetch an external repository.
     FetchExternalRepoRequest(FetchExternalRepoRequest),
+    /// Events from refreshing targets for the current workspace.
+    RefreshAllWorkspaceTargets(RefreshAllWorkspaceTargetsProgress),
 }
 
 #[derive(Debug)]
@@ -291,6 +299,40 @@ impl Server {
                     self.pending_repos.insert(repo);
                     self.pending_files.insert(file_id);
                 }
+            }
+            Task::RefreshAllWorkspaceTargets(progress) => {
+                let token = "RefreshAllWorkspaceTargets";
+                let work_done = match progress {
+                    RefreshAllWorkspaceTargetsProgress::Begin => {
+                        self.send_request::<lsp_types::request::WorkDoneProgressCreate>(
+                            WorkDoneProgressCreateParams {
+                                token: lsp_types::NumberOrString::String(token.to_string()),
+                            },
+                        );
+
+                        lsp_types::WorkDoneProgress::Begin(lsp_types::WorkDoneProgressBegin {
+                            title: "Refreshing all workspace targets".to_string(),
+                            ..Default::default()
+                        })
+                    }
+                    RefreshAllWorkspaceTargetsProgress::End(targets) => {
+                        self.is_refreshing_all_workspace_targets = false;
+                        if let Some(targets) = targets {
+                            self.analysis.set_all_workspace_targets(targets);
+                        }
+
+                        lsp_types::WorkDoneProgress::End(lsp_types::WorkDoneProgressEnd {
+                            message: None,
+                        })
+                    }
+                };
+
+                self.send_notification::<lsp_types::notification::Progress>(
+                    lsp_types::ProgressParams {
+                        token: lsp_types::NumberOrString::String(token.to_string()),
+                        value: lsp_types::ProgressParamsValue::WorkDone(work_done),
+                    },
+                );
             }
         }
     }

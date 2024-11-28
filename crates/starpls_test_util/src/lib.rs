@@ -72,7 +72,7 @@ impl FixtureType {
 
 pub fn make_test_builtins(
     functions: Vec<impl ToString>,
-    globals: Vec<(String, String)>,
+    globals: Vec<(impl ToString, impl ToString)>,
     types: Vec<FixtureType>,
 ) -> Builtins {
     Builtins {
@@ -98,8 +98,8 @@ pub fn make_test_builtins(
                 ..Default::default()
             })
             .chain(globals.into_iter().map(|(name, ty)| Value {
-                name,
-                r#type: ty,
+                name: name.to_string(),
+                r#type: ty.to_string(),
                 ..Default::default()
             }))
             .collect(),

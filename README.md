@@ -85,6 +85,55 @@ def _impl(ctx):
 
 then you'll get autocomplete suggestions for the attributes on `ctx`, like `ctx.actions`, `ctx.attr`, and so on!
 
+## Experimental features
+
+Starpls has a number of experimental features that can be enabled via command-line arguments:
+
+### `--experimental_infer_ctx_attributes`
+
+Infer attributes on a rule implementation function's `ctx` parameter.
+
+```python
+def _foo_impl(ctx):
+    ctx.attr.bar # type: int
+
+foo = rule(
+    implementation = _foo_impl,
+    attrs = {
+        "bar": attr.int(),
+    },
+)
+```
+
+### `--experimental_use_code_flow_analysis`
+
+Use code flow analysis to determine additional information about types.
+
+```python
+if cond:
+    x = 1
+else:
+    x = "abc"
+
+x # type: int | string
+```
+
+### `--experimental_enable_label_completions`
+
+Enables completions for labels within Bazel files. For example, given the following `BUILD.bazel` file at the repository root:
+
+```python
+my_rule(
+    name = "foo"
+)
+
+my_rule(
+    name = "bar",
+    srcs = ["//:"],
+              # ^ ... If the cursor is here, "foo" will be suggested.
+)
+```
+
 ## Roadmap
 
 - Parsing

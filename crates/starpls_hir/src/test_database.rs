@@ -24,6 +24,7 @@ pub(crate) struct TestDatabase {
     storage: salsa::Storage<Self>,
     files: Arc<DashMap<FileId, File>>,
     prelude_file: Option<FileId>,
+    all_workspace_targets: Arc<Vec<String>>,
     pub(crate) gcx: Arc<GlobalContext>,
 }
 
@@ -83,6 +84,10 @@ impl starpls_common::Db for TestDatabase {
     ) -> anyhow::Result<Option<ResolvedPath>> {
         Ok(None)
     }
+
+    fn resolve_build_file(&self, _file_id: FileId) -> Option<String> {
+        None
+    }
 }
 
 impl crate::Db for TestDatabase {
@@ -118,6 +123,14 @@ impl crate::Db for TestDatabase {
 
     fn gcx(&self) -> &GlobalContext {
         &self.gcx
+    }
+
+    fn set_all_workspace_targets(&mut self, targets: Vec<String>) {
+        self.all_workspace_targets = Arc::new(targets)
+    }
+
+    fn get_all_workspace_targets(&self) -> Arc<Vec<String>> {
+        Arc::clone(&self.all_workspace_targets)
     }
 }
 

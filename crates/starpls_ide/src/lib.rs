@@ -62,6 +62,7 @@ pub(crate) struct Database {
     loader: Arc<dyn FileLoader>,
     gcx: Arc<GlobalContext>,
     prelude_file: Option<FileId>,
+    all_workspace_targets: Arc<Vec<String>>,
 }
 
 impl Database {
@@ -96,6 +97,7 @@ impl salsa::ParallelDatabase for Database {
             loader: self.loader.clone(),
             storage: self.storage.snapshot(),
             prelude_file: self.prelude_file,
+            all_workspace_targets: self.all_workspace_targets.clone(),
         })
     }
 }
@@ -190,6 +192,10 @@ impl starpls_common::Db for Database {
 
         Ok(Some(resolved_path))
     }
+
+    fn resolve_build_file(&self, file_id: FileId) -> Option<String> {
+        self.loader.resolve_build_file(file_id)
+    }
 }
 
 impl starpls_hir::Db for Database {
@@ -221,6 +227,14 @@ impl starpls_hir::Db for Database {
 
     fn get_bazel_prelude_file(&self) -> Option<FileId> {
         self.prelude_file
+    }
+
+    fn set_all_workspace_targets(&mut self, targets: Vec<String>) {
+        self.all_workspace_targets = Arc::new(targets)
+    }
+
+    fn get_all_workspace_targets(&self) -> Arc<Vec<String>> {
+        Arc::clone(&self.all_workspace_targets)
     }
 
     fn gcx(&self) -> &GlobalContext {
@@ -286,6 +300,7 @@ impl Analysis {
                 storage: Default::default(),
                 loader,
                 prelude_file: None,
+                all_workspace_targets: Arc::default(),
             },
         }
     }
@@ -307,6 +322,10 @@ impl Analysis {
     pub fn set_bazel_prelude_file(&mut self, file_id: FileId) {
         self.db.set_bazel_prelude_file(file_id);
     }
+
+    pub fn set_all_workspace_targets(&mut self, targets: Vec<String>) {
+        self.db.set_all_workspace_targets(targets);
+    }
 }
 
 pub struct AnalysisSnapshot {
@@ -314,7 +333,7 @@ pub struct AnalysisSnapshot {
 }
 
 impl AnalysisSnapshot {
-    pub fn completion(
+    pub fn completions(
         &self,
         pos: FilePosition,
         trigger_character: Option<String>,
@@ -362,15 +381,26 @@ impl AnalysisSnapshot {
         starpls_hir::Cancelled::catch(|| f(&self.db))
     }
 
-    /// This should only be used as a convenient way to create analysis snapshots
-    /// from test data.
     #[cfg(test)]
     pub fn from_single_file(
         contents: &str,
         dialect: Dialect,
         info: Option<FileInfo>,
     ) -> (Self, FileId) {
+        Self::from_single_file_with_options(contents, dialect, info, vec![])
+    }
+
+    /// This should only be used as a convenient way to create analysis snapshots
+    /// from test data.
+    #[cfg(test)]
+    pub fn from_single_file_with_options(
+        contents: &str,
+        dialect: Dialect,
+        info: Option<FileInfo>,
+        all_workspace_targets: Vec<String>,
+    ) -> (Self, FileId) {
         use starpls_test_util::make_test_builtins;
+        use starpls_test_util::FixtureType;
 
         let mut file_set = FxHashMap::default();
         let file_id = FileId(0);
@@ -386,14 +416,15 @@ impl AnalysisSnapshot {
 
         // Add builtins here as needed for tests.
         let functions = vec!["provider", "rule", "struct"];
-        let globals = vec![];
-        let types = vec![];
+        let globals = vec![("attr", "attr")];
+        let types = vec![FixtureType::new("attr", vec![], vec!["int", "string"])];
 
         analysis.db.set_builtin_defs(
             Dialect::Bazel,
             make_test_builtins(functions, globals, types),
             Builtins::default(),
         );
+        analysis.db.set_all_workspace_targets(all_workspace_targets);
         analysis.apply_change(change);
         (analysis.snapshot(), file_id)
     }
@@ -453,6 +484,9 @@ pub trait FileLoader: Send + Sync + 'static {
         dialect: Dialect,
         from: FileId,
     ) -> anyhow::Result<Option<Vec<LoadItemCandidate>>>;
+
+    /// If the specified file is a BUILD file, returns its package.
+    fn resolve_build_file(&self, file_id: FileId) -> Option<String>;
 }
 
 /// [`FileLoader`] that looks up files by path from a hash map.
@@ -502,5 +536,9 @@ impl FileLoader for SimpleFileLoader {
         _from: FileId,
     ) -> anyhow::Result<Option<ResolvedPath>> {
         Ok(None)
+    }
+
+    fn resolve_build_file(&self, _file_id: FileId) -> Option<String> {
+        None
     }
 }

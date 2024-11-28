@@ -1,5 +1,7 @@
 //! Partially replicates the "completions" API in the LSP specification.
 
+use std::collections::HashSet;
+
 use rustc_hash::FxHashMap;
 use starpls_common::parse;
 use starpls_common::FileId;
@@ -27,7 +29,7 @@ const BUILTIN_TYPE_NAMES: &[&str] = &[
     "NoneType", "bool", "int", "float", "string", "bytes", "list", "tuple", "dict", "range",
 ];
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CompletionItem {
     pub label: String,
     pub kind: CompletionItemKind,
@@ -42,32 +44,32 @@ impl CompletionItem {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Edit {
     TextEdit(TextEdit),
     InsertReplaceEdit(InsertReplaceEdit),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TextEdit {
     pub range: TextRange,
     pub new_text: String,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct InsertReplaceEdit {
     pub new_text: String,
     pub insert: TextRange,
     pub replace: TextRange,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CompletionMode {
     InsertText(String),
     TextEdit(Edit),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CompletionItemKind {
     Function,
     Field,
@@ -81,7 +83,7 @@ pub enum CompletionItemKind {
 }
 
 #[repr(u16)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum CompletionRelevance {
     Parameter,
     VariableOrKeyword,
@@ -122,6 +124,10 @@ enum StringContext {
         file_id: FileId,
         lhs: ast::Expression,
     },
+    Label {
+        file_id: FileId,
+        text: Box<str>,
+    },
 }
 
 struct CompletionContext {
@@ -133,7 +139,7 @@ pub(crate) fn completions(
     pos: FilePosition,
     trigger_character: Option<String>,
 ) -> Option<Vec<CompletionItem>> {
-    let ctx = CompletionContext::new(db, pos, trigger_character)?;
+    let ctx = CompletionContext::new(db, pos, trigger_character.clone())?;
     let mut items = Vec::new();
 
     match ctx.analysis {
@@ -312,6 +318,54 @@ pub(crate) fn completions(
                 });
             }
         }
+
+        CompletionAnalysis::String(StringContext::Label { file_id, text }) => {
+            if matches!(trigger_character.as_deref(), Some("@")) {
+                return None;
+            }
+
+            let package = db.resolve_build_file(file_id).unwrap_or_default();
+            let is_relative = text.starts_with(':');
+            let prefix = strip_last_package_or_target(&text);
+            let has_target = text.contains(':');
+            let mut seen_packages = HashSet::<&str>::new();
+
+            for target in db.get_all_workspace_targets().iter() {
+                let remaining = match if is_relative {
+                    target
+                        .strip_prefix("//")
+                        .and_then(|res| res.strip_prefix(&package))
+                        .and_then(|res| res.strip_prefix(prefix))
+                } else {
+                    target.strip_prefix(prefix)
+                } {
+                    Some(remaining) => remaining,
+                    None => continue,
+                };
+
+                if has_target {
+                    items.push(CompletionItem {
+                        label: remaining.to_string(),
+                        kind: CompletionItemKind::Field,
+                        mode: None,
+                        relevance: CompletionRelevance::VariableOrKeyword,
+                        filter_text: None,
+                    });
+                } else if let Some(index) = remaining.find(['/', ':']) {
+                    let package = &remaining[..index];
+                    if !package.is_empty() && !seen_packages.contains(package) {
+                        seen_packages.insert(package);
+                        items.push(CompletionItem {
+                            label: package.to_string(),
+                            kind: CompletionItemKind::Folder,
+                            mode: None,
+                            relevance: CompletionRelevance::VariableOrKeyword,
+                            filter_text: None,
+                        });
+                    }
+                }
+            }
+        }
         _ => {}
     }
 
@@ -378,6 +432,12 @@ fn maybe_str_context(file_id: FileId, root: &SyntaxNode, pos: TextSize) -> Optio
                     lhs: index_expr.lhs()?,
                 });
             }
+        }
+
+        // Check if the current text is potentially a label.
+        let text = text.value()?;
+        if text.starts_with("//") || text.starts_with(':') {
+            return Some(StringContext::Label { file_id, text });
         }
     }
 
@@ -506,5 +566,317 @@ impl CompletionContext {
         };
 
         Some(Self { analysis })
+    }
+}
+
+fn strip_last_package_or_target(label: &str) -> &str {
+    if let Some(index) = label.rfind(&[':', '/']) {
+        &label[..index + 1]
+    } else {
+        label
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fmt::Write;
+
+    use expect_test::expect;
+    use expect_test::Expect;
+    use starpls_bazel::APIContext;
+    use starpls_common::Dialect;
+    use starpls_common::FileInfo;
+    use starpls_test_util::Fixture;
+
+    use crate::completions::CompletionRelevance;
+    use crate::AnalysisSnapshot;
+    use crate::CompletionItemKind;
+    use crate::FilePosition;
+
+    fn check_completions(fixture: &str, expect: Expect) {
+        check_completions_with_options(fixture, false, expect);
+    }
+
+    fn check_completions_with_options(
+        fixture: &str,
+        include_builtins_and_keywords: bool,
+        expect: Expect,
+    ) {
+        let fixture = Fixture::parse(fixture);
+        let (snap, file_id) = AnalysisSnapshot::from_single_file_with_options(
+            &fixture.contents,
+            Dialect::Bazel,
+            Some(FileInfo::Bazel {
+                api_context: APIContext::Bzl,
+                is_external: false,
+            }),
+            [
+                "//:foo",
+                "//:bar",
+                "//bar:bar",
+                "//foo:foo",
+                "//foo/bar:bar",
+                "//foo/bar:baz",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect(),
+        );
+
+        let completions = snap
+            .completions(
+                FilePosition {
+                    file_id,
+                    pos: fixture.cursor_pos,
+                },
+                Some("".to_string()),
+            )
+            .unwrap()
+            .unwrap();
+
+        let mut completions = completions
+            .into_iter()
+            .filter(|item| {
+                include_builtins_and_keywords
+                    || (item.relevance != CompletionRelevance::Builtin
+                        && item.kind != CompletionItemKind::Keyword)
+            })
+            .collect::<Vec<_>>();
+        completions.sort_by(|item1, item2| item1.label.cmp(&item2.label));
+
+        let expected = completions
+            .into_iter()
+            .fold(String::new(), |mut acc, item| {
+                writeln!(acc, "{:?}", item).unwrap();
+                acc
+            });
+
+        expect.assert_eq(&expected);
+    }
+
+    #[test]
+    fn test_empty() {
+        check_completions_with_options(
+            r#"
+$0
+"#,
+            true,
+            expect![[r#"
+                CompletionItem { label: "False", kind: Keyword, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "None", kind: Keyword, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "True", kind: Keyword, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "abs", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "all", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "any", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "attr", kind: Module, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "bool", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "bytes", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "def", kind: Keyword, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "dict", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "dir", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "enumerate", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "fail", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "float", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "for", kind: Keyword, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "getattr", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "hasattr", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "hash", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "if", kind: Keyword, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "int", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "lambda", kind: Keyword, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "len", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "licenses", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "list", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "load", kind: Keyword, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "max", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "min", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "module_extension", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "package", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "pass", kind: Keyword, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "print", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "provider", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "range", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "repository_rule", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "repr", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "reversed", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "rule", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "sorted", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "str", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "struct", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "tag_class", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "tuple", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "type", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+                CompletionItem { label: "zip", kind: Function, mode: None, filter_text: None, relevance: Builtin }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_parameters() {
+        check_completions(
+            r#"
+abc = 1
+def foo(x, y):
+    pass
+    x + $0
+"#,
+            expect![[r#"
+                CompletionItem { label: "abc", kind: Variable, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "foo", kind: Function, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "x", kind: Variable, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "y", kind: Variable, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_arguments() {
+        check_completions(
+            r#"
+def foo(x, y):
+    pass
+
+foo(
+    $0
+)
+"#,
+            expect![[r#"
+                CompletionItem { label: "foo", kind: Function, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "x=", kind: Variable, mode: Some(InsertText("x = ")), filter_text: None, relevance: Parameter }
+                CompletionItem { label: "y=", kind: Variable, mode: Some(InsertText("y = ")), filter_text: None, relevance: Parameter }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_variables() {
+        check_completions(
+            r#"
+x = 1
+y = 2
+$0
+"#,
+            expect![[r#"
+                CompletionItem { label: "x", kind: Variable, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "y", kind: Variable, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_fields() {
+        check_completions(
+            r#"
+foo = struct(x = 1, y = 2)
+foo.$0
+"#,
+            expect![[r#"
+                CompletionItem { label: "x", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "y", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_dict_keys() {
+        check_completions(
+            r#"
+d = {"a": 1, "b": 2}
+d["$0"]
+"#,
+            expect![[r#"
+                CompletionItem { label: "a", kind: Constant, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "b", kind: Constant, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_label_completions_1() {
+        check_completions(
+            r#"
+label = "//$0"
+"#,
+            expect![[r#"
+                CompletionItem { label: "bar", kind: Folder, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "foo", kind: Folder, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_label_completions_2() {
+        check_completions(
+            r#"
+label = "//fo$0"
+"#,
+            expect![[r#"
+                CompletionItem { label: "bar", kind: Folder, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "foo", kind: Folder, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_label_completions_3() {
+        check_completions(
+            r#"
+label = "//:$0"
+"#,
+            expect![[r#"
+                CompletionItem { label: "bar", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "foo", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_label_completions_4() {
+        check_completions(
+            r#"
+label = "//:f$0"
+"#,
+            expect![[r#"
+                CompletionItem { label: "bar", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "foo", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_label_completions_5() {
+        check_completions(
+            r#"
+label = "//foo:$0"
+"#,
+            expect![[r#"
+                CompletionItem { label: "foo", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_label_completions_6() {
+        check_completions(
+            r#"
+label = "//foo/$0"
+"#,
+            expect![[r#"
+                CompletionItem { label: "bar", kind: Folder, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_label_completions_7() {
+        check_completions(
+            r#"
+label = "//foo/bar:b$0"
+"#,
+            expect![[r#"
+                CompletionItem { label: "bar", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "baz", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
     }
 }

@@ -1,4 +1,5 @@
 use crossbeam_channel::select;
+use log::debug;
 use lsp_server::Connection;
 use lsp_types::InitializeParams;
 use lsp_types::WorkDoneProgressCreateParams;
@@ -75,7 +76,7 @@ pub fn process_connection(
     args: ServerArgs,
     initialize_params: InitializeParams,
 ) -> anyhow::Result<()> {
-    eprintln!("server: initializing state and starting event loop");
+    debug!("initializing state and starting event loop");
     let config = ServerConfig {
         args,
         caps: initialize_params.capabilities,

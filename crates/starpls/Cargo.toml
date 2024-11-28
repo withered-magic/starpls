@@ -23,3 +23,5 @@ starpls_syntax = { path = "../starpls_syntax" }
 starpls_ide = { path = "../starpls_ide" }
 parking_lot = "0.12.1"
 clap = { version = "4.5.4", features = ["derive"] }
+env_logger = "0.11.5"
+log = "0.4.22"

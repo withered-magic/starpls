@@ -333,7 +333,7 @@ pub struct AnalysisSnapshot {
 }
 
 impl AnalysisSnapshot {
-    pub fn completion(
+    pub fn completions(
         &self,
         pos: FilePosition,
         trigger_character: Option<String>,

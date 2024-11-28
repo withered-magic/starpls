@@ -271,9 +271,20 @@ impl Server {
                             ..Default::default()
                         })
                     }
-                    FetchExternalReposProgress::End(files, _failed_repos) => {
+                    FetchExternalReposProgress::End(files, failed_repos) => {
                         self.is_fetching_repos = false;
                         self.force_analysis_for_files.extend(files);
+
+                        // Fetching external repositories with `bazel query`, as in the case when bzlmod is disabled, often
+                        // results in a non-zero exit code because of errors that we don't really care about. Therefore, to
+                        // avoid noise, we only send an error message when fetching with `bazel fetch`, which is the case
+                        // when bzlmod is enabled.
+                        if !failed_repos.is_empty() && self.bzlmod_enabled {
+                            self.send_error_message(&format!(
+                                "Failed to fetch external repositories: {}. Please check the server logs for more details.",
+                                failed_repos.join(", ")
+                            ));
+                        }
 
                         lsp_types::WorkDoneProgress::End(lsp_types::WorkDoneProgressEnd {
                             message: None,

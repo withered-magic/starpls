@@ -62,6 +62,7 @@ pub(crate) struct Database {
     loader: Arc<dyn FileLoader>,
     gcx: Arc<GlobalContext>,
     prelude_file: Option<FileId>,
+    all_workspace_targets: Arc<Vec<String>>,
 }
 
 impl Database {
@@ -96,6 +97,7 @@ impl salsa::ParallelDatabase for Database {
             loader: self.loader.clone(),
             storage: self.storage.snapshot(),
             prelude_file: self.prelude_file,
+            all_workspace_targets: self.all_workspace_targets.clone(),
         })
     }
 }
@@ -223,6 +225,14 @@ impl starpls_hir::Db for Database {
         self.prelude_file
     }
 
+    fn set_all_workspace_targets(&mut self, targets: Vec<String>) {
+        self.all_workspace_targets = Arc::new(targets)
+    }
+
+    fn get_all_workspace_targets(&self) -> Arc<Vec<String>> {
+        Arc::clone(&self.all_workspace_targets)
+    }
+
     fn gcx(&self) -> &GlobalContext {
         &self.gcx
     }
@@ -286,6 +296,7 @@ impl Analysis {
                 storage: Default::default(),
                 loader,
                 prelude_file: None,
+                all_workspace_targets: Arc::default(),
             },
         }
     }
@@ -306,6 +317,10 @@ impl Analysis {
 
     pub fn set_bazel_prelude_file(&mut self, file_id: FileId) {
         self.db.set_bazel_prelude_file(file_id);
+    }
+
+    pub fn set_all_workspace_targets(&mut self, targets: Vec<String>) {
+        self.db.set_all_workspace_targets(targets);
     }
 }
 

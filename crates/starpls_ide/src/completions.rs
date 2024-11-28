@@ -1,5 +1,7 @@
 //! Partially replicates the "completions" API in the LSP specification.
 
+use std::collections::HashSet;
+
 use rustc_hash::FxHashMap;
 use starpls_common::parse;
 use starpls_common::FileId;
@@ -121,6 +123,9 @@ enum StringContext {
     DictKey {
         file_id: FileId,
         lhs: ast::Expression,
+    },
+    Label {
+        text: Box<str>,
     },
 }
 
@@ -312,6 +317,43 @@ pub(crate) fn completions(
                 });
             }
         }
+
+        CompletionAnalysis::String(StringContext::Label { text }) => {
+            let mut prefix = &*text;
+            if !prefix.ends_with(&['/', ':']) {
+                prefix = strip_last_package_or_target(prefix);
+            }
+
+            let mut seen_packages = HashSet::<&str>::new();
+            for target in db.get_all_workspace_targets().iter() {
+                let remaining = match target.strip_prefix(prefix) {
+                    Some(remaining) => remaining,
+                    None => continue,
+                };
+
+                if prefix.ends_with(':') {
+                    items.push(CompletionItem {
+                        label: remaining.to_string(),
+                        kind: CompletionItemKind::Field,
+                        mode: None,
+                        relevance: CompletionRelevance::VariableOrKeyword,
+                        filter_text: None,
+                    });
+                } else if let Some(index) = remaining.find(['/', ':']) {
+                    let package = &remaining[..index];
+                    if !seen_packages.contains(package) {
+                        seen_packages.insert(package);
+                        items.push(CompletionItem {
+                            label: package.to_string(),
+                            kind: CompletionItemKind::Folder,
+                            mode: None,
+                            relevance: CompletionRelevance::VariableOrKeyword,
+                            filter_text: None,
+                        });
+                    }
+                }
+            }
+        }
         _ => {}
     }
 
@@ -378,6 +420,12 @@ fn maybe_str_context(file_id: FileId, root: &SyntaxNode, pos: TextSize) -> Optio
                     lhs: index_expr.lhs()?,
                 });
             }
+        }
+
+        // Check if the current text is potentially a label.
+        let text = text.value()?;
+        if text.starts_with("//") {
+            return Some(StringContext::Label { text });
         }
     }
 
@@ -506,5 +554,27 @@ impl CompletionContext {
         };
 
         Some(Self { analysis })
+    }
+}
+
+fn strip_last_package_or_target(label: &str) -> &str {
+    // Prioritize finding ':' over '/'. This is required to handle labels like "//:node_modules/foo" correctly.
+    if let Some(index) = label.rfind(&[':']) {
+        &label[..index + 1]
+    } else if let Some(index) = label.rfind(&['/']) {
+        &label[..index + 1]
+    } else {
+        label
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::completions::strip_last_package_or_target;
+
+    #[test]
+    fn test_strip_last_package_or_target() {
+        assert_eq!(strip_last_package_or_target("//foo/bar"), "//foo/");
+        assert_eq!(strip_last_package_or_target("//:node_modules/foo"), "//:");
     }
 }

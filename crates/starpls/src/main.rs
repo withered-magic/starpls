@@ -56,12 +56,21 @@ pub(crate) struct ServerArgs {
     /// Path to the Bazel binary.
     #[clap(long = "bazel_path")]
     bazel_path: Option<String>,
+
     /// Infer attributes on a rule implementation function's context parameter.
     #[clap(long = "experimental_infer_ctx_attributes", default_value_t = false)]
     infer_ctx_attributes: bool,
-    /// Enable code-flow analysis during typechecking.
+
+    /// Use code-flow analysis during typechecking.
     #[clap(long = "experimental_use_code_flow_analysis", default_value_t = false)]
     use_code_flow_analysis: bool,
+
+    /// Enable completions for labels for targets in the current workspace.
+    #[clap(
+        long = "experimental_enable_label_completions",
+        default_value_t = false
+    )]
+    enable_label_completions: bool,
 }
 
 fn main() -> anyhow::Result<()> {

@@ -171,6 +171,24 @@ impl Server {
             }
         };
 
+        // Query for all targets in the current workspace, to use for label completion.
+        let targets = if config.args.enable_label_completions {
+            eprintln!("server: querying for all targets in the current workspace");
+            match bazel_client.query_all_workspace_targets() {
+                Ok(targets) => {
+                    eprintln!("server: successfully queried for all targets");
+                    targets
+                }
+                Err(err) => {
+                    eprintln!("server: failed to query all workspace targets: {}", err);
+                    has_bazel_init_err = true;
+                    Default::default()
+                }
+            }
+        } else {
+            Default::default()
+        };
+
         let path_interner = Arc::new(PathInterner::default());
         let loader = DefaultFileLoader::new(
             bazel_client.clone(),
@@ -189,6 +207,7 @@ impl Server {
             },
         );
 
+        analysis.set_all_workspace_targets(targets);
         analysis.set_builtin_defs(builtins, rules);
 
         // Check for a prelude file. We skip verifying that `//tools/build_tools` is actually a package (i.e.

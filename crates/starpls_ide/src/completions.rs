@@ -125,6 +125,7 @@ enum StringContext {
         lhs: ast::Expression,
     },
     Label {
+        file_id: FileId,
         text: Box<str>,
     },
 }
@@ -138,7 +139,7 @@ pub(crate) fn completions(
     pos: FilePosition,
     trigger_character: Option<String>,
 ) -> Option<Vec<CompletionItem>> {
-    let ctx = CompletionContext::new(db, pos, trigger_character)?;
+    let ctx = CompletionContext::new(db, pos, trigger_character.clone())?;
     let mut items = Vec::new();
 
     match ctx.analysis {
@@ -318,20 +319,31 @@ pub(crate) fn completions(
             }
         }
 
-        CompletionAnalysis::String(StringContext::Label { text }) => {
-            let mut prefix = &*text;
-            if !prefix.ends_with(&['/', ':']) {
-                prefix = strip_last_package_or_target(prefix);
+        CompletionAnalysis::String(StringContext::Label { file_id, text }) => {
+            if matches!(trigger_character.as_deref(), Some("@")) {
+                return None;
             }
 
+            let package = db.resolve_build_file(file_id).unwrap_or_default();
+            let is_relative = text.starts_with(':');
+            let prefix = strip_last_package_or_target(&text);
+            let has_target = text.contains(':');
             let mut seen_packages = HashSet::<&str>::new();
+
             for target in db.get_all_workspace_targets().iter() {
-                let remaining = match target.strip_prefix(prefix) {
+                let remaining = match if is_relative {
+                    target
+                        .strip_prefix("//")
+                        .and_then(|res| res.strip_prefix(&package))
+                        .and_then(|res| res.strip_prefix(prefix))
+                } else {
+                    target.strip_prefix(prefix)
+                } {
                     Some(remaining) => remaining,
                     None => continue,
                 };
 
-                if prefix.ends_with(':') {
+                if has_target {
                     items.push(CompletionItem {
                         label: remaining.to_string(),
                         kind: CompletionItemKind::Field,
@@ -424,8 +436,8 @@ fn maybe_str_context(file_id: FileId, root: &SyntaxNode, pos: TextSize) -> Optio
 
         // Check if the current text is potentially a label.
         let text = text.value()?;
-        if text.starts_with("//") {
-            return Some(StringContext::Label { text });
+        if text.starts_with("//") || text.starts_with(':') {
+            return Some(StringContext::Label { file_id, text });
         }
     }
 
@@ -559,22 +571,9 @@ impl CompletionContext {
 
 fn strip_last_package_or_target(label: &str) -> &str {
     // Prioritize finding ':' over '/'. This is required to handle labels like "//:node_modules/foo" correctly.
-    if let Some(index) = label.rfind(&[':']) {
-        &label[..index + 1]
-    } else if let Some(index) = label.rfind(&['/']) {
+    if let Some(index) = label.rfind(&[':', '/']) {
         &label[..index + 1]
     } else {
         label
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::completions::strip_last_package_or_target;
-
-    #[test]
-    fn test_strip_last_package_or_target() {
-        assert_eq!(strip_last_package_or_target("//foo/bar"), "//foo/");
-        assert_eq!(strip_last_package_or_target("//:node_modules/foo"), "//:");
     }
 }

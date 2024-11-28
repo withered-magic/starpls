@@ -96,6 +96,8 @@ pub trait Db: salsa::DbWithJar<Jar> {
         dialect: Dialect,
         from: FileId,
     ) -> anyhow::Result<Option<ResolvedPath>>;
+
+    fn resolve_build_file(&self, file_id: FileId) -> Option<String>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

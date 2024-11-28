@@ -192,6 +192,10 @@ impl starpls_common::Db for Database {
 
         Ok(Some(resolved_path))
     }
+
+    fn resolve_build_file(&self, file_id: FileId) -> Option<String> {
+        self.loader.resolve_build_file(file_id)
+    }
 }
 
 impl starpls_hir::Db for Database {
@@ -469,6 +473,9 @@ pub trait FileLoader: Send + Sync + 'static {
         dialect: Dialect,
         from: FileId,
     ) -> anyhow::Result<Option<Vec<LoadItemCandidate>>>;
+
+    /// If the specified file is a BUILD file, returns its package.
+    fn resolve_build_file(&self, file_id: FileId) -> Option<String>;
 }
 
 /// [`FileLoader`] that looks up files by path from a hash map.
@@ -518,5 +525,9 @@ impl FileLoader for SimpleFileLoader {
         _from: FileId,
     ) -> anyhow::Result<Option<ResolvedPath>> {
         Ok(None)
+    }
+
+    fn resolve_build_file(&self, _file_id: FileId) -> Option<String> {
+        None
     }
 }

@@ -84,6 +84,10 @@ impl starpls_common::Db for TestDatabase {
     ) -> anyhow::Result<Option<ResolvedPath>> {
         Ok(None)
     }
+
+    fn resolve_build_file(&self, _file_id: FileId) -> Option<String> {
+        None
+    }
 }
 
 impl crate::Db for TestDatabase {

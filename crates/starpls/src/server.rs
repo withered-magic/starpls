@@ -391,7 +391,7 @@ impl Server {
     }
 
     pub(crate) fn refresh_all_workspace_targets(&mut self) {
-        if self.is_refreshing_all_workspace_targets {
+        if self.is_refreshing_all_workspace_targets || !self.config.args.enable_label_completions {
             return;
         }
 

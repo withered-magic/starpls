@@ -65,7 +65,7 @@ impl BazelCLI {
     }
 
     pub fn dump_repo_mapping(&self, repo: &str) -> anyhow::Result<HashMap<String, String>> {
-        let output = self.run_command(&["mod", "--enable_bzlmod", "dump_repo_mapping", repo])?;
+        let output = self.run_command(["mod", "--enable_bzlmod", "dump_repo_mapping", repo])?;
         let json = String::from_utf8(output)?;
         let mut mappings = Deserializer::from_str(&json).into_iter::<HashMap<String, String>>();
         Ok(mappings
@@ -76,11 +76,11 @@ impl BazelCLI {
 
 impl BazelClient for BazelCLI {
     fn build_language(&self) -> anyhow::Result<Vec<u8>> {
-        self.run_command(&["info", "build-language"])
+        self.run_command(["info", "build-language"])
     }
 
     fn info(&self) -> anyhow::Result<BazelInfo> {
-        let output = self.run_command(&[
+        let output = self.run_command([
             "info",
             "execution_root",
             "output_base",
@@ -161,7 +161,7 @@ impl BazelClient for BazelCLI {
     }
 
     fn null_query_external_repo_targets(&self, repo: &str) -> anyhow::Result<()> {
-        self.run_command(&["query", "--keep_going", &format!("@@{}//...", repo)])?;
+        self.run_command(["query", "--keep_going", &format!("@@{}//...", repo)])?;
         Ok(())
     }
 

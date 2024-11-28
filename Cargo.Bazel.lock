@@ -1,5 +1,5 @@
 {
-  "checksum": "04de1dc77e4ab66d50d5c04298186bc930e9e64a82e1d13ce0d764ed25ec588e",
+  "checksum": "baa481eabe96b0563ccf35ce85edc3db1b17293a3bb4431722cc76f10a344f09",
   "crates": {
     "addr2line 0.21.0": {
       "name": "addr2line",
@@ -172,6 +172,22 @@
         "compile_data_glob": [
           "**"
         ],
+        "crate_features": {
+          "common": [
+            "perf-literal",
+            "std"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "memchr 2.7.1",
+              "target": "memchr"
+            }
+          ],
+          "selects": {}
+        },
         "edition": "2021",
         "version": "1.1.2"
       },
@@ -249,7 +265,7 @@
         "deps": {
           "common": [
             {
-              "id": "anstyle 1.0.4",
+              "id": "anstyle 1.0.10",
               "target": "anstyle"
             },
             {
@@ -283,13 +299,13 @@
       },
       "license": "MIT OR Apache-2.0"
     },
-    "anstyle 1.0.4": {
+    "anstyle 1.0.10": {
       "name": "anstyle",
-      "version": "1.0.4",
+      "version": "1.0.10",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/anstyle/1.0.4/download",
-          "sha256": "7079075b41f533b8c61d2a4d073c4676e1f8b249ff94a393b0595db304e0dd87"
+          "url": "https://static.crates.io/crates/anstyle/1.0.10/download",
+          "sha256": "55cc3b69f167a1ef2e161439aa98aed94e6028e5f9a59be9a6ffb47aef1651f9"
         }
       },
       "targets": [
@@ -316,7 +332,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "1.0.4"
+        "version": "1.0.10"
       },
       "license": "MIT OR Apache-2.0"
     },
@@ -435,7 +451,7 @@
         "deps": {
           "common": [
             {
-              "id": "anstyle 1.0.4",
+              "id": "anstyle 1.0.10",
               "target": "anstyle"
             }
           ],
@@ -1390,7 +1406,7 @@
               "target": "anstream"
             },
             {
-              "id": "anstyle 1.0.4",
+              "id": "anstyle 1.0.10",
               "target": "anstyle"
             },
             {
@@ -2052,6 +2068,120 @@
         },
         "edition": "2018",
         "version": "1.10.0"
+      },
+      "license": "MIT OR Apache-2.0"
+    },
+    "env_filter 0.1.2": {
+      "name": "env_filter",
+      "version": "0.1.2",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/env_filter/0.1.2/download",
+          "sha256": "4f2c92ceda6ceec50f43169f9ee8424fe2db276791afde7b2cd8bc084cb376ab"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "env_filter",
+            "crate_root": "src/lib.rs",
+            "srcs": [
+              "**/*.rs"
+            ]
+          }
+        }
+      ],
+      "library_target_name": "env_filter",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "regex"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "log 0.4.22",
+              "target": "log"
+            },
+            {
+              "id": "regex 1.10.3",
+              "target": "regex"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "version": "0.1.2"
+      },
+      "license": "MIT OR Apache-2.0"
+    },
+    "env_logger 0.11.5": {
+      "name": "env_logger",
+      "version": "0.11.5",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/env_logger/0.11.5/download",
+          "sha256": "e13fa619b91fb2381732789fc5de83b45675e882f66623b7d8cb4f643017018d"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "env_logger",
+            "crate_root": "src/lib.rs",
+            "srcs": [
+              "**/*.rs"
+            ]
+          }
+        }
+      ],
+      "library_target_name": "env_logger",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "auto-color",
+            "color",
+            "default",
+            "humantime",
+            "regex"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "anstream 0.6.13",
+              "target": "anstream"
+            },
+            {
+              "id": "anstyle 1.0.10",
+              "target": "anstyle"
+            },
+            {
+              "id": "env_filter 0.1.2",
+              "target": "env_filter"
+            },
+            {
+              "id": "humantime 2.1.0",
+              "target": "humantime"
+            },
+            {
+              "id": "log 0.4.22",
+              "target": "log"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "version": "0.11.5"
       },
       "license": "MIT OR Apache-2.0"
     },
@@ -3216,6 +3346,36 @@
       },
       "license": "MIT OR Apache-2.0"
     },
+    "humantime 2.1.0": {
+      "name": "humantime",
+      "version": "2.1.0",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/humantime/2.1.0/download",
+          "sha256": "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "humantime",
+            "crate_root": "src/lib.rs",
+            "srcs": [
+              "**/*.rs"
+            ]
+          }
+        }
+      ],
+      "library_target_name": "humantime",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "edition": "2018",
+        "version": "2.1.0"
+      },
+      "license": "MIT/Apache-2.0"
+    },
     "hyper 0.14.28": {
       "name": "hyper",
       "version": "0.14.28",
@@ -4175,13 +4335,13 @@
       },
       "license": "MIT OR Apache-2.0"
     },
-    "log 0.4.20": {
+    "log 0.4.22": {
       "name": "log",
-      "version": "0.4.20",
+      "version": "0.4.22",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/log/0.4.20/download",
-          "sha256": "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
+          "url": "https://static.crates.io/crates/log/0.4.22/download",
+          "sha256": "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
         }
       },
       "targets": [
@@ -4200,8 +4360,14 @@
         "compile_data_glob": [
           "**"
         ],
-        "edition": "2015",
-        "version": "0.4.20"
+        "crate_features": {
+          "common": [
+            "std"
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "version": "0.4.22"
       },
       "license": "MIT OR Apache-2.0"
     },
@@ -4237,7 +4403,7 @@
               "target": "crossbeam_channel"
             },
             {
-              "id": "log 0.4.20",
+              "id": "log 0.4.22",
               "target": "log"
             },
             {
@@ -5585,7 +5751,7 @@
               "target": "lazy_static"
             },
             {
-              "id": "log 0.4.20",
+              "id": "log 0.4.22",
               "target": "log"
             },
             {
@@ -5681,7 +5847,7 @@
               "target": "itertools"
             },
             {
-              "id": "log 0.4.20",
+              "id": "log 0.4.22",
               "target": "log"
             },
             {
@@ -6447,6 +6613,13 @@
         ],
         "crate_features": {
           "common": [
+            "perf",
+            "perf-backtrack",
+            "perf-cache",
+            "perf-dfa",
+            "perf-inline",
+            "perf-literal",
+            "perf-onepass",
             "std",
             "unicode-bool"
           ],
@@ -6454,6 +6627,14 @@
         },
         "deps": {
           "common": [
+            {
+              "id": "aho-corasick 1.1.2",
+              "target": "aho_corasick"
+            },
+            {
+              "id": "memchr 2.7.1",
+              "target": "memchr"
+            },
             {
               "id": "regex-automata 0.4.4",
               "target": "regex_automata"
@@ -6498,9 +6679,16 @@
         "crate_features": {
           "common": [
             "alloc",
+            "dfa-onepass",
+            "hybrid",
             "meta",
+            "nfa-backtrack",
             "nfa-pikevm",
             "nfa-thompson",
+            "perf-inline",
+            "perf-literal",
+            "perf-literal-multisubstring",
+            "perf-literal-substring",
             "std",
             "syntax",
             "unicode-bool"
@@ -6509,6 +6697,14 @@
         },
         "deps": {
           "common": [
+            {
+              "id": "aho-corasick 1.1.2",
+              "target": "aho_corasick"
+            },
+            {
+              "id": "memchr 2.7.1",
+              "target": "memchr"
+            },
             {
               "id": "regex-syntax 0.8.2",
               "target": "regex_syntax"
@@ -6945,7 +7141,7 @@
               "target": "indexmap"
             },
             {
-              "id": "log 0.4.20",
+              "id": "log 0.4.22",
               "target": "log"
             },
             {
@@ -7556,12 +7752,20 @@
               "target": "dashmap"
             },
             {
+              "id": "env_logger 0.11.5",
+              "target": "env_logger"
+            },
+            {
               "id": "indexmap 2.1.0",
               "target": "indexmap"
             },
             {
               "id": "line-index 0.1.1",
               "target": "line_index"
+            },
+            {
+              "id": "log 0.4.22",
+              "target": "log"
             },
             {
               "id": "lsp-server 0.7.5",
@@ -11222,10 +11426,12 @@
     "dashmap 5.5.3",
     "drop_bomb 0.1.5",
     "either 1.10.0",
+    "env_logger 0.11.5",
     "hashbrown 0.14.3",
     "id-arena 2.2.1",
     "indexmap 2.1.0",
     "line-index 0.1.1",
+    "log 0.4.22",
     "lsp-server 0.7.5",
     "lsp-types 0.94.1",
     "parking_lot 0.12.1",

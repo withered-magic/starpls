@@ -2,6 +2,7 @@ use check::run_check;
 use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
+use log::info;
 use lsp_server::Connection;
 use lsp_types::CompletionOptions;
 use lsp_types::HoverProviderCapability;
@@ -74,6 +75,10 @@ pub(crate) struct ServerArgs {
 }
 
 fn main() -> anyhow::Result<()> {
+    env_logger::Builder::from_default_env()
+        .filter(Some("starpls"), log::LevelFilter::max())
+        .init();
+
     let cli = Cli::parse();
 
     match cli.command {
@@ -85,7 +90,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn run_server(args: ServerArgs) -> anyhow::Result<()> {
-    eprintln!("server: starpls, v{}", get_version());
+    info!("starpls, v{}", get_version());
 
     // Create the transport over stdio.
     let (connection, io_threads) = Connection::stdio();
@@ -113,7 +118,7 @@ fn run_server(args: ServerArgs) -> anyhow::Result<()> {
     event_loop::process_connection(connection, args, initialize_params)?;
 
     // Graceful shutdown.
-    eprintln!("server: connection closed, exiting");
+    info!("connection closed, exiting");
     io_threads.join()?;
 
     Ok(())

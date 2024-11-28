@@ -5,6 +5,8 @@ use std::process;
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use log::debug;
+use log::info;
 use rustc_hash::FxHashMap;
 use starpls_bazel::client::BazelCLI;
 use starpls_bazel::client::BazelClient;
@@ -32,11 +34,11 @@ pub(crate) fn run_check(paths: Vec<String>, output_base: Option<String>) -> anyh
         .try_exists()
         .unwrap_or(false)
         && {
-            eprintln!("server: checking for `bazel mod dump_repo_mapping` capability");
+            debug!("checking for `bazel mod dump_repo_mapping` capability");
             match bazel_client.dump_repo_mapping("") {
                 Ok(_) => true,
                 Err(_) => {
-                    eprintln!("server: installed Bazel version doesn't support `bazel mod dump_repo_mapping`, disabling bzlmod support");
+                    info!("installed Bazel version doesn't support `bazel mod dump_repo_mapping`, disabling bzlmod support");
                     false
                 }
             }

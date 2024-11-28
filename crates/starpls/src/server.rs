@@ -6,6 +6,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use log::debug;
+use log::error;
+use log::info;
 use lsp_server::Connection;
 use lsp_server::ReqQueue;
 use parking_lot::RwLock;
@@ -79,12 +82,12 @@ impl Server {
         let builtins = match load_bazel_builtins() {
             Ok(builtins) => builtins,
             Err(err) => {
-                eprintln!("server: failed to load builtins, {}", err);
+                error!("failed to load builtins, {}", err);
                 Default::default()
             }
         };
 
-        eprintln!("server: fetching Bazel configuration");
+        debug!("fetching Bazel configuration");
 
         let bazel_path = config
             .args
@@ -92,26 +95,26 @@ impl Server {
             .clone()
             .unwrap_or("bazel".to_string());
 
-        eprintln!("server: using Bazel executable at {:?}", bazel_path);
+        debug!("using Bazel executable at {:?}", bazel_path);
 
         let bazel_client = Arc::new(BazelCLI::new(&bazel_path));
         let info = match bazel_client.info() {
             Ok(info) => info,
             Err(err) => {
-                eprintln!("server: failed to run fetch Bazel configuration: {}", err);
+                error!("failed to run fetch Bazel configuration: {}", err);
                 has_bazel_init_err = true;
                 Default::default()
             }
         };
 
-        eprintln!("server: workspace root: {:?}", info.workspace);
-        eprintln!("server: workspace name: {:?}", info.workspace_name);
+        info!("workspace root: {:?}", info.workspace);
+        info!("workspace name: {:?}", info.workspace_name);
 
         // Determine the output base for the purpose of resolving external repositories.
         let external_output_base = info.output_base.join("external");
 
-        eprintln!("server: external output base: {:?}", external_output_base);
-        eprintln!("server: starlark-semantics: {:?}", info.starlark_semantics);
+        info!("external output base: {:?}", external_output_base);
+        info!("starlark-semantics: {:?}", info.starlark_semantics);
 
         // We determine whether to use bzlmod in two steps. First, we check if `MODULE.bazel` exists at all,
         // and if so, whether the `bazel mod dump_repo_mapping` command is supported. If either of these
@@ -122,11 +125,11 @@ impl Server {
             .try_exists()
             .unwrap_or(false)
             && {
-                eprintln!("server: checking for `bazel mod dump_repo_mapping` capability");
+                debug!("checking for `bazel mod dump_repo_mapping` capability");
                 match bazel_client.dump_repo_mapping("") {
                     Ok(_) => true,
                     Err(_) => {
-                        eprintln!("server: installed Bazel version doesn't support `bazel mod dump_repo_mapping`, disabling bzlmod support");
+                        info!("installed Bazel version doesn't support `bazel mod dump_repo_mapping`, disabling bzlmod support");
                         false
                     }
                 }
@@ -142,33 +145,33 @@ impl Server {
                 .any(|release| info.release.starts_with(release));
 
             if bzlmod_enabled_by_default {
-                eprintln!("server: Bazel 7 or later detected")
+                info!("Bazel 7 or later detected")
             }
 
             // Finally, check starlark-semantics to determine whether bzlmod has been explicitly
             // enabled/disabled, e.g. in a .bazelrc file.
             if info.starlark_semantics.contains("enable_bzlmod=true") {
-                eprintln!("server: found enable_bzlmod=true in starlark-semantics");
+                info!("found enable_bzlmod=true in starlark-semantics");
                 true
             } else if info.starlark_semantics.contains("enable_bzlmod=false") {
-                eprintln!("server: found enable_bzlmod=false in starlark-semantics");
+                info!("found enable_bzlmod=false in starlark-semantics");
                 false
             } else {
                 bzlmod_enabled_by_default
             }
         };
 
-        eprintln!("server: bzlmod_enabled = {}", bzlmod_enabled);
+        info!("bzlmod_enabled = {}", bzlmod_enabled);
 
         // Load builtin rules from `bazel info build-language`.
-        eprintln!("server: fetching builtin rules via `bazel info build-language`");
+        debug!("fetching builtin rules via `bazel info build-language`");
         let rules = match load_bazel_build_language(&*bazel_client) {
             Ok(builtins) => {
-                eprintln!("server: successfully fetched builtin rules");
+                debug!("successfully fetched builtin rules");
                 builtins
             }
             Err(err) => {
-                eprintln!("server: failed to run `bazel info build-language`: {}", err);
+                error!("failed to run `bazel info build-language`: {}", err);
                 has_bazel_init_err = true;
                 Default::default()
             }
@@ -176,14 +179,14 @@ impl Server {
 
         // Query for all targets in the current workspace, to use for label completion.
         let targets = if config.args.enable_label_completions {
-            eprintln!("server: querying for all targets in the current workspace");
+            debug!("querying for all targets in the current workspace");
             match bazel_client.query_all_workspace_targets() {
                 Ok(targets) => {
-                    eprintln!("server: successfully queried for all targets");
+                    debug!("successfully queried for all targets");
                     targets
                 }
                 Err(err) => {
-                    eprintln!("server: failed to query all workspace targets: {}", err);
+                    error!("failed to query all workspace targets: {}", err);
                     has_bazel_init_err = true;
                     Default::default()
                 }
@@ -216,7 +219,7 @@ impl Server {
         // Check for a prelude file. We skip verifying that `//tools/build_tools` is actually a package (i.e.
         // that it actually contains a `BUILD.bazel`) file for simplicity.
         if let Ok((prelude, contents)) = load_bazel_prelude(&info.workspace) {
-            eprintln!("server: found prelude file at {:?}", prelude);
+            info!("found prelude file at {:?}", prelude);
             let file_id = path_interner.intern_path(prelude);
             let mut change = Change::default();
             change.create_file(
@@ -374,15 +377,15 @@ impl Server {
             let mut failed_repos = vec![];
 
             for repo in &repos {
-                eprintln!("server: fetching external repository \"@@{}\"", repo);
+                debug!("fetching external repository \"@@{}\"", repo);
                 if let Err(err) = if bzlmod_enabled {
                     bazel_client.fetch_repo(repo)
                 } else {
                     bazel_client.null_query_external_repo_targets(repo)
                 } {
                     failed_repos.push(repo.clone());
-                    eprintln!(
-                        "server: failed to fetch external repository \"@@{}\": {}",
+                    error!(
+                        "failed to fetch external repository \"@@{}\": {}",
                         repo, err
                     );
                 }
@@ -415,7 +418,7 @@ impl Server {
             let targets = match bazel_client.query_all_workspace_targets() {
                 Ok(targets) => Some(targets),
                 Err(err) => {
-                    eprintln!("server: failed to query all workspace targets: {}", err);
+                    error!("failed to query all workspace targets: {}", err);
                     None
                 }
             };

@@ -353,7 +353,7 @@ pub(crate) fn completions(
                     });
                 } else if let Some(index) = remaining.find(['/', ':']) {
                     let package = &remaining[..index];
-                    if !seen_packages.contains(package) {
+                    if !package.is_empty() && !seen_packages.contains(package) {
                         seen_packages.insert(package);
                         items.push(CompletionItem {
                             label: package.to_string(),
@@ -603,13 +603,24 @@ mod tests {
         expect: Expect,
     ) {
         let fixture = Fixture::parse(fixture);
-        let (snap, file_id) = AnalysisSnapshot::from_single_file(
+        let (snap, file_id) = AnalysisSnapshot::from_single_file_with_options(
             &fixture.contents,
             Dialect::Bazel,
             Some(FileInfo::Bazel {
                 api_context: APIContext::Bzl,
                 is_external: false,
             }),
+            [
+                "//:foo",
+                "//:bar",
+                "//bar:bar",
+                "//foo:foo",
+                "//foo/bar:bar",
+                "//foo/bar:baz",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect(),
         );
 
         let completions = snap
@@ -776,6 +787,95 @@ d["$0"]
             expect![[r#"
                 CompletionItem { label: "a", kind: Constant, mode: None, filter_text: None, relevance: VariableOrKeyword }
                 CompletionItem { label: "b", kind: Constant, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_label_completions_1() {
+        check_completions(
+            r#"
+label = "//$0"
+"#,
+            expect![[r#"
+                CompletionItem { label: "bar", kind: Folder, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "foo", kind: Folder, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_label_completions_2() {
+        check_completions(
+            r#"
+label = "//fo$0"
+"#,
+            expect![[r#"
+                CompletionItem { label: "bar", kind: Folder, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "foo", kind: Folder, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_label_completions_3() {
+        check_completions(
+            r#"
+label = "//:$0"
+"#,
+            expect![[r#"
+                CompletionItem { label: "bar", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "foo", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_label_completions_4() {
+        check_completions(
+            r#"
+label = "//:f$0"
+"#,
+            expect![[r#"
+                CompletionItem { label: "bar", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "foo", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_label_completions_5() {
+        check_completions(
+            r#"
+label = "//foo:$0"
+"#,
+            expect![[r#"
+                CompletionItem { label: "foo", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_label_completions_6() {
+        check_completions(
+            r#"
+label = "//foo/$0"
+"#,
+            expect![[r#"
+                CompletionItem { label: "bar", kind: Folder, mode: None, filter_text: None, relevance: VariableOrKeyword }
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_label_completions_7() {
+        check_completions(
+            r#"
+label = "//foo/bar:b$0"
+"#,
+            expect![[r#"
+                CompletionItem { label: "bar", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
+                CompletionItem { label: "baz", kind: Field, mode: None, filter_text: None, relevance: VariableOrKeyword }
             "#]],
         );
     }

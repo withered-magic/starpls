@@ -381,13 +381,23 @@ impl AnalysisSnapshot {
         starpls_hir::Cancelled::catch(|| f(&self.db))
     }
 
-    /// This should only be used as a convenient way to create analysis snapshots
-    /// from test data.
     #[cfg(test)]
     pub fn from_single_file(
         contents: &str,
         dialect: Dialect,
         info: Option<FileInfo>,
+    ) -> (Self, FileId) {
+        Self::from_single_file_with_options(contents, dialect, info, vec![])
+    }
+
+    /// This should only be used as a convenient way to create analysis snapshots
+    /// from test data.
+    #[cfg(test)]
+    pub fn from_single_file_with_options(
+        contents: &str,
+        dialect: Dialect,
+        info: Option<FileInfo>,
+        all_workspace_targets: Vec<String>,
     ) -> (Self, FileId) {
         use starpls_test_util::make_test_builtins;
         use starpls_test_util::FixtureType;
@@ -414,6 +424,7 @@ impl AnalysisSnapshot {
             make_test_builtins(functions, globals, types),
             Builtins::default(),
         );
+        analysis.db.set_all_workspace_targets(all_workspace_targets);
         analysis.apply_change(change);
         (analysis.snapshot(), file_id)
     }

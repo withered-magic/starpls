@@ -89,6 +89,20 @@ impl<'a> GotoDefinitionHandler<'a> {
                             target_file_id: def.file.id(self.db),
                         })
                     }
+                    ScopeDef::Callable(ref callable) if callable.is_user_defined() => {
+                        let parse = parse_query(self.db, self.file);
+                        let ptr = def.syntax_node_ptr(self.db, self.file)?;
+                        let def_stmt = ptr
+                            .try_to_node(&parse.syntax(self.db))
+                            .and_then(ast::DefStmt::cast)?;
+                        let range = def_stmt.name()?.syntax().text_range();
+                        Some(LocationLink::Local {
+                            origin_selection_range: None,
+                            target_range: range,
+                            target_selection_range: range,
+                            target_file_id: self.file.id(self.db),
+                        })
+                    }
                     _ => def
                         .syntax_node_ptr(self.db, self.file)
                         .map(|ptr| LocationLink::Local {
@@ -349,6 +363,19 @@ def f():
     print(GLOBAL$0_LIST)
 "#,
         )
+    }
+
+    #[test]
+    fn test_function() {
+        check_goto_definition(
+            r#"
+def foo():
+    #^^
+    pass
+
+f$0oo()
+"#,
+        );
     }
 
     #[test]

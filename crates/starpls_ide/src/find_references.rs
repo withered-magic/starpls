@@ -37,8 +37,9 @@ pub(crate) fn find_references(
         let var_defs = scope
             .resolve_name(&name)
             .into_iter()
-            .flat_map(|def| match def {
-                def @ ScopeDef::Variable(_) => Some(def),
+            .flat_map(|def| match &def {
+                ScopeDef::Variable(_) => Some(def),
+                ScopeDef::Callable(ref callable) if callable.is_user_defined() => Some(def),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -48,12 +49,10 @@ pub(crate) fn find_references(
         }
 
         let finder = Finder::new(name.as_str());
-        let offsets = finder
-            .find_iter(&file.contents(db).as_bytes())
-            .map(|index| {
-                let offset: TextSize = index.try_into().unwrap();
-                offset
-            });
+        let offsets = finder.find_iter(file.contents(db).as_bytes()).map(|index| {
+            let offset: TextSize = index.try_into().unwrap();
+            offset
+        });
 
         for offset in offsets {
             let Some(parent) = parse

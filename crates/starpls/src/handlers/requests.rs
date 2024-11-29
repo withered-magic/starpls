@@ -68,6 +68,39 @@ pub(crate) fn goto_definition(
     Ok(Some(resp))
 }
 
+pub(crate) fn find_references(
+    snapshot: &ServerSnapshot,
+    params: lsp_types::ReferenceParams,
+) -> anyhow::Result<Option<Vec<lsp_types::Location>>> {
+    let path = path_buf_from_url(&params.text_document_position.text_document.uri)?;
+    let file_id = try_opt!(snapshot.document_manager.read().lookup_by_path_buf(&path));
+    let line_index = try_opt!(snapshot.analysis_snapshot.line_index(file_id)?);
+    let pos = try_opt!(convert::text_size_from_lsp_position(
+        snapshot,
+        file_id,
+        params.text_document_position.position,
+    )?);
+    let resp = snapshot
+        .analysis_snapshot
+        .find_references(FilePosition { file_id, pos })?
+        .unwrap_or_else(Vec::new)
+        .into_iter()
+        .filter_map(|location| {
+            Some(lsp_types::Location {
+                range: convert::lsp_range_from_text_range(location.range, line_index)?,
+                uri: lsp_types::Url::from_file_path(
+                    snapshot
+                        .document_manager
+                        .read()
+                        .lookup_by_file_id(location.file_id),
+                )
+                .ok()?,
+            })
+        });
+
+    Ok(Some(resp.collect()))
+}
+
 pub(crate) fn completion(
     snapshot: &ServerSnapshot,
     params: lsp_types::CompletionParams,

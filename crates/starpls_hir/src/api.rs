@@ -226,7 +226,7 @@ impl<'a> Semantics<'a> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Variable {
     id: Option<(File, ExprId)>,
 }
@@ -237,7 +237,7 @@ impl Variable {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LoadItem {
     file: File,
     id: LoadItemId,
@@ -262,7 +262,7 @@ impl LoadItem {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ScopeDef {
     Callable(Callable),
     Variable(Variable),
@@ -525,7 +525,7 @@ impl From<Ty> for Type {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Callable(CallableInner);
 
 impl Callable {
@@ -642,7 +642,7 @@ impl From<BuiltinFunction> for Callable {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum CallableInner {
     HirDef(FunctionDef),
     IntrinsicFunction(IntrinsicFunction, Option<Substitution>),

@@ -750,10 +750,10 @@ impl Ty {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Param(pub(crate) ParamInner);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum ParamInner {
     Param {
         func: Function,
@@ -775,7 +775,7 @@ pub(crate) enum ParamInner {
     TagParam(TagParam),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum RuleParam {
     Keyword { name: Name, attr: Arc<Attribute> },
     BuiltinKeyword(RuleKind, usize),
@@ -788,7 +788,7 @@ impl From<RuleParam> for ParamInner {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum TagParam {
     Keyword { name: Name, attr: Arc<Attribute> },
     Kwargs,

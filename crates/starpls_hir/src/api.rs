@@ -136,6 +136,20 @@ impl<'a> Semantics<'a> {
         })
     }
 
+    pub fn resolve_def_stmt(&self, file: File, def_stmt: &ast::DefStmt) -> Option<Callable> {
+        let module = module(self.db, file);
+        let stmt = source_map(self.db, file)
+            .stmt_map
+            .get(&AstPtr::new(&ast::Statement::Def(def_stmt.clone())))?;
+        let Stmt::Def { func, .. } = module[*stmt] else {
+            return None;
+        };
+        Some(Callable(CallableInner::HirDef(FunctionDef::Def {
+            func,
+            stmt: InFile { file, value: *stmt },
+        })))
+    }
+
     pub fn type_of_expr(&self, file: File, expr: &ast::Expression) -> Option<Type> {
         let ptr = AstPtr::new(expr);
         let expr = source_map(self.db, file).expr_map.get(&ptr)?;

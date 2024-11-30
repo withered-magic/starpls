@@ -6,6 +6,7 @@ use starpls_hir::ScopeDef;
 use starpls_hir::Semantics;
 use starpls_syntax::ast::AstNode;
 use starpls_syntax::ast::{self};
+use starpls_syntax::match_ast;
 use starpls_syntax::TextSize;
 use starpls_syntax::T;
 
@@ -65,21 +66,25 @@ pub(crate) fn find_references(
             };
 
             let text_range = parent.text_range();
-            let Some(name_ref) = ast::NameRef::cast(parent) else {
-                continue;
-            };
 
-            let scope =
-                sema.scope_for_expr(file, &ast::Expression::cast(name_ref.syntax().clone())?)?;
+            match_ast! {
+                match parent {
+                    ast::NameRef(name_ref) => {
+                        let scope =
+                            sema.scope_for_expr(file, &ast::Expression::cast(name_ref.syntax().clone())?)?;
 
-            for def in scope.resolve_name(&name).into_iter() {
-                if var_defs.contains(&def) {
-                    locations.push(Location {
-                        file_id,
-                        range: text_range,
-                    });
+                        for def in scope.resolve_name(&name).into_iter() {
+                            if var_defs.contains(&def) {
+                                locations.push(Location {
+                                    file_id,
+                                    range: text_range,
+                                });
+                            }
+                        }
+                    },
+                    _ => ()
                 }
-            }
+            };
         }
 
         return Some(locations);

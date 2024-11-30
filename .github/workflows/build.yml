@@ -28,22 +28,18 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v3
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+      - name: Prepare for build
+        run: |
+          echo 'import %workspace%/bazel/remote-cache.bazelrc' >>.bazelrc
+          echo "build --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >>.bazelrc
+          echo "startup --output_user_root=C:/b" >>.bazelrc
+          echo "startup --windows_enable_symlinks" >>.bazelrc
+          mkdir -p editors/code/dist
+        shell: bash
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: Build
-        run: cargo build
+        run: bazel build //crates/...
       - name: Run tests
-        run: cargo test
+        run: bazel test --build_tests_only //crates/...

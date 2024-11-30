@@ -96,7 +96,7 @@ impl<'a> CodeFlowLowerCtx<'a> {
     fn lower_stmt(&mut self, stmt: StmtId) {
         match &self.module[stmt] {
             Stmt::Assign { lhs, rhs, .. } => {
-                self.lower_assignment_target(*lhs, *rhs);
+                self.lower_assignment_target_and_source(*lhs, *rhs);
                 self.result
                     .hir_to_flow_node
                     .insert(stmt.into(), self.curr_node);
@@ -158,7 +158,7 @@ impl<'a> CodeFlowLowerCtx<'a> {
                 stmts,
             } => {
                 for target in targets.iter() {
-                    self.lower_assignment_target(*target, *iterable);
+                    self.lower_assignment_target_and_source(*target, *iterable);
                 }
 
                 let pre_for_node = self.new_flow_node(FlowNode::Loop {
@@ -233,8 +233,12 @@ impl<'a> CodeFlowLowerCtx<'a> {
         }
     }
 
-    fn lower_assignment_target(&mut self, expr: ExprId, source: ExprId) {
+    fn lower_assignment_target_and_source(&mut self, expr: ExprId, source: ExprId) {
         self.lower_expr(source);
+        self.lower_assignment_target(expr, source);
+    }
+
+    fn lower_assignment_target(&mut self, expr: ExprId, source: ExprId) {
         match &self.module[expr] {
             Expr::Name { ref name } => {
                 let assign_node = self.new_flow_node(FlowNode::Assign {
@@ -269,7 +273,7 @@ impl<'a> CodeFlowLowerCtx<'a> {
                 CompClause::For { iterable, targets } => {
                     self.lower_expr(*iterable);
                     for target in targets.iter() {
-                        self.lower_assignment_target(*target, *iterable);
+                        self.lower_assignment_target_and_source(*target, *iterable);
                     }
                 }
                 CompClause::If { test } => {

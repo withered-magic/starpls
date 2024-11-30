@@ -33,9 +33,13 @@ jobs:
         run: |
           echo 'import %workspace%/bazel/remote-cache.bazelrc' >>.bazelrc
           echo "build --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >>.bazelrc
+          echo "startup --output_user_root=C:/b" >>.bazelrc
+          echo "startup --windows_enable_symlinks" >>.bazelrc
           mkdir -p editors/code/dist
         shell: bash
         env:
           BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: Build
-        run: bazel --output_user_root=C:/b --windows_enable_symlinks build //crates/starpls
+        run: bazel build //crates/...
+      - name: Run tests
+        run: bazel test --build_tests_only //crates/...

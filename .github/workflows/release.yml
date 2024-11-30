@@ -44,16 +44,18 @@ jobs:
         run: |
           echo 'import %workspace%/bazel/remote-cache.bazelrc' >>.bazelrc
           echo "build --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >>.bazelrc
+          echo "startup --output_user_root=C:/b" >>.bazelrc
+          echo "startup --windows_enable_symlinks" >>.bazelrc
           mkdir -p editors/code/dist
         shell: bash
         env:
           BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: Build
-        run: bazel --output_user_root=C:/b --windows_enable_symlinks build -c opt //crates/starpls
+        run: bazel -c opt //crates/starpls
       - uses: actions/upload-artifact@v4
         with:
           name: starpls-windows-amd64
-          path: bazel-bin/crates/starpls/starpls
+          path: bazel-bin/crates/starpls/starpls.exe
 
   release:
     name: Release

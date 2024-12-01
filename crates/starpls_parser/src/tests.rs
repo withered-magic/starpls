@@ -71,7 +71,7 @@ fn collect_test_cases(dir: &'static str) -> Result<Vec<TestCase>, Box<dyn error:
 
     // let crate_root = find_runfiles_dir()?.join("starpls/crates/starpls_parser");
     let root = find_runfiles_dir()
-        .map(|dir| dir.join("starpls/crates/starpls_parser"))
+        .map(|dir| dir.join("_main/crates/starpls_parser"))
         .unwrap_or_else(|_| {
             PathBuf::from(
                 env::var("CARGO_MANIFEST_DIR")

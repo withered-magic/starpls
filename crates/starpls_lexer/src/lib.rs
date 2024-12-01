@@ -329,7 +329,11 @@ impl Cursor<'_> {
 
                     // If we are at an equal indentation level, or are currently at a newline or EOF, we can just
                     // emit the whitespace that we consumed.
-                    if indent == last_indent || self.first() == '\n' || self.is_eof() {
+                    if indent == last_indent
+                        || self.first() == '\n'
+                        || (self.first() == '\r' && self.second() == '\n')
+                        || self.is_eof()
+                    {
                         self.state = CursorState::AfterLeadingSpaces;
                         let pos_within_token = self.reset_pos_within_token();
                         if pos_within_token == 0 {
@@ -403,6 +407,13 @@ impl Cursor<'_> {
             }
 
             '\\' if self.first() == '\n' => {
+                self.bump();
+                self.eat_whitespace(self.has_open_block());
+                Whitespace
+            }
+
+            '\\' if self.first() == '\r' && self.second() == '\n' => {
+                self.bump();
                 self.bump();
                 self.eat_whitespace(self.has_open_block());
                 Whitespace
@@ -781,7 +792,9 @@ impl Cursor<'_> {
         };
 
         // TODO(withered-magic): Loop on self.first() instead.
-        if self.first() == '\n' && !triple_quoted {
+        if (self.first() == '\n' || (self.first() == '\r' && self.second() == '\n'))
+            && !triple_quoted
+        {
             return (false, triple_quoted);
         }
 
@@ -805,7 +818,10 @@ impl Cursor<'_> {
                     closing_streak = 0;
                 }
             }
-            if self.first() == '\n' && !triple_quoted {
+
+            if (self.first() == '\n' || (self.first() == '\r' && self.second() == '\n'))
+                && !triple_quoted
+            {
                 break;
             }
         }
@@ -816,10 +832,10 @@ impl Cursor<'_> {
     fn eat_whitespace(&mut self, newline_allowed: bool) {
         while !self.is_eof() {
             match self.first() {
-                ' ' | '\t' => {
+                ' ' | '\t' | '\r' => {
                     self.bump();
                 }
-                '\r' | '\n' if newline_allowed => {
+                '\n' if newline_allowed => {
                     self.bump();
                 }
                 '\\' if self.second() == '\n' => {

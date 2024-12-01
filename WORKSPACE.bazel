@@ -1,18 +1,6 @@
 workspace(name = "starpls")
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
-HERMETIC_CC_TOOLCHAIN_VERSION = "v3.1.1"
-
-http_archive(
-    name = "hermetic_cc_toolchain",
-    sha256 = "907745bf91555f77e8234c0b953371e6cac5ba715d1cf12ff641496dd1bce9d1",
-    urls = [
-        "https://mirror.bazel.build/github.com/uber/hermetic_cc_toolchain/releases/download/{0}/hermetic_cc_toolchain-{0}.tar.gz".format(HERMETIC_CC_TOOLCHAIN_VERSION),
-        "https://github.com/uber/hermetic_cc_toolchain/releases/download/{0}/hermetic_cc_toolchain-{0}.tar.gz".format(HERMETIC_CC_TOOLCHAIN_VERSION),
-    ],
-)
-
 load("@hermetic_cc_toolchain//toolchain:defs.bzl", zig_toolchains = "toolchains")
 
 zig_toolchains()
@@ -78,26 +66,7 @@ swc_register_toolchains(
     swc_version = LATEST_SWC_VERSION,
 )
 
-http_archive(
-    name = "aspect_bazel_lib",
-    sha256 = "262e3d6693cdc16dd43880785cdae13c64e6a3f63f75b1993c716295093d117f",
-    strip_prefix = "bazel-lib-1.38.1",
-    url = "https://github.com/aspect-build/bazel-lib/releases/download/v1.38.1/bazel-lib-v1.38.1.tar.gz",
-)
-
-load("@aspect_bazel_lib//lib:repositories.bzl", "aspect_bazel_lib_dependencies")
-
-aspect_bazel_lib_dependencies()
-
-http_archive(
-    name = "rules_rust",
-    integrity = "sha256-heIBNyerJvsiq9/+SyrAwnotW2KWFnumPY9uExQPUfk=",
-    urls = ["https://github.com/bazelbuild/rules_rust/releases/download/0.53.0/rules_rust-v0.53.0.tar.gz"],
-)
-
-load("@rules_rust//rust:repositories.bzl", "rules_rust_dependencies", "rust_register_toolchains", "rust_repository_set")
-
-rules_rust_dependencies()
+load("@rules_rust//rust:repositories.bzl", "rust_register_toolchains", "rust_repository_set")
 
 rust_version = "nightly/2023-12-06"
 
@@ -123,9 +92,9 @@ rust_repository_set(
     versions = [rust_version],
 )
 
-load("@rules_rust//crate_universe:repositories.bzl", "crate_universe_dependencies")
+# load("@rules_rust//crate_universe:repositories.bzl", "crate_universe_dependencies")
 
-crate_universe_dependencies()
+# crate_universe_dependencies()
 
 load("@rules_rust//crate_universe:defs.bzl", "crate", "crates_repository")
 

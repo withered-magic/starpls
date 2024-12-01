@@ -320,6 +320,9 @@ impl Cursor<'_> {
                             '\t' => {
                                 indent += 4;
                             }
+                            '\r' => {
+                                // TODO(withered-magic): Is it ok to just completely ignore carriage returns in this scenario?
+                            }
                             _ => return false,
                         }
                         true
@@ -403,6 +406,13 @@ impl Cursor<'_> {
             }
 
             '\\' if self.first() == '\n' => {
+                self.bump();
+                self.eat_whitespace(self.has_open_block());
+                Whitespace
+            }
+
+            '\\' if self.first() == '\r' && self.second() == '\n' => {
+                self.bump();
                 self.bump();
                 self.eat_whitespace(self.has_open_block());
                 Whitespace
@@ -781,7 +791,9 @@ impl Cursor<'_> {
         };
 
         // TODO(withered-magic): Loop on self.first() instead.
-        if self.first() == '\n' && !triple_quoted {
+        if (self.first() == '\n' || (self.first() == '\r' && self.second() == '\n'))
+            && !triple_quoted
+        {
             return (false, triple_quoted);
         }
 
@@ -801,11 +813,18 @@ impl Cursor<'_> {
                     // Bump again to skip the escaped character.
                     self.bump();
                 }
+                '\\' if self.first() == '\r' && self.second() == '\n' => {
+                    self.bump();
+                    self.bump();
+                }
                 _ => {
                     closing_streak = 0;
                 }
             }
-            if self.first() == '\n' && !triple_quoted {
+
+            if (self.first() == '\n' || (self.first() == '\r' && self.second() == '\n'))
+                && !triple_quoted
+            {
                 break;
             }
         }
@@ -816,13 +835,18 @@ impl Cursor<'_> {
     fn eat_whitespace(&mut self, newline_allowed: bool) {
         while !self.is_eof() {
             match self.first() {
-                ' ' | '\t' => {
+                ' ' | '\t' | '\r' => {
                     self.bump();
                 }
-                '\r' | '\n' if newline_allowed => {
+                '\n' if newline_allowed => {
                     self.bump();
                 }
                 '\\' if self.second() == '\n' => {
+                    self.bump();
+                    self.bump();
+                }
+                '\\' if self.second() == '\r' && self.third() == '\n' => {
+                    self.bump();
                     self.bump();
                     self.bump();
                 }

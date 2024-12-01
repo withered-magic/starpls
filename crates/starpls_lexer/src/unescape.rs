@@ -98,6 +98,10 @@ fn scan_string_escape(chars: &mut Chars<'_>) -> Result<Option<char>, EscapeError
         '"' => '"',
         '\'' => '\'',
         '\n' => return Ok(None), // escaped newlines are ignored
+        '\r' if chars.clone().next() == Some('\n') => {
+            chars.next();
+            return Ok(None);
+        }
 
         // octal escapes immediately begin with digits
         c @ '0'..='7' => {
@@ -135,6 +139,10 @@ fn scan_byte_string_escape<F>(
 
             '\\' => Ok(b'\\'), // literal backslash
             '\n' => return,
+            '\r' if chars.clone().next() == Some('\n') => {
+                chars.next();
+                return;
+            }
 
             // octal escapes begin immediately with digits
             c @ '0'..='7' => {

@@ -320,6 +320,9 @@ impl Cursor<'_> {
                             '\t' => {
                                 indent += 4;
                             }
+                            '\r' => {
+                                // TODO(withered-magic): Is it ok to just completely ignore carriage returns in this scenario?
+                            }
                             _ => return false,
                         }
                         true
@@ -329,11 +332,7 @@ impl Cursor<'_> {
 
                     // If we are at an equal indentation level, or are currently at a newline or EOF, we can just
                     // emit the whitespace that we consumed.
-                    if indent == last_indent
-                        || self.first() == '\n'
-                        || (self.first() == '\r' && self.second() == '\n')
-                        || self.is_eof()
-                    {
+                    if indent == last_indent || self.first() == '\n' || self.is_eof() {
                         self.state = CursorState::AfterLeadingSpaces;
                         let pos_within_token = self.reset_pos_within_token();
                         if pos_within_token == 0 {
@@ -814,6 +813,10 @@ impl Cursor<'_> {
                     // Bump again to skip the escaped character.
                     self.bump();
                 }
+                '\\' if self.first() == '\r' && self.second() == '\n' => {
+                    self.bump();
+                    self.bump();
+                }
                 _ => {
                     closing_streak = 0;
                 }
@@ -839,6 +842,11 @@ impl Cursor<'_> {
                     self.bump();
                 }
                 '\\' if self.second() == '\n' => {
+                    self.bump();
+                    self.bump();
+                }
+                '\\' if self.second() == '\r' && self.third() == '\n' => {
+                    self.bump();
                     self.bump();
                     self.bump();
                 }

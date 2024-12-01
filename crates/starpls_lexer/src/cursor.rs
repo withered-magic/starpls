@@ -52,6 +52,14 @@ impl<'a> Cursor<'a> {
         chars.next().unwrap_or(EOF_CHAR)
     }
 
+    // TODO(withered-magic): This is only used in eat_whitespace().
+    pub(crate) fn third(&self) -> char {
+        let mut chars = self.chars.clone();
+        chars.next();
+        chars.next();
+        chars.next().unwrap_or(EOF_CHAR)
+    }
+
     pub(crate) fn is_eof(&self) -> bool {
         self.chars.as_str().is_empty()
     }

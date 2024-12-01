@@ -818,3 +818,100 @@ world!""#,
         "#]],
     );
 }
+
+#[test]
+fn test_multiple_crlf_lines() {
+    check_lexing("\r\n\r\n\r\n", expect![[r#"
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Newline, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Newline, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Newline, len: 1 }
+    "#]]);
+}
+
+#[test]
+fn test_def_with_crlf() {
+    check_lexing("def foo():\r\n    x = 1\r\n\r\n    y = 2", expect![[r#"
+        Token { kind: Def, len: 3 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Ident, len: 3 }
+        Token { kind: OpenParen, len: 1 }
+        Token { kind: CloseParen, len: 1 }
+        Token { kind: Colon, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Newline, len: 1 }
+        Token { kind: Indent, len: 4 }
+        Token { kind: Ident, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Eq, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Newline, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Newline, len: 1 }
+        Token { kind: Whitespace, len: 4 }
+        Token { kind: Ident, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Eq, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+        Token { kind: Dedent { consistent: true }, len: 0 }
+    "#]]);
+}
+
+#[test]
+fn test_escaped_crlf() {
+    check_lexing("x = \\\r\n1", expect![[r#"
+        Token { kind: Ident, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Eq, len: 1 }
+        Token { kind: Whitespace, len: 4 }
+        Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+    "#]]);
+}
+
+#[test]
+fn test_escaped_crlf_in_parens() {
+    check_lexing("x = (1\\\r\n, 3)", expect![[r#"
+        Token { kind: Ident, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Eq, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: OpenParen, len: 1 }
+        Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+        Token { kind: Whitespace, len: 3 }
+        Token { kind: Comma, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Literal { kind: Int { base: Decimal, empty_int: false } }, len: 1 }
+        Token { kind: CloseParen, len: 1 }
+    "#]]);
+}
+
+#[test]
+fn test_escaped_crlf_string() {
+    check_lexing("\"ab\\\r\nc\"", expect![[r#"
+        Token { kind: Literal { kind: Str { terminated: true, triple_quoted: false } }, len: 8 }
+    "#]]);
+}
+
+#[test]
+fn test_escaped_crlf_multi() {
+    check_lexing("\\\r\n\\\r\n", expect![[r#"
+        Token { kind: Whitespace, len: 6 }
+    "#]]);
+}
+
+#[test]
+fn test_crlf_unterminated_string() {
+    check_lexing("\"abc\r\n\"\r\n", expect![[r#"
+        Token { kind: Literal { kind: Str { terminated: false, triple_quoted: false } }, len: 4 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Newline, len: 1 }
+        Token { kind: Literal { kind: Str { terminated: false, triple_quoted: false } }, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Newline, len: 1 }
+    "#]]);
+}

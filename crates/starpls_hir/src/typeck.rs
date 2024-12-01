@@ -744,6 +744,7 @@ impl Ty {
             TyKind::Bool(_) => Ty::bool(),
             TyKind::Int(_) => Ty::int(),
             TyKind::String(_) => Ty::string(),
+            TyKind::Attribute(_) => TyKind::Attribute(None).intern(),
             _ => self,
         }
     }
@@ -1270,7 +1271,7 @@ pub(crate) enum TyKind {
     Struct(Option<Struct>),
     /// A Bazel attribute (https://bazel.build/rules/lib/builtins/Attribute.html).
     /// Use this instead of the `Attribute` type defined in `builtin.pb`.
-    Attribute(Arc<Attribute>),
+    Attribute(Option<Arc<Attribute>>),
     /// A Bazel rule (https://bazel.build/rules/lib/builtins/rule).
     Rule(Rule),
     /// A Bazel provider (https://bazel.build/rules/lib/builtins/Provider.html).

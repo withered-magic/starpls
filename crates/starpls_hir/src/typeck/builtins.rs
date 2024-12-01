@@ -341,7 +341,7 @@ impl BuiltinFunction {
                                             .known_keys
                                             .iter()
                                             .filter_map(|(name, ty)| match ty.kind() {
-                                                TyKind::Attribute(attr) => Some((
+                                                TyKind::Attribute(Some(attr)) => Some((
                                                     Name::from_str(&name.value(db)),
                                                     attr.clone(),
                                                 )),
@@ -395,7 +395,7 @@ impl BuiltinFunction {
                     }
                 }
 
-                TyKind::Attribute(Arc::new(Attribute::new(
+                TyKind::Attribute(Some(Arc::new(Attribute::new(
                     match attr {
                         "bool" => AttributeKind::Bool,
                         "int" => AttributeKind::Int,
@@ -414,7 +414,7 @@ impl BuiltinFunction {
                     doc,
                     mandatory,
                     default_ptr.map(|text_range| Either::Left((file, text_range))),
-                )))
+                ))))
             }
 
             (None, "tag_class") => {
@@ -429,10 +429,12 @@ impl BuiltinFunction {
                                         lit.known_keys
                                             .iter()
                                             .filter_map(|(name, ty)| match ty.kind() {
-                                                TyKind::Attribute(attr) => Some(AttributeData {
-                                                    name: Name::from_str(&name.value(db)),
-                                                    attr: attr.clone(),
-                                                }),
+                                                TyKind::Attribute(Some(attr)) => {
+                                                    Some(AttributeData {
+                                                        name: Name::from_str(&name.value(db)),
+                                                        attr: attr.clone(),
+                                                    })
+                                                }
                                                 _ => None,
                                             })
                                             .collect::<Vec<_>>()

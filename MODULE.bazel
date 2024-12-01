@@ -2,6 +2,7 @@ module(name = "starpls")
 
 bazel_dep(name = "aspect_bazel_lib", version = "2.9.4")
 bazel_dep(name = "hermetic_cc_toolchain", version = "3.1.1")
+bazel_dep(name = "protobuf", version = "27.1", repo_name = "com_google_protobuf")
 bazel_dep(name = "rules_rust", version = "0.53.0")
 
 zig_toolchains = use_extension("@hermetic_cc_toolchain//toolchain:ext.bzl", "toolchains")
@@ -9,5 +10,49 @@ use_repo(zig_toolchains, "zig_sdk")
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
-    
+    edition = "2021",
+    versions = ["nightly/2023-12-06"],
+    extra_target_triples = ["aarch64-unknown-linux-gnu"],
 )
+
+use_repo(rust, "rust_toolchains")
+
+register_toolchains("@rust_toolchains//:all")
+
+crate = use_extension(
+    "@rules_rust//crate_universe:extension.bzl",
+    "crate",
+)
+
+crate.from_cargo(
+    name = "crates",
+    cargo_lockfile = "Cargo.lock",
+    manifests = [
+        "//:Cargo.toml",
+        "//crates/starpls:Cargo.toml",
+        "//crates/starpls_bazel:Cargo.toml",
+        "//crates/starpls_common:Cargo.toml",
+        "//crates/starpls_hir:Cargo.toml",
+        "//crates/starpls_ide:Cargo.toml",
+        "//crates/starpls_intern:Cargo.toml",
+        "//crates/starpls_lexer:Cargo.toml",
+        "//crates/starpls_parser:Cargo.toml",
+        "//crates/starpls_syntax:Cargo.toml",
+        "//crates/starpls_test_util:Cargo.toml",
+        "//vendor/runfiles:Cargo.toml",
+        "//xtask:Cargo.toml",
+    ],
+)
+use_repo(crate, "crates")
+
+crate.annotation(
+    crate = "protoc-gen-prost",
+    gen_binaries = ["protoc-gen-prost"],
+)
+
+crate.annotation(
+    crate = "protoc-gen-tonic",
+    gen_binaries = ["protoc-gen-tonic"],
+)
+
+register_toolchains("//:prost_toolchain")

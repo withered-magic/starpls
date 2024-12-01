@@ -1,9 +1,6 @@
 workspace(name = "starpls")
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-load("@hermetic_cc_toolchain//toolchain:defs.bzl", zig_toolchains = "toolchains")
-
-zig_toolchains()
 
 http_archive(
     name = "aspect_rules_ts",
@@ -65,83 +62,3 @@ swc_register_toolchains(
     name = "swc",
     swc_version = LATEST_SWC_VERSION,
 )
-
-load("@rules_rust//rust:repositories.bzl", "rust_register_toolchains", "rust_repository_set")
-
-rust_version = "nightly/2023-12-06"
-
-rust_register_toolchains(
-    edition = "2021",
-    extra_target_triples = [],
-    versions = [rust_version],
-)
-
-rust_repository_set(
-    name = "linux_x86_64",
-    edition = "2021",
-    exec_triple = "x86_64-unknown-linux-gnu",
-    extra_target_triples = ["aarch64-unknown-linux-gnu"],
-    versions = [rust_version],
-)
-
-rust_repository_set(
-    name = "macos_aarch64",
-    edition = "2021",
-    exec_triple = "aarch64-apple-darwin",
-    extra_target_triples = ["aarch64-unknown-linux-gnu"],
-    versions = [rust_version],
-)
-
-# load("@rules_rust//crate_universe:repositories.bzl", "crate_universe_dependencies")
-
-# crate_universe_dependencies()
-
-load("@rules_rust//crate_universe:defs.bzl", "crate", "crates_repository")
-
-crates_repository(
-    name = "crates",
-    annotations = {
-        "protoc-gen-prost": [crate.annotation(
-            gen_binaries = ["protoc-gen-prost"],
-        )],
-        "protoc-gen-tonic": [crate.annotation(
-            gen_binaries = ["protoc-gen-tonic"],
-        )],
-    },
-    cargo_lockfile = "//:Cargo.lock",
-    lockfile = "//:Cargo.Bazel.lock",
-    manifests = [
-        "//:Cargo.toml",
-        "//crates/starpls:Cargo.toml",
-        "//crates/starpls_bazel:Cargo.toml",
-        "//crates/starpls_common:Cargo.toml",
-        "//crates/starpls_hir:Cargo.toml",
-        "//crates/starpls_ide:Cargo.toml",
-        "//crates/starpls_intern:Cargo.toml",
-        "//crates/starpls_lexer:Cargo.toml",
-        "//crates/starpls_parser:Cargo.toml",
-        "//crates/starpls_syntax:Cargo.toml",
-        "//crates/starpls_test_util:Cargo.toml",
-        "//vendor/runfiles:Cargo.toml",
-        "//xtask:Cargo.toml",
-    ],
-    rust_version = "nightly/2023-12-06",
-)
-
-load("@crates//:defs.bzl", "crate_repositories")
-
-crate_repositories()
-
-load("@rules_rust//proto/prost:repositories.bzl", "rust_prost_dependencies")
-
-rust_prost_dependencies()
-
-load("@rules_rust//proto/protobuf:transitive_repositories.bzl", "rust_proto_protobuf_transitive_repositories")
-
-rust_proto_protobuf_transitive_repositories()
-
-load("@rules_rust//proto/prost:transitive_repositories.bzl", "rust_prost_transitive_repositories")
-
-rust_prost_transitive_repositories()
-
-register_toolchains("//:prost_toolchain")

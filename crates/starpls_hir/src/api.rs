@@ -52,7 +52,7 @@ pub fn diagnostics_for_file(db: &dyn Db, file: File) -> impl Iterator<Item = Dia
 }
 
 pub struct Semantics<'a> {
-    db: &'a dyn Db,
+    pub db: &'a dyn Db,
 }
 
 impl<'a> Semantics<'a> {

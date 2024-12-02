@@ -69,7 +69,7 @@ impl<'a> GotoDefinitionHandler<'a> {
     }
 
     fn handle_name_ref(&self, name_ref: ast::NameRef) -> Option<Vec<LocationLink>> {
-        let name = Name::from_ast_node(name_ref.clone());
+        let name = Name::from_ast_name_ref(name_ref.clone());
         let scope = self.sema.scope_for_expr(
             self.file,
             &ast::Expression::cast(name_ref.syntax().clone())?,

@@ -1,6 +1,7 @@
 use memchr::memmem::Finder;
 use starpls_common::parse;
 use starpls_common::Db;
+use starpls_common::File;
 use starpls_hir::Name;
 use starpls_hir::ScopeDef;
 use starpls_hir::Semantics;
@@ -14,6 +15,81 @@ use crate::util::pick_best_token;
 use crate::Database;
 use crate::FilePosition;
 use crate::Location;
+
+struct FindReferencesHandler<'a> {
+    sema: &'a Semantics<'a>,
+    file: File,
+    name: Name,
+    defs: Vec<ScopeDef>,
+    locations: Vec<Location>,
+}
+
+impl<'a> FindReferencesHandler<'a> {
+    fn handle(mut self) -> Vec<Location> {
+        let name = self.name.clone();
+        let finder = Finder::new(name.as_str());
+        let offsets = finder
+            .find_iter(self.file.contents(self.sema.db).as_bytes())
+            .map(|index| {
+                let offset: TextSize = index.try_into().unwrap();
+                offset
+            });
+
+        for offset in offsets {
+            let Some(parent) = parse(self.sema.db, self.file)
+                .syntax(self.sema.db)
+                .token_at_offset(offset)
+                .find(|token| token.text() == self.name.as_str())
+                .and_then(|token| token.parent())
+            else {
+                continue;
+            };
+
+            match_ast! {
+                match parent {
+                    ast::Name(name) => self.check_matches_name(name),
+                    ast::NameRef(name_ref) => self.check_matches_name_ref(name_ref),
+                    _ => ()
+                }
+            };
+        }
+
+        self.locations
+    }
+
+    fn check_matches_name(&mut self, node: ast::Name) {
+        let Some(callable) = node
+            .syntax()
+            .parent()
+            .and_then(ast::DefStmt::cast)
+            .and_then(|def_stmt| self.sema.resolve_def_stmt(self.file, &def_stmt))
+        else {
+            return;
+        };
+        if self.defs.contains(&ScopeDef::Callable(callable)) {
+            self.locations.push(Location {
+                file_id: self.file.id(self.sema.db),
+                range: node.syntax().text_range(),
+            });
+        }
+    }
+
+    fn check_matches_name_ref(&mut self, node: ast::NameRef) {
+        let Some(scope) = ast::Expression::cast(node.syntax().clone())
+            .and_then(|expr| self.sema.scope_for_expr(self.file, &expr))
+        else {
+            return;
+        };
+        for def in scope.resolve_name(&self.name).into_iter() {
+            if self.defs.contains(&def) {
+                self.locations.push(Location {
+                    file_id: self.file.id(self.sema.db),
+                    range: node.syntax().text_range(),
+                });
+            }
+        }
+    }
+}
 
 pub(crate) fn find_references(
     db: &Database,
@@ -30,12 +106,10 @@ pub(crate) fn find_references(
     })?;
     let node = token.parent()?;
 
-    if let Some(name_ref) = ast::NameRef::cast(node) {
-        let mut locations = vec![];
-        let name = Name::from_ast_node(name_ref.clone());
-        let scope =
-            sema.scope_for_expr(file, &ast::Expression::cast(name_ref.syntax().clone())?)?;
-        let var_defs = scope
+    let (name, defs) = if let Some(node) = ast::NameRef::cast(node.clone()) {
+        let name = Name::from_ast_name_ref(node.clone());
+        let scope = sema.scope_for_expr(file, &ast::Expression::cast(node.syntax().clone())?)?;
+        let defs = scope
             .resolve_name(&name)
             .into_iter()
             .flat_map(|def| match &def {
@@ -45,50 +119,30 @@ pub(crate) fn find_references(
             })
             .collect::<Vec<_>>();
 
-        if var_defs.is_empty() {
+        if defs.is_empty() {
             return None;
         }
 
-        let finder = Finder::new(name.as_str());
-        let offsets = finder.find_iter(file.contents(db).as_bytes()).map(|index| {
-            let offset: TextSize = index.try_into().unwrap();
-            offset
-        });
+        (name, defs)
+    } else if let Some(node) = ast::Name::cast(node) {
+        let def_stmt = ast::DefStmt::cast(node.syntax().parent()?)?;
+        let callable = sema.resolve_def_stmt(file, &def_stmt)?;
+        (
+            Name::from_ast_name(node),
+            vec![ScopeDef::Callable(callable)],
+        )
+    } else {
+        return None;
+    };
 
-        for offset in offsets {
-            let Some(parent) = parse
-                .syntax(db)
-                .token_at_offset(offset)
-                .find(|token| token.text() == name.as_str())
-                .and_then(|token| token.parent())
-            else {
-                continue;
-            };
-
-            let text_range = parent.text_range();
-
-            match_ast! {
-                match parent {
-                    ast::NameRef(name_ref) => {
-                        let scope =
-                            sema.scope_for_expr(file, &ast::Expression::cast(name_ref.syntax().clone())?)?;
-
-                        for def in scope.resolve_name(&name).into_iter() {
-                            if var_defs.contains(&def) {
-                                locations.push(Location {
-                                    file_id,
-                                    range: text_range,
-                                });
-                            }
-                        }
-                    },
-                    _ => ()
-                }
-            };
+    Some(
+        FindReferencesHandler {
+            sema: &sema,
+            file,
+            name,
+            defs,
+            locations: vec![],
         }
-
-        return Some(locations);
-    }
-
-    None
+        .handle(),
+    )
 }

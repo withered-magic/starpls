@@ -438,7 +438,11 @@ impl Name {
         &self.0 == "[missing name]"
     }
 
-    pub fn from_ast_node(name: ast::NameRef) -> Self {
+    pub fn from_ast_name(name: ast::Name) -> Self {
+        Self::from_str(name.name().as_ref().map_or_else(|| "", |name| name.text()))
+    }
+
+    pub fn from_ast_name_ref(name: ast::NameRef) -> Self {
         Self::from_str(name.name().as_ref().map_or_else(|| "", |name| name.text()))
     }
 

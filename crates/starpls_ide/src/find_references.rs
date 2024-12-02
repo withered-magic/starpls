@@ -86,6 +86,9 @@ impl<'a> FindReferencesHandler<'a> {
                     file_id: self.file.id(self.sema.db),
                     range: node.syntax().text_range(),
                 });
+
+                // Add the current location at most once.
+                break;
             }
         }
     }
@@ -145,4 +148,117 @@ pub(crate) fn find_references(
         }
         .handle(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use starpls_bazel::APIContext;
+    use starpls_common::Dialect;
+    use starpls_common::FileInfo;
+    use starpls_test_util::Fixture;
+
+    use crate::AnalysisSnapshot;
+    use crate::FilePosition;
+
+    fn check_find_references(fixture: &str) {
+        let fixture = Fixture::parse(fixture);
+        let (snap, file_id) = AnalysisSnapshot::from_single_file(
+            &fixture.contents,
+            Dialect::Bazel,
+            Some(FileInfo::Bazel {
+                api_context: APIContext::Bzl,
+                is_external: false,
+            }),
+        );
+
+        let references = snap
+            .find_references(FilePosition {
+                file_id,
+                pos: fixture.cursor_pos,
+            })
+            .unwrap()
+            .unwrap();
+
+        let mut actual_locations = references
+            .into_iter()
+            .map(|location| location.range)
+            .collect::<Vec<_>>();
+        actual_locations.sort_by_key(|range| (range.start()));
+
+        assert_eq!(fixture.selected_ranges, actual_locations);
+    }
+
+    #[test]
+    fn test_variable() {
+        check_find_references(
+            r#"
+abc = 123
+#^^
+
+a$0bc
+#^^
+"#,
+        );
+    }
+
+    #[test]
+    fn test_variable_with_function_definition() {
+        check_find_references(
+            r#"
+def foo():
+    #^^
+    pass
+
+f$0oo()
+#^^
+"#,
+        );
+    }
+
+    #[test]
+    fn test_function_definition() {
+        check_find_references(
+            r#"
+def f$0oo():
+    #^^
+    pass
+
+foo()
+#^^
+"#,
+        );
+    }
+
+    #[test]
+    fn test_redeclared_variable() {
+        check_find_references(
+            r#"
+foo = 123
+#^^
+foo
+#^^
+foo = "abc"
+#^^
+f$0oo
+#^^
+"#,
+        );
+    }
+
+    #[test]
+    fn test_redeclared_function() {
+        check_find_references(
+            r#"
+def foo():
+    #^^
+    pass
+foo
+#^^
+foo = "abc"
+#^^
+f$0oo
+#^^
+"#,
+        );
+    }
 }

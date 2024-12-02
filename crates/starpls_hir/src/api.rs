@@ -52,7 +52,7 @@ pub fn diagnostics_for_file(db: &dyn Db, file: File) -> impl Iterator<Item = Dia
 }
 
 pub struct Semantics<'a> {
-    db: &'a dyn Db,
+    pub db: &'a dyn Db,
 }
 
 impl<'a> Semantics<'a> {
@@ -134,6 +134,20 @@ impl<'a> Semantics<'a> {
             TyKind::Tag(tag_class) => Callable(CallableInner::Tag(tag_class.clone())),
             _ => return None,
         })
+    }
+
+    pub fn resolve_def_stmt(&self, file: File, def_stmt: &ast::DefStmt) -> Option<Callable> {
+        let module = module(self.db, file);
+        let stmt = source_map(self.db, file)
+            .stmt_map
+            .get(&AstPtr::new(&ast::Statement::Def(def_stmt.clone())))?;
+        let Stmt::Def { func, .. } = module[*stmt] else {
+            return None;
+        };
+        Some(Callable(CallableInner::HirDef(FunctionDef::Def {
+            func,
+            stmt: InFile { file, value: *stmt },
+        })))
     }
 
     pub fn type_of_expr(&self, file: File, expr: &ast::Expression) -> Option<Type> {
@@ -226,7 +240,7 @@ impl<'a> Semantics<'a> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Variable {
     id: Option<(File, ExprId)>,
 }
@@ -237,7 +251,7 @@ impl Variable {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LoadItem {
     file: File,
     id: LoadItemId,
@@ -262,7 +276,7 @@ impl LoadItem {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ScopeDef {
     Callable(Callable),
     Variable(Variable),
@@ -525,7 +539,7 @@ impl From<Ty> for Type {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Callable(CallableInner);
 
 impl Callable {
@@ -642,7 +656,7 @@ impl From<BuiltinFunction> for Callable {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum CallableInner {
     HirDef(FunctionDef),
     IntrinsicFunction(IntrinsicFunction, Option<Substitution>),

@@ -44,6 +44,7 @@ pub use crate::signature_help::SignatureInfo;
 mod completions;
 mod diagnostics;
 mod document_symbols;
+mod find_references;
 mod goto_definition;
 mod hover;
 mod line_index;
@@ -349,6 +350,10 @@ impl AnalysisSnapshot {
         self.query(|db| document_symbols::document_symbols(db, file_id))
     }
 
+    pub fn find_references(&self, pos: FilePosition) -> Cancellable<Option<Vec<Location>>> {
+        self.query(|db| find_references::find_references(db, pos))
+    }
+
     pub fn goto_definition(&self, pos: FilePosition) -> Cancellable<Option<Vec<LocationLink>>> {
         self.query(|db| goto_definition::goto_definition(db, pos))
     }
@@ -431,6 +436,12 @@ impl AnalysisSnapshot {
 }
 
 impl panic::RefUnwindSafe for AnalysisSnapshot {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Location {
+    pub file_id: FileId,
+    pub range: TextRange,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LocationLink {

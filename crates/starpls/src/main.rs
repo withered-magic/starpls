@@ -105,6 +105,7 @@ fn run_server(args: ServerArgs) -> anyhow::Result<()> {
         definition_provider: Some(OneOf::Left(true)),
         document_symbol_provider: Some(OneOf::Left(true)),
         hover_provider: Some(HoverProviderCapability::Simple(true)),
+        references_provider: Some(OneOf::Left(true)),
         signature_help_provider: Some(SignatureHelpOptions {
             trigger_characters: Some(make_trigger_characters(SIGNATURE_HELP_TRIGGER_CHARACTERS)),
             ..Default::default()

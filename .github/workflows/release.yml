@@ -51,7 +51,7 @@ jobs:
         env:
           BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: Build
-        run: bazel -c opt //crates/starpls
+        run: bazel build -c opt //crates/starpls
       - uses: actions/upload-artifact@v4
         with:
           name: starpls-windows-amd64

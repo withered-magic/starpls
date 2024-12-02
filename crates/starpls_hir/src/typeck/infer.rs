@@ -1203,7 +1203,9 @@ impl TyContext<'_> {
                         ScopeDef::BuiltinVariable(type_ref) => {
                             resolve_builtin_type_ref(self.db, type_ref).0
                         }
-                        // This should be unreachable.
+                        // Handle symbols declared in the prelude file.
+                        ScopeDef::Variable(def) => self.infer_expr(def.file, def.expr),
+                        ScopeDef::Function(def) => TyKind::Function(def.clone()).intern(),
                         _ => return None,
                     },
                 );

@@ -16,6 +16,8 @@ jobs:
             runs-on: ubuntu-20.04
           - name: linux-aarch64
             runs-on: ubuntu-20.04
+          - name: darwin-amd64
+            runs-on: macos-13
           - name: darwin-arm64
             runs-on: macos-14
       fail-fast: true
@@ -74,6 +76,7 @@ jobs:
           mkdir -p release
           mv artifacts/starpls-linux-aarch64/starpls release/starpls-linux-aarch64
           mv artifacts/starpls-linux-amd64/starpls release/starpls-linux-amd64
+          mv artifacts/starpls-darwin-amd64/starpls release/starpls-darwin-amd64
           mv artifacts/starpls-darwin-arm64/starpls release/starpls-darwin-arm64
           mv artifacts/starpls-windows-amd64/starpls.exe release/starpls-windows-amd64.exe
           chmod +x release/starpls-*
@@ -83,6 +86,7 @@ jobs:
           cd release
           cp starpls-linux-aarch64 starpls && tar -czvf starpls-linux-aarch64.tar.gz starpls && rm starpls
           cp starpls-linux-amd64 starpls && tar -czvf starpls-linux-amd64.tar.gz starpls && rm starpls
+          cp starpls-darwin-amd64 starpls && tar -czvf starpls-darwin-amd64.tar.gz starpls && rm starpls
           cp starpls-darwin-arm64 starpls && tar -czvf starpls-darwin-arm64.tar.gz starpls && rm starpls
           cp starpls-windows-amd64.exe starpls.exe && zip starpls-windows-amd64.zip starpls.exe && rm starpls.exe
       - name: Show release artifacts

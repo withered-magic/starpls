@@ -55,7 +55,7 @@ pub(crate) fn did_save_text_document(
         match path.file_name().and_then(|file_name| file_name.to_str()) {
             Some("MODULE.bazel" | "WORKSPACE" | "WORKSPACE.bazel" | "WORKSPACE.bzlmod") => {}
             Some(file_name) if file_name.ends_with(".MODULE.bazel") => {}
-            Some("BUILD.bazel") => {
+            Some("BUILD" | "BUILD.bazel") => {
                 server.refresh_all_workspace_targets();
                 return Ok(());
             }

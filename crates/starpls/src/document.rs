@@ -656,7 +656,10 @@ impl FileLoader for DefaultFileLoader {
     fn resolve_build_file(&self, file_id: FileId) -> Option<String> {
         let path = self.interner.lookup_by_file_id(file_id);
         let path = path.strip_prefix(&self.workspace).ok()?;
-        if path.file_name()?.to_string_lossy() == "BUILD.bazel" {
+        if matches!(
+            &*path.file_name()?.to_string_lossy(),
+            "BUILD" | "BUILD.bazel"
+        ) {
             Some(path.parent()?.to_string_lossy().to_string())
         } else {
             None

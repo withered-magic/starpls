@@ -128,8 +128,11 @@ impl Server {
                 debug!("checking for `bazel mod dump_repo_mapping` capability");
                 match bazel_client.dump_repo_mapping("") {
                     Ok(_) => true,
-                    Err(_) => {
-                        info!("installed Bazel version doesn't support `bazel mod dump_repo_mapping`, disabling bzlmod support");
+                    Err(err) => {
+                        has_bazel_init_err = true;
+                        error!(
+                            "failed to run `bazel mod dump_repo_mapping`, disabling bzlmod support: {}", err
+                        );
                         false
                     }
                 }

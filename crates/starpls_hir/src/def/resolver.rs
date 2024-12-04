@@ -59,7 +59,7 @@ impl<'a> Resolver<'a> {
         Self::new_for_module(db, file).resolve_export(name)
     }
 
-    pub(crate) fn resolve_export(&self, name: &Name) -> Option<Export> {
+    fn resolve_export(&self, name: &Name) -> Option<Export> {
         if name.as_str().starts_with('_') {
             return None;
         }
@@ -68,13 +68,28 @@ impl<'a> Resolver<'a> {
             scope
                 .defs
                 .get(name)
-                .and_then(|decls| decls.last())
-                .and_then(|decl| {
-                    Some(match decl {
+                .and_then(|defs| defs.last())
+                .and_then(|def| {
+                    Some(match def {
                         ScopeDef::Variable(def) => Export::Variable(def.clone()),
                         ScopeDef::Function(def) => Export::Function(def.clone()),
                         _ => return None,
                     })
+                })
+        })
+    }
+
+    fn resolve_name_from_prelude(&self, name: &Name) -> Option<ScopeDef> {
+        self.scopes().find_map(|scope| {
+            scope
+                .defs
+                .get(name)
+                .and_then(|defs| defs.last())
+                .and_then(|def| match def {
+                    ScopeDef::Variable(_) | ScopeDef::Function(_) | ScopeDef::LoadItem(_) => {
+                        Some(def.clone())
+                    }
+                    _ => None,
                 })
         })
     }
@@ -114,7 +129,7 @@ impl<'a> Resolver<'a> {
                 .get_bazel_prelude_file()
                 .and_then(|prelude_file_id| {
                     let prelude_file = self.db.get_file(prelude_file_id)?;
-                    Resolver::resolve_export_in_file(self.db, prelude_file, name)
+                    Self::new_for_module(self.db, prelude_file).resolve_name_from_prelude(name)
                 })
                 .map(|export| vec![export.into()])
         }
@@ -189,7 +204,12 @@ impl<'a> Resolver<'a> {
                         .module_defs(true)
                         .into_iter()
                         .filter(|(_, def)| {
-                            matches!(def, ScopeDef::Variable(_) | ScopeDef::Function(_))
+                            matches!(
+                                def,
+                                ScopeDef::Variable(_)
+                                    | ScopeDef::Function(_)
+                                    | ScopeDef::LoadItem(_)
+                            )
                         }),
                 );
             }

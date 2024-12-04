@@ -1203,9 +1203,10 @@ impl TyContext<'_> {
                         ScopeDef::BuiltinVariable(type_ref) => {
                             resolve_builtin_type_ref(self.db, type_ref).0
                         }
-                        // Handle symbols declared in the prelude file.
+                        // Handle symbols declared/loaded in the prelude file.
                         ScopeDef::Variable(def) => self.infer_expr(def.file, def.expr),
                         ScopeDef::Function(def) => TyKind::Function(def.clone()).intern(),
+                        ScopeDef::LoadItem(def) => self.infer_load_item(def.file, def.load_item),
                         _ => return None,
                     },
                 );

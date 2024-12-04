@@ -81,7 +81,7 @@ impl<'a> GotoDefinitionHandler<'a> {
                 .flat_map(|def| match def {
                     ScopeDef::LoadItem(load_item) => {
                         let def = self.sema.def_for_load_item(&load_item)?;
-                        let range = def.value.syntax_node_ptr(self.db, def.file)?.text_range();
+                        let range = def.value.syntax_node_ptr(self.db)?.value.text_range();
                         Some(LocationLink::Local {
                             origin_selection_range: None,
                             target_range: range,
@@ -91,7 +91,7 @@ impl<'a> GotoDefinitionHandler<'a> {
                     }
                     ScopeDef::Callable(ref callable) if callable.is_user_defined() => {
                         let parse = parse_query(self.db, self.file);
-                        let ptr = def.syntax_node_ptr(self.db, self.file)?;
+                        let InFile { file, value: ptr } = def.syntax_node_ptr(self.db)?;
                         let def_stmt = ptr
                             .try_to_node(&parse.syntax(self.db))
                             .and_then(ast::DefStmt::cast)?;
@@ -100,16 +100,16 @@ impl<'a> GotoDefinitionHandler<'a> {
                             origin_selection_range: None,
                             target_range: range,
                             target_selection_range: range,
-                            target_file_id: self.file.id(self.db),
+                            target_file_id: file.id(self.db),
                         })
                     }
                     _ => def
-                        .syntax_node_ptr(self.db, self.file)
-                        .map(|ptr| LocationLink::Local {
+                        .syntax_node_ptr(self.db)
+                        .map(|InFile { file, value: ptr }| LocationLink::Local {
                             origin_selection_range: None,
                             target_range: ptr.text_range(),
                             target_selection_range: ptr.text_range(),
-                            target_file_id: self.file.id(self.db),
+                            target_file_id: file.id(self.db),
                         }),
                 })
                 .collect(),
@@ -173,13 +173,14 @@ impl<'a> GotoDefinitionHandler<'a> {
                     .as_ref()
                     .map(|name| name.text())
         })?;
-        let range = param.syntax_node_ptr(self.db)?.text_range();
 
+        let InFile { file, value: ptr } = param.syntax_node_ptr(self.db)?;
+        let range = ptr.text_range();
         Some(vec![LocationLink::Local {
             origin_selection_range: None,
             target_range: range,
             target_selection_range: range,
-            target_file_id: callable.file()?.id(self.db),
+            target_file_id: file.id(self.db),
         }])
     }
 
@@ -197,7 +198,7 @@ impl<'a> GotoDefinitionHandler<'a> {
     fn handle_load_item(&self, load_item: ast::LoadItem) -> Option<Vec<LocationLink>> {
         let load_item = self.sema.resolve_load_item(self.file, &load_item)?;
         let def = self.sema.def_for_load_item(&load_item)?;
-        let range = def.value.syntax_node_ptr(self.db, def.file)?.text_range();
+        let range = def.value.syntax_node_ptr(self.db)?.value.text_range();
         Some(vec![LocationLink::Local {
             origin_selection_range: None,
             target_range: range,

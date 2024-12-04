@@ -242,12 +242,12 @@ impl<'a> Semantics<'a> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Variable {
-    id: Option<(File, ExprId)>,
+    expr: Option<InFile<ExprId>>,
 }
 
 impl Variable {
     pub fn is_user_defined(&self) -> bool {
-        self.id.is_some()
+        self.expr.is_some()
     }
 }
 
@@ -285,32 +285,35 @@ pub enum ScopeDef {
 }
 
 impl ScopeDef {
-    // TODO(withered-magic): All `ScopeDef` variants should probably store the `File` somehow
-    // so we don't have to pass it in as a parameter.
-    pub fn syntax_node_ptr(&self, db: &dyn Db, file: File) -> Option<SyntaxNodePtr> {
-        let source_map = source_map(db, file);
+    pub fn syntax_node_ptr(&self, db: &dyn Db) -> Option<InFile<SyntaxNodePtr>> {
         match self {
-            ScopeDef::Callable(Callable(CallableInner::HirDef(def))) => Some(def.func().ptr(db)),
-            ScopeDef::Variable(Variable {
-                id: Some((_, expr)),
-            }) => source_map
+            ScopeDef::Callable(Callable(CallableInner::HirDef(def))) => {
+                Some(def.func().syntax_node_ptr(db))
+            }
+            ScopeDef::Variable(Variable { expr: Some(expr) }) => source_map(db, expr.file)
                 .expr_map_back
-                .get(expr)
-                .map(|ptr| ptr.syntax_node_ptr()),
+                .get(&expr.value)
+                .map(|ptr| InFile {
+                    file: expr.file,
+                    value: ptr.syntax_node_ptr(),
+                }),
             ScopeDef::Parameter(param) => param.syntax_node_ptr(db),
-            ScopeDef::LoadItem(LoadItem { id, .. }) => source_map
+            ScopeDef::LoadItem(LoadItem { id, file }) => source_map(db, *file)
                 .load_item_map_back
                 .get(id)
-                .map(|ptr| ptr.syntax_node_ptr()),
+                .map(|ptr| InFile {
+                    file: *file,
+                    value: ptr.syntax_node_ptr(),
+                }),
             _ => None,
         }
     }
 
     pub fn ty(&self, db: &dyn Db) -> Type {
         match self {
-            ScopeDef::Variable(Variable {
-                id: Some((file, expr)),
-            }) => with_tcx(db, |tcx| tcx.infer_expr(*file, *expr)),
+            ScopeDef::Variable(Variable { expr: Some(expr) }) => {
+                with_tcx(db, |tcx| tcx.infer_expr(expr.file, expr.value))
+            }
             ScopeDef::Callable(callable) => return callable.ty(db),
             ScopeDef::LoadItem(LoadItem { file, id }) => {
                 with_tcx(db, |tcx| tcx.infer_load_item(*file, *id))
@@ -338,13 +341,16 @@ impl From<scope::ScopeDef> for ScopeDef {
             }
             scope::ScopeDef::BuiltinFunction(it) => ScopeDef::Callable(it.into()),
             scope::ScopeDef::Variable(it) => ScopeDef::Variable(Variable {
-                id: Some((it.file, it.expr)),
+                expr: Some(InFile {
+                    file: it.file,
+                    value: it.expr,
+                }),
             }),
             scope::ScopeDef::BuiltinVariable(type_ref) => match type_ref {
                 TypeRef::Provider(provider) => ScopeDef::Callable(Callable(
                     CallableInner::Provider(Provider::Builtin(provider)),
                 )),
-                _ => ScopeDef::Variable(Variable { id: None }),
+                _ => ScopeDef::Variable(Variable { expr: None }),
             },
             scope::ScopeDef::Parameter(ParameterDef { func, index }) => {
                 ScopeDef::Parameter(Param(ParamInner::Param { func, index }))
@@ -377,16 +383,17 @@ impl SemanticsScope<'_> {
     }
 
     pub fn resolve_name(&self, name: &Name) -> Vec<ScopeDef> {
-        let defs = match self.resolver.resolve_name(name) {
-            Some((_, defs)) => defs,
-            None => return Vec::new(),
+        eprintln!("resolve name semantics scope");
+        let mut defs: Vec<ScopeDef> = match self.resolver.resolve_name(name) {
+            Some((_, defs)) => defs.map(|def| def.def.clone().into()).collect(),
+            None => Vec::new(),
         };
-        let mut defs = defs.map(|def| def.def.clone().into()).collect::<Vec<_>>();
         if defs.is_empty() {
             if let Some(builtin_defs) = self.resolver.resolve_name_in_prelude_or_builtins(name) {
                 defs.extend(builtin_defs.into_iter().map(|def| def.into()));
             }
         }
+        eprintln!("defs: {:?}", defs);
         defs
     }
 }

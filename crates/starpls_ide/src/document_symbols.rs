@@ -64,7 +64,8 @@ pub(crate) fn document_symbols(db: &Database, file_id: FileId) -> Option<Vec<Doc
     let mut symbols = scope
         .names()
         .filter_map(|(name, def)| {
-            let range = def.syntax_node_ptr(db, file)?.text_range();
+            // TODO(withered-magic): Filter out defs not from our current file (e.g. defs from the prelude).
+            let range = def.syntax_node_ptr(db)?.value.text_range();
             Some(DocumentSymbol {
                 name: name.as_str().to_string(),
                 detail: None,

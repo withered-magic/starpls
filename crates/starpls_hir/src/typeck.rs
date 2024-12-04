@@ -947,12 +947,18 @@ impl Param {
         }
     }
 
-    pub fn syntax_node_ptr(&self, db: &dyn Db) -> Option<SyntaxNodePtr> {
+    pub fn syntax_node_ptr(&self, db: &dyn Db) -> Option<InFile<SyntaxNodePtr>> {
         match self.0 {
-            ParamInner::Param { func, index } => source_map(db, func.file(db))
-                .param_map_back
-                .get(&func.params(db)[index])
-                .map(|ptr| ptr.syntax_node_ptr()),
+            ParamInner::Param { func, index } => {
+                let file = func.file(db);
+                source_map(db, file)
+                    .param_map_back
+                    .get(&func.params(db)[index])
+                    .map(|ptr| InFile {
+                        file,
+                        value: ptr.syntax_node_ptr(),
+                    })
+            }
             _ => None,
         }
     }

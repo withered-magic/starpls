@@ -90,10 +90,9 @@ impl<'a> GotoDefinitionHandler<'a> {
                         })
                     }
                     ScopeDef::Callable(ref callable) if callable.is_user_defined() => {
-                        let parse = parse_query(self.db, self.file);
                         let InFile { file, value: ptr } = def.syntax_node_ptr(self.db)?;
                         let def_stmt = ptr
-                            .try_to_node(&parse.syntax(self.db))
+                            .try_to_node(&parse_query(self.db, file).syntax(self.db))
                             .and_then(ast::DefStmt::cast)?;
                         let range = def_stmt.name()?.syntax().text_range();
                         Some(LocationLink::Local {

@@ -120,31 +120,32 @@ impl<'a> Resolver<'a> {
         Some((first_execution_scope, defs))
     }
 
-    pub(crate) fn resolve_name_in_prelude_or_builtins(&self, name: &Name) -> Option<Vec<ScopeDef>> {
-        // Fall back to prelude, and then to the builtins scope.
-        let mut defs = None;
+    pub(crate) fn resolve_name_in_prelude_or_builtins(&self, name: &Name) -> Option<ScopeDef> {
+        let mut def = None;
+
+        // Check prelude if this is a BUILD file.
         if self.file.api_context(self.db) == Some(APIContext::Build) {
-            defs = self
+            def = self
                 .db
                 .get_bazel_prelude_file()
                 .and_then(|prelude_file_id| {
                     let prelude_file = self.db.get_file(prelude_file_id)?;
                     Self::new_for_module(self.db, prelude_file).resolve_name_from_prelude(name)
                 })
-                .map(|export| vec![export.into()])
         }
 
-        defs.or_else(|| {
+        // Otherwise, check the builtins scope.
+        def.or_else(|| {
             intrinsic_functions(self.db)
                 .functions(self.db)
                 .get(name)
                 .copied()
-                .map(|func| vec![ScopeDef::IntrinsicFunction(func)])
+                .map(ScopeDef::IntrinsicFunction)
         })
         .or_else(|| self.resolve_name_in_builtin_globals(name))
     }
 
-    fn resolve_name_in_builtin_globals(&self, name: &Name) -> Option<Vec<ScopeDef>> {
+    fn resolve_name_in_builtin_globals(&self, name: &Name) -> Option<ScopeDef> {
         let api_context = self.file.api_context(self.db)?;
         let globals = builtin_globals(self.db, self.file.dialect(self.db));
         let resolve_in_api_globals = |api_globals: &APIGlobals| {
@@ -152,13 +153,13 @@ impl<'a> Resolver<'a> {
                 .functions
                 .get(name.as_str())
                 .copied()
-                .map(|func| vec![ScopeDef::BuiltinFunction(func)])
+                .map(ScopeDef::BuiltinFunction)
                 .or_else(|| {
                     api_globals
                         .variables
                         .get(name.as_str())
                         .cloned()
-                        .map(|type_ref| vec![ScopeDef::BuiltinVariable(type_ref)])
+                        .map(ScopeDef::BuiltinVariable)
                 })
         };
 

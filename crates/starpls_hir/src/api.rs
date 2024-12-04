@@ -383,17 +383,15 @@ impl SemanticsScope<'_> {
     }
 
     pub fn resolve_name(&self, name: &Name) -> Vec<ScopeDef> {
-        eprintln!("resolve name semantics scope");
         let mut defs: Vec<ScopeDef> = match self.resolver.resolve_name(name) {
             Some((_, defs)) => defs.map(|def| def.def.clone().into()).collect(),
             None => Vec::new(),
         };
         if defs.is_empty() {
-            if let Some(builtin_defs) = self.resolver.resolve_name_in_prelude_or_builtins(name) {
-                defs.extend(builtin_defs.into_iter().map(|def| def.into()));
+            if let Some(def) = self.resolver.resolve_name_in_prelude_or_builtins(name) {
+                defs.push(def.into());
             }
         }
-        eprintln!("defs: {:?}", defs);
         defs
     }
 }

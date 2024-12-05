@@ -308,6 +308,9 @@ pub(crate) fn goto_definition(db: &Database, pos: FilePosition) -> Option<Vec<Lo
 
 #[cfg(test)]
 mod tests {
+    use starpls_bazel::APIContext;
+    use starpls_common::Dialect;
+    use starpls_common::FileInfo::Bazel;
     use starpls_hir::Fixture;
 
     use crate::Analysis;
@@ -317,6 +320,10 @@ mod tests {
     fn check_goto_definition(fixture: &str) {
         let mut analysis = Analysis::new_for_test();
         let (fixture, _) = Fixture::from_single_file(&mut analysis.db, fixture);
+        check_goto_definition_from_fixture(analysis, fixture);
+    }
+
+    fn check_goto_definition_from_fixture(analysis: Analysis, fixture: Fixture) {
         let actual = analysis
             .snapshot()
             .goto_definition(
@@ -459,5 +466,57 @@ info = GoInfo(foo = 123)
 info.fo$0o
 "#,
         )
+    }
+
+    #[test]
+    fn test_prelude_variable() {
+        let mut analysis = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        fixture.add_prelude_file(
+            &mut analysis.db,
+            r#"
+FOO = 123
+#^^
+"#,
+        );
+        fixture.add_file_with_options(
+            &mut analysis.db,
+            "BUILD.bazel",
+            r#"
+F$0OO
+"#,
+            Dialect::Bazel,
+            Some(Bazel {
+                api_context: APIContext::Build,
+                is_external: false,
+            }),
+        );
+        check_goto_definition_from_fixture(analysis, fixture);
+    }
+
+    #[test]
+    fn test_prelude_function_definition() {
+        let mut analysis = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        fixture.add_prelude_file(
+            &mut analysis.db,
+            r#"
+def foo():
+    #^^
+    pass
+"#,
+        );
+        fixture.add_file_with_options(
+            &mut analysis.db,
+            "BUILD.bazel",
+            r#"
+f$0oo()
+"#,
+            Dialect::Bazel,
+            Some(Bazel {
+                api_context: APIContext::Build,
+                is_external: false,
+            }),
+        );
     }
 }

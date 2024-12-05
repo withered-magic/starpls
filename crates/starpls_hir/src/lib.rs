@@ -14,6 +14,7 @@ use crate::def::ModuleSourceMap;
 pub use crate::def::Name;
 pub use crate::display::DisplayWithDb;
 pub use crate::display::DisplayWithDbWrapper;
+pub use crate::test_database::Fixture;
 pub use crate::typeck::builtins::BuiltinDefs;
 pub use crate::typeck::Cancelled;
 pub use crate::typeck::GlobalContext;

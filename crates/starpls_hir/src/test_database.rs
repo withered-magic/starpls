@@ -1,14 +1,21 @@
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
+use rustc_hash::FxHashMap;
+use starpls_bazel::APIContext;
 use starpls_bazel::Builtins;
 use starpls_common::File;
 use starpls_common::FileId;
 use starpls_common::FileInfo;
 use starpls_common::LoadItemCandidate;
 use starpls_common::ResolvedPath;
+use starpls_syntax::TextRange;
+use starpls_syntax::TextSize;
 use starpls_test_util::make_test_builtins;
+use starpls_test_util::FixtureFile;
 use starpls_test_util::FixtureType;
 
 use crate::BuiltinDefs;
@@ -172,5 +179,114 @@ impl TestDatabaseBuilder {
             Builtins::default(),
         );
         db
+    }
+}
+
+pub struct Fixture {
+    pub path_to_file_id: FxHashMap<PathBuf, FileId>,
+    pub selected_ranges: Vec<(FileId, Vec<TextRange>)>,
+    pub cursor_pos: Option<(FileId, TextSize)>,
+    next_file_id: u32,
+}
+
+impl Fixture {
+    pub fn new(db: &mut dyn Db) -> Self {
+        let fixture = Self {
+            path_to_file_id: Default::default(),
+            selected_ranges: Default::default(),
+            cursor_pos: None,
+            next_file_id: 0,
+        };
+
+        // Add builtins here as needed for tests.
+        // TODO(withered-magic): Make this a little bit nicer.
+        let functions = vec!["provider", "rule", "struct"];
+        let globals = vec![("attr", "attr")];
+        let types = vec![FixtureType::new("attr", vec![], vec!["int", "string"])];
+        db.set_builtin_defs(
+            Dialect::Bazel,
+            make_test_builtins(functions, globals, types),
+            Builtins::default(),
+        );
+
+        fixture
+    }
+
+    /// Provides a convenient way to quickly construct a fixture from a single file, as is commonly
+    /// needed by tests.
+    pub fn from_single_file(db: &mut dyn Db, contents: &str) -> (Self, FileId) {
+        let mut fixture = Self::new(db);
+        let file_id = fixture.add_file_with_options(
+            db,
+            "main.bzl",
+            contents,
+            Dialect::Bazel,
+            Some(FileInfo::Bazel {
+                api_context: APIContext::Bzl,
+                is_external: false,
+            }),
+        );
+        (fixture, file_id)
+    }
+
+    pub fn add_file(mut self, db: &mut dyn Db, path: impl AsRef<Path>, contents: &str) -> Self {
+        self.add_file_with_options(
+            db,
+            path,
+            contents,
+            Dialect::Bazel,
+            Some(FileInfo::Bazel {
+                api_context: APIContext::Bzl,
+                is_external: false,
+            }),
+        );
+        self
+    }
+
+    pub fn add_prelude_file(
+        mut self,
+        db: &mut dyn Db,
+        path: impl AsRef<Path>,
+        contents: &str,
+    ) -> Self {
+        let file_id = self.add_file_with_options(
+            db,
+            path,
+            contents,
+            Dialect::Bazel,
+            Some(FileInfo::Bazel {
+                api_context: APIContext::Bzl,
+                is_external: false,
+            }),
+        );
+        db.set_bazel_prelude_file(file_id);
+        self
+    }
+
+    pub fn add_file_with_options(
+        &mut self,
+        db: &mut dyn Db,
+        path: impl AsRef<Path>,
+        contents: &str,
+        dialect: Dialect,
+        info: Option<FileInfo>,
+    ) -> FileId {
+        let fixture = FixtureFile::parse(contents);
+        let file_id = FileId(self.next_file_id);
+        self.next_file_id += 1;
+        self.path_to_file_id
+            .insert(path.as_ref().to_path_buf(), file_id);
+        db.create_file(file_id, dialect, info, fixture.contents);
+
+        if let Some(cursor_pos) = fixture.cursor_pos {
+            if self.cursor_pos.is_some() {
+                panic!("cannot have more than one cursor_pos");
+            }
+            self.cursor_pos = Some((file_id, cursor_pos));
+        }
+        self.selected_ranges
+            .push((file_id, fixture.selected_ranges));
+
+        file_id
     }
 }

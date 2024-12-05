@@ -152,30 +152,22 @@ pub(crate) fn find_references(
 
 #[cfg(test)]
 mod tests {
-    use starpls_bazel::APIContext;
-    use starpls_common::Dialect;
-    use starpls_common::FileInfo;
-    use starpls_test_util::Fixture;
+    use starpls_hir::Fixture;
 
-    use crate::AnalysisSnapshot;
+    use crate::Analysis;
     use crate::FilePosition;
 
     fn check_find_references(fixture: &str) {
-        let fixture = Fixture::parse(fixture);
-        let (snap, file_id) = AnalysisSnapshot::from_single_file(
-            &fixture.contents,
-            Dialect::Bazel,
-            Some(FileInfo::Bazel {
-                api_context: APIContext::Bzl,
-                is_external: false,
-            }),
-        );
-
-        let references = snap
-            .find_references(FilePosition {
-                file_id,
-                pos: fixture.cursor_pos,
-            })
+        let mut analysis = Analysis::new_for_test();
+        let (fixture, file_id) = Fixture::from_single_file(&mut analysis.db, fixture);
+        let references = analysis
+            .snapshot()
+            .find_references(
+                fixture
+                    .cursor_pos
+                    .map(|(file_id, pos)| FilePosition { file_id, pos })
+                    .unwrap(),
+            )
             .unwrap()
             .unwrap();
 
@@ -185,7 +177,7 @@ mod tests {
             .collect::<Vec<_>>();
         actual_locations.sort_by_key(|range| (range.start()));
 
-        assert_eq!(fixture.selected_ranges, actual_locations);
+        assert_eq!(fixture.selected_ranges, vec![(file_id, actual_locations)]);
     }
 
     #[test]

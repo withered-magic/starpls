@@ -18,7 +18,6 @@ use crate::LocationLink;
 use crate::ResolvedPath;
 
 struct GotoDefinitionHandler<'a> {
-    db: &'a Database,
     sema: Semantics<'a>,
     file: File,
     token: SyntaxToken,
@@ -36,12 +35,7 @@ impl<'a> GotoDefinitionHandler<'a> {
             _ => 1,
         })?;
 
-        Some(Self {
-            db,
-            sema,
-            file,
-            token,
-        })
+        Some(Self { sema, file, token })
     }
 
     fn handle_goto_definition(&self) -> Option<Vec<LocationLink>> {
@@ -81,34 +75,34 @@ impl<'a> GotoDefinitionHandler<'a> {
                 .flat_map(|def| match def {
                     ScopeDef::LoadItem(load_item) => {
                         let def = self.sema.def_for_load_item(&load_item)?;
-                        let range = def.value.syntax_node_ptr(self.db)?.value.text_range();
+                        let range = def.value.syntax_node_ptr(self.sema.db)?.value.text_range();
                         Some(LocationLink::Local {
                             origin_selection_range: None,
                             target_range: range,
                             target_selection_range: range,
-                            target_file_id: def.file.id(self.db),
+                            target_file_id: def.file.id(self.sema.db),
                         })
                     }
                     ScopeDef::Callable(ref callable) if callable.is_user_defined() => {
-                        let InFile { file, value: ptr } = def.syntax_node_ptr(self.db)?;
+                        let InFile { file, value: ptr } = def.syntax_node_ptr(self.sema.db)?;
                         let def_stmt = ptr
-                            .try_to_node(&parse_query(self.db, file).syntax(self.db))
+                            .try_to_node(&parse_query(self.sema.db, file).syntax(self.sema.db))
                             .and_then(ast::DefStmt::cast)?;
                         let range = def_stmt.name()?.syntax().text_range();
                         Some(LocationLink::Local {
                             origin_selection_range: None,
                             target_range: range,
                             target_selection_range: range,
-                            target_file_id: file.id(self.db),
+                            target_file_id: file.id(self.sema.db),
                         })
                     }
                     _ => def
-                        .syntax_node_ptr(self.db)
+                        .syntax_node_ptr(self.sema.db)
                         .map(|InFile { file, value: ptr }| LocationLink::Local {
                             origin_selection_range: None,
                             target_range: ptr.text_range(),
                             target_selection_range: ptr.text_range(),
-                            target_file_id: file.id(self.db),
+                            target_file_id: file.id(self.sema.db),
                         }),
                 })
                 .collect(),
@@ -120,7 +114,7 @@ impl<'a> GotoDefinitionHandler<'a> {
 
         if let Some(strukt) = ty.try_as_inline_struct() {
             // Check for struct field definition.
-            let struct_call_expr = strukt.call_expr(self.db)?;
+            let struct_call_expr = strukt.call_expr(self.sema.db)?;
             struct_call_expr
                 .value
                 .arguments()
@@ -135,13 +129,13 @@ impl<'a> GotoDefinitionHandler<'a> {
                                 origin_selection_range: None,
                                 target_range: range,
                                 target_selection_range: range,
-                                target_file_id: struct_call_expr.file.id(self.db),
+                                target_file_id: struct_call_expr.file.id(self.sema.db),
                             }]
                         })
                     }
                     _ => None,
                 })
-        } else if let Some(provider_fields) = ty.provider_fields_source(self.db) {
+        } else if let Some(provider_fields) = ty.provider_fields_source(self.sema.db) {
             // Check for provider field definition. This only handles the case where the provider
             // fields are specified in a dictionary literal.
             return self.find_name_in_dict_expr(provider_fields);
@@ -160,26 +154,29 @@ impl<'a> GotoDefinitionHandler<'a> {
         let callable = self.sema.resolve_call_expr(self.file, &call_expr)?;
 
         // If the callable is a rule, link to the dictionary where its attributes are declared.
-        if let Some(attrs_expr) = callable.rule_attrs_source(self.db) {
+        if let Some(attrs_expr) = callable.rule_attrs_source(self.sema.db) {
             return self.find_name_in_dict_expr(attrs_expr);
         }
 
-        let (param, _) = callable.params(self.db).into_iter().find(|(param, _)| {
-            param.name(self.db).as_ref().map(|name| name.as_str())
-                == arg
-                    .name()
-                    .and_then(|name| name.name())
-                    .as_ref()
-                    .map(|name| name.text())
-        })?;
+        let (param, _) = callable
+            .params(self.sema.db)
+            .into_iter()
+            .find(|(param, _)| {
+                param.name(self.sema.db).as_ref().map(|name| name.as_str())
+                    == arg
+                        .name()
+                        .and_then(|name| name.name())
+                        .as_ref()
+                        .map(|name| name.text())
+            })?;
 
-        let InFile { file, value: ptr } = param.syntax_node_ptr(self.db)?;
+        let InFile { file, value: ptr } = param.syntax_node_ptr(self.sema.db)?;
         let range = ptr.text_range();
         Some(vec![LocationLink::Local {
             origin_selection_range: None,
             target_range: range,
             target_selection_range: range,
-            target_file_id: file.id(self.db),
+            target_file_id: file.id(self.sema.db),
         }])
     }
 
@@ -190,19 +187,19 @@ impl<'a> GotoDefinitionHandler<'a> {
             origin_selection_range: Some(self.token.text_range()),
             target_range: Default::default(),
             target_selection_range: Default::default(),
-            target_file_id: file.id(self.db),
+            target_file_id: file.id(self.sema.db),
         }])
     }
 
     fn handle_load_item(&self, load_item: ast::LoadItem) -> Option<Vec<LocationLink>> {
         let load_item = self.sema.resolve_load_item(self.file, &load_item)?;
         let def = self.sema.def_for_load_item(&load_item)?;
-        let range = def.value.syntax_node_ptr(self.db)?.value.text_range();
+        let range = def.value.syntax_node_ptr(self.sema.db)?.value.text_range();
         Some(vec![LocationLink::Local {
             origin_selection_range: None,
             target_range: range,
             target_selection_range: range,
-            target_file_id: def.file.id(self.db),
+            target_file_id: def.file.id(self.sema.db),
         }])
     }
 
@@ -212,8 +209,13 @@ impl<'a> GotoDefinitionHandler<'a> {
             _ => return None,
         };
         let resolved_path = self
+            .sema
             .db
-            .resolve_path(&value, self.file.dialect(self.db), self.file.id(self.db))
+            .resolve_path(
+                &value,
+                self.file.dialect(self.sema.db),
+                self.file.id(self.sema.db),
+            )
             .ok()??;
 
         match resolved_path {
@@ -228,8 +230,8 @@ impl<'a> GotoDefinitionHandler<'a> {
                 target,
                 ..
             } => {
-                let build_file = self.db.get_file(build_file_id)?;
-                let parse = parse_query(self.db, build_file).syntax(self.db);
+                let build_file = self.sema.db.get_file(build_file_id)?;
+                let parse = parse_query(self.sema.db, build_file).syntax(self.sema.db);
                 let call_expr = parse
                     .children()
                     .filter_map(ast::CallExpr::cast)
@@ -292,7 +294,7 @@ impl<'a> GotoDefinitionHandler<'a> {
                             origin_selection_range: None,
                             target_range: syntax.text_range(),
                             target_selection_range: syntax.text_range(),
-                            target_file_id: dict_expr.file.id(self.db),
+                            target_file_id: dict_expr.file.id(self.sema.db),
                         }])
                     }
                     _ => None,
@@ -307,30 +309,23 @@ pub(crate) fn goto_definition(db: &Database, pos: FilePosition) -> Option<Vec<Lo
 
 #[cfg(test)]
 mod tests {
-    use starpls_bazel::APIContext;
-    use starpls_common::Dialect;
-    use starpls_common::FileInfo;
-    use starpls_test_util::Fixture;
+    use starpls_hir::Fixture;
 
-    use crate::AnalysisSnapshot;
+    use crate::Analysis;
     use crate::FilePosition;
     use crate::LocationLink;
 
     fn check_goto_definition(fixture: &str) {
-        let fixture = Fixture::parse(fixture);
-        let (snap, file_id) = AnalysisSnapshot::from_single_file(
-            &fixture.contents,
-            Dialect::Bazel,
-            Some(FileInfo::Bazel {
-                api_context: APIContext::Bzl,
-                is_external: false,
-            }),
-        );
-        let actual = snap
-            .goto_definition(FilePosition {
-                file_id,
-                pos: fixture.cursor_pos,
-            })
+        let mut analysis = Analysis::new_for_test();
+        let (fixture, file_id) = Fixture::from_single_file(&mut analysis.db, fixture);
+        let actual = analysis
+            .snapshot()
+            .goto_definition(
+                fixture
+                    .cursor_pos
+                    .map(|(file_id, pos)| FilePosition { file_id, pos })
+                    .unwrap(),
+            )
             .unwrap()
             .unwrap()
             .into_iter()
@@ -339,7 +334,7 @@ mod tests {
                 _ => panic!("expected local location"),
             })
             .collect::<Vec<_>>();
-        assert_eq!(fixture.selected_ranges, actual);
+        assert_eq!(fixture.selected_ranges, vec![(file_id, actual)]);
     }
 
     #[test]

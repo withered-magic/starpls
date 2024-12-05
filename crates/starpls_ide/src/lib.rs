@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
-use rustc_hash::FxHashMap;
 use salsa::ParallelDatabase;
 use starpls_bazel::APIContext;
 use starpls_bazel::Builtins;
@@ -327,6 +326,11 @@ impl Analysis {
     pub fn set_all_workspace_targets(&mut self, targets: Vec<String>) {
         self.db.set_all_workspace_targets(targets);
     }
+
+    #[cfg(test)]
+    pub fn new_for_test() -> Analysis {
+        Analysis::new(Arc::new(UnimplementedFileLoader), Default::default())
+    }
 }
 
 pub struct AnalysisSnapshot {
@@ -384,54 +388,6 @@ impl AnalysisSnapshot {
         F: FnOnce(&'a Database) -> T + panic::UnwindSafe,
     {
         starpls_hir::Cancelled::catch(|| f(&self.db))
-    }
-
-    #[cfg(test)]
-    pub fn from_single_file(
-        contents: &str,
-        dialect: Dialect,
-        info: Option<FileInfo>,
-    ) -> (Self, FileId) {
-        Self::from_single_file_with_options(contents, dialect, info, vec![])
-    }
-
-    /// This should only be used as a convenient way to create analysis snapshots
-    /// from test data.
-    #[cfg(test)]
-    pub fn from_single_file_with_options(
-        contents: &str,
-        dialect: Dialect,
-        info: Option<FileInfo>,
-        all_workspace_targets: Vec<String>,
-    ) -> (Self, FileId) {
-        use starpls_test_util::make_test_builtins;
-        use starpls_test_util::FixtureType;
-
-        let mut file_set = FxHashMap::default();
-        let file_id = FileId(0);
-        file_set.insert("main.star".to_string(), (file_id, contents.to_string()));
-
-        let mut change = Change::default();
-        change.create_file(file_id, dialect, info, contents.to_string());
-
-        let mut analysis = Analysis::new(
-            Arc::new(SimpleFileLoader::from_file_set(file_set)),
-            Default::default(),
-        );
-
-        // Add builtins here as needed for tests.
-        let functions = vec!["provider", "rule", "struct"];
-        let globals = vec![("attr", "attr")];
-        let types = vec![FixtureType::new("attr", vec![], vec!["int", "string"])];
-
-        analysis.db.set_builtin_defs(
-            Dialect::Bazel,
-            make_test_builtins(functions, globals, types),
-            Builtins::default(),
-        );
-        analysis.db.set_all_workspace_targets(all_workspace_targets);
-        analysis.apply_change(change);
-        (analysis.snapshot(), file_id)
     }
 }
 
@@ -500,35 +456,26 @@ pub trait FileLoader: Send + Sync + 'static {
     fn resolve_build_file(&self, file_id: FileId) -> Option<String>;
 }
 
-/// [`FileLoader`] that looks up files by path from a hash map.
-pub(crate) struct SimpleFileLoader {
-    file_set: FxHashMap<String, (FileId, String)>,
-}
+/// Panics on any operation and is only useful for tests that don't need file loading functionality.
+struct UnimplementedFileLoader;
 
-impl SimpleFileLoader {
-    /// Creates a [`SimpleFileLoader`] from a static set of files.
-    #[cfg(test)]
-    pub(crate) fn from_file_set(file_set: FxHashMap<String, (FileId, String)>) -> Self {
-        Self { file_set }
+impl FileLoader for UnimplementedFileLoader {
+    fn resolve_path(
+        &self,
+        _path: &str,
+        _dialect: Dialect,
+        _from: FileId,
+    ) -> anyhow::Result<Option<ResolvedPath>> {
+        unimplemented!()
     }
-}
 
-impl FileLoader for SimpleFileLoader {
     fn load_file(
         &self,
-        path: &str,
-        dialect: Dialect,
+        _path: &str,
+        _dialect: Dialect,
         _from: FileId,
     ) -> anyhow::Result<Option<LoadFileResult>> {
-        Ok(self
-            .file_set
-            .get(path)
-            .map(|(file_id, contents)| LoadFileResult {
-                file_id: *file_id,
-                dialect,
-                info: None,
-                contents: Some(contents.clone()),
-            }))
+        unimplemented!()
     }
 
     fn list_load_candidates(
@@ -537,19 +484,10 @@ impl FileLoader for SimpleFileLoader {
         _dialect: Dialect,
         _from: FileId,
     ) -> anyhow::Result<Option<Vec<LoadItemCandidate>>> {
-        Ok(None)
-    }
-
-    fn resolve_path(
-        &self,
-        _path: &str,
-        _dialect: Dialect,
-        _from: FileId,
-    ) -> anyhow::Result<Option<ResolvedPath>> {
-        Ok(None)
+        unimplemented!()
     }
 
     fn resolve_build_file(&self, _file_id: FileId) -> Option<String> {
-        None
+        unimplemented!()
     }
 }

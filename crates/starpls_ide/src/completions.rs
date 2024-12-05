@@ -583,13 +583,11 @@ mod tests {
 
     use expect_test::expect;
     use expect_test::Expect;
-    use starpls_bazel::APIContext;
-    use starpls_common::Dialect;
-    use starpls_common::FileInfo;
-    use starpls_test_util::Fixture;
+    use starpls_hir::Db;
+    use starpls_hir::Fixture;
 
     use crate::completions::CompletionRelevance;
-    use crate::AnalysisSnapshot;
+    use crate::Analysis;
     use crate::CompletionItemKind;
     use crate::FilePosition;
 
@@ -602,14 +600,9 @@ mod tests {
         include_builtins_and_keywords: bool,
         expect: Expect,
     ) {
-        let fixture = Fixture::parse(fixture);
-        let (snap, file_id) = AnalysisSnapshot::from_single_file_with_options(
-            &fixture.contents,
-            Dialect::Bazel,
-            Some(FileInfo::Bazel {
-                api_context: APIContext::Bzl,
-                is_external: false,
-            }),
+        let mut analysis = Analysis::new_for_test();
+        let (fixture, _file_id) = Fixture::from_single_file(&mut analysis.db, fixture);
+        analysis.db.set_all_workspace_targets(
             [
                 "//:foo",
                 "//:bar",
@@ -623,12 +616,13 @@ mod tests {
             .collect(),
         );
 
-        let completions = snap
+        let completions = analysis
+            .snapshot()
             .completions(
-                FilePosition {
-                    file_id,
-                    pos: fixture.cursor_pos,
-                },
+                fixture
+                    .cursor_pos
+                    .map(|(file_id, pos)| FilePosition { file_id, pos })
+                    .unwrap(),
                 Some("".to_string()),
             )
             .unwrap()

@@ -216,30 +216,22 @@ fn format_for_name(db: &Database, name: &str, ty: &Type) -> String {
 mod tests {
     use expect_test::expect;
     use expect_test::Expect;
-    use starpls_bazel::APIContext;
-    use starpls_common::Dialect;
-    use starpls_common::FileInfo;
-    use starpls_test_util::Fixture;
+    use starpls_hir::Fixture;
 
-    use crate::AnalysisSnapshot;
+    use crate::Analysis;
     use crate::FilePosition;
 
     fn check_hover(fixture: &str, expect: Expect) {
-        let fixture = Fixture::parse(fixture);
-        let (snap, file_id) = AnalysisSnapshot::from_single_file(
-            &fixture.contents,
-            Dialect::Bazel,
-            Some(FileInfo::Bazel {
-                api_context: APIContext::Bzl,
-                is_external: false,
-            }),
-        );
-
-        let hover = snap
-            .hover(FilePosition {
-                file_id,
-                pos: fixture.cursor_pos,
-            })
+        let mut analysis = Analysis::new_for_test();
+        let (fixture, _file_id) = Fixture::from_single_file(&mut analysis.db, fixture);
+        let hover = analysis
+            .snapshot()
+            .hover(
+                fixture
+                    .cursor_pos
+                    .map(|(file_id, pos)| FilePosition { file_id, pos })
+                    .unwrap(),
+            )
             .unwrap()
             .unwrap();
 

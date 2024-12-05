@@ -8,24 +8,29 @@ use starpls_syntax::TextSize;
 
 pub const CURSOR_MARKER: &str = "$0";
 
-pub struct Fixture {
+pub struct FixtureFile {
     pub contents: String,
-    pub cursor_pos: TextSize,
+    pub cursor_pos: Option<TextSize>,
     pub selected_ranges: Vec<TextRange>,
 }
 
-impl Fixture {
+impl FixtureFile {
     pub fn parse(input: &str) -> Self {
-        let offset = input.find(CURSOR_MARKER).unwrap();
-        let mut contents = String::new();
-        contents.push_str(&input[..offset]);
-        contents.push_str(&input[offset + CURSOR_MARKER.len()..]);
+        let mut contents = String::with_capacity(input.len());
+        let mut cursor_pos = None;
+        if let Some(offset) = input.find(CURSOR_MARKER) {
+            contents.push_str(&input[..offset]);
+            contents.push_str(&input[offset + CURSOR_MARKER.len()..]);
+            cursor_pos = Some(TextSize::new(offset as u32));
+        } else {
+            contents.push_str(input);
+        }
 
         let selected_ranges = find_selected_ranges(&contents);
 
         Self {
             contents,
-            cursor_pos: (offset as u32).into(),
+            cursor_pos,
             selected_ranges,
         }
     }

@@ -1,4 +1,3 @@
-use starpls_common::parse as parse_query;
 use starpls_common::Db;
 use starpls_common::File;
 use starpls_common::InFile;
@@ -27,7 +26,7 @@ impl<'a> GotoDefinitionHandler<'a> {
     fn new(db: &'a Database, FilePosition { file_id, pos }: FilePosition) -> Option<Self> {
         let sema = Semantics::new(db);
         let file = db.get_file(file_id)?;
-        let parse = parse_query(db, file);
+        let parse = sema.parse(file);
         let token = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
             T![ident] => 2,
             T!['('] | T![')'] | T!['['] | T![']'] | T!['{'] | T!['}'] => 0,
@@ -86,7 +85,7 @@ impl<'a> GotoDefinitionHandler<'a> {
                     ScopeDef::Callable(ref callable) if callable.is_user_defined() => {
                         let InFile { file, value: ptr } = def.syntax_node_ptr(self.sema.db)?;
                         let def_stmt = ptr
-                            .try_to_node(&parse_query(self.sema.db, file).syntax(self.sema.db))
+                            .try_to_node(&self.sema.parse(file).syntax(self.sema.db))
                             .and_then(ast::DefStmt::cast)?;
                         let range = def_stmt.name()?.syntax().text_range();
                         Some(LocationLink::Local {
@@ -231,7 +230,7 @@ impl<'a> GotoDefinitionHandler<'a> {
                 ..
             } => {
                 let build_file = self.sema.db.get_file(build_file_id)?;
-                let parse = parse_query(self.sema.db, build_file).syntax(self.sema.db);
+                let parse = self.sema.parse(build_file).syntax(self.sema.db);
                 let call_expr = parse
                     .children()
                     .filter_map(ast::CallExpr::cast)

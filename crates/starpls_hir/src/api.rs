@@ -6,6 +6,7 @@ use starpls_common::Diagnostic;
 use starpls_common::Diagnostics;
 use starpls_common::File;
 use starpls_common::InFile;
+use starpls_common::Parse;
 use starpls_syntax::ast::AstNode;
 use starpls_syntax::ast::AstPtr;
 use starpls_syntax::ast::SyntaxNodePtr;
@@ -58,6 +59,10 @@ pub struct Semantics<'a> {
 impl<'a> Semantics<'a> {
     pub fn new(db: &'a dyn Db) -> Self {
         Self { db }
+    }
+
+    pub fn parse(&self, file: File) -> Parse {
+        parse(self.db, file)
     }
 
     pub fn callable_for_def(&self, file: File, node: ast::DefStmt) -> Option<Callable> {

@@ -3,7 +3,6 @@
 use std::collections::HashSet;
 
 use rustc_hash::FxHashMap;
-use starpls_common::parse;
 use starpls_common::FileId;
 use starpls_common::LoadItemCandidateKind;
 use starpls_hir::Db;
@@ -453,7 +452,7 @@ impl CompletionContext {
         // Reparse the file with a dummy identifier inserted at the current offset.
         let sema = Semantics::new(db);
         let file = db.get_file(file_id)?;
-        let parse = parse(db, file);
+        let parse = sema.parse(file);
 
         if let Some(cx) = maybe_str_context(file_id, &parse.syntax(db), pos) {
             return Some(CompletionContext {

@@ -1,6 +1,5 @@
 use std::fmt::Write;
 
-use starpls_common::parse;
 use starpls_common::Db as _;
 use starpls_hir::DisplayWithDb;
 use starpls_hir::Semantics;
@@ -38,9 +37,9 @@ impl From<String> for Hover {
 
 pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) -> Option<Hover> {
     let file = db.get_file(file_id)?;
-    let parsed = parse(db, file);
     let sema = Semantics::new(db);
-    let token = pick_best_token(parsed.syntax(db).token_at_offset(pos), |kind| match kind {
+    let parse = sema.parse(file);
+    let token = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
         T![ident] => 2,
         T!['('] | T![')'] | T!['['] | T![']'] | T!['{'] | T!['}'] => 0,
         kind if kind.is_trivia_token() => 0,
@@ -177,7 +176,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
     } else if let Some(load_module) = ast::LoadModule::cast(parent) {
         let load_stmt = ast::LoadStmt::cast(load_module.syntax().parent()?)?;
         let loaded_file = sema.resolve_load_stmt(file, &load_stmt)?;
-        let parsed = parse(db, loaded_file);
+        let parsed = sema.parse(loaded_file);
         let mut text = format!("```python\n(module) {}\n```\n", token.text());
         if let Some(doc) = parsed.tree(db).doc().and_then(|doc| doc.value()) {
             text.push_str(&unindent_doc(&doc));

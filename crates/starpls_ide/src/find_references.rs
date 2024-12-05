@@ -1,5 +1,4 @@
 use memchr::memmem::Finder;
-use starpls_common::parse;
 use starpls_common::Db;
 use starpls_common::File;
 use starpls_hir::Name;
@@ -36,7 +35,9 @@ impl<'a> FindReferencesHandler<'a> {
             });
 
         for offset in offsets {
-            let Some(parent) = parse(self.sema.db, self.file)
+            let Some(parent) = self
+                .sema
+                .parse(self.file)
                 .syntax(self.sema.db)
                 .token_at_offset(offset)
                 .find(|token| token.text() == self.name.as_str())
@@ -100,7 +101,7 @@ pub(crate) fn find_references(
 ) -> Option<Vec<Location>> {
     let sema = Semantics::new(db);
     let file = db.get_file(file_id)?;
-    let parse = parse(db, file);
+    let parse = sema.parse(file);
     let token = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
         T![ident] => 2,
         T!['('] | T![')'] | T!['['] | T![']'] | T!['{'] | T!['}'] => 0,

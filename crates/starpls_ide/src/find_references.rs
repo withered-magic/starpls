@@ -160,7 +160,7 @@ mod tests {
 
     fn check_find_references(fixture: &str) {
         let mut analysis = Analysis::new_for_test();
-        let (fixture, file_id) = Fixture::from_single_file(&mut analysis.db, fixture);
+        let (fixture, _) = Fixture::from_single_file(&mut analysis.db, fixture);
         let references = analysis
             .snapshot()
             .find_references(
@@ -174,11 +174,12 @@ mod tests {
 
         let mut actual_locations = references
             .into_iter()
-            .map(|location| location.range)
+            .map(|location| (location.file_id, location.range))
             .collect::<Vec<_>>();
-        actual_locations.sort_by_key(|range| (range.start()));
+        actual_locations.sort_by_key(|(_, range)| (range.start()));
+        actual_locations.sort_by_key(|(file_id, _)| *file_id);
 
-        assert_eq!(fixture.selected_ranges, vec![(file_id, actual_locations)]);
+        assert_eq!(fixture.selected_ranges, actual_locations);
     }
 
     #[test]

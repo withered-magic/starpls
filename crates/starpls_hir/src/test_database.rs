@@ -184,7 +184,7 @@ impl TestDatabaseBuilder {
 
 pub struct Fixture {
     pub path_to_file_id: FxHashMap<PathBuf, FileId>,
-    pub selected_ranges: Vec<(FileId, Vec<TextRange>)>,
+    pub selected_ranges: Vec<(FileId, TextRange)>,
     pub cursor_pos: Option<(FileId, TextSize)>,
     next_file_id: u32,
 }
@@ -233,19 +233,14 @@ impl Fixture {
         )
     }
 
-    pub fn add_prelude_file(
-        &mut self,
-        db: &mut dyn Db,
-        path: impl AsRef<Path>,
-        contents: &str,
-    ) -> FileId {
+    pub fn add_prelude_file(&mut self, db: &mut dyn Db, contents: &str) -> FileId {
         let file_id = self.add_file_with_options(
             db,
-            path,
+            "tools/build_rules/prelude_bazel",
             contents,
             Dialect::Bazel,
             Some(FileInfo::Bazel {
-                api_context: APIContext::Bzl,
+                api_context: APIContext::Prelude,
                 is_external: false,
             }),
         );
@@ -274,8 +269,12 @@ impl Fixture {
             }
             self.cursor_pos = Some((file_id, cursor_pos));
         }
-        self.selected_ranges
-            .push((file_id, fixture.selected_ranges));
+        self.selected_ranges.extend(
+            fixture
+                .selected_ranges
+                .into_iter()
+                .map(|range| (file_id, range)),
+        );
 
         file_id
     }

@@ -222,7 +222,7 @@ mod tests {
 
     fn check_hover(fixture: &str, expect: Expect) {
         let mut analysis = Analysis::new_for_test();
-        let (fixture, _file_id) = Fixture::from_single_file(&mut analysis.db, fixture);
+        let (fixture, _) = Fixture::from_single_file(&mut analysis.db, fixture);
         let hover = analysis
             .snapshot()
             .hover(

@@ -600,7 +600,7 @@ mod tests {
         expect: Expect,
     ) {
         let mut analysis = Analysis::new_for_test();
-        let (fixture, _file_id) = Fixture::from_single_file(&mut analysis.db, fixture);
+        let (fixture, _) = Fixture::from_single_file(&mut analysis.db, fixture);
         analysis.db.set_all_workspace_targets(
             [
                 "//:foo",

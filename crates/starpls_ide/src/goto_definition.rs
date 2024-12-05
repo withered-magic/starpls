@@ -316,7 +316,7 @@ mod tests {
 
     fn check_goto_definition(fixture: &str) {
         let mut analysis = Analysis::new_for_test();
-        let (fixture, file_id) = Fixture::from_single_file(&mut analysis.db, fixture);
+        let (fixture, _) = Fixture::from_single_file(&mut analysis.db, fixture);
         let actual = analysis
             .snapshot()
             .goto_definition(
@@ -329,11 +329,15 @@ mod tests {
             .unwrap()
             .into_iter()
             .map(|loc| match loc {
-                LocationLink::Local { target_range, .. } => target_range,
+                LocationLink::Local {
+                    target_range,
+                    target_file_id,
+                    ..
+                } => (target_file_id, target_range),
                 _ => panic!("expected local location"),
             })
             .collect::<Vec<_>>();
-        assert_eq!(fixture.selected_ranges, vec![(file_id, actual)]);
+        assert_eq!(fixture.selected_ranges, actual);
     }
 
     #[test]

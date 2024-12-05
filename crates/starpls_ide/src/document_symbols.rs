@@ -131,13 +131,27 @@ fn add_target_symbols(db: &Database, file: File, acc: &mut Vec<DocumentSymbol>) 
 mod tests {
     use expect_test::expect;
     use expect_test::Expect;
+    use starpls_bazel::APIContext;
+    use starpls_common::Dialect;
+    use starpls_common::FileInfo;
     use starpls_hir::Fixture;
 
     use crate::Analysis;
 
     fn check(input: &str, expect: Expect) {
         let mut analysis = Analysis::new_for_test();
-        let (_fixture, file_id) = Fixture::from_single_file(&mut analysis.db, input);
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let file_id = fixture.add_file_with_options(
+            &mut analysis.db,
+            "BUILD.bazel",
+            input,
+            Dialect::Bazel,
+            Some(FileInfo::Bazel {
+                api_context: APIContext::Build,
+                is_external: false,
+            }),
+        );
+
         let symbols = analysis
             .snapshot()
             .document_symbols(file_id)

@@ -329,7 +329,7 @@ impl Analysis {
 
     #[cfg(test)]
     pub fn new_for_test() -> Analysis {
-        Analysis::new(Arc::new(UnimplementedFileLoader), Default::default())
+        Analysis::new(Arc::new(NoopFileLoader), Default::default())
     }
 }
 
@@ -456,17 +456,17 @@ pub trait FileLoader: Send + Sync + 'static {
     fn resolve_build_file(&self, file_id: FileId) -> Option<String>;
 }
 
-/// Panics on any operation and is only useful for tests that don't need file loading functionality.
-struct UnimplementedFileLoader;
+/// No-op implementation of [`FileLoader`] used for tests.
+struct NoopFileLoader;
 
-impl FileLoader for UnimplementedFileLoader {
+impl FileLoader for NoopFileLoader {
     fn resolve_path(
         &self,
         _path: &str,
         _dialect: Dialect,
         _from: FileId,
     ) -> anyhow::Result<Option<ResolvedPath>> {
-        unimplemented!()
+        Ok(None)
     }
 
     fn load_file(
@@ -475,7 +475,7 @@ impl FileLoader for UnimplementedFileLoader {
         _dialect: Dialect,
         _from: FileId,
     ) -> anyhow::Result<Option<LoadFileResult>> {
-        unimplemented!()
+        Ok(None)
     }
 
     fn list_load_candidates(
@@ -484,10 +484,10 @@ impl FileLoader for UnimplementedFileLoader {
         _dialect: Dialect,
         _from: FileId,
     ) -> anyhow::Result<Option<Vec<LoadItemCandidate>>> {
-        unimplemented!()
+        Ok(None)
     }
 
     fn resolve_build_file(&self, _file_id: FileId) -> Option<String> {
-        unimplemented!()
+        None
     }
 }

@@ -216,20 +216,11 @@ impl Fixture {
     /// needed by tests.
     pub fn from_single_file(db: &mut dyn Db, contents: &str) -> (Self, FileId) {
         let mut fixture = Self::new(db);
-        let file_id = fixture.add_file_with_options(
-            db,
-            "main.bzl",
-            contents,
-            Dialect::Bazel,
-            Some(FileInfo::Bazel {
-                api_context: APIContext::Bzl,
-                is_external: false,
-            }),
-        );
+        let file_id = fixture.add_file(db, "main.bzl", contents);
         (fixture, file_id)
     }
 
-    pub fn add_file(mut self, db: &mut dyn Db, path: impl AsRef<Path>, contents: &str) -> Self {
+    pub fn add_file(&mut self, db: &mut dyn Db, path: impl AsRef<Path>, contents: &str) -> FileId {
         self.add_file_with_options(
             db,
             path,
@@ -239,16 +230,15 @@ impl Fixture {
                 api_context: APIContext::Bzl,
                 is_external: false,
             }),
-        );
-        self
+        )
     }
 
     pub fn add_prelude_file(
-        mut self,
+        &mut self,
         db: &mut dyn Db,
         path: impl AsRef<Path>,
         contents: &str,
-    ) -> Self {
+    ) -> FileId {
         let file_id = self.add_file_with_options(
             db,
             path,
@@ -260,7 +250,7 @@ impl Fixture {
             }),
         );
         db.set_bazel_prelude_file(file_id);
-        self
+        file_id
     }
 
     pub fn add_file_with_options(

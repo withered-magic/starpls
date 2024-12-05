@@ -466,6 +466,32 @@ info.fo$0o
     }
 
     #[test]
+    fn test_load_stmt() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        fixture.add_file(
+            &mut analysis.db,
+            "//:foo.bzl",
+            r#"
+def foo():
+    #^^
+    pass
+"#,
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "//:bar.bzl",
+            r#"
+load("//:foo.bzl", "foo")
+
+f$0oo()
+"#,
+        );
+        loader.add_files_from_fixture(&analysis.db, &fixture);
+        check_goto_definition_from_fixture(analysis, fixture);
+    }
+
+    #[test]
     fn test_prelude_variable() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);

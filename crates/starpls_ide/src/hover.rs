@@ -172,7 +172,7 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
     } else if let Some(load_item) = ast::LoadItem::cast(parent.clone()) {
         let load_item = sema.resolve_load_item(file, &load_item)?;
         let def = sema.def_for_load_item(&load_item)?;
-        return Some(format_for_name(db, load_item.name(db).as_str(), &def.value.ty(db)).into());
+        return Some(format_for_name(db, load_item.name(db).as_str(), &def.ty(db)).into());
     } else if let Some(load_module) = ast::LoadModule::cast(parent) {
         let load_stmt = ast::LoadStmt::cast(load_module.syntax().parent()?)?;
         let loaded_file = sema.resolve_load_stmt(file, &load_stmt)?;
@@ -215,14 +215,12 @@ fn format_for_name(db: &Database, name: &str, ty: &Type) -> String {
 mod tests {
     use expect_test::expect;
     use expect_test::Expect;
-    use starpls_hir::Fixture;
 
     use crate::Analysis;
     use crate::FilePosition;
 
     fn check_hover(fixture: &str, expect: Expect) {
-        let mut analysis = Analysis::new_for_test();
-        let (fixture, _) = Fixture::from_single_file(&mut analysis.db, fixture);
+        let (analysis, fixture) = Analysis::from_single_file_fixture(fixture);
         let hover = analysis
             .snapshot()
             .hover(

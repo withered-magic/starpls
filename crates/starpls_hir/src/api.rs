@@ -231,17 +231,13 @@ impl<'a> Semantics<'a> {
         })
     }
 
-    pub fn def_for_load_item(&self, load_item: &LoadItem) -> Option<InFile<ScopeDef>> {
+    pub fn def_for_load_item(&self, load_item: &LoadItem) -> Option<ScopeDef> {
         let load_stmt = load_item.load_stmt(self.db)?;
         let loaded_file = self.resolve_load_stmt(load_item.file, &load_stmt)?;
         self.scope_for_module(loaded_file)
             .resolve_name(&load_item.name(self.db))
             .into_iter()
             .next()
-            .map(|def| InFile {
-                file: loaded_file,
-                value: def,
-            })
     }
 }
 

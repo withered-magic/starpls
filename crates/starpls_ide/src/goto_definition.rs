@@ -74,35 +74,9 @@ impl<'a> GotoDefinitionHandler<'a> {
                 .flat_map(|def| match def {
                     ScopeDef::LoadItem(load_item) => {
                         let def = self.sema.def_for_load_item(&load_item)?;
-                        let range = def.value.syntax_node_ptr(self.sema.db)?.value.text_range();
-                        Some(LocationLink::Local {
-                            origin_selection_range: None,
-                            target_range: range,
-                            target_selection_range: range,
-                            target_file_id: def.file.id(self.sema.db),
-                        })
+                        self.def_to_location_link(def)
                     }
-                    ScopeDef::Callable(ref callable) if callable.is_user_defined() => {
-                        let InFile { file, value: ptr } = def.syntax_node_ptr(self.sema.db)?;
-                        let def_stmt = ptr
-                            .try_to_node(&self.sema.parse(file).syntax(self.sema.db))
-                            .and_then(ast::DefStmt::cast)?;
-                        let range = def_stmt.name()?.syntax().text_range();
-                        Some(LocationLink::Local {
-                            origin_selection_range: None,
-                            target_range: range,
-                            target_selection_range: range,
-                            target_file_id: file.id(self.sema.db),
-                        })
-                    }
-                    _ => def
-                        .syntax_node_ptr(self.sema.db)
-                        .map(|InFile { file, value: ptr }| LocationLink::Local {
-                            origin_selection_range: None,
-                            target_range: ptr.text_range(),
-                            target_selection_range: ptr.text_range(),
-                            target_file_id: file.id(self.sema.db),
-                        }),
+                    _ => self.def_to_location_link(def),
                 })
                 .collect(),
         )
@@ -193,13 +167,8 @@ impl<'a> GotoDefinitionHandler<'a> {
     fn handle_load_item(&self, load_item: ast::LoadItem) -> Option<Vec<LocationLink>> {
         let load_item = self.sema.resolve_load_item(self.file, &load_item)?;
         let def = self.sema.def_for_load_item(&load_item)?;
-        let range = def.value.syntax_node_ptr(self.sema.db)?.value.text_range();
-        Some(vec![LocationLink::Local {
-            origin_selection_range: None,
-            target_range: range,
-            target_selection_range: range,
-            target_file_id: def.file.id(self.sema.db),
-        }])
+        let location = self.def_to_location_link(def)?;
+        Some(vec![location])
     }
 
     fn handle_literal_expr(&self, lit: ast::LiteralExpr) -> Option<Vec<LocationLink>> {
@@ -300,6 +269,35 @@ impl<'a> GotoDefinitionHandler<'a> {
                 })
         })
     }
+
+    fn def_to_location_link(&self, def: ScopeDef) -> Option<LocationLink> {
+        let location = match def {
+            ScopeDef::Callable(_) => {
+                let InFile { file, value: ptr } = def.syntax_node_ptr(self.sema.db)?;
+                let def_stmt = ptr
+                    .try_to_node(&self.sema.parse(file).syntax(self.sema.db))
+                    .and_then(ast::DefStmt::cast)?;
+                let range = def_stmt.name()?.syntax().text_range();
+                LocationLink::Local {
+                    origin_selection_range: None,
+                    target_range: range,
+                    target_selection_range: range,
+                    target_file_id: file.id(self.sema.db),
+                }
+            }
+            _ => {
+                let InFile { file, value: ptr } = def.syntax_node_ptr(self.sema.db)?;
+                let range = ptr.text_range();
+                LocationLink::Local {
+                    origin_selection_range: None,
+                    target_range: range,
+                    target_selection_range: range,
+                    target_file_id: file.id(self.sema.db),
+                }
+            }
+        };
+        Some(location)
+    }
 }
 
 pub(crate) fn goto_definition(db: &Database, pos: FilePosition) -> Option<Vec<LocationLink>> {
@@ -318,8 +316,7 @@ mod tests {
     use crate::LocationLink;
 
     fn check_goto_definition(fixture: &str) {
-        let mut analysis = Analysis::new_for_test();
-        let (fixture, _) = Fixture::from_single_file(&mut analysis.db, fixture);
+        let (analysis, fixture) = Analysis::from_single_file_fixture(fixture);
         check_goto_definition_from_fixture(analysis, fixture);
     }
 
@@ -470,7 +467,7 @@ info.fo$0o
 
     #[test]
     fn test_prelude_variable() {
-        let mut analysis = Analysis::new_for_test();
+        let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
         fixture.add_prelude_file(
             &mut analysis.db,
@@ -491,12 +488,13 @@ F$0OO
                 is_external: false,
             }),
         );
+        loader.add_files_from_fixture(&analysis.db, &fixture);
         check_goto_definition_from_fixture(analysis, fixture);
     }
 
     #[test]
     fn test_prelude_function_definition() {
-        let mut analysis = Analysis::new_for_test();
+        let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
         fixture.add_prelude_file(
             &mut analysis.db,
@@ -518,5 +516,42 @@ f$0oo()
                 is_external: false,
             }),
         );
+        loader.add_files_from_fixture(&analysis.db, &fixture);
+        check_goto_definition_from_fixture(analysis, fixture);
+    }
+
+    #[test]
+    fn test_prelude_load_stmt() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        fixture.add_prelude_file(
+            &mut analysis.db,
+            r#"
+load("//:defs.bzl", "java_library")
+"#,
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "//:defs.bzl",
+            r#"
+def java_library():
+    #^^^^^^^^^^^
+    pass
+"#,
+        );
+        fixture.add_file_with_options(
+            &mut analysis.db,
+            "BUILD.bazel",
+            r#"
+j$0ava_library()
+"#,
+            Dialect::Bazel,
+            Some(Bazel {
+                api_context: APIContext::Build,
+                is_external: false,
+            }),
+        );
+        loader.add_files_from_fixture(&analysis.db, &fixture);
+        check_goto_definition_from_fixture(analysis, fixture);
     }
 }

@@ -153,14 +153,11 @@ pub(crate) fn find_references(
 
 #[cfg(test)]
 mod tests {
-    use starpls_hir::Fixture;
-
     use crate::Analysis;
     use crate::FilePosition;
 
     fn check_find_references(fixture: &str) {
-        let mut analysis = Analysis::new_for_test();
-        let (fixture, _) = Fixture::from_single_file(&mut analysis.db, fixture);
+        let (analysis, fixture) = Analysis::from_single_file_fixture(fixture);
         let references = analysis
             .snapshot()
             .find_references(

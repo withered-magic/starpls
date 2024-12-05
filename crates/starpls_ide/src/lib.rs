@@ -19,6 +19,8 @@ use starpls_common::ResolvedPath;
 use starpls_hir::BuiltinDefs;
 pub use starpls_hir::Cancelled;
 use starpls_hir::Db as _;
+#[cfg(test)]
+use starpls_hir::Fixture;
 use starpls_hir::GlobalContext;
 pub use starpls_hir::InferenceOptions;
 use starpls_syntax::LineIndex;
@@ -328,8 +330,18 @@ impl Analysis {
     }
 
     #[cfg(test)]
-    pub fn new_for_test() -> Analysis {
-        Analysis::new(Arc::new(NoopFileLoader), Default::default())
+    pub(crate) fn new_for_test() -> (Analysis, Arc<SimpleFileLoader>) {
+        let loader = Arc::new(SimpleFileLoader::default());
+        let analysis = Analysis::new(loader.clone(), Default::default());
+        (analysis, loader)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_single_file_fixture(fixture: &str) -> (Analysis, Fixture) {
+        let (mut analysis, loader) = Self::new_for_test();
+        let (fixture, _) = Fixture::from_single_file(&mut analysis.db, fixture);
+        loader.add_files_from_fixture(&analysis.db, &fixture);
+        (analysis, fixture)
     }
 }
 
@@ -456,10 +468,30 @@ pub trait FileLoader: Send + Sync + 'static {
     fn resolve_build_file(&self, file_id: FileId) -> Option<String>;
 }
 
-/// No-op implementation of [`FileLoader`] used for tests.
-struct NoopFileLoader;
+/// Simple implementation of [`FileLoader`] backed by a HashMap.
+/// Mainly used for tests.
+#[derive(Default)]
+pub(crate) struct SimpleFileLoader(DashMap<String, LoadFileResult>);
 
-impl FileLoader for NoopFileLoader {
+impl SimpleFileLoader {
+    #[cfg(test)]
+    pub(crate) fn add_files_from_fixture(&self, db: &dyn Db, fixture: &Fixture) {
+        for (path, file_id) in &fixture.path_to_file_id {
+            let file = db.get_file(*file_id).unwrap();
+            self.0.insert(
+                path.to_string_lossy().to_string(),
+                LoadFileResult {
+                    file_id: *file_id,
+                    dialect: file.dialect(db),
+                    info: file.info(db),
+                    contents: Some(file.contents(db).clone()),
+                },
+            );
+        }
+    }
+}
+
+impl FileLoader for SimpleFileLoader {
     fn resolve_path(
         &self,
         _path: &str,
@@ -471,11 +503,11 @@ impl FileLoader for NoopFileLoader {
 
     fn load_file(
         &self,
-        _path: &str,
+        path: &str,
         _dialect: Dialect,
         _from: FileId,
     ) -> anyhow::Result<Option<LoadFileResult>> {
-        Ok(None)
+        Ok(self.0.get(path).map(|res| res.clone()))
     }
 
     fn list_load_candidates(

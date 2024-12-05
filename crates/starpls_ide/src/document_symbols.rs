@@ -139,7 +139,7 @@ mod tests {
     use crate::Analysis;
 
     fn check(input: &str, expect: Expect) {
-        let mut analysis = Analysis::new_for_test();
+        let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);
         let file_id = fixture.add_file_with_options(
             &mut analysis.db,
@@ -151,6 +151,7 @@ mod tests {
                 is_external: false,
             }),
         );
+        loader.add_files_from_fixture(&analysis.db, &fixture);
 
         let symbols = analysis
             .snapshot()

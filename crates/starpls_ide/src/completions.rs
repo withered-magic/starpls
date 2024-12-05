@@ -583,7 +583,6 @@ mod tests {
     use expect_test::expect;
     use expect_test::Expect;
     use starpls_hir::Db;
-    use starpls_hir::Fixture;
 
     use crate::completions::CompletionRelevance;
     use crate::Analysis;
@@ -599,8 +598,7 @@ mod tests {
         include_builtins_and_keywords: bool,
         expect: Expect,
     ) {
-        let mut analysis = Analysis::new_for_test();
-        let (fixture, _) = Fixture::from_single_file(&mut analysis.db, fixture);
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(fixture);
         analysis.db.set_all_workspace_targets(
             [
                 "//:foo",

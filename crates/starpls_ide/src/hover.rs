@@ -1,6 +1,5 @@
 use std::fmt::Write;
 
-use starpls_common::parse;
 use starpls_common::Db as _;
 use starpls_hir::DisplayWithDb;
 use starpls_hir::Semantics;
@@ -38,9 +37,9 @@ impl From<String> for Hover {
 
 pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) -> Option<Hover> {
     let file = db.get_file(file_id)?;
-    let parsed = parse(db, file);
     let sema = Semantics::new(db);
-    let token = pick_best_token(parsed.syntax(db).token_at_offset(pos), |kind| match kind {
+    let parse = sema.parse(file);
+    let token = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
         T![ident] => 2,
         T!['('] | T![')'] | T!['['] | T![']'] | T!['{'] | T!['}'] => 0,
         kind if kind.is_trivia_token() => 0,
@@ -173,11 +172,11 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
     } else if let Some(load_item) = ast::LoadItem::cast(parent.clone()) {
         let load_item = sema.resolve_load_item(file, &load_item)?;
         let def = sema.def_for_load_item(&load_item)?;
-        return Some(format_for_name(db, load_item.name(db).as_str(), &def.value.ty(db)).into());
+        return Some(format_for_name(db, load_item.name(db).as_str(), &def.ty(db)).into());
     } else if let Some(load_module) = ast::LoadModule::cast(parent) {
         let load_stmt = ast::LoadStmt::cast(load_module.syntax().parent()?)?;
         let loaded_file = sema.resolve_load_stmt(file, &load_stmt)?;
-        let parsed = parse(db, loaded_file);
+        let parsed = sema.parse(loaded_file);
         let mut text = format!("```python\n(module) {}\n```\n", token.text());
         if let Some(doc) = parsed.tree(db).doc().and_then(|doc| doc.value()) {
             text.push_str(&unindent_doc(&doc));
@@ -216,30 +215,20 @@ fn format_for_name(db: &Database, name: &str, ty: &Type) -> String {
 mod tests {
     use expect_test::expect;
     use expect_test::Expect;
-    use starpls_bazel::APIContext;
-    use starpls_common::Dialect;
-    use starpls_common::FileInfo;
-    use starpls_test_util::Fixture;
 
-    use crate::AnalysisSnapshot;
+    use crate::Analysis;
     use crate::FilePosition;
 
     fn check_hover(fixture: &str, expect: Expect) {
-        let fixture = Fixture::parse(fixture);
-        let (snap, file_id) = AnalysisSnapshot::from_single_file(
-            &fixture.contents,
-            Dialect::Bazel,
-            Some(FileInfo::Bazel {
-                api_context: APIContext::Bzl,
-                is_external: false,
-            }),
-        );
-
-        let hover = snap
-            .hover(FilePosition {
-                file_id,
-                pos: fixture.cursor_pos,
-            })
+        let (analysis, fixture) = Analysis::from_single_file_fixture(fixture);
+        let hover = analysis
+            .snapshot()
+            .hover(
+                fixture
+                    .cursor_pos
+                    .map(|(file_id, pos)| FilePosition { file_id, pos })
+                    .unwrap(),
+            )
             .unwrap()
             .unwrap();
 

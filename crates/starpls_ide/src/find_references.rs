@@ -1,5 +1,4 @@
 use memchr::memmem::Finder;
-use starpls_common::parse;
 use starpls_common::Db;
 use starpls_common::File;
 use starpls_hir::Name;
@@ -36,7 +35,9 @@ impl<'a> FindReferencesHandler<'a> {
             });
 
         for offset in offsets {
-            let Some(parent) = parse(self.sema.db, self.file)
+            let Some(parent) = self
+                .sema
+                .parse(self.file)
                 .syntax(self.sema.db)
                 .token_at_offset(offset)
                 .find(|token| token.text() == self.name.as_str())
@@ -100,7 +101,7 @@ pub(crate) fn find_references(
 ) -> Option<Vec<Location>> {
     let sema = Semantics::new(db);
     let file = db.get_file(file_id)?;
-    let parse = parse(db, file);
+    let parse = sema.parse(file);
     let token = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
         T![ident] => 2,
         T!['('] | T![')'] | T!['['] | T![']'] | T!['{'] | T!['}'] => 0,
@@ -152,38 +153,28 @@ pub(crate) fn find_references(
 
 #[cfg(test)]
 mod tests {
-    use starpls_bazel::APIContext;
-    use starpls_common::Dialect;
-    use starpls_common::FileInfo;
-    use starpls_test_util::Fixture;
-
-    use crate::AnalysisSnapshot;
+    use crate::Analysis;
     use crate::FilePosition;
 
     fn check_find_references(fixture: &str) {
-        let fixture = Fixture::parse(fixture);
-        let (snap, file_id) = AnalysisSnapshot::from_single_file(
-            &fixture.contents,
-            Dialect::Bazel,
-            Some(FileInfo::Bazel {
-                api_context: APIContext::Bzl,
-                is_external: false,
-            }),
-        );
-
-        let references = snap
-            .find_references(FilePosition {
-                file_id,
-                pos: fixture.cursor_pos,
-            })
+        let (analysis, fixture) = Analysis::from_single_file_fixture(fixture);
+        let references = analysis
+            .snapshot()
+            .find_references(
+                fixture
+                    .cursor_pos
+                    .map(|(file_id, pos)| FilePosition { file_id, pos })
+                    .unwrap(),
+            )
             .unwrap()
             .unwrap();
 
         let mut actual_locations = references
             .into_iter()
-            .map(|location| location.range)
+            .map(|location| (location.file_id, location.range))
             .collect::<Vec<_>>();
-        actual_locations.sort_by_key(|range| (range.start()));
+        actual_locations.sort_by_key(|(_, range)| (range.start()));
+        actual_locations.sort_by_key(|(file_id, _)| *file_id);
 
         assert_eq!(fixture.selected_ranges, actual_locations);
     }

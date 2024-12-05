@@ -1,6 +1,5 @@
 use std::fmt::Write;
 
-use starpls_common::parse;
 use starpls_common::Db as _;
 use starpls_hir::DisplayWithDb;
 use starpls_hir::Semantics;
@@ -41,7 +40,7 @@ pub(crate) fn signature_help(
 ) -> Option<SignatureHelp> {
     let sema = Semantics::new(db);
     let file = db.get_file(file_id)?;
-    let parse = parse(db, file);
+    let parse = sema.parse(file);
     let token = pick_best_token(parse.syntax(db).token_at_offset(pos), |kind| match kind {
         // '(', ')', and ',' are typically the main tokens in a call expression that are not part of
         // one of the arguments.

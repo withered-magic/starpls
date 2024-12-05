@@ -3,6 +3,7 @@ use starpls_common::parse;
 use starpls_common::Db;
 use starpls_common::File;
 use starpls_common::FileId;
+use starpls_common::InFile;
 use starpls_hir::ScopeDef;
 use starpls_hir::Semantics;
 use starpls_syntax::ast::AstNode;
@@ -64,7 +65,15 @@ pub(crate) fn document_symbols(db: &Database, file_id: FileId) -> Option<Vec<Doc
     let mut symbols = scope
         .names()
         .filter_map(|(name, def)| {
-            let range = def.syntax_node_ptr(db, file)?.text_range();
+            let ptr = match def.syntax_node_ptr(db)? {
+                InFile {
+                    file: def_file,
+                    value,
+                } if file == def_file => value,
+                _ => return None,
+            };
+
+            let range = ptr.text_range();
             Some(DocumentSymbol {
                 name: name.as_str().to_string(),
                 detail: None,
@@ -133,11 +142,16 @@ mod tests {
     use starpls_bazel::APIContext;
     use starpls_common::Dialect;
     use starpls_common::FileInfo;
+    use starpls_hir::Fixture;
 
-    use crate::AnalysisSnapshot;
+    use crate::Analysis;
 
     fn check(input: &str, expect: Expect) {
-        let (snap, file_id) = AnalysisSnapshot::from_single_file(
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        let file_id = fixture.add_file_with_options(
+            &mut analysis.db,
+            "BUILD.bazel",
             input,
             Dialect::Bazel,
             Some(FileInfo::Bazel {
@@ -145,7 +159,13 @@ mod tests {
                 is_external: false,
             }),
         );
-        let symbols = snap.document_symbols(file_id).unwrap().unwrap();
+        loader.add_files_from_fixture(&analysis.db, &fixture);
+
+        let symbols = analysis
+            .snapshot()
+            .document_symbols(file_id)
+            .unwrap()
+            .unwrap();
         let mut actual = String::new();
         for symbol in symbols {
             actual.push_str(&format!("{:?}", symbol));

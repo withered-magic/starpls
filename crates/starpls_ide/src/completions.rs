@@ -3,7 +3,6 @@
 use std::collections::HashSet;
 
 use rustc_hash::FxHashMap;
-use starpls_common::parse;
 use starpls_common::FileId;
 use starpls_common::LoadItemCandidateKind;
 use starpls_hir::Db;
@@ -175,10 +174,10 @@ pub(crate) fn completions(
 
             if !is_loop_variable {
                 add_globals(&mut items);
-                for (name, decl) in names {
+                for (name, def) in names {
                     items.push(CompletionItem {
                         label: name.to_string(),
-                        kind: match &decl {
+                        kind: match &def {
                             ScopeDef::Callable(_) => CompletionItemKind::Function,
                             def if def.ty(db).is_callable() => CompletionItemKind::Function,
                             // All the global values in the Bazel builtins are modules.
@@ -188,7 +187,7 @@ pub(crate) fn completions(
                             _ => CompletionItemKind::Variable,
                         },
                         mode: None,
-                        relevance: if decl.is_user_defined() {
+                        relevance: if def.is_user_defined() {
                             CompletionRelevance::VariableOrKeyword
                         } else {
                             CompletionRelevance::Builtin
@@ -453,7 +452,7 @@ impl CompletionContext {
         // Reparse the file with a dummy identifier inserted at the current offset.
         let sema = Semantics::new(db);
         let file = db.get_file(file_id)?;
-        let parse = parse(db, file);
+        let parse = sema.parse(file);
 
         if let Some(cx) = maybe_str_context(file_id, &parse.syntax(db), pos) {
             return Some(CompletionContext {
@@ -583,13 +582,10 @@ mod tests {
 
     use expect_test::expect;
     use expect_test::Expect;
-    use starpls_bazel::APIContext;
-    use starpls_common::Dialect;
-    use starpls_common::FileInfo;
-    use starpls_test_util::Fixture;
+    use starpls_hir::Db;
 
     use crate::completions::CompletionRelevance;
-    use crate::AnalysisSnapshot;
+    use crate::Analysis;
     use crate::CompletionItemKind;
     use crate::FilePosition;
 
@@ -602,14 +598,8 @@ mod tests {
         include_builtins_and_keywords: bool,
         expect: Expect,
     ) {
-        let fixture = Fixture::parse(fixture);
-        let (snap, file_id) = AnalysisSnapshot::from_single_file_with_options(
-            &fixture.contents,
-            Dialect::Bazel,
-            Some(FileInfo::Bazel {
-                api_context: APIContext::Bzl,
-                is_external: false,
-            }),
+        let (mut analysis, fixture) = Analysis::from_single_file_fixture(fixture);
+        analysis.db.set_all_workspace_targets(
             [
                 "//:foo",
                 "//:bar",
@@ -623,12 +613,13 @@ mod tests {
             .collect(),
         );
 
-        let completions = snap
+        let completions = analysis
+            .snapshot()
             .completions(
-                FilePosition {
-                    file_id,
-                    pos: fixture.cursor_pos,
-                },
+                fixture
+                    .cursor_pos
+                    .map(|(file_id, pos)| FilePosition { file_id, pos })
+                    .unwrap(),
                 Some("".to_string()),
             )
             .unwrap()

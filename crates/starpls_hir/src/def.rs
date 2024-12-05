@@ -8,6 +8,7 @@ use id_arena::Id;
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 use starpls_common::File;
+use starpls_common::InFile;
 use starpls_syntax::ast::AssignOp;
 use starpls_syntax::ast::AstPtr;
 use starpls_syntax::ast::BinaryOp;
@@ -477,7 +478,16 @@ pub(crate) struct Function {
     pub(crate) name: Name,
     pub(crate) ret_type_ref: Option<TypeRef>,
     pub(crate) doc: Option<Box<str>>,
-    pub(crate) ptr: SyntaxNodePtr,
+    ptr: SyntaxNodePtr,
     #[return_ref]
     pub(crate) params: Box<[ParamId]>,
+}
+
+impl Function {
+    pub(crate) fn syntax_node_ptr(&self, db: &dyn Db) -> InFile<SyntaxNodePtr> {
+        InFile {
+            file: self.file(db),
+            value: self.ptr(db),
+        }
+    }
 }

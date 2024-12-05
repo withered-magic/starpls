@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
-use rustc_hash::FxHashMap;
 use salsa::ParallelDatabase;
 use starpls_bazel::APIContext;
 use starpls_bazel::Builtins;
@@ -20,6 +19,8 @@ use starpls_common::ResolvedPath;
 use starpls_hir::BuiltinDefs;
 pub use starpls_hir::Cancelled;
 use starpls_hir::Db as _;
+#[cfg(test)]
+use starpls_hir::Fixture;
 use starpls_hir::GlobalContext;
 pub use starpls_hir::InferenceOptions;
 use starpls_syntax::LineIndex;
@@ -327,6 +328,21 @@ impl Analysis {
     pub fn set_all_workspace_targets(&mut self, targets: Vec<String>) {
         self.db.set_all_workspace_targets(targets);
     }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test() -> (Analysis, Arc<SimpleFileLoader>) {
+        let loader = Arc::new(SimpleFileLoader::default());
+        let analysis = Analysis::new(loader.clone(), Default::default());
+        (analysis, loader)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_single_file_fixture(fixture: &str) -> (Analysis, Fixture) {
+        let (mut analysis, loader) = Self::new_for_test();
+        let (fixture, _) = Fixture::from_single_file(&mut analysis.db, fixture);
+        loader.add_files_from_fixture(&analysis.db, &fixture);
+        (analysis, fixture)
+    }
 }
 
 pub struct AnalysisSnapshot {
@@ -384,54 +400,6 @@ impl AnalysisSnapshot {
         F: FnOnce(&'a Database) -> T + panic::UnwindSafe,
     {
         starpls_hir::Cancelled::catch(|| f(&self.db))
-    }
-
-    #[cfg(test)]
-    pub fn from_single_file(
-        contents: &str,
-        dialect: Dialect,
-        info: Option<FileInfo>,
-    ) -> (Self, FileId) {
-        Self::from_single_file_with_options(contents, dialect, info, vec![])
-    }
-
-    /// This should only be used as a convenient way to create analysis snapshots
-    /// from test data.
-    #[cfg(test)]
-    pub fn from_single_file_with_options(
-        contents: &str,
-        dialect: Dialect,
-        info: Option<FileInfo>,
-        all_workspace_targets: Vec<String>,
-    ) -> (Self, FileId) {
-        use starpls_test_util::make_test_builtins;
-        use starpls_test_util::FixtureType;
-
-        let mut file_set = FxHashMap::default();
-        let file_id = FileId(0);
-        file_set.insert("main.star".to_string(), (file_id, contents.to_string()));
-
-        let mut change = Change::default();
-        change.create_file(file_id, dialect, info, contents.to_string());
-
-        let mut analysis = Analysis::new(
-            Arc::new(SimpleFileLoader::from_file_set(file_set)),
-            Default::default(),
-        );
-
-        // Add builtins here as needed for tests.
-        let functions = vec!["provider", "rule", "struct"];
-        let globals = vec![("attr", "attr")];
-        let types = vec![FixtureType::new("attr", vec![], vec!["int", "string"])];
-
-        analysis.db.set_builtin_defs(
-            Dialect::Bazel,
-            make_test_builtins(functions, globals, types),
-            Builtins::default(),
-        );
-        analysis.db.set_all_workspace_targets(all_workspace_targets);
-        analysis.apply_change(change);
-        (analysis.snapshot(), file_id)
     }
 }
 
@@ -500,35 +468,46 @@ pub trait FileLoader: Send + Sync + 'static {
     fn resolve_build_file(&self, file_id: FileId) -> Option<String>;
 }
 
-/// [`FileLoader`] that looks up files by path from a hash map.
-pub(crate) struct SimpleFileLoader {
-    file_set: FxHashMap<String, (FileId, String)>,
-}
+/// Simple implementation of [`FileLoader`] backed by a HashMap.
+/// Mainly used for tests.
+#[derive(Default)]
+pub(crate) struct SimpleFileLoader(DashMap<String, LoadFileResult>);
 
 impl SimpleFileLoader {
-    /// Creates a [`SimpleFileLoader`] from a static set of files.
     #[cfg(test)]
-    pub(crate) fn from_file_set(file_set: FxHashMap<String, (FileId, String)>) -> Self {
-        Self { file_set }
+    pub(crate) fn add_files_from_fixture(&self, db: &dyn Db, fixture: &Fixture) {
+        for (path, file_id) in &fixture.path_to_file_id {
+            let file = db.get_file(*file_id).unwrap();
+            self.0.insert(
+                path.to_string_lossy().to_string(),
+                LoadFileResult {
+                    file_id: *file_id,
+                    dialect: file.dialect(db),
+                    info: file.info(db),
+                    contents: Some(file.contents(db).clone()),
+                },
+            );
+        }
     }
 }
 
 impl FileLoader for SimpleFileLoader {
+    fn resolve_path(
+        &self,
+        _path: &str,
+        _dialect: Dialect,
+        _from: FileId,
+    ) -> anyhow::Result<Option<ResolvedPath>> {
+        Ok(None)
+    }
+
     fn load_file(
         &self,
         path: &str,
-        dialect: Dialect,
+        _dialect: Dialect,
         _from: FileId,
     ) -> anyhow::Result<Option<LoadFileResult>> {
-        Ok(self
-            .file_set
-            .get(path)
-            .map(|(file_id, contents)| LoadFileResult {
-                file_id: *file_id,
-                dialect,
-                info: None,
-                contents: Some(contents.clone()),
-            }))
+        Ok(self.0.get(path).map(|res| res.clone()))
     }
 
     fn list_load_candidates(
@@ -537,15 +516,6 @@ impl FileLoader for SimpleFileLoader {
         _dialect: Dialect,
         _from: FileId,
     ) -> anyhow::Result<Option<Vec<LoadItemCandidate>>> {
-        Ok(None)
-    }
-
-    fn resolve_path(
-        &self,
-        _path: &str,
-        _dialect: Dialect,
-        _from: FileId,
-    ) -> anyhow::Result<Option<ResolvedPath>> {
         Ok(None)
     }
 

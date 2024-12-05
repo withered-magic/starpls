@@ -174,10 +174,10 @@ pub(crate) fn completions(
 
             if !is_loop_variable {
                 add_globals(&mut items);
-                for (name, decl) in names {
+                for (name, def) in names {
                     items.push(CompletionItem {
                         label: name.to_string(),
-                        kind: match &decl {
+                        kind: match &def {
                             ScopeDef::Callable(_) => CompletionItemKind::Function,
                             def if def.ty(db).is_callable() => CompletionItemKind::Function,
                             // All the global values in the Bazel builtins are modules.
@@ -187,7 +187,7 @@ pub(crate) fn completions(
                             _ => CompletionItemKind::Variable,
                         },
                         mode: None,
-                        relevance: if decl.is_user_defined() {
+                        relevance: if def.is_user_defined() {
                             CompletionRelevance::VariableOrKeyword
                         } else {
                             CompletionRelevance::Builtin

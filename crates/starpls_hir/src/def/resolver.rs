@@ -202,7 +202,7 @@ impl<'a> Resolver<'a> {
                 let prelude_resolver = Resolver::new_for_module(self.db, prelude_file);
                 names.extend(
                     prelude_resolver
-                        .module_defs(true)
+                        .module_defs(false)
                         .into_iter()
                         .filter(|(_, def)| {
                             matches!(

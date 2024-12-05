@@ -3,6 +3,7 @@ use starpls_common::parse;
 use starpls_common::Db;
 use starpls_common::File;
 use starpls_common::FileId;
+use starpls_common::InFile;
 use starpls_hir::ScopeDef;
 use starpls_hir::Semantics;
 use starpls_syntax::ast::AstNode;
@@ -64,8 +65,15 @@ pub(crate) fn document_symbols(db: &Database, file_id: FileId) -> Option<Vec<Doc
     let mut symbols = scope
         .names()
         .filter_map(|(name, def)| {
-            // TODO(withered-magic): Filter out defs not from our current file (e.g. defs from the prelude).
-            let range = def.syntax_node_ptr(db)?.value.text_range();
+            let ptr = match def.syntax_node_ptr(db)? {
+                InFile {
+                    file: def_file,
+                    value,
+                } if file == def_file => value,
+                _ => return None,
+            };
+
+            let range = ptr.text_range();
             Some(DocumentSymbol {
                 name: name.as_str().to_string(),
                 detail: None,

@@ -76,32 +76,101 @@ use crate::typeck::TypecheckCancelled;
 use crate::Name;
 
 impl TyContext<'_> {
-    pub fn infer_all_exprs(&mut self, file: File) {
+    fn infer_all_exprs(&mut self, file: File) {
         for (expr, _) in module(self.db, file).exprs.iter() {
             self.infer_expr(file, expr);
         }
     }
 
-    pub fn infer_all_params(&mut self, file: File) {
+    fn infer_all_params(&mut self, file: File) {
         for (param, _) in module(self.db, file).params.iter() {
             self.infer_param(file, param);
         }
     }
 
-    pub fn infer_all_load_items(&mut self, file: File) {
+    fn infer_all_stmts(&mut self, file: File) {
         let module = module(self.db, file);
 
         for stmt in module.top_level.iter().copied() {
-            if let Stmt::Load { load_stmt, items } = &module.stmts[stmt] {
-                self.resolve_load_stmt(file, *load_stmt);
-                for load_item in items.iter().copied() {
-                    self.infer_load_item(file, load_item);
+            match &module[stmt] {
+                Stmt::Load { load_stmt, items } => {
+                    self.resolve_load_stmt(file, *load_stmt);
+                    for load_item in items.iter().copied() {
+                        self.infer_load_item(file, load_item);
+                    }
                 }
+                Stmt::Assign { lhs, rhs, .. } => match &module[*lhs] {
+                    Expr::Index { .. } => {
+                        let lhs_ty = self.infer_expr(file, *lhs);
+                        let rhs_ty = self.infer_expr(file, *rhs);
+                        if !assign_tys(self.db, &rhs_ty, &lhs_ty) {
+                            self.add_expr_diagnostic_error(
+                                file,
+                                *lhs,
+                                format!(
+                                    "Cannot use value of type \"{}\" as type \"{}\" in assignment",
+                                    rhs_ty.display(self.db).alt(),
+                                    lhs_ty.display(self.db).alt()
+                                ),
+                            );
+                        }
+                    }
+                    Expr::Dot { expr, field } => {
+                        let ty = self.infer_expr(file, *expr);
+                        if matches!(
+                            ty.kind(),
+                            TyKind::Struct(_) | TyKind::Provider(_) | TyKind::BuiltinType(_, _)
+                        ) {
+                            self.add_expr_diagnostic_error(
+                                file,
+                                *lhs,
+                                format!(
+                                    "Cannot assign to field \"{}\" for immutable type \"{}\"",
+                                    field.as_str(),
+                                    ty.display(self.db).alt()
+                                ),
+                            );
+                        } else if let Some(name) = ty
+                            .fields(self.db)
+                            .and_then(|mut fields| {
+                                fields.find(|(el, _)| &el.name(self.db) == field)
+                            })
+                            .and_then(|(field, ty)| {
+                                if matches!(
+                                    ty.kind(),
+                                    TyKind::Function(_)
+                                        | TyKind::BuiltinFunction(_)
+                                        | TyKind::IntrinsicFunction(_, _)
+                                ) {
+                                    Some(field.name(self.db))
+                                } else {
+                                    None
+                                }
+                            })
+                        {
+                            self.add_expr_diagnostic_error(
+                                file,
+                                *lhs,
+                                format!(
+                                    "Cannot reassign to method \"{}\" of type \"{}\"",
+                                    name,
+                                    ty.display(self.db).alt()
+                                ),
+                            );
+                        }
+                    }
+                    _ => {}
+                },
+                _ => {}
             }
         }
     }
 
-    pub fn diagnostics_for_file(&self, file: File) -> Vec<Diagnostic> {
+    pub fn diagnostics_for_file(&mut self, file: File) -> Vec<Diagnostic> {
+        self.infer_all_exprs(file);
+        self.infer_all_stmts(file);
+        self.infer_all_params(file);
+
         let line_index = line_index(self.db, file);
         let module = module(self.db, file);
         self.cx

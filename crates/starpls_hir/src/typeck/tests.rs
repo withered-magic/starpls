@@ -1633,6 +1633,36 @@ lambda x, y, z: x + y + z
 }
 
 #[test]
+fn test_bad_assignments() {
+    check_infer(
+        r#"
+attr.string = 123
+"foo".capitalize = 123
+d = {} # type: dict[string, string]
+d["foo"] = 1
+"#,
+        expect![[r#"
+            1..5 "attr": attr
+            1..12 "attr.string": def string(*args, **kwargs) -> Unknown
+            15..18 "123": Literal[123]
+            19..24 "\"foo\"": Literal["foo"]
+            19..35 "\"foo\".capitalize": def capitalize() -> string
+            38..41 "123": Literal[123]
+            42..43 "d": dict[string, string]
+            46..48 "{}": dict[Unknown, Unknown]
+            78..79 "d": dict[string, string]
+            80..85 "\"foo\"": Literal["foo"]
+            78..86 "d[\"foo\"]": string
+            89..90 "1": Literal[1]
+
+            1..12 Cannot assign to field "string" for immutable type "attr"
+            19..35 Cannot reassign to method "capitalize" of type "Literal["foo"]"
+            78..86 Cannot use value of type "Literal[1]" as type "string" in assignment
+        "#]],
+    );
+}
+
+#[test]
 fn test_if_else_stmts() {
     check_infer_with_code_flow_analysis(
         r#"

@@ -441,6 +441,7 @@ impl ScopeCollector<'_> {
                                 .syntax_node_ptr()
                                 .text_range(),
                         },
+                        tags: None,
                     },
                 ),
             }

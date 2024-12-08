@@ -8,6 +8,7 @@ pub struct Diagnostic {
     pub message: String,
     pub severity: Severity,
     pub range: FileRange,
+    pub tags: Option<DiagnosticTag>,
 }
 
 #[derive(Clone, Debug)]
@@ -21,6 +22,12 @@ pub struct FileRange {
 pub enum Severity {
     Warning,
     Error,
+}
+
+#[derive(Clone, Debug)]
+pub enum DiagnosticTag {
+    Unnecessary,
+    Deprecated,
 }
 
 #[salsa::accumulator]

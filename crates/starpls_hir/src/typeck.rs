@@ -1639,6 +1639,7 @@ pub(crate) struct InferenceContext {
     pub(crate) type_of_param: FxHashMap<FileParamId, Ty>,
     pub(crate) source_assign_done: FxHashSet<FileExprId>,
     pub(crate) flow_node_type_cache: FxHashMap<CodeFlowCacheKey, Option<Ty>>,
+    pub(crate) definition_is_used: FxHashMap<InFile<ExprId>, bool>,
 }
 
 pub struct CancelGuard<'a> {

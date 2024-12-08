@@ -3,6 +3,7 @@ use std::sync::Arc;
 use starpls_common::line_index;
 use starpls_common::parse;
 use starpls_common::Diagnostic;
+use starpls_common::DiagnosticTag;
 use starpls_common::File;
 use starpls_common::FileRange;
 use starpls_common::InFile;
@@ -166,10 +167,34 @@ impl TyContext<'_> {
         }
     }
 
+    fn find_unused_definitions(&mut self, file: File) {
+        for (expr, name) in module(self.db, file).exprs.iter().filter_map(|(id, expr)| {
+            if let Expr::Name { name } = expr {
+                Some((id, name))
+            } else {
+                None
+            }
+        }) {
+            if let Some(false) = self
+                .cx
+                .definition_is_used
+                .get(&InFile { file, value: expr })
+            {
+                self.add_expr_diagnostic_warning(
+                    file,
+                    expr,
+                    Some(DiagnosticTag::Unnecessary),
+                    format!("\"{}\" is not accessed", name.as_str()),
+                );
+            }
+        }
+    }
+
     pub fn diagnostics_for_file(&mut self, file: File) -> Vec<Diagnostic> {
         self.infer_all_exprs(file);
         self.infer_all_stmts(file);
         self.infer_all_params(file);
+        self.find_unused_definitions(file);
 
         let line_index = line_index(self.db, file);
         let module = module(self.db, file);
@@ -1023,6 +1048,7 @@ impl TyContext<'_> {
                     self.add_expr_diagnostic_warning(
                         file,
                         parent,
+                        None,
                         format!(
                             "Operator \"{}\" not supported for types \"{}\" and \"{}\"",
                             op,
@@ -1132,6 +1158,7 @@ impl TyContext<'_> {
                                     file,
                                     Severity::Error,
                                     type_ref.1,
+                                    None,
                                     error,
                                 );
                             }
@@ -1180,6 +1207,7 @@ impl TyContext<'_> {
                 self.add_expr_diagnostic_warning(
                     file,
                     source,
+                    None,
                     format!("Type \"{}\" is not iterable", source_ty.display(db)),
                 );
                 for expr in targets.iter() {
@@ -1220,6 +1248,21 @@ impl TyContext<'_> {
                                 var_defs.push((file, *expr, *source));
                                 continue;
                             } else {
+                                if def_execution_scope != ExecutionScopeId::Module
+                                    || name.as_str().starts_with('_')
+                                {
+                                    if let ScopeHirId::Expr(usage_expr) = hir_id {
+                                        let key = InFile {
+                                            file: *file,
+                                            value: *expr,
+                                        };
+                                        if usage_expr == *expr {
+                                            self.cx.definition_is_used.entry(key).or_insert(false);
+                                        } else {
+                                            self.cx.definition_is_used.insert(key, true);
+                                        }
+                                    }
+                                }
                                 self.infer_assign(*file, *expr, *source, None)
                             }
                         }
@@ -1518,6 +1561,7 @@ impl TyContext<'_> {
                 self.add_expr_diagnostic_warning(
                     file,
                     root,
+                    None,
                     format!("Type \"{}\" is not iterable", source_ty.display(self.db)),
                 );
                 for expr in exprs.iter() {
@@ -1564,13 +1608,14 @@ impl TyContext<'_> {
         &mut self,
         file: File,
         expr: ExprId,
+        tags: Option<DiagnosticTag>,
         message: T,
     ) {
-        self.add_expr_diagnostic_with_severity(file, expr, Severity::Warning, message)
+        self.add_expr_diagnostic_with_severity(file, expr, Severity::Warning, tags, message)
     }
 
     fn add_expr_diagnostic_error<T: Into<String>>(&mut self, file: File, expr: ExprId, message: T) {
-        self.add_expr_diagnostic_with_severity(file, expr, Severity::Error, message)
+        self.add_expr_diagnostic_with_severity(file, expr, Severity::Error, None, message)
     }
 
     fn add_expr_diagnostic_with_severity<T: Into<String>>(
@@ -1578,13 +1623,14 @@ impl TyContext<'_> {
         file: File,
         expr: ExprId,
         severity: Severity,
+        tags: Option<DiagnosticTag>,
         message: T,
     ) {
         let range = match source_map(self.db, file).expr_map_back.get(&expr) {
             Some(ptr) => ptr.syntax_node_ptr().text_range(),
             None => return,
         };
-        self.add_diagnostic_for_range(file, severity, range, message);
+        self.add_diagnostic_for_range(file, severity, range, tags, message);
     }
 
     fn add_expr_diagnostic_error_ty<T: Into<String>>(
@@ -1603,7 +1649,7 @@ impl TyContext<'_> {
         expr: ExprId,
         message: T,
     ) -> Ty {
-        self.add_expr_diagnostic_warning(file, expr, message);
+        self.add_expr_diagnostic_warning(file, expr, None, message);
         self.unknown_ty()
     }
 
@@ -1612,6 +1658,7 @@ impl TyContext<'_> {
         file: File,
         severity: Severity,
         range: TextRange,
+        tags: Option<DiagnosticTag>,
         message: T,
     ) {
         self.cx.diagnostics.push(Diagnostic {
@@ -1621,6 +1668,7 @@ impl TyContext<'_> {
                 file_id: file.id(self.db),
                 range,
             },
+            tags,
         });
     }
 
@@ -1716,6 +1764,7 @@ impl TyContext<'_> {
                     file,
                     Severity::Warning,
                     ptr.syntax_node_ptr().text_range(),
+                    None,
                     error,
                 );
             }
@@ -1755,6 +1804,7 @@ impl TyContext<'_> {
                                 file,
                                 Severity::Warning,
                                 range(),
+                                None,
                                 "Cannot load the current file",
                             );
                             return self.unknown_ty();
@@ -1783,6 +1833,7 @@ impl TyContext<'_> {
                                     file,
                                     Severity::Warning,
                                     load_stmt.ptr(db).text_range(),
+                                    None,
                                     message.clone(),
                                 )
                             }
@@ -1792,6 +1843,7 @@ impl TyContext<'_> {
                                 file,
                                 Severity::Warning,
                                 load_stmt.ptr(db).text_range(),
+                                None,
                                 message,
                             );
 
@@ -1817,6 +1869,7 @@ impl TyContext<'_> {
                                         file,
                                         Severity::Warning,
                                         range(),
+                                        None,
                                         format!(
                                             "Could not resolve symbol \"{}\" in module \"{}\"",
                                             name,
@@ -1857,6 +1910,7 @@ impl TyContext<'_> {
                     file,
                     Severity::Warning,
                     load_stmt.ptr(self.db).text_range(),
+                    None,
                     format!(
                         "Could not resolve module \"{}\": {}",
                         load_stmt.module(self.db),

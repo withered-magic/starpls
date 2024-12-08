@@ -5,6 +5,7 @@ use line_index::LineIndex;
 use line_index::WideEncoding;
 use line_index::WideLineCol;
 use starpls_common::Diagnostic;
+use starpls_common::DiagnosticTag;
 use starpls_common::FileId;
 use starpls_common::Severity;
 use starpls_ide::DocumentSymbol;
@@ -32,7 +33,14 @@ pub(crate) fn lsp_diagnostic_from_native(
         source: Some("starpls".to_string()),
         message: diagnostic.message,
         related_information: None,
-        tags: None,
+        tags: diagnostic.tags.map(|tags| {
+            tags.into_iter()
+                .map(|tag| match tag {
+                    DiagnosticTag::Unnecessary => lsp_types::DiagnosticTag::UNNECESSARY,
+                    DiagnosticTag::Deprecated => lsp_types::DiagnosticTag::DEPRECATED,
+                })
+                .collect()
+        }),
         data: None,
     })
 }

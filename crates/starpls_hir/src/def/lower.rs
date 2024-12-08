@@ -700,6 +700,7 @@ impl<'a> LoweringContext<'a> {
                     file_id: self.file.id(self.db),
                     range: syntax.text_range(),
                 },
+                tags: None,
             },
         );
     }

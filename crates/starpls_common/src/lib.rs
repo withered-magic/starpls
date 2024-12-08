@@ -10,6 +10,7 @@ use starpls_syntax::ParseTree;
 use starpls_syntax::SyntaxNode;
 
 pub use crate::diagnostics::Diagnostic;
+pub use crate::diagnostics::DiagnosticTag;
 pub use crate::diagnostics::Diagnostics;
 pub use crate::diagnostics::FileRange;
 pub use crate::diagnostics::Severity;
@@ -159,6 +160,7 @@ pub fn parse(db: &dyn Db, file: File) -> Parse {
                     range: err.range,
                 },
                 severity: Severity::Error,
+                tags: None,
             },
         )
     });

@@ -361,6 +361,7 @@ fn suite(p: &mut Parser) {
     match p.current() {
         T!['\n'] => {
             p.bump(T!['\n']);
+            while p.eat(T!['\n']) {}
             if p.eat(INDENT) {
                 while !p.at(EOF) && !p.at(DEDENT) {
                     statement(p);

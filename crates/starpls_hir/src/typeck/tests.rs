@@ -1885,6 +1885,13 @@ def _bar():
     pass
 
 _bar()
+
+def baz():
+    if True:
+        x = 1
+    else:
+        x = 2
+    print(x)
 "#,
         expect![[r#"
             1..2 "x": Literal[1]
@@ -1905,6 +1912,14 @@ _bar()
             140..145 "baz()": Unknown
             191..195 "_bar": def _bar() -> Unknown
             191..197 "_bar()": Unknown
+            217..221 "True": Literal[True]
+            231..232 "x": Literal[1]
+            235..236 "1": Literal[1]
+            255..256 "x": Literal[2]
+            259..260 "2": Literal[2]
+            265..270 "print": def print(*args: Any, str: string = None) -> None
+            271..272 "x": Literal[2]
+            265..273 "print(x)": None
 
             13..15 "_y" is not accessed
             37..38 "x" is not accessed

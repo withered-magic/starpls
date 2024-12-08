@@ -1348,8 +1348,7 @@ impl TyContext<'_> {
                         _ => continue,
                     };
 
-                    known_ty = Some(ty);
-                    break;
+                    known_ty.get_or_insert(ty);
                 }
 
                 // Determine the effective type of the named expression. The effective type is the union of the types

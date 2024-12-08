@@ -161,6 +161,7 @@ impl std::error::Error for Cancelled {}
 pub struct InferenceOptions {
     pub infer_ctx_attributes: bool,
     pub use_code_flow_analysis: bool,
+    pub report_unused_definitions: bool,
 }
 
 #[derive(Default)]
@@ -1639,7 +1640,7 @@ pub(crate) struct InferenceContext {
     pub(crate) type_of_param: FxHashMap<FileParamId, Ty>,
     pub(crate) source_assign_done: FxHashSet<FileExprId>,
     pub(crate) flow_node_type_cache: FxHashMap<CodeFlowCacheKey, Option<Ty>>,
-    pub(crate) definition_is_used: FxHashMap<InFile<ExprId>, bool>,
+    pub(crate) definition_is_used: FxHashMap<InFile<Either<ExprId, StmtId>>, bool>,
 }
 
 pub struct CancelGuard<'a> {

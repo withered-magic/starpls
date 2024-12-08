@@ -8,7 +8,7 @@ pub struct Diagnostic {
     pub message: String,
     pub severity: Severity,
     pub range: FileRange,
-    pub tags: Option<DiagnosticTag>,
+    pub tags: Option<Vec<DiagnosticTag>>,
 }
 
 #[derive(Clone, Debug)]

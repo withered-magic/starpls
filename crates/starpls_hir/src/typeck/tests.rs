@@ -34,6 +34,17 @@ fn check_infer_with_code_flow_analysis(input: &str, expect: Expect) {
     )
 }
 
+fn check_infer_with_unused_definitions(input: &str, expect: Expect) {
+    check_infer_with_options(
+        input,
+        expect,
+        InferenceOptions {
+            report_unused_definitions: true,
+            ..Default::default()
+        },
+    )
+}
+
 fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptions) {
     let mut builder = TestDatabaseBuilder::default();
     builder.add_function("provider");
@@ -1344,6 +1355,7 @@ my_rule = repository_rule(
         InferenceOptions {
             infer_ctx_attributes: true,
             use_code_flow_analysis: true,
+            ..Default::default()
         },
     );
 }
@@ -1841,6 +1853,64 @@ def f():
             50..51 "x": Literal["one"]
             54..59 "\"one\"": Literal["one"]
             64..65 "x": Unknown
+        "#]],
+    );
+}
+
+#[test]
+fn test_unused_definitions() {
+    check_infer_with_unused_definitions(
+        r#"
+x = 1
+x = 2
+_y = []
+
+def foo():
+    x = 123
+    y = "foo"
+    y = y + "bar"
+
+    def bar():
+        pass
+
+    def baz():
+        pass
+
+    baz()
+
+def _foo():
+    pass
+
+def _bar():
+    pass
+
+_bar()
+"#,
+        expect![[r#"
+            1..2 "x": Literal[1]
+            5..6 "1": Literal[1]
+            7..8 "x": Literal[2]
+            11..12 "2": Literal[2]
+            13..15 "_y": list[Unknown]
+            18..20 "[]": list[Unknown]
+            37..38 "x": Literal[123]
+            41..44 "123": Literal[123]
+            49..50 "y": Literal["foo"]
+            53..58 "\"foo\"": Literal["foo"]
+            63..64 "y": Literal["foobar"]
+            67..68 "y": Literal["foo"]
+            71..76 "\"bar\"": Literal["bar"]
+            67..76 "y + \"bar\"": Literal["foobar"]
+            140..143 "baz": def baz() -> Unknown
+            140..145 "baz()": Unknown
+            191..195 "_bar": def _bar() -> Unknown
+            191..197 "_bar()": Unknown
+
+            13..15 "_y" is not accessed
+            37..38 "x" is not accessed
+            63..64 "y" is not accessed
+            86..89 "bar" is not accessed
+            151..155 "_foo" is not accessed
         "#]],
     );
 }

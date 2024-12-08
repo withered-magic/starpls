@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use either::Either;
 use starpls_common::line_index;
 use starpls_common::parse;
 use starpls_common::Diagnostic;
@@ -24,6 +25,7 @@ use crate::def::codeflow::FlowNode;
 use crate::def::codeflow::FlowNodeId;
 use crate::def::resolver::Export;
 use crate::def::resolver::Resolver;
+use crate::def::scope::module_scopes;
 use crate::def::scope::ExecutionScopeId;
 use crate::def::scope::FunctionDef;
 use crate::def::scope::LoadItemDef;
@@ -167,7 +169,7 @@ impl TyContext<'_> {
         }
     }
 
-    fn find_unused_definitions(&mut self, file: File) {
+    fn report_unused_definitions(&mut self, file: File) {
         for (expr, name) in module(self.db, file).exprs.iter().filter_map(|(id, expr)| {
             if let Expr::Name { name } = expr {
                 Some((id, name))
@@ -175,17 +177,71 @@ impl TyContext<'_> {
                 None
             }
         }) {
-            if let Some(false) = self
-                .cx
-                .definition_is_used
-                .get(&InFile { file, value: expr })
-            {
+            if let Some(false) = self.cx.definition_is_used.get(&InFile {
+                file,
+                value: Either::Left(expr),
+            }) {
                 self.add_expr_diagnostic_warning(
                     file,
                     expr,
-                    Some(DiagnosticTag::Unnecessary),
+                    Some(vec![DiagnosticTag::Unnecessary]),
                     format!("\"{}\" is not accessed", name.as_str()),
                 );
+            }
+        }
+
+        for (stmt, name) in module(self.db, file)
+            .stmts
+            .iter()
+            .filter_map(|(id, stmt)| match stmt {
+                Stmt::Def { func, .. } => {
+                    let name = func.name(self.db);
+                    if name.is_missing() {
+                        None
+                    } else {
+                        Some((id, name))
+                    }
+                }
+                _ => None,
+            })
+        {
+            if !self.cx.definition_is_used.contains_key(&InFile {
+                file,
+                value: Either::Right(stmt),
+            }) {
+                fn maybe_add_diagnostic(
+                    tcx: &mut TyContext,
+                    file: File,
+                    stmt: StmtId,
+                    name: &Name,
+                ) -> Option<()> {
+                    // Don't report exported functions as unused.
+                    let scopes = module_scopes(tcx.db, file).scopes(tcx.db);
+                    let scope = scopes.scopes_by_hir_id.get(&ScopeHirId::Stmt(stmt))?;
+                    if scopes.scopes[*scope].execution_scope == ExecutionScopeId::Module
+                        && !name.as_str().starts_with('_')
+                    {
+                        return None;
+                    }
+
+                    let ptr = source_map(tcx.db, file).stmt_map_back.get(&stmt)?;
+                    let node = ptr
+                        .syntax_node_ptr()
+                        .try_to_node(&parse(tcx.db, file).syntax(tcx.db))?;
+                    let def_stmt = ast::DefStmt::cast(node)?;
+                    let name_node = def_stmt.name()?;
+
+                    tcx.add_diagnostic_for_range(
+                        file,
+                        Severity::Warning,
+                        name_node.syntax().text_range(),
+                        Some(vec![DiagnosticTag::Unnecessary]),
+                        format!("\"{}\" is not accessed", name.as_str()),
+                    );
+                    Some(())
+                }
+
+                maybe_add_diagnostic(self, file, stmt, &name);
             }
         }
     }
@@ -194,7 +250,10 @@ impl TyContext<'_> {
         self.infer_all_exprs(file);
         self.infer_all_stmts(file);
         self.infer_all_params(file);
-        self.find_unused_definitions(file);
+
+        if self.shared_state.options.report_unused_definitions {
+            self.report_unused_definitions(file);
+        }
 
         let line_index = line_index(self.db, file);
         let module = module(self.db, file);
@@ -1244,29 +1303,41 @@ impl TyContext<'_> {
                 for def in defs.skip_while(|def| def.scope > expr_scope) {
                     let ty = match def.def {
                         ScopeDef::Variable(VariableDef { file, expr, source }) => {
+                            if def_execution_scope != ExecutionScopeId::Module
+                                || name.as_str().starts_with('_')
+                            {
+                                if let ScopeHirId::Expr(usage_expr) = hir_id {
+                                    let key = InFile {
+                                        file: *file,
+                                        value: Either::Left(*expr),
+                                    };
+                                    if usage_expr == *expr {
+                                        self.cx.definition_is_used.entry(key).or_insert(false);
+                                    } else {
+                                        self.cx.definition_is_used.insert(key, true);
+                                    }
+                                }
+                            }
+
                             if self.shared_state.options.use_code_flow_analysis {
                                 var_defs.push((file, *expr, *source));
                                 continue;
                             } else {
-                                if def_execution_scope != ExecutionScopeId::Module
-                                    || name.as_str().starts_with('_')
-                                {
-                                    if let ScopeHirId::Expr(usage_expr) = hir_id {
-                                        let key = InFile {
-                                            file: *file,
-                                            value: *expr,
-                                        };
-                                        if usage_expr == *expr {
-                                            self.cx.definition_is_used.entry(key).or_insert(false);
-                                        } else {
-                                            self.cx.definition_is_used.insert(key, true);
-                                        }
-                                    }
-                                }
                                 self.infer_assign(*file, *expr, *source, None)
                             }
                         }
-                        ScopeDef::Function(def) => TyKind::Function(def.clone()).intern(),
+                        ScopeDef::Function(def) => {
+                            if let Some(stmt) = def.stmt() {
+                                self.cx.definition_is_used.insert(
+                                    InFile {
+                                        file: stmt.file,
+                                        value: Either::Right(stmt.value),
+                                    },
+                                    true,
+                                );
+                            }
+                            TyKind::Function(def.clone()).intern()
+                        }
                         ScopeDef::Parameter(ParameterDef { func, index }) => {
                             self.infer_param(file, func.params(self.db)[*index])
                         }
@@ -1608,7 +1679,7 @@ impl TyContext<'_> {
         &mut self,
         file: File,
         expr: ExprId,
-        tags: Option<DiagnosticTag>,
+        tags: Option<Vec<DiagnosticTag>>,
         message: T,
     ) {
         self.add_expr_diagnostic_with_severity(file, expr, Severity::Warning, tags, message)
@@ -1623,7 +1694,7 @@ impl TyContext<'_> {
         file: File,
         expr: ExprId,
         severity: Severity,
-        tags: Option<DiagnosticTag>,
+        tags: Option<Vec<DiagnosticTag>>,
         message: T,
     ) {
         let range = match source_map(self.db, file).expr_map_back.get(&expr) {
@@ -1658,7 +1729,7 @@ impl TyContext<'_> {
         file: File,
         severity: Severity,
         range: TextRange,
-        tags: Option<DiagnosticTag>,
+        tags: Option<Vec<DiagnosticTag>>,
         message: T,
     ) {
         self.cx.diagnostics.push(Diagnostic {

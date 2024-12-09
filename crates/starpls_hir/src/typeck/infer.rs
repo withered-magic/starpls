@@ -91,81 +91,137 @@ impl TyContext<'_> {
         }
     }
 
-    fn infer_all_stmts(&mut self, file: File) {
+    fn walk_stmts(&mut self, file: File, stmts: &[StmtId]) {
+        let mut unreachable_start = None;
+
+        for stmt in stmts.iter() {
+            if self.shared_state.options.use_code_flow_analysis {
+                // Check for reachability.
+                if !code_flow_graph(self.db, file)
+                    .cfg(self.db)
+                    .hir_to_flow_node
+                    .contains_key(&ScopeHirId::Stmt(*stmt))
+                {
+                    unreachable_start.get_or_insert(*stmt);
+                }
+            }
+
+            self.walk_stmt(file, *stmt);
+        }
+
+        if let Some(unreachable_start) = unreachable_start {
+            let unreachable_end = stmts[stmts.len() - 1];
+            let source_map = source_map(self.db, file);
+            if let Some((start, end)) =
+                source_map
+                    .stmt_map_back
+                    .get(&unreachable_start)
+                    .and_then(|start| {
+                        source_map.stmt_map_back.get(&unreachable_end).map(|end| {
+                            (
+                                start.syntax_node_ptr().text_range().start(),
+                                end.syntax_node_ptr().text_range().end(),
+                            )
+                        })
+                    })
+            {
+                self.add_diagnostic_for_range(
+                    file,
+                    Severity::Warning,
+                    TextRange::new(start, end),
+                    Some(vec![DiagnosticTag::Unnecessary]),
+                    "Code is unreachable".to_string(),
+                );
+            }
+        }
+    }
+
+    fn walk_stmt(&mut self, file: File, stmt: StmtId) {
         let module = module(self.db, file);
 
-        for stmt in module.top_level.iter().copied() {
-            match &module[stmt] {
-                Stmt::Load { load_stmt, items } => {
-                    self.resolve_load_stmt(file, *load_stmt);
-                    for load_item in items.iter().copied() {
-                        self.infer_load_item(file, load_item);
+        match &module[stmt] {
+            Stmt::Load { load_stmt, items } => {
+                self.resolve_load_stmt(file, *load_stmt);
+                for load_item in items.iter().copied() {
+                    self.infer_load_item(file, load_item);
+                }
+            }
+            Stmt::Assign { lhs, rhs, .. } => match &module[*lhs] {
+                Expr::Index { .. } => {
+                    let lhs_ty = self.infer_expr(file, *lhs);
+                    let rhs_ty = self.infer_expr(file, *rhs);
+                    if !assign_tys(self.db, &rhs_ty, &lhs_ty) {
+                        self.add_expr_diagnostic_error(
+                            file,
+                            *lhs,
+                            format!(
+                                "Cannot use value of type \"{}\" as type \"{}\" in assignment",
+                                rhs_ty.display(self.db).alt(),
+                                lhs_ty.display(self.db).alt()
+                            ),
+                        );
                     }
                 }
-                Stmt::Assign { lhs, rhs, .. } => match &module[*lhs] {
-                    Expr::Index { .. } => {
-                        let lhs_ty = self.infer_expr(file, *lhs);
-                        let rhs_ty = self.infer_expr(file, *rhs);
-                        if !assign_tys(self.db, &rhs_ty, &lhs_ty) {
-                            self.add_expr_diagnostic_error(
-                                file,
-                                *lhs,
-                                format!(
-                                    "Cannot use value of type \"{}\" as type \"{}\" in assignment",
-                                    rhs_ty.display(self.db).alt(),
-                                    lhs_ty.display(self.db).alt()
-                                ),
-                            );
-                        }
+                Expr::Dot { expr, field } => {
+                    let ty = self.infer_expr(file, *expr);
+                    if matches!(
+                        ty.kind(),
+                        TyKind::Struct(_) | TyKind::Provider(_) | TyKind::BuiltinType(_, _)
+                    ) {
+                        self.add_expr_diagnostic_error(
+                            file,
+                            *lhs,
+                            format!(
+                                "Cannot assign to field \"{}\" for immutable type \"{}\"",
+                                field.as_str(),
+                                ty.display(self.db).alt()
+                            ),
+                        );
+                    } else if let Some(name) = ty
+                        .fields(self.db)
+                        .and_then(|mut fields| fields.find(|(el, _)| &el.name(self.db) == field))
+                        .and_then(|(field, ty)| {
+                            if matches!(
+                                ty.kind(),
+                                TyKind::Function(_)
+                                    | TyKind::BuiltinFunction(_)
+                                    | TyKind::IntrinsicFunction(_, _)
+                            ) {
+                                Some(field.name(self.db))
+                            } else {
+                                None
+                            }
+                        })
+                    {
+                        self.add_expr_diagnostic_error(
+                            file,
+                            *lhs,
+                            format!(
+                                "Cannot reassign to method \"{}\" of type \"{}\"",
+                                name,
+                                ty.display(self.db).alt()
+                            ),
+                        );
                     }
-                    Expr::Dot { expr, field } => {
-                        let ty = self.infer_expr(file, *expr);
-                        if matches!(
-                            ty.kind(),
-                            TyKind::Struct(_) | TyKind::Provider(_) | TyKind::BuiltinType(_, _)
-                        ) {
-                            self.add_expr_diagnostic_error(
-                                file,
-                                *lhs,
-                                format!(
-                                    "Cannot assign to field \"{}\" for immutable type \"{}\"",
-                                    field.as_str(),
-                                    ty.display(self.db).alt()
-                                ),
-                            );
-                        } else if let Some(name) = ty
-                            .fields(self.db)
-                            .and_then(|mut fields| {
-                                fields.find(|(el, _)| &el.name(self.db) == field)
-                            })
-                            .and_then(|(field, ty)| {
-                                if matches!(
-                                    ty.kind(),
-                                    TyKind::Function(_)
-                                        | TyKind::BuiltinFunction(_)
-                                        | TyKind::IntrinsicFunction(_, _)
-                                ) {
-                                    Some(field.name(self.db))
-                                } else {
-                                    None
-                                }
-                            })
-                        {
-                            self.add_expr_diagnostic_error(
-                                file,
-                                *lhs,
-                                format!(
-                                    "Cannot reassign to method \"{}\" of type \"{}\"",
-                                    name,
-                                    ty.display(self.db).alt()
-                                ),
-                            );
-                        }
-                    }
-                    _ => {}
-                },
+                }
                 _ => {}
+            },
+            Stmt::Def { stmts, .. } | Stmt::For { stmts, .. } => {
+                self.walk_stmts(file, stmts);
             }
+            Stmt::If {
+                if_stmts,
+                elif_or_else_stmts,
+                ..
+            } => {
+                self.walk_stmts(file, if_stmts);
+                match elif_or_else_stmts {
+                    Some(Either::Left(stmt)) => self.walk_stmt(file, *stmt),
+                    Some(Either::Right(stmts)) => self.walk_stmts(file, stmts),
+                    _ => {}
+                }
+            }
+            _ => {}
         }
     }
 
@@ -247,16 +303,17 @@ impl TyContext<'_> {
     }
 
     pub fn diagnostics_for_file(&mut self, file: File) -> Vec<Diagnostic> {
+        let module = module(self.db, file);
+
         self.infer_all_exprs(file);
-        self.infer_all_stmts(file);
         self.infer_all_params(file);
+        self.walk_stmts(file, &module.top_level);
 
         if self.shared_state.options.report_unused_definitions {
             self.report_unused_definitions(file);
         }
 
         let line_index = line_index(self.db, file);
-        let module = module(self.db, file);
         self.cx
             .diagnostics
             .iter()

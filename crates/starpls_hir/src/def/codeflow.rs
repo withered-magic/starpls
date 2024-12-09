@@ -94,12 +94,13 @@ impl<'a> CodeFlowLowerCtx<'a> {
     }
 
     fn lower_stmt(&mut self, stmt: StmtId) {
+        self.result
+            .hir_to_flow_node
+            .insert(stmt.into(), self.curr_node);
+
         match &self.module[stmt] {
             Stmt::Assign { lhs, rhs, .. } => {
                 self.lower_assignment_target_and_source(*lhs, *rhs);
-                self.result
-                    .hir_to_flow_node
-                    .insert(stmt.into(), self.curr_node);
             }
 
             Stmt::Def { stmts, .. } => {
@@ -141,7 +142,7 @@ impl<'a> CodeFlowLowerCtx<'a> {
                     }
                 }
 
-                self.curr_node = post_if_node;
+                self.curr_node = self.finish_branch_or_loop_node(post_if_node);
             }
 
             Stmt::Return { expr: Some(expr) } => {
@@ -183,7 +184,7 @@ impl<'a> CodeFlowLowerCtx<'a> {
                 // Wire up the pre-`for` and post-`for` nodes.
                 self.push_antecedent(pre_for_node, self.curr_node);
                 self.push_antecedent(post_for_node, pre_for_node);
-                self.curr_node = post_for_node;
+                self.curr_node = self.finish_branch_or_loop_node(post_for_node);
 
                 // Restore the previous `break` and `continue` targets.
                 self.curr_break_target = prev_break_target;
@@ -287,8 +288,8 @@ impl<'a> CodeFlowLowerCtx<'a> {
         self.result.flow_nodes.alloc(data)
     }
 
-    fn push_antecedent(&mut self, this: FlowNodeId, antecedent: FlowNodeId) {
-        match self.result.flow_nodes[this] {
+    fn push_antecedent(&mut self, node: FlowNodeId, antecedent: FlowNodeId) {
+        match self.result.flow_nodes[node] {
             FlowNode::Branch {
                 ref mut antecedents,
             }
@@ -297,6 +298,19 @@ impl<'a> CodeFlowLowerCtx<'a> {
             } => {
                 if antecedent != self.unreachable_node && !antecedents.contains(&antecedent) {
                     antecedents.push(antecedent);
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn finish_branch_or_loop_node(&mut self, node: FlowNodeId) -> FlowNodeId {
+        match self.result.flow_nodes[node] {
+            FlowNode::Branch { ref antecedents } | FlowNode::Loop { ref antecedents } => {
+                if antecedents.is_empty() {
+                    self.unreachable_node
+                } else {
+                    node
                 }
             }
             _ => unreachable!(),
@@ -810,5 +824,52 @@ for x in range(5):
 
             "#]],
         )
+    }
+
+    #[test]
+    fn test_if_else_continue() {
+        check(
+            r#"
+for i in range(1):
+    if 1 < 2:
+        continue
+    else:
+        continue
+    x = 123
+"#,
+            expect![[r#"
+                def main():
+                    'bb0: {
+                        data: Unreachable
+                        antecedents: []
+                    }
+
+                    'bb1: {
+                        data: Start
+                        antecedents: []
+                    }
+
+                    'bb2: {
+                        data: Assign { expr: Id { idx: 3 }, name: Name("i"), execution_scope: Module, source: Id { idx: 2 }, antecedent: Id { idx: 1 } }
+                        antecedents: ['bb1]
+                    }
+
+                    'bb3: {
+                        data: Loop { antecedents: [Id { idx: 2 }, Id { idx: 3 }] }
+                        antecedents: ['bb2, 'bb3]
+                    }
+
+                    'bb4: {
+                        data: Branch { antecedents: [Id { idx: 3 }] }
+                        antecedents: ['bb3]
+                    }
+
+                    'bb5: {
+                        data: Branch { antecedents: [] }
+                        antecedents: []
+                    }
+
+            "#]],
+        );
     }
 }

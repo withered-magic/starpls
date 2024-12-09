@@ -1828,6 +1828,10 @@ def h():
             255..256 "y": Literal["one"]
             259..264 "\"one\"": Literal["one"]
             291..292 "y": Never
+
+            54..69 Code is unreachable
+            127..142 Code is unreachable
+            291..292 Code is unreachable
         "#]],
     );
 }

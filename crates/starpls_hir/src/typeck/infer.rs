@@ -92,24 +92,47 @@ impl TyContext<'_> {
     }
 
     fn walk_stmts(&mut self, file: File, stmts: &[StmtId]) {
-        let mut unreachable_start = None;
-
-        for stmt in stmts.iter() {
-            if self.shared_state.options.use_code_flow_analysis {
-                // Check for reachability.
-                if !code_flow_graph(self.db, file)
-                    .cfg(self.db)
-                    .hir_to_flow_node
-                    .contains_key(&ScopeHirId::Stmt(*stmt))
-                {
-                    unreachable_start.get_or_insert(*stmt);
-                }
-            }
-
-            self.walk_stmt(file, *stmt);
+        if stmts.is_empty() {
+            return;
         }
 
-        if let Some(unreachable_start) = unreachable_start {
+        if !self.shared_state.options.use_code_flow_analysis {
+            for stmt in stmts.iter() {
+                self.walk_stmt(file, *stmt);
+            }
+            return;
+        }
+
+        let cfg = code_flow_graph(self.db, file).cfg(self.db);
+        let mut prev_flow_node_or_unreachable = {
+            self.walk_stmt(file, stmts[0]);
+            if let Some(flow_node_id) = cfg.hir_to_flow_node.get(&ScopeHirId::Stmt(stmts[0])) {
+                Either::Left(*flow_node_id)
+            } else {
+                Either::Right(stmts[0])
+            }
+        };
+
+        for stmt in stmts[1..].iter() {
+            self.walk_stmt(file, *stmt);
+
+            if let Either::Left(prev_flow_node) = prev_flow_node_or_unreachable {
+                // Check for reachability.
+                match cfg.hir_to_flow_node.get(&ScopeHirId::Stmt(*stmt)) {
+                    Some(flow_node_id) => {
+                        prev_flow_node_or_unreachable =
+                            if self.exists_flow_path(cfg, file, *flow_node_id, prev_flow_node) {
+                                Either::Left(*flow_node_id)
+                            } else {
+                                Either::Right(*stmt)
+                            }
+                    }
+                    None => prev_flow_node_or_unreachable = Either::Right(*stmt),
+                }
+            }
+        }
+
+        if let Either::Right(unreachable_start) = prev_flow_node_or_unreachable {
             let unreachable_end = stmts[stmts.len() - 1];
             let source_map = source_map(self.db, file);
             if let Some((start, end)) =
@@ -1560,6 +1583,14 @@ impl TyContext<'_> {
                     Ty::union(antecedent_tys.into_iter())
                 }
                 FlowNode::Loop { .. } => Ty::unknown(), // TODO(withered-magic): Correctly handle loops.
+                FlowNode::Call { expr, antecedent } => {
+                    if self.infer_expr(file, *expr) == Ty::never() {
+                        Ty::never()
+                    } else {
+                        curr_node_id = *antecedent;
+                        continue;
+                    }
+                }
                 FlowNode::Unreachable { .. } => Ty::never(),
             };
 
@@ -1567,6 +1598,36 @@ impl TyContext<'_> {
         };
 
         self.cache_ref_type_at_flow_node(file, execution_scope, name, start_node, res)
+    }
+
+    fn exists_flow_path(
+        &mut self,
+        cfg: &CodeFlowGraph,
+        file: File,
+        from_node: FlowNodeId,
+        to_node: FlowNodeId,
+    ) -> bool {
+        if from_node == to_node {
+            true
+        } else {
+            match &cfg.flow_nodes[from_node] {
+                FlowNode::Assign { antecedent, .. } => {
+                    self.exists_flow_path(cfg, file, *antecedent, to_node)
+                }
+                FlowNode::Branch { antecedents } => antecedents
+                    .iter()
+                    .any(|antecedent| self.exists_flow_path(cfg, file, *antecedent, to_node)),
+                FlowNode::Loop { .. } => true,
+                FlowNode::Call { expr, antecedent } => {
+                    if self.infer_expr(file, *expr) == Ty::never() {
+                        false
+                    } else {
+                        self.exists_flow_path(cfg, file, *antecedent, to_node)
+                    }
+                }
+                _ => false,
+            }
+        }
     }
 
     fn read_cached_ref_type_at_flow_node(

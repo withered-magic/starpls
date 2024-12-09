@@ -365,7 +365,7 @@ fail("oops", 1, False)		# "fail: oops 1 False"
 ```
 "#,
         vec![ArgsList { ty: Any.intern() }],
-        None,
+        Never,
     );
     add_function(
         "getattr",

@@ -39,6 +39,10 @@ pub(crate) enum FlowNode {
     Loop {
         antecedents: Vec<FlowNodeId>,
     },
+    Call {
+        expr: ExprId,
+        antecedent: FlowNodeId,
+    },
     Unreachable,
 }
 
@@ -49,7 +53,7 @@ pub(crate) struct CodeFlowGraph {
 }
 
 #[allow(unused)]
-struct CodeFlowLowerCtx<'a> {
+struct CodeFlowLoweringContext<'a> {
     module: &'a Module,
     scopes: &'a Scopes,
     result: CodeFlowGraph,
@@ -59,7 +63,7 @@ struct CodeFlowLowerCtx<'a> {
     curr_continue_target: Option<FlowNodeId>,
 }
 
-impl<'a> CodeFlowLowerCtx<'a> {
+impl<'a> CodeFlowLoweringContext<'a> {
     fn new(module: &'a Module, scopes: &'a Scopes) -> Self {
         let mut flow_nodes = Arena::new();
         let unreachable_node = flow_nodes.alloc(FlowNode::Unreachable);
@@ -68,7 +72,7 @@ impl<'a> CodeFlowLowerCtx<'a> {
             flow_nodes,
             hir_to_flow_node: Default::default(),
         };
-        CodeFlowLowerCtx {
+        CodeFlowLoweringContext {
             module,
             scopes,
             result: cfg,
@@ -228,6 +232,15 @@ impl<'a> CodeFlowLowerCtx<'a> {
                 self.lower_comp_clauses(comp_clauses);
                 self.lower_expr(*expr);
             }
+            node @ Expr::Call { .. } => {
+                node.walk_child_exprs(|expr| {
+                    self.lower_expr(expr);
+                });
+                self.curr_node = self.new_flow_node(FlowNode::Call {
+                    expr,
+                    antecedent: self.curr_node,
+                })
+            }
             expr => expr.walk_child_exprs(|expr| {
                 self.lower_expr(expr);
             }),
@@ -242,14 +255,13 @@ impl<'a> CodeFlowLowerCtx<'a> {
     fn lower_assignment_target(&mut self, expr: ExprId, source: ExprId) {
         match &self.module[expr] {
             Expr::Name { ref name } => {
-                let assign_node = self.new_flow_node(FlowNode::Assign {
+                self.curr_node = self.new_flow_node(FlowNode::Assign {
                     expr,
                     name: name.clone(),
                     execution_scope: self.scopes.execution_scope_for_hir_id(expr).unwrap(),
                     source,
                     antecedent: self.curr_node,
                 });
-                self.curr_node = assign_node;
                 self.result
                     .hir_to_flow_node
                     .insert(expr.into(), self.curr_node);
@@ -331,7 +343,7 @@ impl<'a> CodeFlowLowerCtx<'a> {
 }
 
 pub(crate) fn lower_to_code_flow_graph(module: &Module, scopes: &Scopes) -> CodeFlowGraph {
-    let mut cx = CodeFlowLowerCtx::new(module, scopes);
+    let mut cx = CodeFlowLoweringContext::new(module, scopes);
     cx.lower_stmts(&module.top_level);
     cx.result
         .hir_to_flow_node

@@ -1933,3 +1933,47 @@ def baz():
         "#]],
     );
 }
+
+#[test]
+fn test_unreachable_fail() {
+    check_infer_with_code_flow_analysis(
+        r#"
+def foo():
+    if 1 < 2:
+        x = "abc"
+    elif 2 < 1:
+        x = 0
+    else:
+        fail()
+    x
+
+x = 123
+fail("hehe")
+y = 234
+"#,
+        expect![[r#"
+            19..20 "1": Literal[1]
+            23..24 "2": Literal[2]
+            19..24 "1 < 2": bool
+            34..35 "x": Literal["abc"]
+            38..43 "\"abc\"": Literal["abc"]
+            53..54 "2": Literal[2]
+            57..58 "1": Literal[1]
+            53..58 "2 < 1": bool
+            68..69 "x": Literal[0]
+            72..73 "0": Literal[0]
+            92..96 "fail": def fail(*args: Any) -> Never
+            92..98 "fail()": Never
+            103..104 "x": string | int
+            106..107 "x": Literal[123]
+            110..113 "123": Literal[123]
+            114..118 "fail": def fail(*args: Any) -> Never
+            119..125 "\"hehe\"": Literal["hehe"]
+            114..126 "fail(\"hehe\")": Never
+            127..128 "y": Literal[234]
+            131..134 "234": Literal[234]
+
+            127..134 Code is unreachable
+        "#]],
+    );
+}

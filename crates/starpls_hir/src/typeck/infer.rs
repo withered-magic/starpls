@@ -1615,7 +1615,7 @@ impl TyContext<'_> {
                     self.exists_flow_path(cfg, file, *antecedent, to_node)
                 }
                 FlowNode::Branch { antecedents } => antecedents
-                    .into_iter()
+                    .iter()
                     .any(|antecedent| self.exists_flow_path(cfg, file, *antecedent, to_node)),
                 FlowNode::Loop { .. } => true,
                 FlowNode::Call { expr, antecedent } => {

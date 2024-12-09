@@ -527,7 +527,7 @@ y = 4
     fn test_list_comp() {
         check(
             r#"
-nums = [x for x in range(10)]        
+nums = [x for x in [1, 2, 3]]
 "#,
             expect![[r#"
                 def main():
@@ -542,12 +542,12 @@ nums = [x for x in range(10)]
                     }
 
                     'bb2: {
-                        data: Assign { expr: Id { idx: 5 }, name: Name("x"), execution_scope: Comp(Id { idx: 6 }), source: Id { idx: 4 }, antecedent: Id { idx: 1 } }
+                        data: Assign { expr: Id { idx: 6 }, name: Name("x"), execution_scope: Comp(Id { idx: 7 }), source: Id { idx: 5 }, antecedent: Id { idx: 1 } }
                         antecedents: ['bb1]
                     }
 
                     'bb3: {
-                        data: Assign { expr: Id { idx: 0 }, name: Name("nums"), execution_scope: Module, source: Id { idx: 6 }, antecedent: Id { idx: 2 } }
+                        data: Assign { expr: Id { idx: 0 }, name: Name("nums"), execution_scope: Module, source: Id { idx: 7 }, antecedent: Id { idx: 2 } }
                         antecedents: ['bb2]
                     }
 
@@ -559,8 +559,8 @@ nums = [x for x in range(10)]
     fn test_for_stmt() {
         check(
             r#"
-for x, y in [[1, 2], [3, 4]]:
-    nums = [(x * y * i) for i in range(5)]
+for x, y in [[1, 2, 3], [3, 4]]:
+    nums = [(x * y * i) for i in [1, 2, 3]]
 "#,
             expect![[r#"
                 def main():
@@ -575,12 +575,12 @@ for x, y in [[1, 2], [3, 4]]:
                     }
 
                     'bb2: {
-                        data: Assign { expr: Id { idx: 7 }, name: Name("x"), execution_scope: Module, source: Id { idx: 6 }, antecedent: Id { idx: 1 } }
+                        data: Assign { expr: Id { idx: 8 }, name: Name("x"), execution_scope: Module, source: Id { idx: 7 }, antecedent: Id { idx: 1 } }
                         antecedents: ['bb1]
                     }
 
                     'bb3: {
-                        data: Assign { expr: Id { idx: 8 }, name: Name("y"), execution_scope: Module, source: Id { idx: 6 }, antecedent: Id { idx: 2 } }
+                        data: Assign { expr: Id { idx: 9 }, name: Name("y"), execution_scope: Module, source: Id { idx: 7 }, antecedent: Id { idx: 2 } }
                         antecedents: ['bb2]
                     }
 
@@ -595,12 +595,12 @@ for x, y in [[1, 2], [3, 4]]:
                     }
 
                     'bb6: {
-                        data: Assign { expr: Id { idx: 19 }, name: Name("i"), execution_scope: Comp(Id { idx: 20 }), source: Id { idx: 18 }, antecedent: Id { idx: 4 } }
+                        data: Assign { expr: Id { idx: 21 }, name: Name("i"), execution_scope: Comp(Id { idx: 22 }), source: Id { idx: 20 }, antecedent: Id { idx: 4 } }
                         antecedents: ['bb4]
                     }
 
                     'bb7: {
-                        data: Assign { expr: Id { idx: 9 }, name: Name("nums"), execution_scope: Module, source: Id { idx: 20 }, antecedent: Id { idx: 6 } }
+                        data: Assign { expr: Id { idx: 10 }, name: Name("nums"), execution_scope: Module, source: Id { idx: 22 }, antecedent: Id { idx: 6 } }
                         antecedents: ['bb6]
                     }
 
@@ -612,7 +612,7 @@ for x, y in [[1, 2], [3, 4]]:
     fn test_for_stmt_simple() {
         check(
             r#"
-for x in range(1, 5):
+for x in [1, 2, 3]:
     pass
 "#,
             expect![[r#"
@@ -650,7 +650,7 @@ for x in range(1, 5):
     fn test_break_stmt() {
         check(
             r#"
-for x in range(1, 5):
+for x in [1, 2, 3]:
     break
 "#,
             expect![[r#"
@@ -688,7 +688,7 @@ for x in range(1, 5):
     fn test_break_stmt_with_unreachable() {
         check(
             r#"
-for x in range(1, 5):
+for x in [1, 2, 3]:
     y = 1
     break
     z = 1
@@ -740,8 +740,8 @@ a = 1
     fn test_break_stmt_nested() {
         check(
             r#"
-for x in range(5):
-    for y in range(5):
+for x in [1, 2, 3]:
+    for y in [4, 5, 6]:
         break
         a = 1
     break
@@ -760,7 +760,7 @@ for x in range(5):
                     }
 
                     'bb2: {
-                        data: Assign { expr: Id { idx: 3 }, name: Name("x"), execution_scope: Module, source: Id { idx: 2 }, antecedent: Id { idx: 1 } }
+                        data: Assign { expr: Id { idx: 4 }, name: Name("x"), execution_scope: Module, source: Id { idx: 3 }, antecedent: Id { idx: 1 } }
                         antecedents: ['bb1]
                     }
 
@@ -775,7 +775,7 @@ for x in range(5):
                     }
 
                     'bb5: {
-                        data: Assign { expr: Id { idx: 7 }, name: Name("y"), execution_scope: Module, source: Id { idx: 6 }, antecedent: Id { idx: 3 } }
+                        data: Assign { expr: Id { idx: 9 }, name: Name("y"), execution_scope: Module, source: Id { idx: 8 }, antecedent: Id { idx: 3 } }
                         antecedents: ['bb3]
                     }
 
@@ -797,7 +797,7 @@ for x in range(5):
     fn test_continue_stmt() {
         check(
             r#"
-for x in range(5):
+for x in [1, 2, 3]:
     y = 1
     continue
     z = 2
@@ -815,7 +815,7 @@ for x in range(5):
                     }
 
                     'bb2: {
-                        data: Assign { expr: Id { idx: 3 }, name: Name("x"), execution_scope: Module, source: Id { idx: 2 }, antecedent: Id { idx: 1 } }
+                        data: Assign { expr: Id { idx: 4 }, name: Name("x"), execution_scope: Module, source: Id { idx: 3 }, antecedent: Id { idx: 1 } }
                         antecedents: ['bb1]
                     }
 
@@ -830,7 +830,7 @@ for x in range(5):
                     }
 
                     'bb5: {
-                        data: Assign { expr: Id { idx: 4 }, name: Name("y"), execution_scope: Module, source: Id { idx: 5 }, antecedent: Id { idx: 3 } }
+                        data: Assign { expr: Id { idx: 5 }, name: Name("y"), execution_scope: Module, source: Id { idx: 6 }, antecedent: Id { idx: 3 } }
                         antecedents: ['bb3]
                     }
 
@@ -842,7 +842,7 @@ for x in range(5):
     fn test_if_else_continue() {
         check(
             r#"
-for i in range(1):
+for i in [1, 2, 3]:
     if 1 < 2:
         continue
     else:
@@ -862,7 +862,7 @@ for i in range(1):
                     }
 
                     'bb2: {
-                        data: Assign { expr: Id { idx: 3 }, name: Name("i"), execution_scope: Module, source: Id { idx: 2 }, antecedent: Id { idx: 1 } }
+                        data: Assign { expr: Id { idx: 4 }, name: Name("i"), execution_scope: Module, source: Id { idx: 3 }, antecedent: Id { idx: 1 } }
                         antecedents: ['bb1]
                     }
 
@@ -879,6 +879,45 @@ for i in range(1):
                     'bb5: {
                         data: Branch { antecedents: [] }
                         antecedents: []
+                    }
+
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_call() {
+        check(
+            r#"
+x = 123
+fail("foo")
+y = 456
+"#,
+            expect![[r#"
+                def main():
+                    'bb0: {
+                        data: Unreachable
+                        antecedents: []
+                    }
+
+                    'bb1: {
+                        data: Start
+                        antecedents: []
+                    }
+
+                    'bb2: {
+                        data: Assign { expr: Id { idx: 0 }, name: Name("x"), execution_scope: Module, source: Id { idx: 1 }, antecedent: Id { idx: 1 } }
+                        antecedents: ['bb1]
+                    }
+
+                    'bb3: {
+                        data: Call { expr: Id { idx: 4 }, antecedent: Id { idx: 2 } }
+                        antecedents: []
+                    }
+
+                    'bb4: {
+                        data: Assign { expr: Id { idx: 5 }, name: Name("y"), execution_scope: Module, source: Id { idx: 6 }, antecedent: Id { idx: 3 } }
+                        antecedents: ['bb3]
                     }
 
             "#]],

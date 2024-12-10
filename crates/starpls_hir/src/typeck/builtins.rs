@@ -88,6 +88,8 @@ pub(crate) struct BuiltinGlobals {
     pub(crate) workspace_globals: APIGlobals,
     #[return_ref]
     pub(crate) cquery_globals: APIGlobals,
+    #[return_ref]
+    pub(crate) vendor_globals: APIGlobals,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -669,6 +671,8 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
         APIGlobals::from_values(db, providers, env::make_workspace_builtins().global.iter());
     let cquery_globals =
         APIGlobals::from_values(db, providers, env::make_cquery_builtins().global.iter());
+    let vendor_globals =
+        APIGlobals::from_values(db, providers, env::make_vendor_builtins().global.iter());
 
     BuiltinGlobals::new(
         db,
@@ -677,6 +681,7 @@ pub(crate) fn builtin_globals_query(db: &dyn Db, defs: BuiltinDefs) -> BuiltinGl
         repo_globals,
         workspace_globals,
         cquery_globals,
+        vendor_globals,
     )
 }
 

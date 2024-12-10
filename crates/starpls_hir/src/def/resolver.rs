@@ -233,6 +233,8 @@ impl<'a> Resolver<'a> {
             add_builtins(builtin_globals.repo_globals(self.db));
         } else if api_context == APIContext::Cquery {
             add_builtins(builtin_globals.cquery_globals(self.db));
+        } else if api_context == APIContext::Vendor {
+            add_builtins(builtin_globals.vendor_globals(self.db));
         } else {
             add_builtins(builtin_globals.bzl_globals(self.db));
             match api_context {

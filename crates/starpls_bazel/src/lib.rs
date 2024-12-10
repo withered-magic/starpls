@@ -131,6 +131,7 @@ pub enum APIContext {
     Workspace,
     Prelude,
     Cquery,
+    Vendor,
 }
 
 pub fn load_builtins(path: impl AsRef<Path>) -> anyhow::Result<Builtins> {

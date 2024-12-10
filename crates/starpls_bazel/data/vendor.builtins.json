@@ -1,0 +1,40 @@
+{
+  "builtins": [
+    {
+      "name": "ignore",
+      "doc": "Ignore this repo from vendoring. Bazel will never vendor it or use the corresponding directory (if exists) while building in vendor mode.",
+      "callable": {
+        "params": [
+          {
+            "name": "args",
+            "type": "Unknown",
+            "doc": "The canonical repo names of the repos to ignore.",
+            "default_value": "",
+            "is_mandatory": false,
+            "is_star_arg": true,
+            "is_star_star_arg": false
+          }
+        ],
+        "return_type": "None"
+      }
+    },
+    {
+      "name": "pin",
+      "doc": "Pin the contents of this repo under the vendor directory. Bazel will not update this repo while vendoring, and will use the vendored source as if there is a --override_repository flag when building in vendor mode",
+      "callable": {
+        "params": [
+          {
+            "name": "args",
+            "type": "Unknown",
+            "doc": "The canonical repo names of the repos to pin.",
+            "default_value": "",
+            "is_mandatory": false,
+            "is_star_arg": true,
+            "is_star_star_arg": false
+          }
+        ],
+        "return_type": "None"
+      }
+    }
+  ]
+}

@@ -107,6 +107,7 @@ impl Server {
             }
         };
 
+        info!("Bazel version: {}", info.release);
         info!("workspace root: {:?}", info.workspace);
         info!("workspace name: {:?}", info.workspace_name);
 

@@ -113,6 +113,12 @@ pub fn make_cquery_builtins() -> Builtins {
         .into()
 }
 
+pub fn make_vendor_builtins() -> Builtins {
+    serde_json::from_str::<BuiltinsJson>(include_str!("../data/vendor.builtins.json"))
+        .expect("bug: invalid vendor.builtins.json")
+        .into()
+}
+
 pub fn make_missing_module_members() -> HashMap<String, Vec<Value>> {
     serde_json::from_str::<HashMap<String, Vec<ValueJson>>>(include_str!(
         "../data/missingModuleFields.json"

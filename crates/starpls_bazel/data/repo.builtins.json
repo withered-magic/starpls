@@ -1,8 +1,26 @@
 {
   "builtins": [
     {
+      "name": "ignore_directories",
+      "doc": "The list of directories to ignore in this repository.\n\nThis function takes a list of strings and a directory is ignored if any of the given strings matches its repository-relative path according to the semantics of the `glob()` function. This function can be used to ignore directories that are implementation details of source control systems, output files of other build systems, etc.",
+      "callable": {
+        "params": [
+          {
+            "name": "dirs",
+            "type": "sequence of strings",
+            "doc": "",
+            "default_value": "",
+            "is_mandatory": true,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          }
+        ],
+        "return_type": "None"
+      }
+    },
+    {
       "name": "repo",
-      "doc": "",
+      "doc": "Declares metadata that applies to every rule in the repository. It must be called at most once per REPO.bazel file. If called, it must be the first call in the REPO.bazel file.",
       "callable": {
         "params": [
           {

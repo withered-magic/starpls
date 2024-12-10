@@ -104,7 +104,8 @@ impl<'a> CodeFlowLoweringContext<'a> {
 
         match &self.module[stmt] {
             Stmt::Assign { lhs, rhs, .. } => {
-                self.lower_assignment_target_and_source(*lhs, *rhs);
+                self.lower_expr(*rhs);
+                self.lower_assignment_target(*lhs, *rhs);
             }
 
             Stmt::Def { stmts, .. } => {
@@ -162,8 +163,9 @@ impl<'a> CodeFlowLoweringContext<'a> {
                 targets,
                 stmts,
             } => {
+                self.lower_expr(*iterable);
                 for target in targets.iter() {
-                    self.lower_assignment_target_and_source(*target, *iterable);
+                    self.lower_assignment_target(*target, *iterable);
                 }
 
                 let pre_for_node = self.new_flow_node(FlowNode::Loop {
@@ -247,11 +249,6 @@ impl<'a> CodeFlowLoweringContext<'a> {
         }
     }
 
-    fn lower_assignment_target_and_source(&mut self, expr: ExprId, source: ExprId) {
-        self.lower_expr(source);
-        self.lower_assignment_target(expr, source);
-    }
-
     fn lower_assignment_target(&mut self, expr: ExprId, source: ExprId) {
         match &self.module[expr] {
             Expr::Name { ref name } => {
@@ -286,7 +283,7 @@ impl<'a> CodeFlowLoweringContext<'a> {
                 CompClause::For { iterable, targets } => {
                     self.lower_expr(*iterable);
                     for target in targets.iter() {
-                        self.lower_assignment_target_and_source(*target, *iterable);
+                        self.lower_assignment_target(*target, *iterable);
                     }
                 }
                 CompClause::If { test } => {

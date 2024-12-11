@@ -36,8 +36,8 @@ use crate::def::scope::VariableDef;
 use crate::def::Argument;
 use crate::def::Expr;
 use crate::def::ExprId;
+use crate::def::InternedString;
 use crate::def::Literal;
-use crate::def::LiteralString;
 use crate::def::LoadItem;
 use crate::def::LoadItemId;
 use crate::def::LoadStmt;
@@ -510,7 +510,8 @@ impl TyContext<'_> {
                                             .iter()
                                             .find_map(|(name, attr)| {
                                                 if name == field {
-                                                    Some(attr.resolved_ty(rule_kind))
+                                                    attr.as_ref()
+                                                        .map(|attr| attr.resolved_ty(rule_kind))
                                                 } else {
                                                     None
                                                 }
@@ -978,6 +979,7 @@ impl TyContext<'_> {
 
                         self.none_ty()
                     }
+                    TyKind::Macro(_) => self.none_ty(),
                     TyKind::Unknown | TyKind::Any | TyKind::Unbound => self.unknown_ty(),
                     _ => self.add_expr_diagnostic_warning_ty(
                         file,
@@ -1133,7 +1135,7 @@ impl TyContext<'_> {
                     let mut s = String::with_capacity(s1.len() + s2.len());
                     s.push_str(s1);
                     s.push_str(s2);
-                    let interned = LiteralString::new(db, s.into_boxed_str());
+                    let interned = InternedString::new(db, s.into_boxed_str());
                     TyKind::String(Some(interned)).intern()
                 }
                 (TyKind::String(_), TyKind::String(_), ArithOp::Add)

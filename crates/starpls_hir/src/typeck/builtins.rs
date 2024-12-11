@@ -29,13 +29,15 @@ use crate::source_map;
 use crate::typeck::Attribute;
 use crate::typeck::AttributeData;
 use crate::typeck::AttributeKind;
+use crate::typeck::Attributes;
 use crate::typeck::CustomProvider;
 use crate::typeck::CustomProviderFields;
+use crate::typeck::DictLiteral;
+use crate::typeck::Macro;
 use crate::typeck::ModuleExtension;
 use crate::typeck::Provider;
 use crate::typeck::ProviderField;
 use crate::typeck::Rule as TyRule;
-use crate::typeck::RuleAttributes;
 use crate::typeck::RuleKind;
 use crate::typeck::Struct;
 use crate::typeck::TagClass;
@@ -338,20 +340,7 @@ impl BuiltinFunction {
                             }
                             "attrs" => {
                                 if let TyKind::Dict(_, _, Some(lit)) = ty.kind() {
-                                    attrs = Some(RuleAttributes {
-                                        attrs: lit
-                                            .known_keys
-                                            .iter()
-                                            .filter_map(|(name, ty)| match ty.kind() {
-                                                TyKind::Attribute(Some(attr)) => Some((
-                                                    Name::from_str(&name.value(db)),
-                                                    attr.clone(),
-                                                )),
-                                                _ => None,
-                                            })
-                                            .collect::<Vec<_>>(),
-                                        expr: lit.expr,
-                                    })
+                                    attrs = Some(attrs_from_dict_literal(db, lit))
                                 }
                             }
                             _ => {}
@@ -494,6 +483,30 @@ impl BuiltinFunction {
                 }
 
                 TyKind::ModuleExtension(Arc::new(ModuleExtension { doc, tag_classes }))
+            }
+
+            (None, "macro") => {
+                let mut attrs = None;
+                let mut doc = None;
+                for (arg, ty) in args {
+                    if let Argument::Keyword { name, .. } = arg {
+                        match name.as_str() {
+                            "doc" => {
+                                if let TyKind::String(Some(s)) = ty.kind() {
+                                    doc = Some(*s);
+                                }
+                            }
+                            "attrs" => {
+                                if let TyKind::Dict(_, _, Some(lit)) = ty.kind() {
+                                    attrs = Some(Arc::new(attrs_from_dict_literal(db, lit)))
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                TyKind::Macro(Macro { attrs, doc })
             }
 
             (None, "use_extension") => {
@@ -1107,6 +1120,22 @@ fn maybe_field_type_ref_override(typ: &str, field: &str) -> Option<TypeRef> {
     };
 
     Some(type_ref)
+}
+
+fn attrs_from_dict_literal(db: &dyn Db, lit: &DictLiteral) -> Attributes {
+    Attributes {
+        attrs: lit
+            .known_keys
+            .iter()
+            .filter_map(|(name, ty)| match ty.kind() {
+                TyKind::Attribute(Some(attr)) => {
+                    Some((Name::from_str(&name.value(db)), attr.clone()))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>(),
+        expr: lit.expr,
+    }
 }
 
 #[cfg(test)]

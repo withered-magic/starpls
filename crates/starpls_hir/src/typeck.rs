@@ -1190,7 +1190,7 @@ where
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum TyData {
-    Attributes(Arc<RuleAttributes>),
+    Attributes(Arc<Attributes>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1198,82 +1198,118 @@ pub(crate) enum TyKind {
     /// An unbound variable, e.g. a variable without a corresponding
     /// declaration.
     Unbound,
+
     /// A value whose actual type is unknown. This is usually the
     /// result of failed type inference, e.g. calling an unbound
     /// function.
     Unknown,
+
     /// Similar to `Unknown`, but not necessarily the result of failed
     /// type inference.
     Any,
+
     /// Indicates that the corresponding expression will never be evaluated.
     Never,
+
     /// The type of the predefined `None` variable.
     None,
+
     /// A boolean.
     Bool(Option<bool>),
+
     /// A 64-bit integer.
     Int(Option<i64>),
+
     /// A 64-bit floating point number.
     Float,
+
     /// A UTF-8 encoded string.
     String(Option<LiteralString>),
+
     /// The individual characters of a UTF-8 encoded string.
     StringElems,
+
     /// A series of bytes.
     Bytes,
+
     /// An iterable collection of bytes.
     BytesElems,
+
     /// A list type, e.g. `list[string]`
     List(Ty),
+
     /// A fixed-size collection of elements.
     Tuple(Tuple),
+
     /// A mapping of keys to values.
     Dict(Ty, Ty, Option<Arc<DictLiteral>>),
+
     /// An iterable and indexable sequence of numbers. Obtained from
     /// the `range()` function.
     Range,
+
     /// A user-defined function.
     Function(FunctionDef),
+
     /// A function predefined by the Starlark specification.
     IntrinsicFunction(IntrinsicFunction, Substitution),
+
     /// A function defined outside of the Starlark specification.
     /// For example, common Bazel functions like `genrule()`.
     BuiltinFunction(BuiltinFunction),
+
     /// A type defined outside of the Starlark specification.
     /// For example, common Bazel types like `Label`.
     BuiltinType(BuiltinType, Option<TyData>),
+
     /// A bound type variable, e.g. the argument to the `append()` method
     /// of the `list[int]` class.
     BoundVar(usize),
+
     /// A marker type that indicates some specific behavior, e.g. Sequence[T].
     Protocol(Protocol),
+
     /// A union of two or more types.
     Union(SmallVec<[Ty; 2]>),
+
     /// A Bazel struct (https://bazel.build/rules/lib/builtins/struct).
     /// Use this instead of the `struct` type defined in `builtin.pb`.
     Struct(Option<Struct>),
+
     /// A Bazel attribute (https://bazel.build/rules/lib/builtins/Attribute.html).
     /// Use this instead of the `Attribute` type defined in `builtin.pb`.
     Attribute(Option<Arc<Attribute>>),
+
     /// A Bazel rule (https://bazel.build/rules/lib/builtins/rule).
     Rule(Rule),
+
     /// A Bazel provider (https://bazel.build/rules/lib/builtins/Provider.html).
     /// This is a callable that yields "provider instances".
     Provider(Provider),
+
     /// An instance of a Bazel provider.
     ProviderInstance(Provider),
+
     /// The raw constructor for a Bazel provider.
     ProviderRawConstructor(Name, Provider),
+
     /// A Bazel tag class.
     TagClass(Arc<TagClass>),
+
     /// A Bazel module extension.
     ModuleExtension(Arc<ModuleExtension>),
+
     /// A Bazel module extension proxy.
     ModuleExtensionProxy(Arc<ModuleExtension>),
-    /// A Bazel tag (e.g. `maven.artifact()`)
+
+    /// A Bazel tag (e.g. `maven.artifact()`).
     Tag(Arc<TagClass>),
+
     /// A Bazel target (https://bazel.build/rules/lib/builtins/Target).
     Target,
+
+    /// A Bazel symbolic macro.
+    Macro(Macro),
 }
 
 impl_internable!(TyKind);
@@ -1364,7 +1400,7 @@ pub enum RuleKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct RuleAttributes {
+pub(crate) struct Attributes {
     pub(crate) attrs: Vec<(Name, Arc<Attribute>)>,
     pub(crate) expr: Option<InFile<ExprId>>,
 }
@@ -1373,7 +1409,7 @@ pub(crate) struct RuleAttributes {
 pub(crate) struct Rule {
     pub(crate) kind: RuleKind,
     pub(crate) doc: Option<Box<str>>,
-    pub(crate) attrs: Option<Arc<RuleAttributes>>,
+    pub(crate) attrs: Option<Arc<Attributes>>,
 }
 
 impl Rule {
@@ -1446,7 +1482,7 @@ pub(crate) enum Struct {
         ty: Ty,
     },
     Attributes {
-        attrs: Arc<RuleAttributes>,
+        attrs: Arc<Attributes>,
     },
 }
 
@@ -1489,6 +1525,14 @@ impl TyKind {
             _ => return None,
         })
     }
+}
+
+/// A Bazel symbolic macro created by the `macro()` function.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct Macro {
+    /// Attributes defined in the `attrs` argument to the `macro()` function.
+    pub(crate) attrs: Option<Arc<Attributes>>,
+    pub(crate) doc: Option<LiteralString>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

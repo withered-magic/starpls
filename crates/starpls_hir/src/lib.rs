@@ -30,6 +30,7 @@ use typeck::resolve_type_ref;
 use typeck::with_tcx;
 use typeck::Field;
 use typeck::FieldInner;
+use typeck::Macro;
 use typeck::Provider;
 use typeck::Rule;
 use typeck::RuleParam;
@@ -74,7 +75,7 @@ pub struct Jar(
     ModuleInfo,
     def::Function,
     def::LoadStmt,
-    def::LiteralString,
+    def::InternedString,
     def::codeflow::CodeFlowGraphResult,
     def::codeflow::code_flow_graph,
     def::scope::ModuleScopes,
@@ -208,6 +209,7 @@ impl<'a> Semantics<'a> {
                 CallableInner::ProviderRawConstructor(name.clone(), provider.clone()),
             ),
             TyKind::Tag(tag_class) => Callable(CallableInner::Tag(tag_class.clone())),
+            TyKind::Macro(makro) => Callable(CallableInner::Macro(makro.clone())),
             _ => return None,
         })
     }
@@ -369,6 +371,7 @@ impl Type {
                     | TyKind::Provider(_)
                     | TyKind::ProviderRawConstructor(_, _)
                     | TyKind::Tag(_)
+                    | TyKind::Macro(_)
             )
     }
 
@@ -400,6 +403,7 @@ impl Type {
                 module_extension.doc.as_ref().map(Box::to_string)
             }
             TyKind::Target => Some(TARGET_DOC.into()),
+            TyKind::Macro(makro) => makro.doc.map(|doc| doc.value(db).to_string()),
             _ => None,
         }
     }
@@ -416,14 +420,16 @@ impl Type {
 
         // TODO(withered-magic): This ideally should be handled in `Ty::fields()` instead.
         if let TyKind::Struct(Some(typeck::Struct::Attributes { attrs })) = self.ty.kind() {
-            fields.extend(attrs.attrs.iter().map(|(name, attr)| {
-                (
-                    Field(FieldInner::StructField {
-                        name: name.clone(),
-                        doc: attr.doc.as_ref().map(|doc| doc.to_string()),
-                    }),
-                    attr.resolved_ty().into(),
-                )
+            fields.extend(attrs.attrs.iter().filter_map(|(name, attr)| {
+                attr.as_ref().map(|attr| {
+                    (
+                        Field(FieldInner::StructField {
+                            name: name.clone(),
+                            doc: attr.doc.as_ref().map(|doc| doc.value(db).to_string()),
+                        }),
+                        attr.resolved_ty().into(),
+                    )
+                })
             }));
         }
 
@@ -552,6 +558,7 @@ impl Callable {
                 .unwrap_or_else(|| Name::new_inline("provider")),
             CallableInner::ProviderRawConstructor(ref name, _) => name.clone(),
             CallableInner::Tag(_) => Name::new_inline("tag"),
+            CallableInner::Macro(_) => Name::new_inline("macro"),
         }
     }
 
@@ -576,6 +583,7 @@ impl Callable {
                 TyKind::ProviderRawConstructor(name.clone(), provider.clone()).intern()
             }
             CallableInner::Tag(ref tag_class) => TyKind::Tag(tag_class.clone()).intern(),
+            CallableInner::Macro(ref makro) => TyKind::Macro(makro.clone()).intern(),
         }
         .into()
     }
@@ -600,6 +608,9 @@ impl Callable {
                 Provider::Custom(provider) => provider.doc.map(|doc| doc.value(db).to_string()),
             },
             CallableInner::Tag(ref tag_class) => tag_class.doc.as_ref().map(|doc| doc.to_string()),
+            CallableInner::Macro(ref makro) => {
+                makro.doc.as_ref().map(|doc| doc.value(db).to_string())
+            }
         }
     }
 
@@ -677,6 +688,9 @@ enum CallableInner {
 
     /// A Bazel tag.
     Tag(Arc<TagClass>),
+
+    /// A Bazel symbolic macro.
+    Macro(Macro),
 }
 
 /// A parameter for a function, rule, etc.

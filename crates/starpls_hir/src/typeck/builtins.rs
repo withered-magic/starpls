@@ -25,6 +25,7 @@ use starpls_syntax::ast::{self};
 use crate::def::resolver::Export;
 use crate::def::resolver::Resolver;
 use crate::def::Argument;
+use crate::def::InternedString;
 use crate::source_map;
 use crate::typeck::Attribute;
 use crate::typeck::AttributeData;
@@ -173,10 +174,10 @@ impl BuiltinFunction {
 
             let path = next_string_arg()?;
             let name = next_string_arg()?;
-            let loaded_file = db.load_file(&path, file.dialect(db), file.id(db)).ok()??;
+            let loaded_file = db.load_file(path, file.dialect(db), file.id(db)).ok()??;
 
             Some(
-                match Resolver::resolve_export_in_file(db, loaded_file, &Name::from_str(&name))? {
+                match Resolver::resolve_export_in_file(db, loaded_file, &Name::from_str(name))? {
                     Export::Variable(expr) => InFile {
                         file: loaded_file,
                         value: expr.expr,
@@ -232,7 +233,7 @@ impl BuiltinFunction {
                                                 let name = &key.value(db);
                                                 if !name.is_empty() {
                                                     Some(ProviderField {
-                                                        name: Name::from_str(&key.value(db)),
+                                                        name: Name::from_str(key.value(db)),
                                                         doc: match value.kind() {
                                                             TyKind::String(Some(s)) => Some(
                                                                 s.value(db)
@@ -340,7 +341,7 @@ impl BuiltinFunction {
                             }
                             "attrs" => {
                                 if let TyKind::Dict(_, _, Some(lit)) = ty.kind() {
-                                    attrs = Some(attrs_from_dict_literal(db, lit))
+                                    attrs = Some(attrs_from_dict_literal(db, lit, false))
                                 }
                             }
                             _ => {}
@@ -360,7 +361,7 @@ impl BuiltinFunction {
             }
 
             (Some("attr"), attr) => {
-                let mut doc: Option<Box<str>> = None;
+                let mut doc: Option<InternedString> = None;
                 let mut mandatory = false;
                 let mut default_ptr = None;
                 for (arg, ty) in args {
@@ -368,7 +369,7 @@ impl BuiltinFunction {
                         match name.as_str() {
                             "doc" => {
                                 if let TyKind::String(Some(s)) = ty.kind() {
-                                    doc = Some(s.value(db).clone());
+                                    doc = Some(*s);
                                 }
                             }
                             "mandatory" => {
@@ -386,7 +387,7 @@ impl BuiltinFunction {
                     }
                 }
 
-                TyKind::Attribute(Some(Arc::new(Attribute::new(
+                TyKind::Attribute(Some(Attribute::new(
                     match attr {
                         "bool" => AttributeKind::Bool,
                         "int" => AttributeKind::Int,
@@ -404,8 +405,13 @@ impl BuiltinFunction {
                     },
                     doc,
                     mandatory,
-                    default_ptr.map(|text_range| Either::Left((file, text_range))),
-                ))))
+                    default_ptr.map(|text_range| {
+                        Either::Left(InFile {
+                            file,
+                            value: text_range,
+                        })
+                    }),
+                )))
             }
 
             (None, "tag_class") => {
@@ -422,7 +428,7 @@ impl BuiltinFunction {
                                             .filter_map(|(name, ty)| match ty.kind() {
                                                 TyKind::Attribute(Some(attr)) => {
                                                     Some(AttributeData {
-                                                        name: Name::from_str(&name.value(db)),
+                                                        name: Name::from_str(name.value(db)),
                                                         attr: attr.clone(),
                                                     })
                                                 }
@@ -468,7 +474,7 @@ impl BuiltinFunction {
                                         .iter()
                                         .filter_map(|(name, ty)| match ty.kind() {
                                             TyKind::TagClass(tag_class) => Some(TagClassData {
-                                                name: Name::from_str(&name.value(db)),
+                                                name: Name::from_str(name.value(db)),
                                                 tag_class: tag_class.clone(),
                                             }),
                                             _ => None,
@@ -498,7 +504,7 @@ impl BuiltinFunction {
                             }
                             "attrs" => {
                                 if let TyKind::Dict(_, _, Some(lit)) = ty.kind() {
-                                    attrs = Some(Arc::new(attrs_from_dict_literal(db, lit)))
+                                    attrs = Some(Arc::new(attrs_from_dict_literal(db, lit, true)))
                                 }
                             }
                             _ => {}
@@ -981,9 +987,15 @@ pub(crate) fn common_attributes_query(db: &dyn Db) -> CommonAttributes {
                             attr::AttributeKind::StringList => StringList,
                             attr::AttributeKind::StringListDict => StringListDict,
                         },
-                        doc: Some(normalize_doc_text(&attr.doc).into_boxed_str()),
+                        doc: Some(InternedString::new(
+                            db,
+                            normalize_doc_text(&attr.doc).into_boxed_str(),
+                        )),
                         mandatory: attr.is_mandatory,
-                        default_text_range: Some(Either::Right(attr.default_value)),
+                        default_value: Some(Either::Right(InternedString::new(
+                            db,
+                            attr.default_value.into_boxed_str(),
+                        ))),
                     },
                 )
             })
@@ -1122,15 +1134,16 @@ fn maybe_field_type_ref_override(typ: &str, field: &str) -> Option<TypeRef> {
     Some(type_ref)
 }
 
-fn attrs_from_dict_literal(db: &dyn Db, lit: &DictLiteral) -> Attributes {
+fn attrs_from_dict_literal(db: &dyn Db, lit: &DictLiteral, allow_none: bool) -> Attributes {
     Attributes {
         attrs: lit
             .known_keys
             .iter()
             .filter_map(|(name, ty)| match ty.kind() {
                 TyKind::Attribute(Some(attr)) => {
-                    Some((Name::from_str(&name.value(db)), attr.clone()))
+                    Some((Name::from_str(name.value(db)), Some(attr.clone())))
                 }
+                TyKind::None if allow_none => Some((Name::from_str(name.value(db)), None)),
                 _ => None,
             })
             .collect::<Vec<_>>(),

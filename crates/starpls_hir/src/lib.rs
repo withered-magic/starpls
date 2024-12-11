@@ -607,7 +607,9 @@ impl Callable {
                 Provider::Builtin(provider) => Some(provider.doc(db).clone()),
                 Provider::Custom(provider) => provider.doc.map(|doc| doc.value(db).to_string()),
             },
-            CallableInner::Tag(ref tag_class) => tag_class.doc.as_ref().map(|doc| doc.to_string()),
+            CallableInner::Tag(ref tag_class) => {
+                tag_class.doc.as_ref().map(|doc| doc.value(db).to_string())
+            }
             CallableInner::Macro(ref makro) => {
                 makro.doc.as_ref().map(|doc| doc.value(db).to_string())
             }

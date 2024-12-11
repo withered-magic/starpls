@@ -1098,7 +1098,7 @@ impl Field {
                 .tag_class
                 .doc
                 .as_ref()
-                .map(|doc| doc.to_string())
+                .map(|doc| doc.value(db).to_string())
                 .unwrap_or_default(),
             FieldInner::StaticField { doc, .. } => doc.unwrap_or_default().to_string(),
         }
@@ -1519,7 +1519,7 @@ pub(crate) struct AttributeData {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct TagClass {
     pub(crate) attrs: Option<Box<[AttributeData]>>,
-    pub(crate) doc: Option<Box<str>>,
+    pub(crate) doc: Option<InternedString>,
 }
 
 impl TyKind {

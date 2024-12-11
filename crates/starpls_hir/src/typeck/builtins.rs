@@ -441,7 +441,7 @@ impl BuiltinFunction {
                             }
                             "doc" => {
                                 if let TyKind::String(Some(s)) = ty.kind() {
-                                    doc = Some(s.value(db).clone());
+                                    doc = Some(*s);
                                 }
                             }
                             _ => {}

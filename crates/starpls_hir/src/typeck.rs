@@ -24,7 +24,6 @@ use crate::def::codeflow::FlowNodeId;
 use crate::def::scope::ExecutionScopeId;
 use crate::def::scope::FunctionDef;
 use crate::def::ExprId;
-use crate::def::Function;
 use crate::def::LiteralString;
 use crate::def::LoadItemId;
 use crate::def::LoadStmt;
@@ -47,6 +46,8 @@ use crate::typeck::intrinsics::IntrinsicFunctionParam;
 use crate::typeck::intrinsics::Intrinsics;
 use crate::Db;
 use crate::Name;
+use crate::Param;
+use crate::ParamInner;
 
 mod call;
 mod infer;
@@ -749,31 +750,6 @@ impl Ty {
             _ => self,
         }
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Param(pub(crate) ParamInner);
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum ParamInner {
-    Param {
-        func: Function,
-        index: usize,
-    },
-    IntrinsicParam {
-        parent: IntrinsicFunction,
-        index: usize,
-    },
-    BuiltinParam {
-        parent: BuiltinFunction,
-        index: usize,
-    },
-    RuleParam(RuleParam),
-    ProviderParam {
-        provider: Provider,
-        index: usize,
-    },
-    TagParam(TagParam),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

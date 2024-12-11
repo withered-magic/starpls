@@ -24,8 +24,7 @@ use crate::def::codeflow::FlowNodeId;
 use crate::def::scope::ExecutionScopeId;
 use crate::def::scope::FunctionDef;
 use crate::def::ExprId;
-use crate::def::Function;
-use crate::def::LiteralString;
+use crate::def::InternedString;
 use crate::def::LoadItemId;
 use crate::def::LoadStmt;
 use crate::def::Param as HirDefParam;
@@ -47,6 +46,8 @@ use crate::typeck::intrinsics::IntrinsicFunctionParam;
 use crate::typeck::intrinsics::Intrinsics;
 use crate::Db;
 use crate::Name;
+use crate::Param;
+use crate::ParamInner;
 
 mod call;
 mod infer;
@@ -499,17 +500,19 @@ impl Ty {
                             attrs
                                 .as_ref()
                                 .map(|attrs| {
-                                    attrs.attrs.iter().map(|(name, attr)| {
-                                        (
-                                            Param(
-                                                RuleParam::Keyword {
-                                                    name: name.clone(),
-                                                    attr: attr.clone(),
-                                                }
-                                                .into(),
-                                            ),
-                                            attr.expected_ty(),
-                                        )
+                                    attrs.attrs.iter().filter_map(|(name, attr)| {
+                                        attr.as_ref().map(|attr| {
+                                            (
+                                                Param(
+                                                    RuleParam::Keyword {
+                                                        name: name.clone(),
+                                                        attr: attr.clone(),
+                                                    }
+                                                    .into(),
+                                                ),
+                                                attr.expected_ty(),
+                                            )
+                                        })
                                     })
                                 })
                                 .into_iter()
@@ -583,11 +586,10 @@ impl Ty {
             TyKind::Function(def) => resolve_builtin_type_ref_opt(db, def.func().ret_type_ref(db)),
             TyKind::IntrinsicFunction(func, subst) => func.ret_ty(db).substitute(&subst.args),
             TyKind::BuiltinFunction(func) => resolve_builtin_type_ref(db, func.ret_type_ref(db)).0,
-            TyKind::Rule(_) => Ty::none(),
             TyKind::Provider(provider) | TyKind::ProviderRawConstructor(_, provider) => {
                 TyKind::ProviderInstance(provider.clone()).intern()
             }
-            TyKind::Tag(_) => Ty::none(),
+            TyKind::Tag(_) | TyKind::Macro(_) | TyKind::Rule(_) => Ty::none(),
             _ => return None,
         })
     }
@@ -710,7 +712,7 @@ impl Ty {
         }
     }
 
-    pub(crate) fn known_keys(&self) -> Option<&[(LiteralString, Ty)]> {
+    pub(crate) fn known_keys(&self) -> Option<&[(InternedString, Ty)]> {
         match self.kind() {
             TyKind::Dict(_, _, known_keys) => known_keys.as_ref().map(|lit| &*lit.known_keys),
             _ => None,
@@ -752,33 +754,8 @@ impl Ty {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Param(pub(crate) ParamInner);
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum ParamInner {
-    Param {
-        func: Function,
-        index: usize,
-    },
-    IntrinsicParam {
-        parent: IntrinsicFunction,
-        index: usize,
-    },
-    BuiltinParam {
-        parent: BuiltinFunction,
-        index: usize,
-    },
-    RuleParam(RuleParam),
-    ProviderParam {
-        provider: Provider,
-        index: usize,
-    },
-    TagParam(TagParam),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum RuleParam {
-    Keyword { name: Name, attr: Arc<Attribute> },
+    Keyword { name: Name, attr: Attribute },
     BuiltinKeyword(RuleKind, usize),
     Kwargs,
 }
@@ -791,7 +768,7 @@ impl From<RuleParam> for ParamInner {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum TagParam {
-    Keyword { name: Name, attr: Arc<Attribute> },
+    Keyword { name: Name, attr: Attribute },
     Kwargs,
 }
 
@@ -866,7 +843,7 @@ impl Param {
             }
             ParamInner::IntrinsicParam { .. } => return None,
             ParamInner::RuleParam(RuleParam::Keyword { attr, .. }) => {
-                return attr.doc.as_ref().map(Box::to_string)
+                return attr.doc.map(|doc| doc.value(db).to_string())
             }
             ParamInner::RuleParam(RuleParam::BuiltinKeyword(kind, index)) => {
                 return common_attributes_query(db)
@@ -874,7 +851,7 @@ impl Param {
                     .1
                     .doc
                     .as_ref()
-                    .map(Box::to_string)
+                    .map(|doc| doc.value(db).to_string())
             }
             ParamInner::ProviderParam { provider, index } => match provider {
                 Provider::Builtin(provider) => provider.params(db)[*index].doc().to_string(),
@@ -890,7 +867,7 @@ impl Param {
                 }
             },
             ParamInner::TagParam(TagParam::Keyword { attr, .. }) => {
-                return attr.doc.as_ref().map(Box::to_string)
+                return attr.doc.map(|doc| doc.value(db).to_string())
             }
             _ => return None,
         })
@@ -988,13 +965,15 @@ impl Param {
             _ => return None,
         };
 
-        attr.default_text_range.as_ref().and_then(|e| {
+        attr.default_value.as_ref().and_then(|e| {
             Some(match e {
-                Either::Left((file, ptr)) => ptr
-                    .try_to_node(&parse(db, *file).syntax(db))?
+                Either::Left(ptr) => ptr
+                    .value
+                    .to_owned()
+                    .try_to_node(&parse(db, ptr.file).syntax(db))?
                     .text()
                     .to_string(),
-                Either::Right(s) => s.clone(),
+                Either::Right(s) => s.value(db).to_string(),
             })
         })
     }
@@ -1119,7 +1098,7 @@ impl Field {
                 .tag_class
                 .doc
                 .as_ref()
-                .map(|doc| doc.to_string())
+                .map(|doc| doc.value(db).to_string())
                 .unwrap_or_default(),
             FieldInner::StaticField { doc, .. } => doc.unwrap_or_default().to_string(),
         }
@@ -1214,7 +1193,7 @@ where
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum TyData {
-    Attributes(Arc<RuleAttributes>),
+    Attributes(Arc<Attributes>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1222,82 +1201,118 @@ pub(crate) enum TyKind {
     /// An unbound variable, e.g. a variable without a corresponding
     /// declaration.
     Unbound,
+
     /// A value whose actual type is unknown. This is usually the
     /// result of failed type inference, e.g. calling an unbound
     /// function.
     Unknown,
+
     /// Similar to `Unknown`, but not necessarily the result of failed
     /// type inference.
     Any,
+
     /// Indicates that the corresponding expression will never be evaluated.
     Never,
+
     /// The type of the predefined `None` variable.
     None,
+
     /// A boolean.
     Bool(Option<bool>),
+
     /// A 64-bit integer.
     Int(Option<i64>),
+
     /// A 64-bit floating point number.
     Float,
+
     /// A UTF-8 encoded string.
-    String(Option<LiteralString>),
+    String(Option<InternedString>),
+
     /// The individual characters of a UTF-8 encoded string.
     StringElems,
+
     /// A series of bytes.
     Bytes,
+
     /// An iterable collection of bytes.
     BytesElems,
+
     /// A list type, e.g. `list[string]`
     List(Ty),
+
     /// A fixed-size collection of elements.
     Tuple(Tuple),
+
     /// A mapping of keys to values.
     Dict(Ty, Ty, Option<Arc<DictLiteral>>),
+
     /// An iterable and indexable sequence of numbers. Obtained from
     /// the `range()` function.
     Range,
+
     /// A user-defined function.
     Function(FunctionDef),
+
     /// A function predefined by the Starlark specification.
     IntrinsicFunction(IntrinsicFunction, Substitution),
+
     /// A function defined outside of the Starlark specification.
     /// For example, common Bazel functions like `genrule()`.
     BuiltinFunction(BuiltinFunction),
+
     /// A type defined outside of the Starlark specification.
     /// For example, common Bazel types like `Label`.
     BuiltinType(BuiltinType, Option<TyData>),
+
     /// A bound type variable, e.g. the argument to the `append()` method
     /// of the `list[int]` class.
     BoundVar(usize),
+
     /// A marker type that indicates some specific behavior, e.g. Sequence[T].
     Protocol(Protocol),
+
     /// A union of two or more types.
     Union(SmallVec<[Ty; 2]>),
+
     /// A Bazel struct (https://bazel.build/rules/lib/builtins/struct).
     /// Use this instead of the `struct` type defined in `builtin.pb`.
     Struct(Option<Struct>),
+
     /// A Bazel attribute (https://bazel.build/rules/lib/builtins/Attribute.html).
     /// Use this instead of the `Attribute` type defined in `builtin.pb`.
-    Attribute(Option<Arc<Attribute>>),
+    Attribute(Option<Attribute>),
+
     /// A Bazel rule (https://bazel.build/rules/lib/builtins/rule).
     Rule(Rule),
+
     /// A Bazel provider (https://bazel.build/rules/lib/builtins/Provider.html).
     /// This is a callable that yields "provider instances".
     Provider(Provider),
+
     /// An instance of a Bazel provider.
     ProviderInstance(Provider),
+
     /// The raw constructor for a Bazel provider.
     ProviderRawConstructor(Name, Provider),
+
     /// A Bazel tag class.
     TagClass(Arc<TagClass>),
+
     /// A Bazel module extension.
     ModuleExtension(Arc<ModuleExtension>),
+
     /// A Bazel module extension proxy.
     ModuleExtensionProxy(Arc<ModuleExtension>),
-    /// A Bazel tag (e.g. `maven.artifact()`)
+
+    /// A Bazel tag (e.g. `maven.artifact()`).
     Tag(Arc<TagClass>),
+
     /// A Bazel target (https://bazel.build/rules/lib/builtins/Target).
     Target,
+
+    /// A Bazel symbolic macro.
+    Macro(Macro),
 }
 
 impl_internable!(TyKind);
@@ -1327,23 +1342,23 @@ pub enum AttributeKind {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Attribute {
     pub kind: AttributeKind,
-    pub doc: Option<Box<str>>,
+    pub doc: Option<InternedString>,
     pub mandatory: bool,
-    pub default_text_range: Option<Either<(File, SyntaxNodePtr), String>>,
+    pub default_value: Option<Either<InFile<SyntaxNodePtr>, InternedString>>,
 }
 
 impl Attribute {
     pub fn new(
         kind: AttributeKind,
-        doc: Option<Box<str>>,
+        doc: Option<InternedString>,
         mandatory: bool,
-        default_text_range: Option<Either<(File, SyntaxNodePtr), String>>,
+        default_value: Option<Either<InFile<SyntaxNodePtr>, InternedString>>,
     ) -> Self {
         Self {
             kind,
             doc,
             mandatory,
-            default_text_range,
+            default_value,
         }
     }
 
@@ -1388,8 +1403,12 @@ pub enum RuleKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct RuleAttributes {
-    pub(crate) attrs: Vec<(Name, Arc<Attribute>)>,
+pub(crate) struct Attributes {
+    /// The actual attributes.
+    /// `None` in the second element of the tuple means that the attribute
+    /// *cannot* be specfied during an invocation of the corresponding macro.
+    pub(crate) attrs: Vec<(Name, Option<Attribute>)>,
+    /// The dict expression where these attributes were defined.
     pub(crate) expr: Option<InFile<ExprId>>,
 }
 
@@ -1397,7 +1416,7 @@ pub(crate) struct RuleAttributes {
 pub(crate) struct Rule {
     pub(crate) kind: RuleKind,
     pub(crate) doc: Option<Box<str>>,
-    pub(crate) attrs: Option<Arc<RuleAttributes>>,
+    pub(crate) attrs: Option<Arc<Attributes>>,
 }
 
 impl Rule {
@@ -1417,7 +1436,12 @@ impl Rule {
             .chain(
                 self.attrs
                     .as_ref()
-                    .map(|attrs| attrs.attrs.iter().map(|(name, attr)| (name, &**attr)))
+                    .map(|attrs| {
+                        attrs
+                            .attrs
+                            .iter()
+                            .filter_map(|(name, attr)| attr.as_ref().map(|attr| (name, attr)))
+                    })
                     .into_iter()
                     .flatten(),
             )
@@ -1434,7 +1458,7 @@ pub(crate) struct CustomProviderFields {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct CustomProvider {
     pub(crate) name: Option<Name>,
-    pub(crate) doc: Option<LiteralString>,
+    pub(crate) doc: Option<InternedString>,
     pub(crate) fields: Option<CustomProviderFields>,
 }
 
@@ -1470,7 +1494,7 @@ pub(crate) enum Struct {
         ty: Ty,
     },
     Attributes {
-        attrs: Arc<RuleAttributes>,
+        attrs: Arc<Attributes>,
     },
 }
 
@@ -1489,13 +1513,13 @@ pub(crate) struct ModuleExtension {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct AttributeData {
     pub(crate) name: Name,
-    pub(crate) attr: Arc<Attribute>,
+    pub(crate) attr: Attribute,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct TagClass {
     pub(crate) attrs: Option<Box<[AttributeData]>>,
-    pub(crate) doc: Option<Box<str>>,
+    pub(crate) doc: Option<InternedString>,
 }
 
 impl TyKind {
@@ -1515,6 +1539,14 @@ impl TyKind {
     }
 }
 
+/// A Bazel symbolic macro created by the `macro()` function.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct Macro {
+    /// Attributes defined in the `attrs` argument to the `macro()` function.
+    pub(crate) attrs: Option<Arc<Attributes>>,
+    pub(crate) doc: Option<InternedString>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct ProviderField {
     pub(crate) name: Name,
@@ -1524,7 +1556,7 @@ pub(crate) struct ProviderField {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct DictLiteral {
     pub(crate) expr: Option<InFile<ExprId>>,
-    pub(crate) known_keys: Box<[(LiteralString, Ty)]>,
+    pub(crate) known_keys: Box<[(InternedString, Ty)]>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

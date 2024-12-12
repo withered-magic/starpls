@@ -1896,6 +1896,7 @@ def baz():
     else:
         x = 2
     print(x)
+    _ = 123
 "#,
         expect![[r#"
             1..2 "x": Literal[1]
@@ -1924,6 +1925,8 @@ def baz():
             265..270 "print": def print(*args: Any, str: string = None) -> None
             271..272 "x": Literal[2]
             265..273 "print(x)": None
+            278..279 "_": Literal[123]
+            282..285 "123": Literal[123]
 
             13..15 "_y" is not accessed
             37..38 "x" is not accessed

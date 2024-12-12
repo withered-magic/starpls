@@ -1473,35 +1473,18 @@ impl TyContext<'_> {
             }
         };
 
-        // TODO(withered-magic): Should we use the fallback type for scenarios that we don't support yet, e.g. loops?
-        let (start_ty, fallback_ty) = if def_execution_scope != curr_execution_scope {
-            let cfg = code_flow_graph(self.db, file).cfg(self.db);
-            let hir_id = match def_execution_scope {
-                ExecutionScopeId::Module => ScopeHirId::Module,
-                ExecutionScopeId::Def(stmt) => stmt.into(),
-                ExecutionScopeId::Comp(expr) | ExecutionScopeId::Lambda(expr) => expr.into(),
-            };
-            let start_node = cfg.hir_to_flow_node.get(&hir_id)?;
-            let start_ty = self
-                .infer_ref_from_flow_node(
-                    cfg,
-                    file,
-                    def_execution_scope,
-                    name,
-                    &self.unbound_ty(),
-                    *start_node,
-                )
-                .unwrap_or_else(|| self.unknown_ty());
-            (start_ty.clone(), start_ty)
+        // TODO(withered-magic): We should eventually apply narrowing to the effective type here.
+        let start_ty = if def_execution_scope != curr_execution_scope {
+            effective_ty.clone()
         } else {
-            (self.unbound_ty(), effective_ty)
+            self.unbound_ty()
         };
 
         // See if we can narrow the effective type further through code-flow analysis. If not, then
         // fall back to the effective type.
         Some(
             self.infer_name_from_code_flow(file, name, hir_id, curr_execution_scope, &start_ty)
-                .unwrap_or(fallback_ty),
+                .unwrap_or(effective_ty),
         )
     }
 

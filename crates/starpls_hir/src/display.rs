@@ -21,9 +21,7 @@ use crate::Type;
 pub trait DisplayWithDb {
     fn fmt(&self, db: &dyn Db, f: &mut fmt::Formatter<'_>) -> fmt::Result;
 
-    fn fmt_alt(&self, db: &dyn Db, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.fmt(db, f)
-    }
+    fn fmt_alt(&self, db: &dyn Db, f: &mut fmt::Formatter<'_>) -> fmt::Result;
 
     fn display<'a>(&'a self, db: &'a dyn Db) -> DisplayWithDbWrapper<'a, Self> {
         DisplayWithDbWrapper {
@@ -58,7 +56,11 @@ pub struct DisplayWithDbWrapper<'a, T: DisplayWithDb + ?Sized> {
 
 impl<'a, T: DisplayWithDb> DisplayWithDbWrapper<'a, T> {
     pub fn alt(self) -> Self {
-        Self { alt: true, ..self }
+        Self {
+            db: self.db,
+            item: self.item,
+            alt: true,
+        }
     }
 }
 
@@ -75,6 +77,10 @@ impl<'a, T: DisplayWithDb> fmt::Display for DisplayWithDbWrapper<'a, T> {
 impl DisplayWithDb for Ty {
     fn fmt(&self, db: &dyn Db, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.kind().fmt(db, f)
+    }
+
+    fn fmt_alt(&self, db: &dyn Db, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.kind().fmt_alt(db, f)
     }
 }
 

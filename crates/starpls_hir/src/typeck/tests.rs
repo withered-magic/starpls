@@ -1820,9 +1820,9 @@ def h():
             169..170 "2": Literal[2]
             172..173 "3": Literal[3]
             166..173 "1, 2, 3": tuple[Literal[1], Literal[2], Literal[3]]
-            186..187 "x": Unknown
+            186..187 "x": int
             190..191 "1": Literal[1]
-            186..191 "x < 1": Unknown
+            186..191 "x < 1": bool
             205..206 "y": Literal[1]
             209..210 "1": Literal[1]
             255..256 "y": Literal["one"]
@@ -1856,7 +1856,7 @@ def f():
             33..40 "1, 2, 3": tuple[Literal[1], Literal[2], Literal[3]]
             50..51 "x": Literal["one"]
             54..59 "\"one\"": Literal["one"]
-            64..65 "x": Unknown
+            64..65 "x": string | int
         "#]],
     );
 }

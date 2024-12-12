@@ -521,7 +521,7 @@ impl TyContext<'_> {
                                     format!(
                                         "Cannot access field \"{}\" for type \"{}\"",
                                         field.as_str(),
-                                        receiver_ty.display(db)
+                                        receiver_ty.display(db).alt()
                                     ),
                                 )
                             })
@@ -548,7 +548,7 @@ impl TyContext<'_> {
                                     format!(
                                         "Index {} is out of range for type {}",
                                         x,
-                                        lhs_ty.display(db)
+                                        lhs_ty.display(db).alt()
                                     ),
                                 ),
                             },
@@ -782,7 +782,7 @@ impl TyContext<'_> {
                                             expr,
                                             format!(
                                                 "Missing expected argument of type \"{}\"",
-                                                param_ty.display(db)
+                                                param_ty.display(db).alt()
                                             ),
                                         );
                                     }
@@ -1035,7 +1035,10 @@ impl TyContext<'_> {
                     _ => self.add_expr_diagnostic_warning_ty(
                         file,
                         expr,
-                        format!("Cannot slice expression of type \"{}\"", lhs_ty.display(db)),
+                        format!(
+                            "Cannot slice expression of type \"{}\"",
+                            lhs_ty.display(db).alt()
+                        ),
                     ),
                 }
             }
@@ -1058,7 +1061,7 @@ impl TyContext<'_> {
                 format!(
                     "Operator \"{}\" is not supported for type \"{}\"",
                     op,
-                    ty.display(self.db)
+                    ty.display(self.db).alt()
                 ),
             ),
         }
@@ -1101,8 +1104,8 @@ impl TyContext<'_> {
                 format!(
                     "Operator \"{}\" not supported for types \"{}\" and \"{}\"",
                     op,
-                    lhs_kind.display(db),
-                    rhs_kind.display(db)
+                    lhs_kind.display(db).alt(),
+                    rhs_kind.display(db).alt()
                 ),
             )
         };
@@ -1191,8 +1194,8 @@ impl TyContext<'_> {
                         format!(
                             "Operator \"{}\" not supported for types \"{}\" and \"{}\"",
                             op,
-                            lhs_kind.display(db),
-                            rhs_kind.display(db)
+                            lhs_kind.display(db).alt(),
+                            rhs_kind.display(db).alt()
                         ),
                     );
                 }
@@ -1347,7 +1350,7 @@ impl TyContext<'_> {
                     file,
                     source,
                     None,
-                    format!("Type \"{}\" is not iterable", source_ty.display(db)),
+                    format!("Type \"{}\" is not iterable", source_ty.display(db).alt()),
                 );
                 for expr in targets.iter() {
                     self.assign_expr_unknown_rec(file, *expr);
@@ -1582,10 +1585,11 @@ impl TyContext<'_> {
                     }
                     Ty::union(antecedent_tys.into_iter())
                 }
-                FlowNode::Loop { .. } => Ty::unknown(), // TODO(withered-magic): Correctly handle loops.
+                FlowNode::Loop { .. } => break 'outer None, // TODO(withered-magic): Correctly handle loops.
                 FlowNode::Call { expr, antecedent } => {
-                    if self.infer_expr(file, *expr) == Ty::never() {
-                        Ty::never()
+                    let ty = self.infer_expr(file, *expr);
+                    if matches!(ty.kind(), TyKind::Never) {
+                        ty
                     } else {
                         curr_node_id = *antecedent;
                         continue;
@@ -1687,8 +1691,8 @@ impl TyContext<'_> {
                             root,
                             format!(
                                 "Expression of type \"{}\" cannot be assigned to variable of type \"{}\"",
-                                source_ty.display(self.db),
-                                expected_ty.display(self.db)
+                                source_ty.display(self.db).alt(),
+                                expected_ty.display(self.db).alt()
                             ),
                         )
                     }
@@ -1750,7 +1754,10 @@ impl TyContext<'_> {
                     file,
                     root,
                     None,
-                    format!("Type \"{}\" is not iterable", source_ty.display(self.db)),
+                    format!(
+                        "Type \"{}\" is not iterable",
+                        source_ty.display(self.db).alt()
+                    ),
                 );
                 for expr in exprs.iter() {
                     self.assign_expr_unknown_rec(file, *expr);

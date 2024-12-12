@@ -256,6 +256,11 @@ impl TyContext<'_> {
                 None
             }
         }) {
+            // Don't report assignments to the placeholder "_" as unused.
+            if name.as_str() == "_" {
+                continue;
+            }
+
             if let Some(false) = self.cx.definition_is_used.get(&InFile {
                 file,
                 value: Either::Left(expr),

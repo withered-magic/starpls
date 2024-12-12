@@ -111,11 +111,7 @@ impl<'a> CodeFlowLoweringContext<'a> {
             Stmt::Def { stmts, .. } => {
                 self.with_new_start_node(|this| {
                     this.lower_stmts(stmts);
-                    stmt
                 });
-                self.result
-                    .hir_to_flow_node
-                    .insert(stmt.into(), self.curr_node);
             }
 
             Stmt::If {
@@ -326,15 +322,13 @@ impl<'a> CodeFlowLoweringContext<'a> {
         }
     }
 
-    fn with_new_start_node<F, T>(&mut self, mut f: F)
+    fn with_new_start_node<F>(&mut self, mut f: F)
     where
-        F: FnMut(&mut Self) -> T,
-        T: Into<ScopeHirId>,
+        F: FnMut(&mut Self),
     {
         let saved_curr_node = self.curr_node;
         self.curr_node = self.new_flow_node(FlowNode::Start);
-        let hir = f(self).into();
-        self.result.hir_to_flow_node.insert(hir, self.curr_node);
+        f(self);
         self.curr_node = saved_curr_node;
     }
 }
@@ -342,9 +336,6 @@ impl<'a> CodeFlowLoweringContext<'a> {
 pub(crate) fn lower_to_code_flow_graph(module: &Module, scopes: &Scopes) -> CodeFlowGraph {
     let mut cx = CodeFlowLoweringContext::new(module, scopes);
     cx.lower_stmts(&module.top_level);
-    cx.result
-        .hir_to_flow_node
-        .insert(ScopeHirId::Module, cx.curr_node);
     cx.result
 }
 

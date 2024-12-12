@@ -1977,3 +1977,50 @@ y = 234
         "#]],
     );
 }
+
+#[test]
+fn test_definitions_beyond_current_scope() {
+    check_infer_with_code_flow_analysis(
+        r#"
+foo = 123
+[x + foo for x in [1, 2, 3]]
+lambda x: x + foo
+def f():
+    foo
+    y = 1
+    maybe = 123
+    def bar():
+        foo + y
+        maybe
+    maybe = "abc"
+"#,
+        expect![[r#"
+            1..4 "foo": Literal[123]
+            7..10 "123": Literal[123]
+            12..13 "x": int
+            16..19 "foo": int
+            12..19 "x + foo": int
+            24..25 "x": int
+            30..31 "1": Literal[1]
+            33..34 "2": Literal[2]
+            36..37 "3": Literal[3]
+            29..38 "[1, 2, 3]": list[int]
+            11..39 "[x + foo for x in [1, 2, 3]]": list[int]
+            50..51 "x": Unknown
+            54..57 "foo": int
+            50..57 "x + foo": Unknown
+            40..57 "lambda x: x + foo": def lambda(x) -> Unknown
+            71..74 "foo": int
+            79..80 "y": Literal[1]
+            83..84 "1": Literal[1]
+            89..94 "maybe": Literal[123]
+            97..100 "123": Literal[123]
+            124..127 "foo": int
+            130..131 "y": int
+            124..131 "foo + y": int
+            140..145 "maybe": string | int
+            150..155 "maybe": Literal["abc"]
+            158..163 "\"abc\"": Literal["abc"]
+        "#]],
+    );
+}

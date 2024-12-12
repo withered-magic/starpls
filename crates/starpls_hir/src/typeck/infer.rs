@@ -1233,6 +1233,7 @@ impl TyContext<'_> {
         expr: ExprId,
         source: Option<ExprId>,
         expected_ty: Option<Ty>,
+        execution_scope: ExecutionScopeId,
     ) -> Ty {
         let cached_ty = self
             .cx
@@ -1242,7 +1243,7 @@ impl TyContext<'_> {
         cached_ty.unwrap_or_else(|| {
             source
                 .and_then(|source| {
-                    self.infer_source_expr_assign(file, source, expected_ty);
+                    self.infer_source_expr_assign(file, source, expected_ty, execution_scope);
                     self.cx
                         .type_of_expr
                         .get(&FileExprId::new(file, expr))
@@ -1252,12 +1253,18 @@ impl TyContext<'_> {
         })
     }
 
-    fn infer_source_expr_assign(&mut self, file: File, source: ExprId, expected_ty: Option<Ty>) {
+    fn infer_source_expr_assign(
+        &mut self,
+        file: File,
+        source: ExprId,
+        expected_ty: Option<Ty>,
+        execution_scope: ExecutionScopeId,
+    ) {
         let key = FileExprId::new(file, source);
         if self.cx.source_assign_done.contains(&key) {
             return;
         }
-        self.infer_source_expr_assign_inner(file, source, expected_ty);
+        self.infer_source_expr_assign_inner(file, source, expected_ty, execution_scope);
         self.cx.source_assign_done.insert(key);
     }
 
@@ -1266,6 +1273,7 @@ impl TyContext<'_> {
         file: File,
         source: ExprId,
         expected_ty: Option<Ty>,
+        execution_scope: ExecutionScopeId,
     ) {
         // Find the parent assignment node. This can be either an assignment statement (`x = 0`), a `for` statement (`for x in 1, 2, 3`), or
         // a for comp clause in a list/dict comprehension (`[x + 1 for x in [1, 2, 3]]`).
@@ -1319,7 +1327,14 @@ impl TyContext<'_> {
             if let Some(lhs) = node.lhs() {
                 let lhs_ptr = AstPtr::new(&lhs);
                 let expr = source_map.expr_map.get(&lhs_ptr).unwrap();
-                self.assign_expr_source_ty(file, source, *expr, source_ty, expected_ty);
+                self.assign_expr_source_ty(
+                    file,
+                    source,
+                    *expr,
+                    source_ty,
+                    expected_ty,
+                    execution_scope,
+                );
                 return;
             }
         }
@@ -1358,15 +1373,15 @@ impl TyContext<'_> {
                     format!("Type \"{}\" is not iterable", source_ty.display(db).alt()),
                 );
                 for expr in targets.iter() {
-                    self.assign_expr_unknown_rec(file, *expr);
+                    self.assign_expr_unknown_rec(file, *expr, execution_scope);
                 }
                 return;
             }
         };
         if targets.len() == 1 {
-            self.assign_expr_source_ty(file, targets[0], targets[0], sub_ty, None);
+            self.assign_expr_source_ty(file, targets[0], targets[0], sub_ty, None, execution_scope);
         } else {
-            self.assign_exprs_source_ty(file, source, &targets, sub_ty);
+            self.assign_exprs_source_ty(file, source, &targets, sub_ty, execution_scope);
         }
     }
 
@@ -1399,9 +1414,7 @@ impl TyContext<'_> {
                                         file: *file,
                                         value: Either::Left(*expr),
                                     };
-                                    if usage_expr == *expr {
-                                        self.cx.definition_is_used.entry(key).or_insert(false);
-                                    } else {
+                                    if usage_expr != *expr {
                                         self.cx.definition_is_used.insert(key, true);
                                     }
                                 }
@@ -1411,7 +1424,7 @@ impl TyContext<'_> {
                                 var_defs.push((file, *expr, *source));
                                 continue;
                             } else {
-                                self.infer_assign(*file, *expr, *source, None)
+                                self.infer_assign(*file, *expr, *source, None, def_execution_scope)
                             }
                         }
                         ScopeDef::Function(def) => {
@@ -1450,7 +1463,7 @@ impl TyContext<'_> {
                 // logic (i.e. `known_ty` is `Some`), we still compute the effective type if only to infer types
                 // for the relevant assignment statements.
                 let effective_ty = Ty::union(var_defs.into_iter().map(|(file, expr, source)| {
-                    self.infer_assign(*file, expr, source, known_ty.clone())
+                    self.infer_assign(*file, expr, source, known_ty.clone(), def_execution_scope)
                 }));
 
                 if known_ty.is_some() {
@@ -1547,7 +1560,7 @@ impl TyContext<'_> {
                         continue;
                     }
 
-                    self.infer_source_expr_assign(file, *source, None);
+                    self.infer_source_expr_assign(file, *source, None, execution_scope);
                     self.cx
                         .type_of_expr
                         .get(&FileExprId::new(file, *expr))
@@ -1667,9 +1680,19 @@ impl TyContext<'_> {
         expr: ExprId,
         source_ty: Ty,
         expected_ty: Option<Ty>,
+        execution_scope: ExecutionScopeId,
     ) {
         match module(self.db, file).exprs.get(expr).unwrap() {
-            Expr::Name { .. } => {
+            Expr::Name { name } => {
+                if execution_scope != ExecutionScopeId::Module || name.as_str().starts_with('_') {
+                    self.cx
+                        .definition_is_used
+                        .entry(InFile {
+                            file,
+                            value: Either::Left(expr),
+                        })
+                        .or_insert(false);
+                }
                 // If we have an expected type from a type comment, use that.
                 // We also emit any error if the source and expected types aren't compatible.
                 if let Some(expected_ty) = expected_ty {
@@ -1690,9 +1713,11 @@ impl TyContext<'_> {
                 }
             }
             Expr::List { exprs } | Expr::Tuple { exprs } => {
-                self.assign_exprs_source_ty(file, root, exprs, source_ty);
+                self.assign_exprs_source_ty(file, root, exprs, source_ty, execution_scope);
             }
-            Expr::Paren { expr } => self.assign_expr_source_ty(file, root, *expr, source_ty, None),
+            Expr::Paren { expr } => {
+                self.assign_expr_source_ty(file, root, *expr, source_ty, None, execution_scope)
+            }
             _ => {}
         }
     }
@@ -1703,22 +1728,23 @@ impl TyContext<'_> {
         root: ExprId,
         exprs: &[ExprId],
         source_ty: Ty,
+        execution_scope: ExecutionScopeId,
     ) {
         match source_ty.kind() {
             TyKind::List(ty) | TyKind::Tuple(Tuple::Variable(ty)) => {
                 for expr in exprs.iter().copied() {
-                    self.assign_expr_source_ty(file, root, expr, ty.clone(), None);
+                    self.assign_expr_source_ty(file, root, expr, ty.clone(), None, execution_scope);
                 }
             }
             TyKind::Tuple(Tuple::Simple(tys)) => {
                 let pairs = exprs.iter().copied().zip(tys.iter());
                 for (expr, ty) in pairs {
-                    self.assign_expr_source_ty(file, root, expr, ty.clone(), None);
+                    self.assign_expr_source_ty(file, root, expr, ty.clone(), None, execution_scope);
                 }
                 if exprs.len() != tys.len() {
                     if exprs.len() > tys.len() {
                         for expr in &exprs[tys.len()..] {
-                            self.assign_expr_unknown_rec(file, *expr);
+                            self.assign_expr_unknown_rec(file, *expr, execution_scope);
                         }
                     }
                     self.add_expr_diagnostic_error(
@@ -1734,7 +1760,14 @@ impl TyContext<'_> {
             }
             TyKind::Any | TyKind::Unknown => {
                 for expr in exprs.iter().copied() {
-                    self.assign_expr_source_ty(file, root, expr, self.unknown_ty(), None);
+                    self.assign_expr_source_ty(
+                        file,
+                        root,
+                        expr,
+                        self.unknown_ty(),
+                        None,
+                        execution_scope,
+                    );
                 }
             }
             _ => {
@@ -1748,17 +1781,39 @@ impl TyContext<'_> {
                     ),
                 );
                 for expr in exprs.iter() {
-                    self.assign_expr_unknown_rec(file, *expr);
+                    self.assign_expr_unknown_rec(file, *expr, execution_scope);
                 }
             }
         }
     }
 
-    fn assign_expr_unknown_rec(&mut self, file: File, expr: ExprId) {
+    fn assign_expr_unknown_rec(
+        &mut self,
+        file: File,
+        expr: ExprId,
+        execution_scope: ExecutionScopeId,
+    ) {
+        let module = module(self.db, file);
+        let node = &module[expr];
         self.set_expr_type(file, expr, self.unknown_ty());
-        module(self.db, file)[expr].walk_child_exprs(|expr| {
-            self.assign_expr_unknown_rec(file, expr);
-        })
+
+        match node {
+            Expr::Name { name }
+                if execution_scope != ExecutionScopeId::Module
+                    || name.as_str().starts_with('_') =>
+            {
+                self.cx
+                    .definition_is_used
+                    .entry(InFile {
+                        file,
+                        value: Either::Left(expr),
+                    })
+                    .or_insert(false);
+            }
+            _ => node.walk_child_exprs(|expr| {
+                self.assign_expr_unknown_rec(file, expr, execution_scope);
+            }),
+        }
     }
 
     fn set_expr_type(&mut self, file: File, expr: ExprId, ty: Ty) -> Ty {

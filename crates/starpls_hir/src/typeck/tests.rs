@@ -1897,6 +1897,8 @@ def baz():
         x = 2
     print(x)
     _ = 123
+    a, b = 3, 4
+    (d, (e, f)) = 123
 "#,
         expect![[r#"
             1..2 "x": Literal[1]
@@ -1927,12 +1929,30 @@ def baz():
             265..273 "print(x)": None
             278..279 "_": Literal[123]
             282..285 "123": Literal[123]
+            290..291 "a": Literal[3]
+            293..294 "b": Literal[4]
+            290..294 "a, b": tuple[Literal[3], Literal[4]]
+            297..298 "3": Literal[3]
+            300..301 "4": Literal[4]
+            297..301 "3, 4": tuple[Literal[3], Literal[4]]
+            307..308 "d": Unknown
+            311..312 "e": Unknown
+            314..315 "f": Unknown
+            310..316 "(e, f)": Unknown
+            306..317 "(d, (e, f))": tuple[Unknown, Unknown]
+            320..323 "123": Literal[123]
 
             13..15 "_y" is not accessed
             37..38 "x" is not accessed
             63..64 "y" is not accessed
             86..89 "bar" is not accessed
             151..155 "_foo" is not accessed
+            290..291 "a" is not accessed
+            293..294 "b" is not accessed
+            307..308 "d" is not accessed
+            311..312 "e" is not accessed
+            314..315 "f" is not accessed
+            320..323 Type "Literal[123]" is not iterable
         "#]],
     );
 }

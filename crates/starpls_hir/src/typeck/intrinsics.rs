@@ -4,7 +4,7 @@ use rustc_hash::FxHashMap;
 use smallvec::smallvec;
 
 use crate::def::Argument;
-use crate::def::LiteralString;
+use crate::def::InternedString;
 use crate::typeck::Binders;
 use crate::typeck::DictLiteral;
 use crate::typeck::Substitution;
@@ -134,7 +134,7 @@ impl IntrinsicFunction {
         let known_keys = args
             .filter_map(|(arg, ty)| match arg {
                 Argument::Keyword { name, .. } => Some((
-                    LiteralString::new(db, name.as_str().to_string().into_boxed_str()),
+                    InternedString::new(db, name.as_str().to_string().into_boxed_str()),
                     ty.clone(),
                 )),
                 _ => None,

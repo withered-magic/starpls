@@ -6,6 +6,7 @@ use lsp_types::WorkDoneProgressCreateParams;
 use rustc_hash::FxHashSet;
 use starpls_common::FileId;
 
+use crate::commands::server::ServerCommand;
 use crate::config::ServerConfig;
 use crate::convert;
 use crate::dispatcher::RequestDispatcher;
@@ -15,7 +16,6 @@ use crate::handlers::notifications;
 use crate::handlers::requests;
 use crate::server::Server;
 use crate::server::ServerSnapshot;
-use crate::ServerArgs;
 
 #[macro_export]
 macro_rules! match_notification {
@@ -73,7 +73,7 @@ pub(crate) enum Event {
 
 pub fn process_connection(
     connection: Connection,
-    args: ServerArgs,
+    args: ServerCommand,
     initialize_params: InitializeParams,
 ) -> anyhow::Result<()> {
     debug!("initializing state and starting event loop");

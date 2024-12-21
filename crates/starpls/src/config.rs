@@ -1,10 +1,10 @@
 use lsp_types::ClientCapabilities;
 
-use crate::ServerArgs;
+use crate::commands::server::ServerCommand;
 
 #[derive(Default)]
 pub(crate) struct ServerConfig {
-    pub(crate) args: ServerArgs,
+    pub(crate) args: ServerCommand,
     pub(crate) caps: ClientCapabilities,
 }
 

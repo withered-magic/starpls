@@ -9,6 +9,7 @@ use annotate_snippets::Renderer;
 use annotate_snippets::Snippet;
 use anyhow::anyhow;
 use anyhow::bail;
+use clap::Args;
 use starpls_bazel::client::BazelCLI;
 use starpls_bazel::client::BazelInfo;
 use starpls_common::Diagnostic;
@@ -23,6 +24,41 @@ use crate::bazel::BazelContext;
 use crate::document::DefaultFileLoader;
 use crate::document::PathInterner;
 use crate::document::{self};
+
+#[derive(Args, Default)]
+pub(crate) struct CheckCommand {
+    /// Paths to typecheck.
+    paths: Vec<String>,
+
+    /// Path to the Bazel output base.
+    #[clap(long = "output_base")]
+    output_base: Option<String>,
+}
+
+impl CheckCommand {
+    pub(crate) fn run(self) -> anyhow::Result<()> {
+        let bazel_client = Arc::new(BazelCLI::default());
+        let bazel_cx = BazelContext::new(&*bazel_client)
+            .map_err(|err| anyhow!("failed to initialize Bazel context: {}", err))?;
+        let (fetch_repo_sender, _) = crossbeam_channel::unbounded();
+        let interner = Arc::new(PathInterner::default());
+        let loader = DefaultFileLoader::new(
+            bazel_client,
+            interner.clone(),
+            bazel_cx.info.workspace.clone(),
+            bazel_cx.info.workspace_name.clone(),
+            bazel_cx.info.output_base.join("external"),
+            fetch_repo_sender,
+            bazel_cx.bzlmod_enabled,
+        );
+
+        let mut analysis = Analysis::new(Arc::new(loader), Default::default());
+        analysis.set_builtin_defs(bazel_cx.builtins, bazel_cx.rules);
+
+        let checker = Checker::new(analysis, bazel_cx.info, interner, self.paths)?;
+        checker.report_diagnostics()
+    }
+}
 
 struct FileMetadata {
     path: String,
@@ -126,13 +162,14 @@ impl Checker {
         Ok(())
     }
 
-    fn report_diagnostics(&self, snapshot: &AnalysisSnapshot) -> anyhow::Result<()> {
+    fn report_diagnostics(&self) -> anyhow::Result<()> {
+        let snapshot = self.analysis.snapshot();
         let mut num_errors = 0;
         let mut files = self.files.iter().collect::<Vec<_>>();
         files.sort_by_key(|(file_id, _)| **file_id);
 
         for (file_id, metadata) in files {
-            self.report_diagnostics_for_file(snapshot, *file_id, metadata, &mut num_errors)?;
+            self.report_diagnostics_for_file(&snapshot, *file_id, metadata, &mut num_errors)?;
         }
 
         if num_errors > 0 {
@@ -146,32 +183,4 @@ impl Checker {
 
         Ok(())
     }
-
-    fn snapshot(&self) -> AnalysisSnapshot {
-        self.analysis.snapshot()
-    }
-}
-
-pub(crate) fn run_check(paths: Vec<String>, _output_base: Option<String>) -> anyhow::Result<()> {
-    let bazel_client = Arc::new(BazelCLI::default());
-    let bazel_cx = BazelContext::new(&*bazel_client)
-        .map_err(|err| anyhow!("failed to initialize Bazel context: {}", err))?;
-    let (fetch_repo_sender, _) = crossbeam_channel::unbounded();
-    let interner = Arc::new(PathInterner::default());
-    let loader = DefaultFileLoader::new(
-        bazel_client,
-        interner.clone(),
-        bazel_cx.info.workspace.clone(),
-        bazel_cx.info.workspace_name.clone(),
-        bazel_cx.info.output_base.join("external"),
-        fetch_repo_sender,
-        bazel_cx.bzlmod_enabled,
-    );
-
-    let mut analysis = Analysis::new(Arc::new(loader), Default::default());
-    analysis.set_builtin_defs(bazel_cx.builtins, bazel_cx.rules);
-
-    let checker = Checker::new(analysis, bazel_cx.info, interner, paths)?;
-    let snapshot = checker.snapshot();
-    checker.report_diagnostics(&snapshot)
 }

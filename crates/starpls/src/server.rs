@@ -77,7 +77,8 @@ impl Server {
         let (task_pool_sender, task_pool_receiver) = crossbeam_channel::unbounded();
         let task_pool = TaskPool::with_num_threads(task_pool_sender.clone(), 4)?;
         let task_pool_handle = TaskPoolHandle::new(task_pool_receiver, task_pool);
-        let mut has_bazel_init_err = false;
+
+        // Check if the user specified a path to the Bazel executable.
         let bazel_path = config
             .args
             .bazel_path
@@ -89,6 +90,8 @@ impl Server {
             bazel_path
         );
 
+        // Determine Bazel configuration.
+        let mut has_bazel_init_err = false;
         let bazel_client = Arc::new(BazelCLI::new(&bazel_path));
         let bazel_cx = match BazelContext::new(&*bazel_client) {
             Ok(cx) => cx,

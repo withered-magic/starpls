@@ -131,7 +131,6 @@ impl Checker {
     }
 
     fn report_diagnostics(&self, snapshot: &AnalysisSnapshot) -> anyhow::Result<()> {
-        let renderer = Renderer::styled();
         let mut num_errors = 0;
         let mut files = self.files.iter().collect::<Vec<_>>();
         files.sort_by_key(|(file_id, _)| **file_id);
@@ -143,7 +142,8 @@ impl Checker {
         if num_errors > 0 {
             anstream::println!(
                 "{}",
-                renderer.render(Level::Error.title(&format!("failed with {} errors", num_errors)))
+                Renderer::styled()
+                    .render(Level::Error.title(&format!("failed with {} errors", num_errors)))
             );
             std::process::exit(1);
         }

@@ -19,9 +19,9 @@ use starpls_common::Severity;
 use starpls_ide::Analysis;
 use starpls_ide::AnalysisSnapshot;
 use starpls_ide::Change;
-use starpls_ide::InferenceOptions;
 
 use crate::bazel::BazelContext;
+use crate::commands::InferenceOptions;
 use crate::document::DefaultFileLoader;
 use crate::document::PathInterner;
 use crate::document::{self};
@@ -35,20 +35,8 @@ pub(crate) struct CheckCommand {
     #[clap(long = "output_base")]
     pub(crate) output_base: Option<String>,
 
-    /// Infer attributes on a rule implementation function's context parameter.
-    #[clap(long = "experimental_infer_ctx_attributes", default_value_t = false)]
-    pub(crate) infer_ctx_attributes: bool,
-
-    /// Use code-flow analysis during typechecking.
-    #[clap(long = "experimental_use_code_flow_analysis", default_value_t = false)]
-    pub(crate) use_code_flow_analysis: bool,
-
-    /// Enable completions for labels for targets in the current workspace.
-    #[clap(
-        long = "experimental_enable_label_completions",
-        default_value_t = false
-    )]
-    pub(crate) enable_label_completions: bool,
+    #[command(flatten)]
+    pub(crate) inference_options: InferenceOptions,
 }
 
 impl CheckCommand {
@@ -70,9 +58,9 @@ impl CheckCommand {
 
         let mut analysis = Analysis::new(
             Arc::new(loader),
-            InferenceOptions {
-                infer_ctx_attributes: self.infer_ctx_attributes,
-                use_code_flow_analysis: self.use_code_flow_analysis,
+            starpls_ide::InferenceOptions {
+                infer_ctx_attributes: self.inference_options.infer_ctx_attributes,
+                use_code_flow_analysis: self.inference_options.use_code_flow_analysis,
                 ..Default::default()
             },
         );

@@ -133,8 +133,8 @@ impl Server {
         let mut analysis = Analysis::new(
             Arc::new(loader),
             InferenceOptions {
-                infer_ctx_attributes: config.args.infer_ctx_attributes,
-                use_code_flow_analysis: config.args.use_code_flow_analysis,
+                infer_ctx_attributes: config.args.inference_options.infer_ctx_attributes,
+                use_code_flow_analysis: config.args.inference_options.use_code_flow_analysis,
                 ..Default::default()
             },
         );

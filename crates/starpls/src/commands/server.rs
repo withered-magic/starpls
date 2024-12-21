@@ -9,6 +9,7 @@ use lsp_types::SignatureHelpOptions;
 use lsp_types::TextDocumentSyncCapability;
 use lsp_types::TextDocumentSyncKind;
 
+use crate::commands::InferenceOptions;
 use crate::event_loop;
 use crate::get_version;
 use crate::make_trigger_characters;
@@ -22,20 +23,15 @@ pub(crate) struct ServerCommand {
     #[clap(long = "bazel_path")]
     pub(crate) bazel_path: Option<String>,
 
-    /// Infer attributes on a rule implementation function's context parameter.
-    #[clap(long = "experimental_infer_ctx_attributes", default_value_t = false)]
-    pub(crate) infer_ctx_attributes: bool,
-
-    /// Use code-flow analysis during typechecking.
-    #[clap(long = "experimental_use_code_flow_analysis", default_value_t = false)]
-    pub(crate) use_code_flow_analysis: bool,
-
     /// Enable completions for labels for targets in the current workspace.
     #[clap(
         long = "experimental_enable_label_completions",
         default_value_t = false
     )]
     pub(crate) enable_label_completions: bool,
+
+    #[command(flatten)]
+    pub(crate) inference_options: InferenceOptions,
 }
 
 impl ServerCommand {

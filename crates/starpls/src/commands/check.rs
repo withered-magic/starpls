@@ -19,6 +19,7 @@ use starpls_common::Severity;
 use starpls_ide::Analysis;
 use starpls_ide::AnalysisSnapshot;
 use starpls_ide::Change;
+use starpls_ide::InferenceOptions;
 
 use crate::bazel::BazelContext;
 use crate::document::DefaultFileLoader;
@@ -28,11 +29,26 @@ use crate::document::{self};
 #[derive(Args, Default)]
 pub(crate) struct CheckCommand {
     /// Paths to typecheck.
-    paths: Vec<String>,
+    pub(crate) paths: Vec<String>,
 
     /// Path to the Bazel output base.
     #[clap(long = "output_base")]
-    output_base: Option<String>,
+    pub(crate) output_base: Option<String>,
+
+    /// Infer attributes on a rule implementation function's context parameter.
+    #[clap(long = "experimental_infer_ctx_attributes", default_value_t = false)]
+    pub(crate) infer_ctx_attributes: bool,
+
+    /// Use code-flow analysis during typechecking.
+    #[clap(long = "experimental_use_code_flow_analysis", default_value_t = false)]
+    pub(crate) use_code_flow_analysis: bool,
+
+    /// Enable completions for labels for targets in the current workspace.
+    #[clap(
+        long = "experimental_enable_label_completions",
+        default_value_t = false
+    )]
+    pub(crate) enable_label_completions: bool,
 }
 
 impl CheckCommand {
@@ -52,7 +68,14 @@ impl CheckCommand {
             bazel_cx.bzlmod_enabled,
         );
 
-        let mut analysis = Analysis::new(Arc::new(loader), Default::default());
+        let mut analysis = Analysis::new(
+            Arc::new(loader),
+            InferenceOptions {
+                infer_ctx_attributes: self.infer_ctx_attributes,
+                use_code_flow_analysis: self.use_code_flow_analysis,
+                ..Default::default()
+            },
+        );
         analysis.set_builtin_defs(bazel_cx.builtins, bazel_cx.rules);
 
         let checker = Checker::new(analysis, bazel_cx.info, interner, self.paths)?;

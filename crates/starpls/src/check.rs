@@ -3,13 +3,17 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::anyhow;
+use annotate_snippets::Level;
+use annotate_snippets::Message;
+use annotate_snippets::Renderer;
+use annotate_snippets::Snippet;
 use anyhow::bail;
 use log::debug;
 use log::info;
 use starpls_bazel::client::BazelCLI;
 use starpls_bazel::client::BazelClient;
 use starpls_bazel::client::BazelInfo;
+use starpls_common::Diagnostic;
 use starpls_common::FileId;
 use starpls_common::FileInfo;
 use starpls_common::Severity;
@@ -23,12 +27,36 @@ use crate::document::{self};
 use crate::server::load_bazel_build_language;
 use crate::server::load_bazel_builtins;
 
+struct FileMetadata {
+    path: String,
+    contents: String,
+}
+
 struct Checker {
     analysis: Analysis,
     bazel_info: BazelInfo,
     interner: Arc<PathInterner>,
-    file_order: Vec<FileId>,
-    file_id_to_original_path: HashMap<FileId, String>,
+    files: HashMap<FileId, FileMetadata>,
+}
+
+fn diagnostic_to_message<'a>(
+    diagnostic: &'a Diagnostic,
+    metadata: &'a FileMetadata,
+) -> Message<'a> {
+    let start: usize = diagnostic.range.range.start().into();
+    let end: usize = diagnostic.range.range.end().into();
+    let level = match diagnostic.severity {
+        Severity::Warning => Level::Warning,
+        Severity::Error => Level::Error,
+    };
+
+    level.title(&diagnostic.message).snippet(
+        Snippet::source(&metadata.contents)
+            .origin(&metadata.path)
+            .fold(true)
+            .line_start(1)
+            .annotation(Level::Error.span(start..end)),
+    )
 }
 
 impl Checker {
@@ -42,8 +70,7 @@ impl Checker {
             analysis,
             interner,
             bazel_info,
-            file_id_to_original_path: HashMap::new(),
-            file_order: Vec::new(),
+            files: HashMap::default(),
         };
 
         let mut change = Change::default();
@@ -77,10 +104,8 @@ impl Checker {
         });
 
         let file_id = self.interner.intern_path(canonical_path);
-
-        self.file_id_to_original_path.insert(file_id, path);
-        change.create_file(file_id, dialect, info, contents);
-        self.file_order.push(file_id);
+        change.create_file(file_id, dialect, info, contents.clone());
+        self.files.insert(file_id, FileMetadata { path, contents });
 
         Ok(())
     }
@@ -89,41 +114,38 @@ impl Checker {
         &self,
         snapshot: &AnalysisSnapshot,
         file_id: FileId,
+        metadata: &FileMetadata,
         num_errors: &mut usize,
     ) -> anyhow::Result<()> {
-        let line_index = snapshot
-            .line_index(file_id)?
-            .ok_or_else(|| anyhow!("Failed to compute line index"))?;
-
+        let renderer = Renderer::styled();
         for diagnostic in snapshot.diagnostics(file_id)? {
-            let loc = line_index.line_col(diagnostic.range.range.start());
-            println!(
-                "{}:{}:{} - {}: {}",
-                self.file_id_to_original_path.get(&file_id).unwrap(),
-                loc.line + 1,
-                loc.col + 1,
-                match diagnostic.severity {
-                    Severity::Warning => "warn",
-                    Severity::Error => {
-                        *num_errors += 1;
-                        "error"
-                    }
-                },
-                diagnostic.message,
+            if diagnostic.severity == Severity::Error {
+                *num_errors += 1;
+            }
+            anstream::print!(
+                "{}\n\n",
+                renderer.render(diagnostic_to_message(&diagnostic, metadata))
             );
         }
-
         Ok(())
     }
 
     fn report_diagnostics(&self, snapshot: &AnalysisSnapshot) -> anyhow::Result<()> {
+        let renderer = Renderer::styled();
         let mut num_errors = 0;
-        for file_id in &self.file_order {
-            self.report_diagnostics_for_file(snapshot, *file_id, &mut num_errors)?;
+        let mut files = self.files.iter().collect::<Vec<_>>();
+        files.sort_by_key(|(file_id, _)| **file_id);
+
+        for (file_id, metadata) in files {
+            self.report_diagnostics_for_file(snapshot, *file_id, metadata, &mut num_errors)?;
         }
 
         if num_errors > 0 {
-            bail!("Failed with {} errors", num_errors);
+            anstream::println!(
+                "{}",
+                renderer.render(Level::Error.title(&format!("failed with {} errors", num_errors)))
+            );
+            std::process::exit(1);
         }
 
         Ok(())

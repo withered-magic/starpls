@@ -75,11 +75,16 @@ pub(crate) struct ServerArgs {
 }
 
 fn main() -> anyhow::Result<()> {
-    env_logger::Builder::from_default_env()
-        .filter(Some("starpls"), log::LevelFilter::max())
-        .init();
-
     let cli = Cli::parse();
+
+    // Don't do any log filtering when running the language server.
+    if matches!(cli.command, Some(Commands::Server(_)) | None) {
+        env_logger::Builder::from_default_env()
+            .filter(Some("starpls"), log::LevelFilter::max())
+            .init();
+    } else {
+        env_logger::init();
+    }
 
     match cli.command {
         Some(Commands::Check { paths, output_base }) => run_check(paths, output_base),

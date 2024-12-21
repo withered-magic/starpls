@@ -55,7 +55,7 @@ fn diagnostic_to_message<'a>(
             .origin(&metadata.path)
             .fold(true)
             .line_start(1)
-            .annotation(Level::Error.span(start..end)),
+            .annotation(level.span(start..end)),
     )
 }
 

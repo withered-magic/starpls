@@ -29,20 +29,14 @@ fn check_infer_with_code_flow_analysis(input: &str, expect: Expect) {
         expect,
         InferenceOptions {
             use_code_flow_analysis: true,
+            allow_unused_definitions: true,
             ..Default::default()
         },
     )
 }
 
 fn check_infer_with_unused_definitions(input: &str, expect: Expect) {
-    check_infer_with_options(
-        input,
-        expect,
-        InferenceOptions {
-            report_unused_definitions: true,
-            ..Default::default()
-        },
-    )
+    check_infer_with_options(input, expect, Default::default())
 }
 
 fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptions) {

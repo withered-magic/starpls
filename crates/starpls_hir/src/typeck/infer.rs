@@ -337,7 +337,7 @@ impl TyContext<'_> {
         self.infer_all_params(file);
         self.walk_stmts(file, &module.top_level);
 
-        if self.shared_state.options.report_unused_definitions {
+        if !self.shared_state.options.allow_unused_definitions {
             self.report_unused_definitions(file);
         }
 

@@ -214,7 +214,7 @@ impl Server {
             InferenceOptions {
                 infer_ctx_attributes: config.args.infer_ctx_attributes,
                 use_code_flow_analysis: config.args.use_code_flow_analysis,
-                report_unused_definitions: true,
+                ..Default::default()
             },
         );
 

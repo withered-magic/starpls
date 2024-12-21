@@ -161,7 +161,7 @@ impl std::error::Error for Cancelled {}
 pub struct InferenceOptions {
     pub infer_ctx_attributes: bool,
     pub use_code_flow_analysis: bool,
-    pub report_unused_definitions: bool,
+    pub allow_unused_definitions: bool,
 }
 
 #[derive(Default)]

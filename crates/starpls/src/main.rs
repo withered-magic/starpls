@@ -12,6 +12,7 @@ use lsp_types::SignatureHelpOptions;
 use lsp_types::TextDocumentSyncCapability;
 use lsp_types::TextDocumentSyncKind;
 
+mod bazel;
 mod check;
 mod config;
 mod convert;

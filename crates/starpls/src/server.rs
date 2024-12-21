@@ -27,6 +27,7 @@ use starpls_ide::AnalysisSnapshot;
 use starpls_ide::Change;
 use starpls_ide::InferenceOptions;
 
+use crate::bazel::BazelContext;
 use crate::config::ServerConfig;
 use crate::debouncer::AnalysisDebouncer;
 use crate::diagnostics::DiagnosticsManager;
@@ -77,106 +78,23 @@ impl Server {
         let task_pool = TaskPool::with_num_threads(task_pool_sender.clone(), 4)?;
         let task_pool_handle = TaskPoolHandle::new(task_pool_receiver, task_pool);
         let mut has_bazel_init_err = false;
-
-        // Load Bazel builtins from the specified file.
-        let builtins = match load_bazel_builtins() {
-            Ok(builtins) => builtins,
-            Err(err) => {
-                error!("failed to load builtins, {}", err);
-                Default::default()
-            }
-        };
-
-        debug!("fetching Bazel configuration");
-
         let bazel_path = config
             .args
             .bazel_path
             .clone()
             .unwrap_or("bazel".to_string());
 
-        debug!("using Bazel executable at {:?}", bazel_path);
+        debug!(
+            "fetching Bazel configuration using Bazel executable at {:?}",
+            bazel_path
+        );
 
         let bazel_client = Arc::new(BazelCLI::new(&bazel_path));
-        let info = match bazel_client.info() {
-            Ok(info) => info,
+        let bazel_cx = match BazelContext::new(&*bazel_client) {
+            Ok(cx) => cx,
             Err(err) => {
-                error!("failed to run fetch Bazel configuration: {}", err);
                 has_bazel_init_err = true;
-                Default::default()
-            }
-        };
-
-        info!("Bazel version: {}", info.release);
-        info!("workspace root: {:?}", info.workspace);
-        info!("workspace name: {:?}", info.workspace_name);
-
-        // Determine the output base for the purpose of resolving external repositories.
-        let external_output_base = info.output_base.join("external");
-
-        info!("external output base: {:?}", external_output_base);
-        info!("starlark-semantics: {:?}", info.starlark_semantics);
-
-        // We determine whether to use bzlmod in two steps. First, we check if `MODULE.bazel` exists at all,
-        // and if so, whether the `bazel mod dump_repo_mapping` command is supported. If either of these
-        // checks fails, then we can't use bzlmod anyways.
-        let bzlmod_capability = info
-            .workspace
-            .join("MODULE.bazel")
-            .try_exists()
-            .unwrap_or(false)
-            && {
-                debug!("checking for `bazel mod dump_repo_mapping` capability");
-                match bazel_client.dump_repo_mapping("") {
-                    Ok(_) => true,
-                    Err(err) => {
-                        has_bazel_init_err = true;
-                        error!(
-                            "failed to run `bazel mod dump_repo_mapping`, disabling bzlmod support: {}", err
-                        );
-                        false
-                    }
-                }
-            };
-
-        let bzlmod_enabled = bzlmod_capability && {
-            // Next, we check if bzlmod is enabled by default for the current Bazel version.
-            // bzlmod is enabled by default for Bazel versions 7 and later.
-            // TODO(withered-magic): Just hardcoding this for now since I'm lazy to parse the actual versions.
-            // This should last us pretty long since Bazel 9 isn't anywhere on the horizon.
-            let bzlmod_enabled_by_default = ["release 7", "release 8", "release 9"]
-                .iter()
-                .any(|release| info.release.starts_with(release));
-
-            if bzlmod_enabled_by_default {
-                info!("Bazel 7 or later detected")
-            }
-
-            // Finally, check starlark-semantics to determine whether bzlmod has been explicitly
-            // enabled/disabled, e.g. in a .bazelrc file.
-            if info.starlark_semantics.contains("enable_bzlmod=true") {
-                info!("found enable_bzlmod=true in starlark-semantics");
-                true
-            } else if info.starlark_semantics.contains("enable_bzlmod=false") {
-                info!("found enable_bzlmod=false in starlark-semantics");
-                false
-            } else {
-                bzlmod_enabled_by_default
-            }
-        };
-
-        info!("bzlmod_enabled = {}", bzlmod_enabled);
-
-        // Load builtin rules from `bazel info build-language`.
-        debug!("fetching builtin rules via `bazel info build-language`");
-        let rules = match load_bazel_build_language(&*bazel_client) {
-            Ok(builtins) => {
-                debug!("successfully fetched builtin rules");
-                builtins
-            }
-            Err(err) => {
-                error!("failed to run `bazel info build-language`: {}", err);
-                has_bazel_init_err = true;
+                error!("failed to initialize Bazel context: {}", err);
                 Default::default()
             }
         };
@@ -203,11 +121,11 @@ impl Server {
         let loader = DefaultFileLoader::new(
             bazel_client.clone(),
             path_interner.clone(),
-            info.workspace.clone(),
-            info.workspace_name,
-            external_output_base.clone(),
+            bazel_cx.info.workspace.clone(),
+            bazel_cx.info.workspace_name,
+            bazel_cx.info.output_base.join("external"),
             task_pool_sender.clone(),
-            bzlmod_enabled,
+            bazel_cx.bzlmod_enabled,
         );
         let mut analysis = Analysis::new(
             Arc::new(loader),
@@ -219,11 +137,11 @@ impl Server {
         );
 
         analysis.set_all_workspace_targets(targets);
-        analysis.set_builtin_defs(builtins, rules);
+        analysis.set_builtin_defs(bazel_cx.builtins, bazel_cx.rules);
 
         // Check for a prelude file. We skip verifying that `//tools/build_tools` is actually a package (i.e.
         // that it actually contains a `BUILD.bazel`) file for simplicity.
-        if let Ok((prelude, contents)) = load_bazel_prelude(&info.workspace) {
+        if let Ok((prelude, contents)) = load_bazel_prelude(&bazel_cx.info.workspace) {
             info!("found prelude file at {:?}", prelude);
             let file_id = path_interner.intern_path(prelude);
             let mut change = Change::default();
@@ -247,7 +165,7 @@ impl Server {
             task_pool_handle,
             document_manager: Arc::new(RwLock::new(DocumentManager::new(
                 path_interner,
-                info.workspace,
+                bazel_cx.info.workspace,
             ))),
             diagnostics_manager: Default::default(),
             analysis,
@@ -260,7 +178,7 @@ impl Server {
             fetched_repos: Default::default(),
             is_fetching_repos: false,
             is_refreshing_all_workspace_targets: false,
-            bzlmod_enabled,
+            bzlmod_enabled: bazel_cx.bzlmod_enabled,
         };
 
         if has_bazel_init_err {

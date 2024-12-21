@@ -7,11 +7,9 @@ use annotate_snippets::Level;
 use annotate_snippets::Message;
 use annotate_snippets::Renderer;
 use annotate_snippets::Snippet;
+use anyhow::anyhow;
 use anyhow::bail;
-use log::debug;
-use log::info;
 use starpls_bazel::client::BazelCLI;
-use starpls_bazel::client::BazelClient;
 use starpls_bazel::client::BazelInfo;
 use starpls_common::Diagnostic;
 use starpls_common::FileId;
@@ -21,11 +19,10 @@ use starpls_ide::Analysis;
 use starpls_ide::AnalysisSnapshot;
 use starpls_ide::Change;
 
+use crate::bazel::BazelContext;
 use crate::document::DefaultFileLoader;
 use crate::document::PathInterner;
 use crate::document::{self};
-use crate::server::load_bazel_build_language;
-use crate::server::load_bazel_builtins;
 
 struct FileMetadata {
     path: String,
@@ -49,7 +46,6 @@ fn diagnostic_to_message<'a>(
         Severity::Warning => Level::Warning,
         Severity::Error => Level::Error,
     };
-
     level.title(&diagnostic.message).snippet(
         Snippet::source(&metadata.contents)
             .origin(&metadata.path)
@@ -156,46 +152,26 @@ impl Checker {
     }
 }
 
-pub(crate) fn run_check(paths: Vec<String>, output_base: Option<String>) -> anyhow::Result<()> {
+pub(crate) fn run_check(paths: Vec<String>, _output_base: Option<String>) -> anyhow::Result<()> {
     let bazel_client = Arc::new(BazelCLI::default());
-    let bazel_info = bazel_client.info()?;
-    let external_output_base = output_base
-        .map(PathBuf::from)
-        .unwrap_or_else(|| bazel_info.output_base.join("external"));
-
-    let bzlmod_enabled = bazel_info
-        .workspace
-        .join("MODULE.bazel")
-        .try_exists()
-        .unwrap_or(false)
-        && {
-            debug!("checking for `bazel mod dump_repo_mapping` capability");
-            match bazel_client.dump_repo_mapping("") {
-                Ok(_) => true,
-                Err(_) => {
-                    info!("installed Bazel version doesn't support `bazel mod dump_repo_mapping`, disabling bzlmod support");
-                    false
-                }
-            }
-        };
-
+    let bazel_cx = BazelContext::new(&*bazel_client)
+        .map_err(|err| anyhow!("failed to initialize Bazel context: {}", err))?;
     let (fetch_repo_sender, _) = crossbeam_channel::unbounded();
-    let builtins = load_bazel_builtins()?;
-    let rules = load_bazel_build_language(&*bazel_client)?;
     let interner = Arc::new(PathInterner::default());
     let loader = DefaultFileLoader::new(
         bazel_client,
         interner.clone(),
-        bazel_info.workspace.clone(),
-        bazel_info.workspace_name.clone(),
-        external_output_base.clone(),
+        bazel_cx.info.workspace.clone(),
+        bazel_cx.info.workspace_name.clone(),
+        bazel_cx.info.output_base.join("external"),
         fetch_repo_sender,
-        bzlmod_enabled,
+        bazel_cx.bzlmod_enabled,
     );
-    let mut analysis = Analysis::new(Arc::new(loader), Default::default());
-    analysis.set_builtin_defs(builtins, rules);
 
-    let checker = Checker::new(analysis, bazel_info, interner, paths)?;
+    let mut analysis = Analysis::new(Arc::new(loader), Default::default());
+    analysis.set_builtin_defs(bazel_cx.builtins, bazel_cx.rules);
+
+    let checker = Checker::new(analysis, bazel_cx.info, interner, paths)?;
     let snapshot = checker.snapshot();
     checker.report_diagnostics(&snapshot)
 }

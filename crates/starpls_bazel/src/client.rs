@@ -33,6 +33,7 @@ pub trait BazelClient: Send + Sync + 'static {
     fn repo_mapping_keys(&self, from_repo: &str) -> anyhow::Result<Vec<String>>;
     fn query_all_workspace_targets(&self) -> anyhow::Result<Vec<String>>;
     fn fetch_repo(&self, repo: &str) -> anyhow::Result<()>;
+    fn dump_repo_mapping(&self, repo: &str) -> anyhow::Result<HashMap<String, String>>;
 }
 
 pub struct BazelCLI {
@@ -62,15 +63,6 @@ impl BazelCLI {
             );
         }
         Ok(output.stdout)
-    }
-
-    pub fn dump_repo_mapping(&self, repo: &str) -> anyhow::Result<HashMap<String, String>> {
-        let output = self.run_command(["mod", "--enable_bzlmod", "dump_repo_mapping", repo])?;
-        let json = String::from_utf8(output)?;
-        let mut mappings = Deserializer::from_str(&json).into_iter::<HashMap<String, String>>();
-        Ok(mappings
-            .next()
-            .ok_or_else(|| anyhow!("missing repo mapping for repository: {:?}", repo))??)
     }
 }
 
@@ -193,6 +185,15 @@ impl BazelClient for BazelCLI {
     fn fetch_repo(&self, repo: &str) -> anyhow::Result<()> {
         self.run_command(["fetch", "--repo", &format!("@@{}", repo)])?;
         Ok(())
+    }
+
+    fn dump_repo_mapping(&self, repo: &str) -> anyhow::Result<HashMap<String, String>> {
+        let output = self.run_command(["mod", "--enable_bzlmod", "dump_repo_mapping", repo])?;
+        let json = String::from_utf8(output)?;
+        let mut mappings = Deserializer::from_str(&json).into_iter::<HashMap<String, String>>();
+        Ok(mappings
+            .next()
+            .ok_or_else(|| anyhow!("missing repo mapping for repository: {:?}", repo))??)
     }
 }
 

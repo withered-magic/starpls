@@ -20,7 +20,14 @@ use crate::DisplayWithDb;
 use crate::InferenceOptions;
 
 fn check_infer(input: &str, expect: Expect) {
-    check_infer_with_options(input, expect, Default::default())
+    check_infer_with_options(
+        input,
+        expect,
+        InferenceOptions {
+            allow_unused_definitions: true,
+            ..Default::default()
+        },
+    )
 }
 
 fn check_infer_with_code_flow_analysis(input: &str, expect: Expect) {
@@ -1349,7 +1356,7 @@ my_rule = repository_rule(
         InferenceOptions {
             infer_ctx_attributes: true,
             use_code_flow_analysis: true,
-            ..Default::default()
+            allow_unused_definitions: true,
         },
     );
 }

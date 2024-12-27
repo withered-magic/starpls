@@ -93,7 +93,21 @@ fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptio
     builder.add_type(FixtureType::new(
         "attr",
         vec![],
-        vec!["int", "label_list", "string"],
+        vec![
+            "bool",
+            "int",
+            "int_list",
+            "label",
+            "label_keyed_string_dict",
+            "label_list",
+            "output",
+            "output_list",
+            "string",
+            "string_dict",
+            "string_keyed_label_dict",
+            "string_list",
+            "string_list_dict",
+        ],
     ));
     builder.add_global("attr", "attr");
     builder.add_global("config_common", "config_common");
@@ -1352,6 +1366,150 @@ my_rule = repository_rule(
             360..377 "attr.label_list()": Attribute
             342..384 "{\n        \"srcs\": attr.label_list(),\n    }": dict[string, Attribute]
             269..387 "repository_rule(\n    implementation = _repository_rule_impl,\n    attrs = {\n        \"srcs\": attr.label_list(),\n    },\n)": repository_rule
+        "#]],
+        InferenceOptions {
+            infer_ctx_attributes: true,
+            use_code_flow_analysis: true,
+            allow_unused_definitions: true,
+        },
+    );
+}
+
+#[test]
+fn test_infer_ctx_attrs_all() {
+    check_infer_with_options(
+        r#"
+def _rule_impl(ctx):
+    ctx.attr.a
+    ctx.attr.b
+    ctx.attr.c
+    ctx.attr.d
+    ctx.attr.e
+    ctx.attr.f
+    ctx.attr.g
+    ctx.attr.h
+    ctx.attr.i
+    ctx.attr.j
+    ctx.attr.k
+    ctx.attr.l
+    ctx.attr.m
+
+my_rule = rule(
+    implementation = _rule_impl,
+    attrs = {
+        "a": attr.bool(),
+        "b": attr.int(),
+        "c": attr.int_list(),
+        "d": attr.label(),
+        "e": attr.label_keyed_string_dict(),
+        "f": attr.label_list(),
+        "g": attr.output(),
+        "h": attr.output_list(),
+        "i": attr.string(),
+        "j": attr.string_dict(),
+        "k": attr.string_keyed_label_dict(),
+        "l": attr.string_list(),
+        "m": attr.string_list_dict(),
+    },
+)
+"#,
+        expect![[r#"
+            26..29 "ctx": ctx
+            26..34 "ctx.attr": struct
+            26..36 "ctx.attr.a": bool
+            41..44 "ctx": ctx
+            41..49 "ctx.attr": struct
+            41..51 "ctx.attr.b": int
+            56..59 "ctx": ctx
+            56..64 "ctx.attr": struct
+            56..66 "ctx.attr.c": list[int]
+            71..74 "ctx": ctx
+            71..79 "ctx.attr": struct
+            71..81 "ctx.attr.d": Target
+            86..89 "ctx": ctx
+            86..94 "ctx.attr": struct
+            86..96 "ctx.attr.e": dict[Target, string]
+            101..104 "ctx": ctx
+            101..109 "ctx.attr": struct
+            101..111 "ctx.attr.f": list[Target]
+            116..119 "ctx": ctx
+            116..124 "ctx.attr": struct
+            116..126 "ctx.attr.g": Unknown
+            131..134 "ctx": ctx
+            131..139 "ctx.attr": struct
+            131..141 "ctx.attr.h": list[Unknown]
+            146..149 "ctx": ctx
+            146..154 "ctx.attr": struct
+            146..156 "ctx.attr.i": string
+            161..164 "ctx": ctx
+            161..169 "ctx.attr": struct
+            161..171 "ctx.attr.j": dict[string, string]
+            176..179 "ctx": ctx
+            176..184 "ctx.attr": struct
+            176..186 "ctx.attr.k": dict[string, Target]
+            191..194 "ctx": ctx
+            191..199 "ctx.attr": struct
+            191..201 "ctx.attr.l": list[string]
+            206..209 "ctx": ctx
+            206..214 "ctx.attr": struct
+            206..216 "ctx.attr.m": dict[string, list[string]]
+            218..225 "my_rule": rule
+            228..232 "rule": def rule(*args, **kwargs) -> Unknown
+            255..265 "_rule_impl": def _rule_impl(ctx) -> Unknown
+            289..292 "\"a\"": Literal["a"]
+            294..298 "attr": attr
+            294..303 "attr.bool": def bool(*args, **kwargs) -> Unknown
+            294..305 "attr.bool()": Attribute
+            315..318 "\"b\"": Literal["b"]
+            320..324 "attr": attr
+            320..328 "attr.int": def int(*args, **kwargs) -> Unknown
+            320..330 "attr.int()": Attribute
+            340..343 "\"c\"": Literal["c"]
+            345..349 "attr": attr
+            345..358 "attr.int_list": def int_list(*args, **kwargs) -> Unknown
+            345..360 "attr.int_list()": Attribute
+            370..373 "\"d\"": Literal["d"]
+            375..379 "attr": attr
+            375..385 "attr.label": def label(*args, **kwargs) -> Unknown
+            375..387 "attr.label()": Attribute
+            397..400 "\"e\"": Literal["e"]
+            402..406 "attr": attr
+            402..430 "attr.label_keyed_string_dict": def label_keyed_string_dict(*args, **kwargs) -> Unknown
+            402..432 "attr.label_keyed_string_dict()": Attribute
+            442..445 "\"f\"": Literal["f"]
+            447..451 "attr": attr
+            447..462 "attr.label_list": def label_list(*args, **kwargs) -> Unknown
+            447..464 "attr.label_list()": Attribute
+            474..477 "\"g\"": Literal["g"]
+            479..483 "attr": attr
+            479..490 "attr.output": def output(*args, **kwargs) -> Unknown
+            479..492 "attr.output()": Attribute
+            502..505 "\"h\"": Literal["h"]
+            507..511 "attr": attr
+            507..523 "attr.output_list": def output_list(*args, **kwargs) -> Unknown
+            507..525 "attr.output_list()": Attribute
+            535..538 "\"i\"": Literal["i"]
+            540..544 "attr": attr
+            540..551 "attr.string": def string(*args, **kwargs) -> Unknown
+            540..553 "attr.string()": Attribute
+            563..566 "\"j\"": Literal["j"]
+            568..572 "attr": attr
+            568..584 "attr.string_dict": def string_dict(*args, **kwargs) -> Unknown
+            568..586 "attr.string_dict()": Attribute
+            596..599 "\"k\"": Literal["k"]
+            601..605 "attr": attr
+            601..629 "attr.string_keyed_label_dict": def string_keyed_label_dict(*args, **kwargs) -> Unknown
+            601..631 "attr.string_keyed_label_dict()": Attribute
+            641..644 "\"l\"": Literal["l"]
+            646..650 "attr": attr
+            646..662 "attr.string_list": def string_list(*args, **kwargs) -> Unknown
+            646..664 "attr.string_list()": Attribute
+            674..677 "\"m\"": Literal["m"]
+            679..683 "attr": attr
+            679..700 "attr.string_list_dict": def string_list_dict(*args, **kwargs) -> Unknown
+            679..702 "attr.string_list_dict()": Attribute
+            279..709 "{\n        \"a\": attr.bool(),\n        \"b\": attr.int(),\n        \"c\": attr.int_list(),\n        \"d\": attr.label(),\n        \"e\": attr.label_keyed_string_dict(),\n        \"f\": attr.label_list(),\n        \"g\": attr.output(),\n        \"h\": attr.output_list(),\n        \"i\": attr.string(),\n        \"j\": attr.string_dict(),\n        \"k\": attr.string_keyed_label_dict(),\n        \"l\": attr.string_list(),\n        \"m\": attr.string_list_dict(),\n    }": dict[string, Attribute]
+            228..712 "rule(\n    implementation = _rule_impl,\n    attrs = {\n        \"a\": attr.bool(),\n        \"b\": attr.int(),\n        \"c\": attr.int_list(),\n        \"d\": attr.label(),\n        \"e\": attr.label_keyed_string_dict(),\n        \"f\": attr.label_list(),\n        \"g\": attr.output(),\n        \"h\": attr.output_list(),\n        \"i\": attr.string(),\n        \"j\": attr.string_dict(),\n        \"k\": attr.string_keyed_label_dict(),\n        \"l\": attr.string_list(),\n        \"m\": attr.string_list_dict(),\n    },\n)": rule
         "#]],
         InferenceOptions {
             infer_ctx_attributes: true,

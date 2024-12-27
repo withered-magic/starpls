@@ -32,6 +32,8 @@ pub enum AttributeKind {
     #[serde(rename = "Dictionary of strings")]
     StringDict,
     // TODO(withered-magic): Add a `rename`.
+    StringKeyedLabelDict,
+    // TODO(withered-magic): Add a `rename`.
     StringListDict,
 }
 

@@ -1320,6 +1320,7 @@ pub enum AttributeKind {
     OutputList,
     String,
     StringDict,
+    StringKeyedLabelDict,
     StringList,
     StringListDict,
 }
@@ -1353,9 +1354,9 @@ impl Attribute {
             AttributeKind::Int => Ty::int(),
             AttributeKind::IntList => Ty::list(Ty::int()),
             AttributeKind::String | AttributeKind::Label | AttributeKind::Output => Ty::string(),
-            AttributeKind::StringDict | AttributeKind::LabelKeyedStringDict => {
-                Ty::dict(Ty::string(), Ty::string(), None)
-            }
+            AttributeKind::StringDict
+            | AttributeKind::LabelKeyedStringDict
+            | AttributeKind::StringKeyedLabelDict => Ty::dict(Ty::string(), Ty::string(), None),
             AttributeKind::StringList | AttributeKind::LabelList | AttributeKind::OutputList => {
                 Ty::list(Ty::string())
             }
@@ -1372,6 +1373,7 @@ impl Attribute {
             AttributeKind::Label => Ty::target(),
             AttributeKind::Output => Ty::unknown(),
             AttributeKind::StringDict => Ty::dict(Ty::string(), Ty::string(), None),
+            AttributeKind::StringKeyedLabelDict => Ty::dict(Ty::string(), Ty::target(), None),
             AttributeKind::LabelKeyedStringDict => Ty::dict(Ty::target(), Ty::string(), None),
             AttributeKind::StringList => Ty::list(Ty::string()),
             AttributeKind::LabelList => Ty::list(TyKind::Target.intern()),

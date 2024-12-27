@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -13,12 +15,15 @@ use clap::Args;
 use starpls_bazel::client::BazelCLI;
 use starpls_bazel::client::BazelInfo;
 use starpls_common::Diagnostic;
+use starpls_common::Dialect;
 use starpls_common::FileId;
 use starpls_common::FileInfo;
 use starpls_common::Severity;
 use starpls_ide::Analysis;
 use starpls_ide::AnalysisSnapshot;
 use starpls_ide::Change;
+use walkdir::DirEntry;
+use walkdir::WalkDir;
 
 use crate::bazel::BazelContext;
 use crate::commands::InferenceOptions;
@@ -34,6 +39,13 @@ pub(crate) struct CheckCommand {
     /// Path to the Bazel output base.
     #[clap(long = "output_base")]
     pub(crate) output_base: Option<String>,
+
+    /// Specify patterns of files/directories to ignore.
+    #[clap(long = "ignore_pattern")]
+    pub(crate) ignore_patterns: Vec<String>,
+
+    #[clap(long = "ext")]
+    pub(crate) extensions: Vec<String>,
 
     #[command(flatten)]
     pub(crate) inference_options: InferenceOptions,
@@ -66,13 +78,32 @@ impl CheckCommand {
         );
         analysis.set_builtin_defs(bazel_cx.builtins, bazel_cx.rules);
 
-        let checker = Checker::new(analysis, bazel_cx.info, interner, self.paths)?;
+        // Strip off the leading "." from each of the specified extensions.
+        // This works better when filtering against files with .extension().
+        let extensions = self
+            .extensions
+            .iter()
+            .map(|ext| match ext.strip_prefix('.') {
+                Some(ext) => ext,
+                None => ext,
+            })
+            .chain(["star", "sky"])
+            .collect::<Vec<_>>();
+
+        let checker = Checker::new(
+            analysis,
+            bazel_cx.info,
+            interner,
+            self.paths,
+            self.ignore_patterns,
+            &extensions,
+        )?;
         checker.report_diagnostics()
     }
 }
 
 struct FileMetadata {
-    path: String,
+    path: PathBuf,
     contents: String,
 }
 
@@ -81,6 +112,7 @@ struct Checker {
     bazel_info: BazelInfo,
     interner: Arc<PathInterner>,
     files: HashMap<FileId, FileMetadata>,
+    ignored_files: HashSet<PathBuf>,
 }
 
 fn diagnostic_to_message<'a>(
@@ -95,11 +127,22 @@ fn diagnostic_to_message<'a>(
     };
     level.title(&diagnostic.message).snippet(
         Snippet::source(&metadata.contents)
-            .origin(&metadata.path)
+            .origin(metadata.path.as_os_str().to_str().unwrap_or(""))
             .fold(true)
             .line_start(1)
             .annotation(level.span(start..end)),
     )
+}
+
+fn is_hidden(entry: &DirEntry) -> bool {
+    entry
+        .file_name()
+        .to_str()
+        .map(|s| {
+            // Don't consider lone "." as a hidden entry.
+            s.starts_with('.') && s != "."
+        })
+        .unwrap_or(false)
 }
 
 impl Checker {
@@ -108,38 +151,73 @@ impl Checker {
         bazel_info: BazelInfo,
         interner: Arc<PathInterner>,
         paths: Vec<String>,
+        ignore_patterns: Vec<String>,
+        extensions: &[&str],
     ) -> anyhow::Result<Self> {
         let mut checker = Self {
             analysis,
             interner,
             bazel_info,
-            files: HashMap::default(),
+            files: Default::default(),
+            ignored_files: Default::default(),
         };
-
         let mut change = Change::default();
+
         for path in paths {
-            checker.load_file(&mut change, path)?;
+            for entry in WalkDir::new(&path).into_iter().filter_entry(|e| {
+                !is_hidden(e)
+                    && !ignore_patterns
+                        .iter()
+                        .any(|pat| e.file_name().to_str().map(|s| s == pat).unwrap_or(false))
+            }) {
+                let entry = entry?;
+                if entry.file_type().is_file() {
+                    let is_explicit = entry.path().as_os_str().to_str() == Some(path.as_str());
+                    checker.load_file(&mut change, entry.path(), is_explicit, extensions)?;
+                }
+            }
         }
 
         checker.analysis.apply_change(change);
-
         Ok(checker)
     }
 
-    fn load_file(&mut self, change: &mut Change, path: String) -> anyhow::Result<()> {
+    fn load_file(
+        &mut self,
+        change: &mut Change,
+        path: &Path,
+        is_explicit: bool,
+        extensions: &[&str],
+    ) -> anyhow::Result<()> {
         let canonical_path = PathBuf::from(&path).canonicalize()?;
         if self.interner.lookup_by_path_buf(&canonical_path).is_some() {
             return Ok(());
         }
 
-        let contents = fs::read_to_string(&canonical_path)?;
         let (dialect, api_context) = match document::dialect_and_api_context_for_workspace_path(
             &self.bazel_info.workspace,
             &canonical_path,
         ) {
             Some(res) => res,
-            None => bail!("Failed to determine Starlark dialect for file: {}", path),
+            None => bail!("Failed to determine Starlark dialect for file: {:?}", path),
         };
+
+        // Only process files that match any of the file extensions passed via the command line.
+        // This always includes ".star" and ".sky" files.
+        if dialect == Dialect::Standard
+            && !path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| extensions.contains(&ext))
+                .unwrap_or(false)
+        {
+            if is_explicit {
+                self.ignored_files.insert(path.to_path_buf());
+            }
+            return Ok(());
+        }
+
+        let contents = fs::read_to_string(&canonical_path)?;
 
         let info = api_context.map(|api_context| FileInfo::Bazel {
             api_context,
@@ -148,7 +226,13 @@ impl Checker {
 
         let file_id = self.interner.intern_path(canonical_path);
         change.create_file(file_id, dialect, info, contents.clone());
-        self.files.insert(file_id, FileMetadata { path, contents });
+        self.files.insert(
+            file_id,
+            FileMetadata {
+                path: path.to_path_buf(),
+                contents,
+            },
+        );
 
         Ok(())
     }
@@ -159,11 +243,13 @@ impl Checker {
         file_id: FileId,
         metadata: &FileMetadata,
         num_errors: &mut usize,
+        num_warnings: &mut usize,
     ) -> anyhow::Result<()> {
         let renderer = Renderer::styled();
         for diagnostic in snapshot.diagnostics(file_id)? {
-            if diagnostic.severity == Severity::Error {
-                *num_errors += 1;
+            match diagnostic.severity {
+                Severity::Warning => *num_warnings += 1,
+                Severity::Error => *num_errors += 1,
             }
             anstream::print!(
                 "{}\n\n",
@@ -176,20 +262,59 @@ impl Checker {
     fn report_diagnostics(&self) -> anyhow::Result<()> {
         let snapshot = self.analysis.snapshot();
         let mut num_errors = 0;
+        let mut num_warnings = 0;
+
+        let mut ignored_files = self.ignored_files.iter().collect::<Vec<_>>();
+        ignored_files.sort();
+
+        for path in ignored_files {
+            anstream::print!(
+                "{}\n\n",
+                Renderer::styled().render(
+                    Level::Warning.title(&format!("non-Starlark file {:?} was ignored", path))
+                )
+            );
+            num_warnings += 1;
+        }
+
         let mut files = self.files.iter().collect::<Vec<_>>();
         files.sort_by_key(|(file_id, _)| **file_id);
 
         for (file_id, metadata) in files {
-            self.report_diagnostics_for_file(&snapshot, *file_id, metadata, &mut num_errors)?;
+            self.report_diagnostics_for_file(
+                &snapshot,
+                *file_id,
+                metadata,
+                &mut num_errors,
+                &mut num_warnings,
+            )?;
         }
 
         if num_errors > 0 {
+            if num_warnings > 0 {
+                anstream::println!(
+                    "{}",
+                    Renderer::styled().render(Level::Error.title(&format!(
+                        "failed with {} errors and {} warnings",
+                        num_errors, num_warnings
+                    )))
+                );
+            } else {
+                anstream::println!(
+                    "{}",
+                    Renderer::styled()
+                        .render(Level::Error.title(&format!("failed with {} errors", num_errors)))
+                );
+            }
+            std::process::exit(1);
+        }
+        if num_warnings > 0 {
             anstream::println!(
                 "{}",
-                Renderer::styled()
-                    .render(Level::Error.title(&format!("failed with {} errors", num_errors)))
+                Renderer::styled().render(
+                    Level::Warning.title(&format!("passed with {} warnings", num_warnings))
+                )
             );
-            std::process::exit(1);
         }
 
         Ok(())

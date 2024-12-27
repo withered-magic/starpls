@@ -140,7 +140,7 @@ impl Server {
         );
 
         analysis.set_all_workspace_targets(targets);
-        analysis.set_builtin_defs(bazel_cx.builtins, bazel_cx.rules);
+        analysis.set_builtin_defs(load_bazel_builtins(), bazel_cx.rules);
 
         // Check for a prelude file. We skip verifying that `//tools/build_tools` is actually a package (i.e.
         // that it actually contains a `BUILD.bazel`) file for simplicity.
@@ -360,10 +360,11 @@ impl Server {
 
 impl panic::RefUnwindSafe for ServerSnapshot {}
 
-pub(crate) fn load_bazel_builtins() -> anyhow::Result<Builtins> {
+pub(crate) fn load_bazel_builtins() -> Builtins {
     let data = include_bytes!("builtin/builtin.pb");
-    let builtins = decode_builtins(&data[..])?;
-    Ok(builtins)
+
+    // We want to crash if the bundled protobuf file is ever invalid.
+    decode_builtins(&data[..]).expect("bug: invalid builtin.pb")
 }
 
 pub(crate) fn load_bazel_build_language(client: &dyn BazelClient) -> anyhow::Result<Builtins> {

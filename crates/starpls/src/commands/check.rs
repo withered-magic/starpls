@@ -30,6 +30,7 @@ use crate::commands::InferenceOptions;
 use crate::document::DefaultFileLoader;
 use crate::document::PathInterner;
 use crate::document::{self};
+use crate::server::load_bazel_builtins;
 
 #[derive(Args, Default)]
 pub(crate) struct CheckCommand {
@@ -56,6 +57,7 @@ impl CheckCommand {
         let bazel_client = Arc::new(BazelCLI::default());
         let bazel_cx = BazelContext::new(&*bazel_client)
             .map_err(|err| anyhow!("failed to initialize Bazel context: {}", err))?;
+        let builtins = load_bazel_builtins();
         let (fetch_repo_sender, _) = crossbeam_channel::unbounded();
         let interner = Arc::new(PathInterner::default());
         let loader = DefaultFileLoader::new(
@@ -76,7 +78,8 @@ impl CheckCommand {
                 ..Default::default()
             },
         );
-        analysis.set_builtin_defs(bazel_cx.builtins, bazel_cx.rules);
+
+        analysis.set_builtin_defs(builtins, bazel_cx.rules);
 
         // Strip off the leading "." from each of the specified extensions.
         // This works better when filtering against files with .extension().

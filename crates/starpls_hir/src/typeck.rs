@@ -275,10 +275,11 @@ impl Ty {
                         let resolved = match (resolved.kind(), data) {
                             // If `TyData` is set, this means the current type is either `ctx` or `repository_ctx`.
                             // Override the `attr` field for both of these types.
-                            (TyKind::Struct(_), Some(TyData::Attributes(attrs)))
+                            (TyKind::Struct(_), Some(TyData::Attributes(kind, attrs)))
                                 if field.name.as_str() == "attr" =>
                             {
-                                TyKind::Struct(Some(Struct::Attributes {
+                                TyKind::Struct(Some(Struct::RuleAttributes {
+                                    rule_kind: kind.clone(),
                                     attrs: attrs.clone(),
                                 }))
                                 .intern()
@@ -1214,7 +1215,7 @@ where
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum TyData {
-    Attributes(Arc<RuleAttributes>),
+    Attributes(RuleKind, Arc<RuleAttributes>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1364,19 +1365,30 @@ impl Attribute {
         }
     }
 
-    pub fn resolved_ty(&self) -> Ty {
+    pub fn resolved_ty(&self, rule_kind: &RuleKind) -> Ty {
+        let resolved_label_ty = || match rule_kind {
+            RuleKind::Build => Ty::target(),
+            // TODO(withered-magic): This should be the `Label` type, maybe we should retrieve it
+            // from the builtins?
+            RuleKind::Repository => Ty::unknown(),
+        };
+
         match self.kind {
             AttributeKind::Bool => Ty::bool(),
             AttributeKind::Int => Ty::int(),
             AttributeKind::IntList => Ty::list(Ty::int()),
             AttributeKind::String => Ty::string(),
-            AttributeKind::Label => Ty::target(),
+            AttributeKind::Label => resolved_label_ty(),
             AttributeKind::Output => Ty::unknown(),
             AttributeKind::StringDict => Ty::dict(Ty::string(), Ty::string(), None),
-            AttributeKind::StringKeyedLabelDict => Ty::dict(Ty::string(), Ty::target(), None),
-            AttributeKind::LabelKeyedStringDict => Ty::dict(Ty::target(), Ty::string(), None),
+            AttributeKind::StringKeyedLabelDict => {
+                Ty::dict(Ty::string(), resolved_label_ty(), None)
+            }
+            AttributeKind::LabelKeyedStringDict => {
+                Ty::dict(resolved_label_ty(), Ty::string(), None)
+            }
             AttributeKind::StringList => Ty::list(Ty::string()),
-            AttributeKind::LabelList => Ty::list(TyKind::Target.intern()),
+            AttributeKind::LabelList => Ty::list(resolved_label_ty()),
             AttributeKind::OutputList => Ty::list(Ty::unknown()),
             AttributeKind::StringListDict => Ty::dict(Ty::string(), Ty::list(Ty::string()), None),
         }
@@ -1471,7 +1483,8 @@ pub(crate) enum Struct {
     FieldSignature {
         ty: Ty,
     },
-    Attributes {
+    RuleAttributes {
+        rule_kind: RuleKind,
         attrs: Arc<RuleAttributes>,
     },
 }

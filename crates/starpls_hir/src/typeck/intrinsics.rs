@@ -472,7 +472,7 @@ It is a dynamic error if its argument is not a sequence."#,
 `list(x)` returns a new list containing the elements of the iterable sequence x.
     
 With no argument, `list()` returns a new empty list."#,
-        vec![positional(Any)],
+        vec![positional_opt(Any)],
         List(Any.intern()),
     );
     add_function(

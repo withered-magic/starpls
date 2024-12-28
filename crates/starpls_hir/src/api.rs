@@ -464,14 +464,15 @@ impl Type {
             .collect::<Vec<_>>();
 
         // TODO(withered-magic): This ideally should be handled in `Ty::fields()` instead.
-        if let TyKind::Struct(Some(DefStruct::Attributes { attrs })) = self.ty.kind() {
+        if let TyKind::Struct(Some(DefStruct::RuleAttributes { rule_kind, attrs })) = self.ty.kind()
+        {
             fields.extend(attrs.attrs.iter().map(|(name, attr)| {
                 (
                     Field(FieldInner::StructField {
                         name: name.clone(),
                         doc: attr.doc.as_ref().map(|doc| doc.to_string()),
                     }),
-                    attr.resolved_ty().into(),
+                    attr.resolved_ty(rule_kind).into(),
                 )
             }));
         }

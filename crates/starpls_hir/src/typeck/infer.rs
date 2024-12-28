@@ -1360,7 +1360,9 @@ impl TyContext<'_> {
         };
 
         let sub_ty = match source_ty.kind() {
-            TyKind::List(ty) | TyKind::Tuple(Tuple::Variable(ty)) => ty.clone(),
+            TyKind::List(ty)
+            | TyKind::Tuple(Tuple::Variable(ty))
+            | TyKind::Protocol(Protocol::Iterable(ty) | Protocol::Sequence(ty)) => ty.clone(),
             TyKind::Tuple(Tuple::Simple(tys)) => Ty::union(tys.iter().cloned()),
             TyKind::Dict(key_ty, _, _) => key_ty.clone(),
             TyKind::Any => self.any_ty(),

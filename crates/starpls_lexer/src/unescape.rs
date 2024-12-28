@@ -38,7 +38,7 @@ pub enum EscapeError {
     OutOfRangeUnicodeEscape,
 }
 
-pub fn unescape_string<F>(input: &str, _raw: bool, _triple_quoted: bool, callback: &mut F)
+pub fn unescape_string<F>(input: &str, raw: bool, _triple_quoted: bool, callback: &mut F)
 where
     F: FnMut(Range<usize>, Result<char, EscapeError>),
 {
@@ -48,6 +48,15 @@ where
     while let Some(c) = chars.next() {
         let start = input.len() - chars.as_str().len() - c.len_utf8();
         let res = match c {
+            '\\' if raw => match chars.next() {
+                Some(c @ ('"' | '\'')) => Ok(c),
+                Some(c) => {
+                    callback(start..start + 1, Ok('\\'));
+                    callback(start + 1..input.len() - chars.as_str().len(), Ok(c));
+                    continue;
+                }
+                None => Err(EscapeError::LoneSlash),
+            },
             '\\' => match scan_string_escape(&mut chars) {
                 Ok(Some(c)) => Ok(c),
                 Ok(None) => continue,

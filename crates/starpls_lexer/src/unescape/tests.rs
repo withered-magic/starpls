@@ -7,7 +7,61 @@ use expect_test::Expect;
 use super::*;
 
 #[test]
-fn test_unescape_string() {}
+fn test_unescape_string() {
+    fn check(input: &str, raw: bool, expect: Expect) {
+        let mut actual = String::new();
+        unescape_string(input, raw, false, &mut |range, res| {
+            write!(&mut actual, "{:?} ", range).unwrap();
+            match res {
+                Ok(c) => {
+                    writeln!(&mut actual, "{:?}", c).unwrap();
+                }
+                Err(err) => {
+                    writeln!(&mut actual, "{:?}", err).unwrap();
+                }
+            }
+        });
+        expect.assert_eq(&actual);
+    }
+    check(
+        "\\0",
+        false,
+        expect![[r#"
+        0..2 '\0'
+    "#]],
+    );
+    check(
+        "\\世a",
+        true,
+        expect![[r#"
+            0..1 '\\'
+            1..4 '世'
+            4..5 'a'
+        "#]],
+    );
+    check(
+        "\\\"",
+        true,
+        expect![[r#"
+        0..2 '"'
+    "#]],
+    );
+    check(
+        "\\'",
+        true,
+        expect![[r#"
+        0..2 '\''
+    "#]],
+    );
+    check(
+        "\\\n",
+        true,
+        expect![[r#"
+        0..1 '\\'
+        1..2 '\n'
+    "#]],
+    );
+}
 
 #[test]
 fn test_unescape_byte_string() {

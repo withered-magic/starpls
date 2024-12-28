@@ -510,7 +510,7 @@ impl TyContext<'_> {
                                             .iter()
                                             .find_map(|(name, attr)| {
                                                 if name == field {
-                                                    Some(attr.resolved_ty(&rule_kind))
+                                                    Some(attr.resolved_ty(rule_kind))
                                                 } else {
                                                     None
                                                 }

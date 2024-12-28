@@ -472,7 +472,7 @@ impl Type {
                         name: name.clone(),
                         doc: attr.doc.as_ref().map(|doc| doc.to_string()),
                     }),
-                    attr.resolved_ty(&rule_kind).into(),
+                    attr.resolved_ty(rule_kind).into(),
                 )
             }));
         }

@@ -709,7 +709,7 @@ UTF-K encoding of the replacement character, U+FFFD.
         r#"`tuple(x)` returns a tuple containing the elements of the iterable x.
 
 With no arguments, `tuple()` returns the empty tuple."#,
-        vec![positional(Any)],
+        vec![positional_opt(Any)],
         Any,
     );
     add_function(

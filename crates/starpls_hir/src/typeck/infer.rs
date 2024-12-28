@@ -501,13 +501,16 @@ impl TyContext<'_> {
                                     TyKind::Struct(Some(Struct::FieldSignature { ty })) => {
                                         return ty.clone()
                                     }
-                                    TyKind::Struct(Some(Struct::Attributes { attrs })) => {
+                                    TyKind::Struct(Some(Struct::RuleAttributes {
+                                        rule_kind,
+                                        attrs,
+                                    })) => {
                                         return attrs
                                             .attrs
                                             .iter()
                                             .find_map(|(name, attr)| {
                                                 if name == field {
-                                                    Some(attr.resolved_ty())
+                                                    Some(attr.resolved_ty(&rule_kind))
                                                 } else {
                                                     None
                                                 }
@@ -1973,7 +1976,11 @@ impl TyContext<'_> {
                     })?;
                 match (ty.kind(), &rule.attrs) {
                     (TyKind::BuiltinType(ty, _), Some(attrs)) => Some(
-                        TyKind::BuiltinType(*ty, Some(TyData::Attributes(attrs.clone()))).intern(),
+                        TyKind::BuiltinType(
+                            *ty,
+                            Some(TyData::Attributes(rule.kind.clone(), attrs.clone())),
+                        )
+                        .intern(),
                     ),
                     _ => None,
                 }

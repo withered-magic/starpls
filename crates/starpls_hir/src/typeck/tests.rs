@@ -1353,10 +1353,10 @@ my_rule = repository_rule(
             150..167 "attr.label_list()": Attribute
             132..174 "{\n        \"srcs\": attr.label_list(),\n    }": dict[string, Attribute]
             81..177 "rule(\n    implementation = _rule_impl,\n    attrs = {\n        \"srcs\": attr.label_list(),\n    },\n)": rule
-            226..230 "srcs": list[Target]
+            226..230 "srcs": list[Unknown]
             233..247 "repository_ctx": repository_ctx
             233..252 "repository_ctx.attr": struct
-            233..257 "repository_ctx.attr.srcs": list[Target]
+            233..257 "repository_ctx.attr.srcs": list[Unknown]
             259..266 "my_rule": repository_rule
             269..284 "repository_rule": def repository_rule(implementation: Unknown, attrs: dict[string, Unknown] | None = None, local: bool = None, environ: Sequence[string] = [], configure: bool = False, remotable: bool = False, doc: string | None = None) -> callable
             307..328 "_repository_rule_impl": def _repository_rule_impl(repository_ctx) -> Unknown
@@ -1510,6 +1510,69 @@ my_rule = rule(
             679..702 "attr.string_list_dict()": Attribute
             279..709 "{\n        \"a\": attr.bool(),\n        \"b\": attr.int(),\n        \"c\": attr.int_list(),\n        \"d\": attr.label(),\n        \"e\": attr.label_keyed_string_dict(),\n        \"f\": attr.label_list(),\n        \"g\": attr.output(),\n        \"h\": attr.output_list(),\n        \"i\": attr.string(),\n        \"j\": attr.string_dict(),\n        \"k\": attr.string_keyed_label_dict(),\n        \"l\": attr.string_list(),\n        \"m\": attr.string_list_dict(),\n    }": dict[string, Attribute]
             228..712 "rule(\n    implementation = _rule_impl,\n    attrs = {\n        \"a\": attr.bool(),\n        \"b\": attr.int(),\n        \"c\": attr.int_list(),\n        \"d\": attr.label(),\n        \"e\": attr.label_keyed_string_dict(),\n        \"f\": attr.label_list(),\n        \"g\": attr.output(),\n        \"h\": attr.output_list(),\n        \"i\": attr.string(),\n        \"j\": attr.string_dict(),\n        \"k\": attr.string_keyed_label_dict(),\n        \"l\": attr.string_list(),\n        \"m\": attr.string_list_dict(),\n    },\n)": rule
+        "#]],
+        InferenceOptions {
+            infer_ctx_attributes: true,
+            use_code_flow_analysis: true,
+            allow_unused_definitions: true,
+        },
+    );
+}
+
+#[test]
+fn test_infer_ctx_attrs_repository_rule() {
+    check_infer_with_options(
+        r#"
+def _rule_impl(ctx):
+    ctx.attr.a
+    ctx.attr.b
+    ctx.attr.c
+    ctx.attr.d
+
+my_rule = repository_rule(
+    implementation = _rule_impl,
+    attrs = {
+        "a": attr.label(),
+        "b": attr.label_keyed_string_dict(),
+        "c": attr.label_list(),
+        "d": attr.string_keyed_label_dict(),
+    },
+)
+"#,
+        expect![[r#"
+            26..29 "ctx": repository_ctx
+            26..34 "ctx.attr": struct
+            26..36 "ctx.attr.a": Unknown
+            41..44 "ctx": repository_ctx
+            41..49 "ctx.attr": struct
+            41..51 "ctx.attr.b": dict[Unknown, string]
+            56..59 "ctx": repository_ctx
+            56..64 "ctx.attr": struct
+            56..66 "ctx.attr.c": list[Unknown]
+            71..74 "ctx": repository_ctx
+            71..79 "ctx.attr": struct
+            71..81 "ctx.attr.d": dict[string, Unknown]
+            83..90 "my_rule": repository_rule
+            93..108 "repository_rule": def repository_rule(implementation: Unknown, attrs: dict[string, Unknown] | None = None, local: bool = None, environ: Sequence[string] = [], configure: bool = False, remotable: bool = False, doc: string | None = None) -> callable
+            131..141 "_rule_impl": def _rule_impl(ctx) -> Unknown
+            165..168 "\"a\"": Literal["a"]
+            170..174 "attr": attr
+            170..180 "attr.label": def label(*args, **kwargs) -> Unknown
+            170..182 "attr.label()": Attribute
+            192..195 "\"b\"": Literal["b"]
+            197..201 "attr": attr
+            197..225 "attr.label_keyed_string_dict": def label_keyed_string_dict(*args, **kwargs) -> Unknown
+            197..227 "attr.label_keyed_string_dict()": Attribute
+            237..240 "\"c\"": Literal["c"]
+            242..246 "attr": attr
+            242..257 "attr.label_list": def label_list(*args, **kwargs) -> Unknown
+            242..259 "attr.label_list()": Attribute
+            269..272 "\"d\"": Literal["d"]
+            274..278 "attr": attr
+            274..302 "attr.string_keyed_label_dict": def string_keyed_label_dict(*args, **kwargs) -> Unknown
+            274..304 "attr.string_keyed_label_dict()": Attribute
+            155..311 "{\n        \"a\": attr.label(),\n        \"b\": attr.label_keyed_string_dict(),\n        \"c\": attr.label_list(),\n        \"d\": attr.string_keyed_label_dict(),\n    }": dict[string, Attribute]
+            93..314 "repository_rule(\n    implementation = _rule_impl,\n    attrs = {\n        \"a\": attr.label(),\n        \"b\": attr.label_keyed_string_dict(),\n        \"c\": attr.label_list(),\n        \"d\": attr.string_keyed_label_dict(),\n    },\n)": repository_rule
         "#]],
         InferenceOptions {
             infer_ctx_attributes: true,

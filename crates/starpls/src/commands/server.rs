@@ -30,6 +30,11 @@ pub(crate) struct ServerCommand {
     )]
     pub(crate) enable_label_completions: bool,
 
+    /// After receiving an edit event, the amount of time in milliseconds
+    /// the server will wait for additional events before running analysis
+    #[clap(long = "analysis_debounce_interval", default_value_t = 250)]
+    pub(crate) analysis_debounce_interval: u64,
+
     #[command(flatten)]
     pub(crate) inference_options: InferenceOptions,
 }

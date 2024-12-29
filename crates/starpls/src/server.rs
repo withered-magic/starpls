@@ -41,8 +41,6 @@ use crate::event_loop::Task;
 use crate::task_pool::TaskPool;
 use crate::task_pool::TaskPoolHandle;
 
-const DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
-
 const BAZEL_INIT_ERR_MESSAGE: &str = "Failed to fetch Bazel configuration! Please check the language server logs for more details. Certain features may not work correctly until the underlying issue is fixed.";
 
 pub(crate) struct Server {
@@ -161,6 +159,7 @@ impl Server {
             analysis.set_bazel_prelude_file(file_id);
         }
 
+        let analysis_debounce_interval = config.args.analysis_debounce_interval;
         let server = Server {
             config: Arc::new(config),
             connection,
@@ -172,7 +171,10 @@ impl Server {
             ))),
             diagnostics_manager: Default::default(),
             analysis,
-            analysis_debouncer: AnalysisDebouncer::new(DEBOUNCE_INTERVAL, task_pool_sender),
+            analysis_debouncer: AnalysisDebouncer::new(
+                Duration::from_millis(analysis_debounce_interval),
+                task_pool_sender,
+            ),
             analysis_requested_for_files: None,
             bazel_client,
             pending_repos: Default::default(),

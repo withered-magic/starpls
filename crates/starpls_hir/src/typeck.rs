@@ -1589,7 +1589,7 @@ pub(crate) struct Macro {
 }
 
 impl Macro {
-    pub(crate) fn attrs<'a>(&'a self) -> impl Iterator<Item = (&Name, &Attribute)> {
+    pub(crate) fn attrs(&self) -> impl Iterator<Item = (&Name, &Attribute)> {
         self.attrs
             .as_ref()
             .map(|attrs| {
@@ -1602,7 +1602,7 @@ impl Macro {
             .flatten()
     }
 
-    pub(crate) fn disallowed_attrs<'a>(&'a self) -> impl Iterator<Item = &Name> {
+    pub(crate) fn disallowed_attrs(&self) -> impl Iterator<Item = &Name> {
         self.attrs
             .as_ref()
             .map(|attrs| {

@@ -989,7 +989,7 @@ impl TyContext<'_> {
                             eprintln!("{:?}", arg);
                             match arg {
                                 Argument::Keyword { name, expr }
-                                    if makro.disallowed_attrs().find(|n| n == &name).is_some() =>
+                                    if makro.disallowed_attrs().any(|n| n == name) =>
                                 {
                                     self.add_expr_diagnostic_error(
                                         file,

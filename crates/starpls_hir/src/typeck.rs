@@ -578,6 +578,29 @@ impl Ty {
                         TyKind::Dict(Ty::string(), Ty::any(), None).intern(),
                     ))),
             ),
+            TyKind::Macro(makro) => Params::Macro(
+                makro
+                    .attrs
+                    .as_ref()
+                    .map(|attrs| {
+                        attrs.attrs.iter().filter_map(|(name, attr)| {
+                            attr.as_ref().map(|attr| {
+                                (
+                                    Param(
+                                        RuleParam::Keyword {
+                                            name: name.clone(),
+                                            attr: attr.clone(),
+                                        }
+                                        .into(),
+                                    ),
+                                    attr.expected_ty(),
+                                )
+                            })
+                        })
+                    })
+                    .into_iter()
+                    .flatten(),
+            ),
             _ => return None,
         })
     }
@@ -1000,16 +1023,17 @@ where
     }
 }
 
-enum Params<I1, I2, I3, I4, I5, I6, I7> {
+enum Params<I1, I2, I3, I4, I5, I6, I7, I8> {
     Simple(I1),
     Intrinsic(I2),
     Builtin(I3),
     Rule(I4),
     Provider(ProviderParams<I5, I6>),
     Tag(I7),
+    Macro(I8),
 }
 
-impl<I1, I2, I3, I4, I5, I6, I7> Iterator for Params<I1, I2, I3, I4, I5, I6, I7>
+impl<I1, I2, I3, I4, I5, I6, I7, I8> Iterator for Params<I1, I2, I3, I4, I5, I6, I7, I8>
 where
     I1: Iterator<Item = (Param, Ty)>,
     I2: Iterator<Item = (Param, Ty)>,
@@ -1018,6 +1042,7 @@ where
     I5: Iterator<Item = (Param, Ty)>,
     I6: Iterator<Item = (Param, Ty)>,
     I7: Iterator<Item = (Param, Ty)>,
+    I8: Iterator<Item = (Param, Ty)>,
 {
     type Item = (Param, Ty);
 
@@ -1029,6 +1054,7 @@ where
             Params::Rule(it) => it.next(),
             Params::Provider(it) => it.next(),
             Params::Tag(it) => it.next(),
+            Params::Macro(it) => it.next(),
         }
     }
 }
@@ -1560,6 +1586,34 @@ pub(crate) struct Macro {
     /// Attributes defined in the `attrs` argument to the `macro()` function.
     pub(crate) attrs: Option<Arc<RuleAttributes>>,
     pub(crate) doc: Option<InternedString>,
+}
+
+impl Macro {
+    pub(crate) fn attrs<'a>(&'a self) -> impl Iterator<Item = (&Name, &Attribute)> {
+        self.attrs
+            .as_ref()
+            .map(|attrs| {
+                attrs
+                    .attrs
+                    .iter()
+                    .filter_map(|(name, attr)| attr.as_ref().map(|attr| (name, attr)))
+            })
+            .into_iter()
+            .flatten()
+    }
+
+    pub(crate) fn disallowed_attrs<'a>(&'a self) -> impl Iterator<Item = &Name> {
+        self.attrs
+            .as_ref()
+            .map(|attrs| {
+                attrs
+                    .attrs
+                    .iter()
+                    .filter_map(|(name, attr)| if attr.is_none() { Some(name) } else { None })
+            })
+            .into_iter()
+            .flatten()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

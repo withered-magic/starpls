@@ -104,7 +104,7 @@ pub(crate) fn signature_help(
     label.push_str(func.name(db).as_str());
     label.push('(');
 
-    let is_rule_or_tag = func.is_rule() || func.is_tag();
+    let is_rule_or_tag = func.is_rule() || func.is_tag() || func.is_macro();
     if is_rule_or_tag {
         label.push('*');
     }

@@ -637,6 +637,10 @@ impl Callable {
         matches!(self.0, CallableInner::Tag(_))
     }
 
+    pub fn is_macro(&self) -> bool {
+        matches!(self.0, CallableInner::Macro(_))
+    }
+
     pub fn rule_attrs_source(&self, db: &dyn Db) -> Option<InFile<ast::DictExpr>> {
         let attrs_expr = match self.0 {
             CallableInner::Rule(ref rule) => rule.attrs.as_ref()?.expr?,

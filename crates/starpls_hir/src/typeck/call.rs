@@ -10,6 +10,7 @@ use crate::def::Argument;
 use crate::def::Param;
 use crate::typeck::builtins::BuiltinFunctionParam;
 use crate::typeck::intrinsics::IntrinsicFunctionParam;
+use crate::typeck::Macro;
 use crate::typeck::Provider;
 use crate::typeck::Rule;
 use crate::typeck::TagClass;
@@ -23,7 +24,7 @@ pub(crate) struct ArgError {
 }
 
 pub(crate) struct Slots {
-    slots: SmallVec<[Slot; 5]>,
+    pub(crate) slots: SmallVec<[Slot; 5]>,
     disable_errors: bool,
 }
 
@@ -196,14 +197,27 @@ impl Slots {
         (errors, active_slot)
     }
 
-    pub(crate) fn into_inner(self) -> SmallVec<[Slot; 5]> {
-        self.slots
-    }
-
     pub(crate) fn from_rule(db: &dyn Db, rule: &Rule) -> Self {
         Self {
             slots: rule
                 .attrs(db)
+                .map(|(name, _)| Slot::Keyword {
+                    name: name.clone(),
+                    provider: SlotProvider::Missing,
+                    positional: false,
+                })
+                .chain(iter::once(Slot::KwargsDict {
+                    providers: smallvec![],
+                }))
+                .collect(),
+            disable_errors: true,
+        }
+    }
+
+    pub(crate) fn from_macro(makro: &Macro) -> Self {
+        Self {
+            slots: makro
+                .attrs()
                 .map(|(name, _)| Slot::Keyword {
                     name: name.clone(),
                     provider: SlotProvider::Missing,

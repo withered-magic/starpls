@@ -50,6 +50,7 @@ fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptio
     let mut builder = TestDatabaseBuilder::default();
     builder.add_function("provider");
     builder.add_function("rule");
+    builder.add_function("macro");
     builder.add_function("struct");
     builder.add_type(FixtureType::new("File", vec![], vec![]));
     builder.add_type(FixtureType::new(
@@ -1281,6 +1282,66 @@ def _impl(ctx):
             108..119 "ctx.outputs": struct
             108..123 "ctx.outputs.qux": File
             "#]],
+    );
+}
+
+#[test]
+fn test_macro() {
+    check_infer(
+        r#"
+def _impl():
+    pass
+
+miniature = macro(
+    implementation = _impl,
+    attrs = {
+        "a": attr.string(),
+        "b": attr.string(),
+        "c": attr.string(mandatory=True),
+        "d": None,
+    }
+)
+
+miniature(
+    a = "abc",
+    b = 1,
+    d = "abc",
+    e = "abc",
+)
+
+"#,
+        expect![[r#"
+            24..33 "miniature": macro
+            36..41 "macro": def macro(*args, **kwargs) -> Unknown
+            64..69 "_impl": def _impl() -> Unknown
+            93..96 "\"a\"": Literal["a"]
+            98..102 "attr": attr
+            98..109 "attr.string": def string(*args, **kwargs) -> Unknown
+            98..111 "attr.string()": Attribute
+            121..124 "\"b\"": Literal["b"]
+            126..130 "attr": attr
+            126..137 "attr.string": def string(*args, **kwargs) -> Unknown
+            126..139 "attr.string()": Attribute
+            149..152 "\"c\"": Literal["c"]
+            154..158 "attr": attr
+            154..165 "attr.string": def string(*args, **kwargs) -> Unknown
+            176..180 "True": Literal[True]
+            154..181 "attr.string(mandatory=True)": Attribute
+            191..194 "\"d\"": Literal["d"]
+            196..200 "None": None
+            83..207 "{\n        \"a\": attr.string(),\n        \"b\": attr.string(),\n        \"c\": attr.string(mandatory=True),\n        \"d\": None,\n    }": dict[string, Unknown]
+            36..209 "macro(\n    implementation = _impl,\n    attrs = {\n        \"a\": attr.string(),\n        \"b\": attr.string(),\n        \"c\": attr.string(mandatory=True),\n        \"d\": None,\n    }\n)": macro
+            211..220 "miniature": macro
+            230..235 "\"abc\"": Literal["abc"]
+            245..246 "1": Literal[1]
+            256..261 "\"abc\"": Literal["abc"]
+            271..276 "\"abc\"": Literal["abc"]
+            211..279 "miniature(\n    a = \"abc\",\n    b = 1,\n    d = \"abc\",\n    e = \"abc\",\n)": None
+
+            211..279 Argument missing for attribute(s) "c"
+            245..246 Argument of type "Literal[1]" cannot be assigned to parameter of type "string"
+            256..261 Cannot set attribute "d"
+        "#]],
     );
 }
 

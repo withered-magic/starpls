@@ -402,7 +402,7 @@ pub(crate) struct DictEntry {
 pub(crate) enum Literal {
     Int(u64),
     Float,
-    String(LiteralString),
+    String(InternedString),
     Bytes,
     Bool(bool),
     None,
@@ -414,7 +414,7 @@ impl Literal {
             ast::LiteralKind::Int(lit) => Literal::Int(lit.value().unwrap_or(0)),
             ast::LiteralKind::Float(_) => Literal::Float,
             ast::LiteralKind::String(lit) => {
-                Literal::String(LiteralString::new(db, lit.value().unwrap_or_default()))
+                Literal::String(InternedString::new(db, lit.value().unwrap_or_default()))
             }
             ast::LiteralKind::Bytes(_) => Literal::Bytes,
             ast::LiteralKind::Bool(lit) => Literal::Bool(*lit),
@@ -467,7 +467,8 @@ impl fmt::Display for Name {
 }
 
 #[salsa::interned]
-pub(crate) struct LiteralString {
+pub(crate) struct InternedString {
+    #[return_ref]
     pub(crate) value: Box<str>,
 }
 

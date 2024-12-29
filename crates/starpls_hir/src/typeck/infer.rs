@@ -36,8 +36,8 @@ use crate::def::scope::VariableDef;
 use crate::def::Argument;
 use crate::def::Expr;
 use crate::def::ExprId;
+use crate::def::InternedString;
 use crate::def::Literal;
-use crate::def::LiteralString;
 use crate::def::LoadItem;
 use crate::def::LoadItemId;
 use crate::def::LoadStmt;
@@ -510,7 +510,8 @@ impl TyContext<'_> {
                                             .iter()
                                             .find_map(|(name, attr)| {
                                                 if name == field {
-                                                    Some(attr.resolved_ty(rule_kind))
+                                                    attr.as_ref()
+                                                        .map(|attr| attr.resolved_ty(rule_kind))
                                                 } else {
                                                     None
                                                 }
@@ -687,6 +688,7 @@ impl TyContext<'_> {
                     .collect();
                 let args_with_ty = args.iter().zip(arg_tys.iter());
 
+                // TODO(withered-magic): This is hilariously non-DRY, should probably clean this up at some point.
                 match callee_ty.kind() {
                     TyKind::Function(def) => {
                         let module = module(db, def.func().file(db));
@@ -705,7 +707,7 @@ impl TyContext<'_> {
                         let mut missing_params = Vec::new();
 
                         // Validate argument types.
-                        for (param, slot) in params.zip(slots.into_inner()) {
+                        for (param, slot) in params.zip(slots.slots) {
                             let hir_param = &module[param];
                             let param_ty =
                                 resolve_type_ref_opt(self, hir_param.type_ref(), def.stmt());
@@ -773,7 +775,7 @@ impl TyContext<'_> {
                         }
 
                         // Validate argument types.
-                        for (param, slot) in params.iter().zip(slots.into_inner()) {
+                        for (param, slot) in params.iter().zip(slots.slots) {
                             let param_ty = match param {
                                 IntrinsicFunctionParam::Positional { ty, .. }
                                 | IntrinsicFunctionParam::Keyword { ty, .. }
@@ -830,7 +832,7 @@ impl TyContext<'_> {
                         let mut missing_params = Vec::new();
 
                         // Validate argument types.
-                        for (param, slot) in params.iter().zip(slots.into_inner()) {
+                        for (param, slot) in params.iter().zip(slots.slots) {
                             let param_ty = resolve_type_ref_opt(self, param.type_ref(), None);
                             let mut validate_provider = |provider| match provider {
                                 SlotProvider::Missing => {
@@ -883,12 +885,11 @@ impl TyContext<'_> {
                     }
                     TyKind::Rule(rule) => {
                         let mut slots = Slots::from_rule(db, rule);
+                        let mut missing_attrs = Vec::new();
                         slots.assign_args(args, None);
 
-                        let mut missing_attrs = Vec::new();
-
                         // Validate argument types.
-                        for ((name, attr), slot) in rule.attrs(db).zip(slots.into_inner()) {
+                        for ((name, attr), slot) in rule.attrs(db).zip(slots.slots) {
                             let expected_ty = attr.expected_ty();
                             if let Slot::Keyword { provider, .. } = slot {
                                 match provider {
@@ -908,7 +909,7 @@ impl TyContext<'_> {
                             }
                         }
 
-                        // Emit diagnostic for missing parameters.
+                        // Emit diagnostic for missing attributes.
                         if !missing_attrs.is_empty() {
                             let mut message = String::from("Argument missing for attribute(s) ");
                             for (i, name) in missing_attrs.iter().enumerate() {
@@ -940,7 +941,7 @@ impl TyContext<'_> {
                             .attrs
                             .iter()
                             .flat_map(|attrs| attrs.iter())
-                            .zip(slots.into_inner())
+                            .zip(slots.slots)
                         {
                             let expected_ty = data.attr.expected_ty();
                             if let Slot::Keyword { provider, .. } = slot {
@@ -962,6 +963,66 @@ impl TyContext<'_> {
                         }
 
                         // Emit diagnostic for missing parameters.
+                        if !missing_attrs.is_empty() {
+                            let mut message = String::from("Argument missing for attribute(s) ");
+                            for (i, name) in missing_attrs.iter().enumerate() {
+                                if i > 0 {
+                                    message.push_str(", ");
+                                }
+                                message.push('"');
+                                message.push_str(name.as_str());
+                                message.push('"');
+                            }
+
+                            self.add_expr_diagnostic_error(file, expr, message);
+                        }
+
+                        self.none_ty()
+                    }
+                    TyKind::Macro(makro) => {
+                        let mut slots = Slots::from_macro(makro);
+                        let mut missing_attrs = Vec::new();
+                        slots.assign_args(args, None);
+
+                        // Check for any disallowed attributes.
+                        for arg in args.iter() {
+                            eprintln!("{:?}", arg);
+                            match arg {
+                                Argument::Keyword { name, expr }
+                                    if makro.disallowed_attrs().any(|n| n == name) =>
+                                {
+                                    self.add_expr_diagnostic_error(
+                                        file,
+                                        *expr,
+                                        format!("Cannot set attribute \"{}\"", name.as_str()),
+                                    );
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        // Validate attribute types.
+                        for ((name, attr), slot) in makro.attrs().zip(slots.slots) {
+                            let expected_ty = attr.expected_ty();
+                            if let Slot::Keyword { provider, .. } = slot {
+                                match provider {
+                                    SlotProvider::Single(expr, index) => {
+                                        let ty = &arg_tys[index];
+                                        if !assign_tys(db, ty, &expected_ty) {
+                                            self.add_expr_diagnostic_error(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), expected_ty.display(self.db).alt()));
+                                        }
+                                    }
+                                    SlotProvider::Missing => {
+                                        if attr.mandatory {
+                                            missing_attrs.push(name);
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+
+                        // Emit diagnostic for missing attributes.
                         if !missing_attrs.is_empty() {
                             let mut message = String::from("Argument missing for attribute(s) ");
                             for (i, name) in missing_attrs.iter().enumerate() {
@@ -1133,7 +1194,7 @@ impl TyContext<'_> {
                     let mut s = String::with_capacity(s1.len() + s2.len());
                     s.push_str(s1);
                     s.push_str(s2);
-                    let interned = LiteralString::new(db, s.into_boxed_str());
+                    let interned = InternedString::new(db, s.into_boxed_str());
                     TyKind::String(Some(interned)).intern()
                 }
                 (TyKind::String(_), TyKind::String(_), ArithOp::Add)
@@ -2228,6 +2289,7 @@ impl TyContext<'_> {
                         Slots::from_provider(db, provider)
                     }
                     TyKind::Tag(tag_class) => Slots::from_tag_class(tag_class),
+                    TyKind::Macro(makro) => Slots::from_macro(makro),
                     _ => return None,
                 };
 

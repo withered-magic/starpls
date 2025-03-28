@@ -71,7 +71,7 @@ struct LoweringContext<'a> {
     source_map: ModuleSourceMap,
 }
 
-impl<'a> LoweringContext<'a> {
+impl LoweringContext<'_> {
     fn lower(mut self, syntax: ast::Module) -> (Module, ModuleSourceMap) {
         let line_index = line_index(self.db, self.file);
         self.module.type_ignore_comment_lines = syntax

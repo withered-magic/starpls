@@ -212,7 +212,7 @@ impl DisplayWithDb for TyKind {
                                 f.write_str(" = None")?;
                             }
                         }
-                        IntrinsicFunctionParam::Keyword { name, ty } => {
+                        IntrinsicFunctionParam::Keyword { name, ty, .. } => {
                             f.write_str(name.as_str())?;
                             f.write_str(": ")?;
                             ty.substitute(&subst.args).fmt(db, f)?;

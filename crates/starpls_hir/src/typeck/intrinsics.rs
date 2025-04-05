@@ -177,9 +177,18 @@ impl IntrinsicFunction {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum IntrinsicFunctionParam {
-    Positional { ty: Ty, optional: bool },
-    Keyword { name: Name, ty: Ty },
-    ArgsList { ty: Ty },
+    Positional {
+        ty: Ty,
+        optional: bool,
+    },
+    Keyword {
+        name: Name,
+        ty: Ty,
+        deprecated: bool,
+    },
+    ArgsList {
+        ty: Ty,
+    },
     KwargsDict,
 }
 
@@ -513,6 +522,7 @@ max("two", "three", "four", key=len)            # "three", the longest
             Keyword {
                 name: Name::new_inline("key"),
                 ty: Any.intern(),
+                deprecated: false,
             },
         ],
         Any,
@@ -538,6 +548,7 @@ min("two", "three", "four", key=len)            # "two", the shortest
             Keyword {
                 name: Name::new_inline("key"),
                 ty: Any.intern(),
+                deprecated: false,
             },
         ],
         Any,
@@ -565,6 +576,7 @@ determined by the host application.
             Keyword {
                 name: Name::new_inline("str"),
                 ty: Ty::string(),
+                deprecated: false,
             },
         ],
         None,
@@ -689,10 +701,12 @@ sorted(["two", "three", "four"], key=len, reverse=True)    # ["three", "four", "
             Keyword {
                 name: Name::new_inline("reverse"),
                 ty: non_literal_bool().intern(),
+                deprecated: false,
             },
             Keyword {
                 name: Name::new_inline("key"),
                 ty: Any.intern(),
+                deprecated: false,
             },
         ],
         List(Any.intern()),

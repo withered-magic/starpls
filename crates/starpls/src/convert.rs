@@ -91,6 +91,7 @@ fn lsp_severity_from_native(severity: Severity) -> lsp_types::DiagnosticSeverity
     match severity {
         Severity::Error => lsp_types::DiagnosticSeverity::ERROR,
         Severity::Warning => lsp_types::DiagnosticSeverity::WARNING,
+        Severity::Info => lsp_types::DiagnosticSeverity::INFORMATION,
     }
 }
 

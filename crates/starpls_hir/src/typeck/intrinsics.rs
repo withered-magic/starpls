@@ -364,7 +364,24 @@ fail("oops")			# "fail: oops"
 fail("oops", 1, False)		# "fail: oops 1 False"
 ```
 "#,
-        vec![ArgsList { ty: Any.intern() }],
+        vec![
+            Keyword {
+                name: Name::new_inline("msg"),
+                ty: Ty::string(),
+                deprecated: true,
+            },
+            Keyword {
+                name: Name::new_inline("attr"),
+                ty: Ty::string(),
+                deprecated: true,
+            },
+            Keyword {
+                name: Name::new_inline("sep"),
+                ty: TyKind::String(Some(InternedString::new(db, " ".to_string().into_boxed_str()))).intern(),
+                deprecated: false,
+            },
+            ArgsList { ty: Any.intern() },
+        ],
         Never,
     );
     add_function(

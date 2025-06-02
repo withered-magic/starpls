@@ -54,7 +54,7 @@ pub struct DisplayWithDbWrapper<'a, T: DisplayWithDb + ?Sized> {
     alt: bool,
 }
 
-impl<'a, T: DisplayWithDb> DisplayWithDbWrapper<'a, T> {
+impl<T: DisplayWithDb> DisplayWithDbWrapper<'_, T> {
     pub fn alt(self) -> Self {
         Self {
             db: self.db,
@@ -64,7 +64,7 @@ impl<'a, T: DisplayWithDb> DisplayWithDbWrapper<'a, T> {
     }
 }
 
-impl<'a, T: DisplayWithDb> fmt::Display for DisplayWithDbWrapper<'a, T> {
+impl<T: DisplayWithDb> fmt::Display for DisplayWithDbWrapper<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.alt {
             self.item.fmt_alt(self.db, f)

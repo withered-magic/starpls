@@ -23,7 +23,7 @@ struct FindReferencesHandler<'a> {
     locations: Vec<Location>,
 }
 
-impl<'a> FindReferencesHandler<'a> {
+impl FindReferencesHandler<'_> {
     fn handle(mut self) -> Vec<Location> {
         let name = self.name.clone();
         let finder = Finder::new(name.as_str());

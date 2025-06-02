@@ -202,6 +202,12 @@ impl<T: ?Sized> InternStorage<T> {
     }
 }
 
+impl<T: ?Sized> Default for InternStorage<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Internable + ?Sized> InternStorage<T> {
     fn get(&self) -> &InternMap<T> {
         self.map.get_or_init(DashMap::default)

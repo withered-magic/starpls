@@ -417,7 +417,7 @@
             "default_value": "",
             "is_mandatory": true,
             "is_star_arg": false,
-            "is_star_star_arg": false
+            "is_star_star_arg": true
           }
         ],
         "return_type": "None"

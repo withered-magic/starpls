@@ -20,6 +20,7 @@ pub struct FileRange {
 /// A severity level for diagnostic messages.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Severity {
+    Info,
     Warning,
     Error,
 }

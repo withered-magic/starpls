@@ -195,6 +195,7 @@ pub struct InternStorage<T: ?Sized> {
 }
 
 impl<T: ?Sized> InternStorage<T> {
+    #[allow(clippy::new_without_default)]
     pub const fn new() -> Self {
         Self {
             map: OnceLock::new(),

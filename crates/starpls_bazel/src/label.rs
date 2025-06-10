@@ -24,7 +24,7 @@ pub struct Label<'a> {
 }
 
 impl<'a> Label<'a> {
-    pub fn parse(input: &'a str) -> ParseResult {
+    pub fn parse(input: &'a str) -> ParseResult<'a> {
         Parser {
             chars: input.chars(),
             pos: 0,

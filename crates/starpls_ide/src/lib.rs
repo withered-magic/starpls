@@ -470,6 +470,7 @@ pub trait FileLoader: Send + Sync + 'static {
 
 /// Simple implementation of [`FileLoader`] backed by a HashMap.
 /// Mainly used for tests.
+#[allow(dead_code)]
 #[derive(Default)]
 pub(crate) struct SimpleFileLoader(DashMap<String, LoadFileResult>);
 

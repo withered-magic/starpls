@@ -41,7 +41,10 @@ pub(crate) fn binary_expr(
     tokens: &[SyntaxKind],
     next: fn(&mut Parser) -> Option<CompletedMarker>,
 ) -> Option<CompletedMarker> {
-    let mut m = next(p)?;
+    let mut m = match next(p) {
+        Some(m) => m,
+        None => return None,
+    };
 
     while tokens.contains(&p.current()) {
         let binary_marker = m.precede(p);
@@ -85,7 +88,10 @@ fn and_expr(p: &mut Parser) -> Option<CompletedMarker> {
 
 fn comparison_expr(p: &mut Parser) -> Option<CompletedMarker> {
     const COMP_TOKENS: &[SyntaxKind] = &[T![==], T![!=], T![<], T![>], T![<=], T![>=], T![in]];
-    let mut m = bitwise_or_expr(p)?;
+    let mut m = match bitwise_or_expr(p) {
+        Some(m) => m,
+        None => return None,
+    };
 
     loop {
         let is_not_in = if COMP_TOKENS.contains(&p.current()) {
@@ -144,7 +150,10 @@ fn unary_expr(p: &mut Parser) -> Option<CompletedMarker> {
 
 /// Parses a function call, subscript expression, or member access.
 pub(crate) fn primary_expr(p: &mut Parser) -> Option<CompletedMarker> {
-    let mut m = operand_expr(p)?;
+    let mut m = match operand_expr(p) {
+        Some(m) => m,
+        None => return None,
+    };
 
     loop {
         let next = match p.current() {

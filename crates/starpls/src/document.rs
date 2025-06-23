@@ -363,7 +363,7 @@ impl DefaultFileLoader {
         Ok((file_id, contents))
     }
 
-    fn repo_for_path<'a>(&'a self, path: &'a Path) -> Option<&'a str> {
+    fn repo_for_path<'a>(&'a self, path: &'a Path) -> Option<&str> {
         match path.strip_prefix(&self.external_output_base) {
             Ok(stripped) => stripped
                 .components()

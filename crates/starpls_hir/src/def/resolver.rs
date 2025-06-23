@@ -97,7 +97,7 @@ impl<'a> Resolver<'a> {
     pub(crate) fn resolve_name(
         &'a self,
         name: &'a Name,
-    ) -> Option<(ExecutionScopeId, impl Iterator<Item = SymbolDef<'a>>)> {
+    ) -> Option<(ExecutionScopeId, impl Iterator<Item = SymbolDef<'a>> + '_)> {
         let mut defs = self
             .scopes_with_id()
             .filter_map(move |(scope_id, scope)| {

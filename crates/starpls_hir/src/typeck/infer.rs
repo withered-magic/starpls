@@ -1662,7 +1662,7 @@ impl TyContext<'_> {
                         continue;
                     }
                 }
-                FlowNode::Unreachable => Ty::never(),
+                FlowNode::Unreachable { .. } => Ty::never(),
             };
 
             break Some(curr_node_ty);

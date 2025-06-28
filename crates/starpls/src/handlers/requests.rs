@@ -49,6 +49,21 @@ pub(crate) fn goto_definition(
     snapshot: &ServerSnapshot,
     params: lsp_types::GotoDefinitionParams,
 ) -> anyhow::Result<Option<lsp_types::GotoDefinitionResponse>> {
+    goto_definition_impl(snapshot, params, false)
+}
+
+pub(crate) fn goto_declaration(
+    snapshot: &ServerSnapshot,
+    params: lsp_types::GotoDefinitionParams,
+) -> anyhow::Result<Option<lsp_types::GotoDefinitionResponse>> {
+    goto_definition_impl(snapshot, params, true)
+}
+
+fn goto_definition_impl(
+    snapshot: &ServerSnapshot,
+    params: lsp_types::GotoDefinitionParams,
+    skip_re_exports: bool,
+) -> anyhow::Result<Option<lsp_types::GotoDefinitionResponse>> {
     let path = path_buf_from_url(&params.text_document_position_params.text_document.uri)?;
     let file_id = try_opt!(snapshot.document_manager.read().lookup_by_path_buf(&path));
     let pos = try_opt!(convert::text_size_from_lsp_position(
@@ -61,7 +76,7 @@ pub(crate) fn goto_definition(
         file_id,
         snapshot
             .analysis_snapshot
-            .goto_definition(FilePosition { file_id, pos })?
+            .goto_definition(FilePosition { file_id, pos }, skip_re_exports)?
             .unwrap_or_else(Vec::new)
             .into_iter(),
     );

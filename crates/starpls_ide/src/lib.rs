@@ -370,8 +370,12 @@ impl AnalysisSnapshot {
         self.query(|db| find_references::find_references(db, pos))
     }
 
-    pub fn goto_definition(&self, pos: FilePosition) -> Cancellable<Option<Vec<LocationLink>>> {
-        self.query(|db| goto_definition::goto_definition(db, pos))
+    pub fn goto_definition(
+        &self,
+        pos: FilePosition,
+        skip_re_exports: bool,
+    ) -> Cancellable<Option<Vec<LocationLink>>> {
+        self.query(|db| goto_definition::goto_definition(db, pos, skip_re_exports))
     }
 
     pub fn hover(&self, pos: FilePosition) -> Cancellable<Option<Hover>> {

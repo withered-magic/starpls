@@ -2,6 +2,7 @@ use clap::Args;
 use log::info;
 use lsp_server::Connection;
 use lsp_types::CompletionOptions;
+use lsp_types::DeclarationCapability;
 use lsp_types::HoverProviderCapability;
 use lsp_types::OneOf;
 use lsp_types::ServerCapabilities;
@@ -53,6 +54,7 @@ impl ServerCommand {
                 trigger_characters: Some(make_trigger_characters(COMPLETION_TRIGGER_CHARACTERS)),
                 ..Default::default()
             }),
+            declaration_provider: Some(DeclarationCapability::Simple(true)),
             definition_provider: Some(OneOf::Left(true)),
             document_symbol_provider: Some(OneOf::Left(true)),
             hover_provider: Some(HoverProviderCapability::Simple(true)),

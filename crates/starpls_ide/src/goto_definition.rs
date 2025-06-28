@@ -589,6 +589,40 @@ f$0oo
     }
 
     #[test]
+    fn test_load_stmt_re_export_short_circuit() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        fixture.add_file(
+            &mut analysis.db,
+            "//:foo.bzl",
+            r#"
+foo = 123
+"#,
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "//:bar.bzl",
+            r#"
+load("//:foo.bzl", _foo = "bar")
+
+foo = _foo
+#^^
+"#,
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "//:baz.bzl",
+            r#"
+load("//:bar.bzl", "foo")
+
+f$0oo
+"#,
+        );
+        loader.add_files_from_fixture(&analysis.db, &fixture);
+        check_goto_definition_from_fixture(analysis, fixture, true);
+    }
+
+    #[test]
     fn test_prelude_variable() {
         let (mut analysis, loader) = Analysis::new_for_test();
         let mut fixture = Fixture::new(&mut analysis.db);

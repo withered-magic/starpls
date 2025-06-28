@@ -926,10 +926,9 @@ impl Param {
                     HirDefParam::KwargsDict { .. }
                 )
             }
-            ParamInner::IntrinsicParam { parent, index } => matches!(
-                parent.params(db)[index],
-                IntrinsicFunctionParam::KwargsDict { .. }
-            ),
+            ParamInner::IntrinsicParam { parent, index } => {
+                matches!(parent.params(db)[index], IntrinsicFunctionParam::KwargsDict)
+            }
             ParamInner::BuiltinParam { parent, index } => matches!(
                 parent.params(db)[index],
                 BuiltinFunctionParam::KwargsDict { .. }
@@ -1460,7 +1459,10 @@ pub(crate) struct Rule {
 }
 
 impl Rule {
-    pub(crate) fn attrs<'a>(&'a self, db: &'a dyn Db) -> impl Iterator<Item = (&Name, &Attribute)> {
+    pub(crate) fn attrs<'a>(
+        &'a self,
+        db: &'a dyn Db,
+    ) -> impl Iterator<Item = (&'a Name, &'a Attribute)> {
         // This chaining is done to put the `name` attribute first.
         let common = common_attributes_query(db);
         let mut common_attrs = match self.kind {
@@ -1777,7 +1779,7 @@ struct TypeRefResolver<'a, 'b> {
     errors: Vec<String>,
 }
 
-impl<'a, 'b> TypeRefResolver<'a, 'b> {
+impl TypeRefResolver<'_, '_> {
     fn resolve_type_ref(mut self, type_ref: &TypeRef) -> (Ty, Vec<String>) {
         let ty = self.resolve_type_ref_inner(type_ref);
         (ty, self.errors)

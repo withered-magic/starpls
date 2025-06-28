@@ -24,7 +24,7 @@ pub struct Label<'a> {
 }
 
 impl<'a> Label<'a> {
-    pub fn parse(input: &'a str) -> ParseResult {
+    pub fn parse(input: &'a str) -> ParseResult<'a> {
         Parser {
             chars: input.chars(),
             pos: 0,
@@ -134,7 +134,7 @@ struct Parser<'a, 'b> {
     label: Label<'a>,
 }
 
-impl<'a, 'b> Parser<'a, 'b> {
+impl<'a> Parser<'a, '_> {
     fn parse(mut self) -> ParseResult<'a> {
         match self.parse_full() {
             Ok(_) => Ok(self.label),

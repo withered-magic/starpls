@@ -233,7 +233,7 @@ pub(crate) fn completions(
             for candidate in db.list_load_candidates(&value, file_id).ok()?? {
                 let start = TextSize::from(
                     value
-                        .rfind(&['/', ':', '@'])
+                        .rfind(['/', ':', '@'])
                         .map(|start| {
                             if candidate.replace_trailing_slash {
                                 start
@@ -569,7 +569,7 @@ impl CompletionContext {
 }
 
 fn strip_last_package_or_target(label: &str) -> &str {
-    if let Some(index) = label.rfind(&[':', '/']) {
+    if let Some(index) = label.rfind([':', '/']) {
         &label[..index + 1]
     } else {
         label

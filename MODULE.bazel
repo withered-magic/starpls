@@ -16,7 +16,7 @@ use_repo(zig_toolchains, "zig_sdk")
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
     edition = "2021",
-    versions = ["1.87.0"],
+    versions = ["nightly/2023-12-06"],
     extra_target_triples = ["aarch64-unknown-linux-gnu"],
 )
 

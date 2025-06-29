@@ -1,6 +1,7 @@
 use starpls_common::Db;
 use starpls_common::File;
 use starpls_common::InFile;
+use starpls_hir::LoadItem;
 use starpls_hir::Name;
 use starpls_hir::ScopeDef;
 use starpls_hir::Semantics;
@@ -20,10 +21,15 @@ struct GotoDefinitionHandler<'a> {
     sema: Semantics<'a>,
     file: File,
     token: SyntaxToken,
+    skip_re_exports: bool,
 }
 
 impl<'a> GotoDefinitionHandler<'a> {
-    fn new(db: &'a Database, FilePosition { file_id, pos }: FilePosition) -> Option<Self> {
+    fn new(
+        db: &'a Database,
+        FilePosition { file_id, pos }: FilePosition,
+        skip_re_exports: bool,
+    ) -> Option<Self> {
         let sema = Semantics::new(db);
         let file = db.get_file(file_id)?;
         let parse = sema.parse(file);
@@ -34,7 +40,12 @@ impl<'a> GotoDefinitionHandler<'a> {
             _ => 1,
         })?;
 
-        Some(Self { sema, file, token })
+        Some(Self {
+            sema,
+            file,
+            token,
+            skip_re_exports,
+        })
     }
 
     fn handle_goto_definition(&self) -> Option<Vec<LocationLink>> {
@@ -42,7 +53,7 @@ impl<'a> GotoDefinitionHandler<'a> {
 
         match_ast! {
             match parent {
-                ast::NameRef(name_ref) => self.handle_name_ref(name_ref),
+                ast::NameRef(name_ref) => self.handle_name_ref(name_ref, self.skip_re_exports),
                 ast::Name(name) => {
                     let parent = name.syntax().parent()?;
                     match_ast! {
@@ -54,14 +65,18 @@ impl<'a> GotoDefinitionHandler<'a> {
                     }
                 },
                 ast::LoadModule(load_module) => self.handle_load_module(load_module),
-                ast::LoadItem(load_item) => self.handle_load_item(load_item),
+                ast::LoadItem(load_item) => self.handle_load_item(load_item, self.skip_re_exports),
                 ast::LiteralExpr(lit) => self.handle_literal_expr(lit),
                 _ => None
             }
         }
     }
 
-    fn handle_name_ref(&self, name_ref: ast::NameRef) -> Option<Vec<LocationLink>> {
+    fn handle_name_ref(
+        &self,
+        name_ref: ast::NameRef,
+        skip_re_exports: bool,
+    ) -> Option<Vec<LocationLink>> {
         let name = Name::from_ast_name_ref(name_ref.clone());
         let scope = self.sema.scope_for_expr(
             self.file,
@@ -73,13 +88,52 @@ impl<'a> GotoDefinitionHandler<'a> {
                 .into_iter()
                 .flat_map(|def| match def {
                     ScopeDef::LoadItem(load_item) => {
-                        let def = self.sema.def_for_load_item(&load_item)?;
-                        self.def_to_location_link(def)
+                        if skip_re_exports {
+                            self.try_resolve_re_export(&load_item)
+                        } else {
+                            let def = self.sema.def_for_load_item(&load_item)?;
+                            self.def_to_location_link(def)
+                        }
                     }
                     _ => self.def_to_location_link(def),
                 })
                 .collect(),
         )
+    }
+
+    // Re-exporting symbols is a common pattern in Starlark, but the default
+    // behavior in this scenario isn't ideal from a UX perspective - the user
+    // might need to issue multiple "Go to Definition" commands to get to
+    // the actual definition of a re-exported symbol.
+    fn try_resolve_re_export(&self, load_item: &LoadItem) -> Option<LocationLink> {
+        let def = self.sema.def_for_load_item(load_item)?;
+        self.try_resolve_assign_from_load_item(&def)
+            .and_then(|load_item| self.try_resolve_re_export(&load_item))
+            .or_else(|| self.def_to_location_link(def))
+    }
+
+    fn try_resolve_assign_from_load_item(&self, def: &ScopeDef) -> Option<LoadItem> {
+        let InFile { file, value: ptr } = def.syntax_node_ptr(self.sema.db)?;
+        let syntax = ptr.try_to_node(&self.sema.parse(file).syntax(self.sema.db))?;
+        if !ast::NameRef::can_cast(syntax.kind()) {
+            return None;
+        }
+        let assign_stmt = ast::AssignStmt::cast(syntax.parent()?)?;
+        let name_ref = match assign_stmt.rhs()? {
+            ast::Expression::Name(name_ref) => name_ref,
+            _ => return None,
+        };
+        let name = Name::from_ast_name_ref(name_ref.clone());
+        let scope = self
+            .sema
+            .scope_for_expr(file, &ast::Expression::cast(name_ref.syntax().clone())?)?;
+        scope
+            .resolve_name(&name)
+            .into_iter()
+            .find_map(|def| match def {
+                ScopeDef::LoadItem(load_item) => Some(load_item),
+                _ => None,
+            })
     }
 
     fn handle_dot_expr(&self, dot_expr: ast::DotExpr) -> Option<Vec<LocationLink>> {
@@ -164,11 +218,19 @@ impl<'a> GotoDefinitionHandler<'a> {
         }])
     }
 
-    fn handle_load_item(&self, load_item: ast::LoadItem) -> Option<Vec<LocationLink>> {
+    fn handle_load_item(
+        &self,
+        load_item: ast::LoadItem,
+        skip_re_exports: bool,
+    ) -> Option<Vec<LocationLink>> {
         let load_item = self.sema.resolve_load_item(self.file, &load_item)?;
-        let def = self.sema.def_for_load_item(&load_item)?;
-        let location = self.def_to_location_link(def)?;
-        Some(vec![location])
+        if skip_re_exports {
+            self.try_resolve_re_export(&load_item)
+        } else {
+            let def = self.sema.def_for_load_item(&load_item)?;
+            self.def_to_location_link(def)
+        }
+        .map(|loc| vec![loc])
     }
 
     fn handle_literal_expr(&self, lit: ast::LiteralExpr) -> Option<Vec<LocationLink>> {
@@ -300,8 +362,12 @@ impl<'a> GotoDefinitionHandler<'a> {
     }
 }
 
-pub(crate) fn goto_definition(db: &Database, pos: FilePosition) -> Option<Vec<LocationLink>> {
-    GotoDefinitionHandler::new(db, pos)?.handle_goto_definition()
+pub(crate) fn goto_definition(
+    db: &Database,
+    pos: FilePosition,
+    skip_re_exports: bool,
+) -> Option<Vec<LocationLink>> {
+    GotoDefinitionHandler::new(db, pos, skip_re_exports)?.handle_goto_definition()
 }
 
 #[cfg(test)]
@@ -317,10 +383,14 @@ mod tests {
 
     fn check_goto_definition(fixture: &str) {
         let (analysis, fixture) = Analysis::from_single_file_fixture(fixture);
-        check_goto_definition_from_fixture(analysis, fixture);
+        check_goto_definition_from_fixture(analysis, fixture, false);
     }
 
-    fn check_goto_definition_from_fixture(analysis: Analysis, fixture: Fixture) {
+    fn check_goto_definition_from_fixture(
+        analysis: Analysis,
+        fixture: Fixture,
+        skip_re_exports: bool,
+    ) {
         let actual = analysis
             .snapshot()
             .goto_definition(
@@ -328,6 +398,7 @@ mod tests {
                     .cursor_pos
                     .map(|(file_id, pos)| FilePosition { file_id, pos })
                     .unwrap(),
+                skip_re_exports,
             )
             .unwrap()
             .unwrap()
@@ -488,7 +559,107 @@ f$0oo()
 "#,
         );
         loader.add_files_from_fixture(&analysis.db, &fixture);
-        check_goto_definition_from_fixture(analysis, fixture);
+        check_goto_definition_from_fixture(analysis, fixture, false);
+    }
+
+    #[test]
+    fn test_load_stmt_re_export() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        fixture.add_file(
+            &mut analysis.db,
+            "//:foo.bzl",
+            r#"
+foo = 123
+#^^
+"#,
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "//:bar.bzl",
+            r#"
+load("//:foo.bzl", _foo = "foo")
+
+foo = _foo
+"#,
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "//:baz.bzl",
+            r#"
+load("//:bar.bzl", "foo")
+
+f$0oo
+"#,
+        );
+        loader.add_files_from_fixture(&analysis.db, &fixture);
+        check_goto_definition_from_fixture(analysis, fixture, true);
+    }
+
+    #[test]
+    fn test_load_stmt_re_export_load_item() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        fixture.add_file(
+            &mut analysis.db,
+            "//:foo.bzl",
+            r#"
+foo = 123
+#^^
+"#,
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "//:bar.bzl",
+            r#"
+load("//:foo.bzl", _foo = "foo")
+
+foo = _foo
+"#,
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "//:baz.bzl",
+            r#"
+load("//:bar.bzl", "f$0oo")
+"#,
+        );
+        loader.add_files_from_fixture(&analysis.db, &fixture);
+        check_goto_definition_from_fixture(analysis, fixture, true);
+    }
+
+    #[test]
+    fn test_load_stmt_re_export_short_circuit() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        fixture.add_file(
+            &mut analysis.db,
+            "//:foo.bzl",
+            r#"
+foo = 123
+"#,
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "//:bar.bzl",
+            r#"
+load("//:foo.bzl", _foo = "bar")
+
+foo = _foo
+#^^
+"#,
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "//:baz.bzl",
+            r#"
+load("//:bar.bzl", "foo")
+
+f$0oo
+"#,
+        );
+        loader.add_files_from_fixture(&analysis.db, &fixture);
+        check_goto_definition_from_fixture(analysis, fixture, true);
     }
 
     #[test]
@@ -515,7 +686,7 @@ F$0OO
             }),
         );
         loader.add_files_from_fixture(&analysis.db, &fixture);
-        check_goto_definition_from_fixture(analysis, fixture);
+        check_goto_definition_from_fixture(analysis, fixture, false);
     }
 
     #[test]
@@ -543,7 +714,7 @@ f$0oo()
             }),
         );
         loader.add_files_from_fixture(&analysis.db, &fixture);
-        check_goto_definition_from_fixture(analysis, fixture);
+        check_goto_definition_from_fixture(analysis, fixture, false);
     }
 
     #[test]
@@ -578,6 +749,6 @@ j$0ava_library()
             }),
         );
         loader.add_files_from_fixture(&analysis.db, &fixture);
-        check_goto_definition_from_fixture(analysis, fixture);
+        check_goto_definition_from_fixture(analysis, fixture, false);
     }
 }

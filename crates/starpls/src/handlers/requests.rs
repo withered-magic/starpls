@@ -49,7 +49,11 @@ pub(crate) fn goto_definition(
     snapshot: &ServerSnapshot,
     params: lsp_types::GotoDefinitionParams,
 ) -> anyhow::Result<Option<lsp_types::GotoDefinitionResponse>> {
-    goto_definition_impl(snapshot, params, false)
+    goto_definition_impl(
+        snapshot,
+        params,
+        snapshot.config.args.goto_definition_skip_re_exports,
+    )
 }
 
 pub(crate) fn goto_declaration(

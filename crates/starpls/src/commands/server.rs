@@ -31,6 +31,12 @@ pub(crate) struct ServerCommand {
     )]
     pub(crate) enable_label_completions: bool,
 
+    #[clap(
+        long = "experimental_goto_definition_skip_re_exports",
+        default_value_t = false
+    )]
+    pub(crate) goto_definition_skip_re_exports: bool,
+
     /// After receiving an edit event, the amount of time in milliseconds
     /// the server will wait for additional events before running analysis
     #[clap(long = "analysis_debounce_interval", default_value_t = 250)]

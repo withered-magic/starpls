@@ -65,7 +65,7 @@ impl<'a> GotoDefinitionHandler<'a> {
                     }
                 },
                 ast::LoadModule(load_module) => self.handle_load_module(load_module),
-                ast::LoadItem(load_item) => self.handle_load_item(load_item),
+                ast::LoadItem(load_item) => self.handle_load_item(load_item, self.skip_re_exports),
                 ast::LiteralExpr(lit) => self.handle_literal_expr(lit),
                 _ => None
             }
@@ -218,11 +218,19 @@ impl<'a> GotoDefinitionHandler<'a> {
         }])
     }
 
-    fn handle_load_item(&self, load_item: ast::LoadItem) -> Option<Vec<LocationLink>> {
+    fn handle_load_item(
+        &self,
+        load_item: ast::LoadItem,
+        skip_re_exports: bool,
+    ) -> Option<Vec<LocationLink>> {
         let load_item = self.sema.resolve_load_item(self.file, &load_item)?;
-        let def = self.sema.def_for_load_item(&load_item)?;
-        let location = self.def_to_location_link(def)?;
-        Some(vec![location])
+        if skip_re_exports {
+            self.try_resolve_re_export(&load_item)
+        } else {
+            let def = self.sema.def_for_load_item(&load_item)?;
+            self.def_to_location_link(def)
+        }
+        .map(|loc| vec![loc])
     }
 
     fn handle_literal_expr(&self, lit: ast::LiteralExpr) -> Option<Vec<LocationLink>> {
@@ -582,6 +590,38 @@ foo = _foo
 load("//:bar.bzl", "foo")
 
 f$0oo
+"#,
+        );
+        loader.add_files_from_fixture(&analysis.db, &fixture);
+        check_goto_definition_from_fixture(analysis, fixture, true);
+    }
+
+    #[test]
+    fn test_load_stmt_re_export_load_item() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+        fixture.add_file(
+            &mut analysis.db,
+            "//:foo.bzl",
+            r#"
+foo = 123
+#^^
+"#,
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "//:bar.bzl",
+            r#"
+load("//:foo.bzl", _foo = "foo")
+
+foo = _foo
+"#,
+        );
+        fixture.add_file(
+            &mut analysis.db,
+            "//:baz.bzl",
+            r#"
+load("//:bar.bzl", "f$0oo")
 "#,
         );
         loader.add_files_from_fixture(&analysis.db, &fixture);

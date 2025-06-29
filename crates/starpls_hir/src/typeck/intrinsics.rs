@@ -386,7 +386,11 @@ fail("oops", 1, False)		# "fail: oops 1 False"
             },
             Keyword {
                 name: Name::new_inline("sep"),
-                ty: TyKind::String(Some(InternedString::new(db, " ".to_string().into_boxed_str()))).intern(),
+                ty: TyKind::String(Some(InternedString::new(
+                    db,
+                    " ".to_string().into_boxed_str(),
+                )))
+                .intern(),
                 deprecated: false,
             },
             ArgsList { ty: Any.intern() },

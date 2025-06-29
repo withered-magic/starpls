@@ -2286,12 +2286,12 @@ y = 234
             53..58 "2 < 1": bool
             68..69 "x": Literal[0]
             72..73 "0": Literal[0]
-            92..96 "fail": def fail(*args: Any) -> Never
+            92..96 "fail": def fail(msg: string = None, attr: string = None, sep: Literal[" "] = None, *args: Any) -> Never
             92..98 "fail()": Never
             103..104 "x": string | int
             106..107 "x": Literal[123]
             110..113 "123": Literal[123]
-            114..118 "fail": def fail(*args: Any) -> Never
+            114..118 "fail": def fail(msg: string = None, attr: string = None, sep: Literal[" "] = None, *args: Any) -> Never
             119..125 "\"hehe\"": Literal["hehe"]
             114..126 "fail(\"hehe\")": Never
             127..128 "y": Literal[234]

@@ -9,6 +9,7 @@ use starpls_syntax::ast::AstNode;
 use starpls_syntax::ast::{self};
 use starpls_syntax::match_ast;
 use starpls_syntax::SyntaxToken;
+use starpls_syntax::TextRange;
 use starpls_syntax::T;
 
 use crate::util::pick_best_token;
@@ -16,6 +17,7 @@ use crate::Database;
 use crate::FilePosition;
 use crate::LocationLink;
 use crate::ResolvedPath;
+use crate::TextSize;
 
 struct GotoDefinitionHandler<'a> {
     sema: Semantics<'a>,
@@ -262,38 +264,42 @@ impl<'a> GotoDefinitionHandler<'a> {
             } => {
                 let build_file = self.sema.db.get_file(build_file_id)?;
                 let parse = self.sema.parse(build_file).syntax(self.sema.db);
-                let call_expr = parse
-                    .children()
-                    .filter_map(ast::CallExpr::cast)
-                    .find(|expr| {
-                        expr.arguments()
-                            .into_iter()
-                            .flat_map(|args| args.arguments())
-                            .any(|arg| match arg {
-                                ast::Argument::Keyword(arg) => {
-                                    arg.name()
-                                        .and_then(|name| name.name())
-                                        .map(|name| name.text() == "name")
-                                        .unwrap_or_default()
-                                        && arg
-                                            .expr()
-                                            .and_then(|expr| match expr {
-                                                ast::Expression::Literal(expr) => Some(expr),
-                                                _ => None,
-                                            })
-                                            .and_then(|expr| match expr.kind() {
-                                                ast::LiteralKind::String(s) => {
-                                                    s.value().map(|value| *value == target)
-                                                }
-                                                _ => None,
-                                            })
+                let optional_call_expr =
+                    parse
+                        .children()
+                        .filter_map(ast::CallExpr::cast)
+                        .find(|expr| {
+                            expr.arguments()
+                                .into_iter()
+                                .flat_map(|args| args.arguments())
+                                .any(|arg| match arg {
+                                    ast::Argument::Keyword(arg) => {
+                                        arg.name()
+                                            .and_then(|name| name.name())
+                                            .map(|name| name.text() == "name")
                                             .unwrap_or_default()
-                                }
-                                _ => false,
-                            })
-                    })?;
+                                            && arg
+                                                .expr()
+                                                .and_then(|expr| match expr {
+                                                    ast::Expression::Literal(expr) => Some(expr),
+                                                    _ => None,
+                                                })
+                                                .and_then(|expr| match expr.kind() {
+                                                    ast::LiteralKind::String(s) => {
+                                                        s.value().map(|value| *value == target)
+                                                    }
+                                                    _ => None,
+                                                })
+                                                .unwrap_or_default()
+                                    }
+                                    _ => false,
+                                })
+                        });
+                let range = match optional_call_expr {
+                    Some(call_expr) => call_expr.syntax().text_range(),
+                    None => TextRange::new(TextSize::new(0), TextSize::new(0)),
+                };
 
-                let range = call_expr.syntax().text_range();
                 Some(vec![LocationLink::Local {
                     origin_selection_range: Some(self.token.text_range()),
                     target_range: range,

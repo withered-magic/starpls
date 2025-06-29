@@ -1958,6 +1958,24 @@ d["foo"] = 1
 }
 
 #[test]
+fn test_fail_deprecated_args() {
+    check_infer(
+        r#"
+fail(msg = "foo", attr = "bar")
+"#,
+        expect![[r#"
+            1..5 "fail": def fail(msg: string = None, attr: string = None, sep: Literal[" "] = None, *args: Any) -> Never
+            12..17 "\"foo\"": Literal["foo"]
+            26..31 "\"bar\"": Literal["bar"]
+            1..32 "fail(msg = \"foo\", attr = \"bar\")": Never
+
+            6..9 Argument "msg" is deprecated
+            19..23 Argument "attr" is deprecated
+        "#]],
+    );
+}
+
+#[test]
 fn test_if_else_stmts() {
     check_infer_with_code_flow_analysis(
         r#"

@@ -177,9 +177,18 @@ impl IntrinsicFunction {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum IntrinsicFunctionParam {
-    Positional { ty: Ty, optional: bool },
-    Keyword { name: Name, ty: Ty },
-    ArgsList { ty: Ty },
+    Positional {
+        ty: Ty,
+        optional: bool,
+    },
+    Keyword {
+        name: Name,
+        ty: Ty,
+        deprecated: bool,
+    },
+    ArgsList {
+        ty: Ty,
+    },
     KwargsDict,
 }
 
@@ -364,7 +373,28 @@ fail("oops")			# "fail: oops"
 fail("oops", 1, False)		# "fail: oops 1 False"
 ```
 "#,
-        vec![ArgsList { ty: Any.intern() }],
+        vec![
+            Keyword {
+                name: Name::new_inline("msg"),
+                ty: Ty::string(),
+                deprecated: true,
+            },
+            Keyword {
+                name: Name::new_inline("attr"),
+                ty: Ty::string(),
+                deprecated: true,
+            },
+            Keyword {
+                name: Name::new_inline("sep"),
+                ty: TyKind::String(Some(InternedString::new(
+                    db,
+                    " ".to_string().into_boxed_str(),
+                )))
+                .intern(),
+                deprecated: false,
+            },
+            ArgsList { ty: Any.intern() },
+        ],
         Never,
     );
     add_function(
@@ -496,6 +526,7 @@ max("two", "three", "four", key=len)            # "three", the longest
             Keyword {
                 name: Name::new_inline("key"),
                 ty: Any.intern(),
+                deprecated: false,
             },
         ],
         Any,
@@ -521,6 +552,7 @@ min("two", "three", "four", key=len)            # "two", the shortest
             Keyword {
                 name: Name::new_inline("key"),
                 ty: Any.intern(),
+                deprecated: false,
             },
         ],
         Any,
@@ -548,6 +580,7 @@ determined by the host application.
             Keyword {
                 name: Name::new_inline("str"),
                 ty: Ty::string(),
+                deprecated: false,
             },
         ],
         None,
@@ -672,10 +705,12 @@ sorted(["two", "three", "four"], key=len, reverse=True)    # ["three", "four", "
             Keyword {
                 name: Name::new_inline("reverse"),
                 ty: non_literal_bool().intern(),
+                deprecated: false,
             },
             Keyword {
                 name: Name::new_inline("key"),
                 ty: Any.intern(),
+                deprecated: false,
             },
         ],
         List(Any.intern()),

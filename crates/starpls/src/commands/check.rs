@@ -125,6 +125,7 @@ fn diagnostic_to_message<'a>(
     let start: usize = diagnostic.range.range.start().into();
     let end: usize = diagnostic.range.range.end().into();
     let level = match diagnostic.severity {
+        Severity::Info => Level::Info,
         Severity::Warning => Level::Warning,
         Severity::Error => Level::Error,
     };
@@ -247,10 +248,12 @@ impl Checker {
         metadata: &FileMetadata,
         num_errors: &mut usize,
         num_warnings: &mut usize,
+        num_infos: &mut usize,
     ) -> anyhow::Result<()> {
         let renderer = Renderer::styled();
         for diagnostic in snapshot.diagnostics(file_id)? {
             match diagnostic.severity {
+                Severity::Info => *num_infos += 1,
                 Severity::Warning => *num_warnings += 1,
                 Severity::Error => *num_errors += 1,
             }
@@ -266,6 +269,7 @@ impl Checker {
         let snapshot = self.analysis.snapshot();
         let mut num_errors = 0;
         let mut num_warnings = 0;
+        let mut num_infos = 0;
 
         let mut ignored_files = self.ignored_files.iter().collect::<Vec<_>>();
         ignored_files.sort();
@@ -290,6 +294,7 @@ impl Checker {
                 metadata,
                 &mut num_errors,
                 &mut num_warnings,
+                &mut num_infos,
             )?;
         }
 

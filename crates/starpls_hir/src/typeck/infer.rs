@@ -810,36 +810,17 @@ impl TyContext<'_> {
                                     {
                                         if *deprecated {
                                             let source_map = source_map(self.db, file);
-                                            let arg_name_node = match source_map
+                                            let arg_name_node = source_map
                                                 .expr_map_back
                                                 .get(&expr)
-                                            {
-                                                Some(arg_value_ptr) => match arg_value_ptr
-                                                    .syntax_node_ptr()
-                                                    .try_to_node(
+                                                .and_then(|arg_value_ptr| {
+                                                    arg_value_ptr.syntax_node_ptr().try_to_node(
                                                         &parse(self.db, file).syntax(self.db),
-                                                    ) {
-                                                    Some(arg_value_node) => {
-                                                        match arg_value_node.parent() {
-                                                            Some(keyword_arg) => {
-                                                                match ast::KeywordArgument::cast(
-                                                                    keyword_arg,
-                                                                ) {
-                                                                    Some(keyword_arg) => {
-                                                                        keyword_arg.name()
-                                                                    }
-                                                                    None => None,
-                                                                }
-                                                            }
-
-                                                            None => None,
-                                                        }
-                                                    }
-                                                    None => None,
-                                                },
-
-                                                None => None,
-                                            };
+                                                    )
+                                                })
+                                                .and_then(|arg_value_node| arg_value_node.parent())
+                                                .and_then(ast::KeywordArgument::cast)
+                                                .and_then(|keyword_arg| keyword_arg.name());
                                             if let Some(arg_name_node) = arg_name_node {
                                                 self.add_diagnostic_for_range(
                                                     file,

@@ -346,7 +346,7 @@ impl Server {
     }
 
     fn respond(&mut self, resp: lsp_server::Response) {
-        if self.req_queue.incoming.complete(resp.id.clone()).is_some() {
+        if self.req_queue.incoming.complete(&resp.id.clone()).is_some() {
             self.connection.sender.send(resp.into()).unwrap();
         }
     }

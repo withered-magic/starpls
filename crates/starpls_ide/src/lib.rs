@@ -398,6 +398,10 @@ impl AnalysisSnapshot {
         self.query(|db| signature_help::signature_help(db, pos))
     }
 
+    pub fn file_contents(&self, file_id: FileId) -> Cancellable<Option<String>> {
+        self.query(|db| db.get_file(file_id).map(|file| file.contents(db).clone()))
+    }
+
     /// Helper method to handle Salsa cancellations.
     fn query<'a, F, T>(&'a self, f: F) -> Cancellable<T>
     where

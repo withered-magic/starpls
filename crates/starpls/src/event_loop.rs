@@ -77,10 +77,10 @@ pub fn process_connection(
     initialize_params: InitializeParams,
 ) -> anyhow::Result<()> {
     debug!("initializing state and starting event loop");
-    let config = ServerConfig {
-        args,
-        caps: initialize_params.capabilities,
-    };
+    let mut config =
+        ServerConfig::from_json(initialize_params.initialization_options.unwrap_or_default());
+    config.args = args;
+    config.caps = initialize_params.capabilities;
     let server = Server::new(connection, config)?;
     server.run()
 }
@@ -218,6 +218,7 @@ impl Server {
             .on::<lsp_types::request::HoverRequest>(requests::hover)
             .on::<lsp_types::request::References>(requests::find_references)
             .on::<lsp_types::request::SignatureHelpRequest>(requests::signature_help)
+            .on::<lsp_types::request::Formatting>(requests::formatting)
             .finish();
     }
 

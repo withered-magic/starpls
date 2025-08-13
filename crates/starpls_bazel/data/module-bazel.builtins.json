@@ -211,6 +211,15 @@
             "is_mandatory": false,
             "is_star_arg": false,
             "is_star_star_arg": false
+          },
+          {
+            "name": "tag",
+            "type": "string",
+            "doc": "The tag that should be checked out.",
+            "default_value": "''",
+            "is_mandatory": false,
+            "is_star_arg": false,
+            "is_star_star_arg": false
           }
         ],
         "return_type": "None"

@@ -13,9 +13,9 @@ jobs:
       matrix:
         target:
           - name: linux-amd64
-            runs-on: ubuntu-20.04
+            runs-on: ubuntu-latest
           - name: linux-aarch64
-            runs-on: ubuntu-20.04
+            runs-on: ubuntu-latest
           - name: darwin-amd64
             runs-on: macos-13
           - name: darwin-arm64

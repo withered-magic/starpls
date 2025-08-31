@@ -62,6 +62,7 @@ impl ServerCommand {
             }),
             declaration_provider: Some(DeclarationCapability::Simple(true)),
             definition_provider: Some(OneOf::Left(true)),
+            document_formatting_provider: Some(OneOf::Left(true)),
             document_symbol_provider: Some(OneOf::Left(true)),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
             references_provider: Some(OneOf::Left(true)),

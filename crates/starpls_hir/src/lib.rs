@@ -109,8 +109,17 @@ const TARGET_DOC: &str = "The BUILD target for a dependency. Appears in the fiel
 
 pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
     fn gcx(&self) -> &GlobalContext;
+
+    // Legacy dialect methods (for backward compatibility)
     fn set_builtin_defs(&mut self, dialect: Dialect, builtins: Builtins, rules: Builtins);
     fn get_builtin_defs(&self, dialect: &Dialect) -> BuiltinDefs;
+
+    // New extensible dialect methods
+    fn get_dialect_registry(&self) -> &starpls_common::DialectRegistry;
+    fn get_dialect_registry_mut(&mut self) -> &mut starpls_common::DialectRegistry;
+    fn register_dialect(&mut self, dialect: starpls_common::ExtensibleDialect);
+    fn get_builtin_defs_by_id(&self, dialect_id: &starpls_common::DialectId, api_context: Option<starpls_bazel::APIContext>) -> BuiltinDefs;
+
     fn set_bazel_prelude_file(&mut self, file_id: FileId);
     fn get_bazel_prelude_file(&self) -> Option<FileId>;
     fn set_all_workspace_targets(&mut self, targets: Vec<String>);

@@ -59,6 +59,7 @@ pub type Cancellable<T> = Result<T, Cancelled>;
 #[salsa::db(starpls_common::Jar, starpls_hir::Jar)]
 pub(crate) struct Database {
     builtin_defs: Arc<DashMap<Dialect, BuiltinDefs>>,
+    dialect_registry: starpls_common::DialectRegistry,
     storage: salsa::Storage<Self>,
     files: Arc<DashMap<FileId, File>>,
     loader: Arc<dyn FileLoader>,
@@ -241,6 +242,28 @@ impl starpls_hir::Db for Database {
 
     fn gcx(&self) -> &GlobalContext {
         &self.gcx
+    }
+
+    fn get_dialect_registry(&self) -> &starpls_common::DialectRegistry {
+        &self.dialect_registry
+    }
+
+    fn get_dialect_registry_mut(&mut self) -> &mut starpls_common::DialectRegistry {
+        &mut self.dialect_registry
+    }
+
+    fn register_dialect(&mut self, dialect: starpls_common::ExtensibleDialect) {
+        self.dialect_registry.register(dialect);
+    }
+
+    fn get_builtin_defs_by_id(&self, dialect_id: &starpls_common::DialectId, api_context: Option<starpls_bazel::APIContext>) -> BuiltinDefs {
+        if let Some(provider) = self.dialect_registry.builtin_provider(dialect_id) {
+            let builtins = provider.load_builtins(api_context).unwrap_or_default();
+            let rules = provider.load_rules(api_context).unwrap_or_default();
+            BuiltinDefs::new(self, builtins, rules)
+        } else {
+            BuiltinDefs::new(self, Builtins::default(), Builtins::default())
+        }
     }
 }
 

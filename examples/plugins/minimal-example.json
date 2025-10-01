@@ -1,0 +1,25 @@
+{
+  "dialect": {
+    "id": "minimal",
+    "name": "Minimal Example",
+    "description": "A minimal example dialect with just one function",
+    "file_patterns": ["Minimalfile"]
+  },
+  "symbols": [
+    {
+      "name": "hello",
+      "kind": "function",
+      "callable": {
+        "params": [
+          {
+            "name": "name",
+            "type": "string",
+            "is_mandatory": true
+          }
+        ],
+        "return_type": "None"
+      },
+      "doc": "Prints a hello message"
+    }
+  ]
+}

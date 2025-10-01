@@ -1,0 +1,142 @@
+{
+  "dialect_id": "bazel",
+  "context": "build",
+  "symbols": [
+    {
+      "name": "company_library",
+      "kind": "function",
+      "callable": {
+        "params": [
+          {
+            "name": "name",
+            "type": "string",
+            "doc": "A unique name for this library target.",
+            "is_mandatory": true
+          },
+          {
+            "name": "srcs",
+            "type": "list of labels",
+            "doc": "Source files to compile for this library.",
+            "default_value": "[]",
+            "is_mandatory": false
+          },
+          {
+            "name": "deps",
+            "type": "list of labels",
+            "doc": "Dependencies for this library.",
+            "default_value": "[]",
+            "is_mandatory": false
+          },
+          {
+            "name": "company_config",
+            "type": "string",
+            "doc": "Company-specific configuration profile to use.",
+            "default_value": "\"default\"",
+            "is_mandatory": false
+          },
+          {
+            "name": "enable_metrics",
+            "type": "boolean",
+            "doc": "Whether to enable company metrics collection.",
+            "default_value": "True",
+            "is_mandatory": false
+          }
+        ],
+        "return_type": "None"
+      },
+      "doc": "Creates a company-specific library with standard configurations and metrics."
+    },
+    {
+      "name": "company_service",
+      "kind": "function",
+      "callable": {
+        "params": [
+          {
+            "name": "name",
+            "type": "string",
+            "doc": "A unique name for this service target.",
+            "is_mandatory": true
+          },
+          {
+            "name": "library",
+            "type": "label",
+            "doc": "The main library target for this service.",
+            "is_mandatory": true
+          },
+          {
+            "name": "config_files",
+            "type": "list of labels",
+            "doc": "Configuration files for the service.",
+            "default_value": "[]",
+            "is_mandatory": false
+          },
+          {
+            "name": "docker_base",
+            "type": "string",
+            "doc": "Base Docker image to use for containerization.",
+            "default_value": "\"company/base:latest\"",
+            "is_mandatory": false
+          },
+          {
+            "name": "monitoring_enabled",
+            "type": "boolean",
+            "doc": "Whether to enable company monitoring for this service.",
+            "default_value": "True",
+            "is_mandatory": false
+          }
+        ],
+        "return_type": "None"
+      },
+      "doc": "Creates a company-specific service with standardized deployment and monitoring configuration."
+    },
+    {
+      "name": "company_test",
+      "kind": "function",
+      "callable": {
+        "params": [
+          {
+            "name": "name",
+            "type": "string",
+            "doc": "A unique name for this test target.",
+            "is_mandatory": true
+          },
+          {
+            "name": "srcs",
+            "type": "list of labels",
+            "doc": "Test source files.",
+            "is_mandatory": true
+          },
+          {
+            "name": "library_under_test",
+            "type": "label",
+            "doc": "The library target being tested.",
+            "is_mandatory": true
+          },
+          {
+            "name": "test_data",
+            "type": "list of labels",
+            "doc": "Test data files and fixtures.",
+            "default_value": "[]",
+            "is_mandatory": false
+          },
+          {
+            "name": "coverage_enabled",
+            "type": "boolean",
+            "doc": "Whether to collect code coverage for this test.",
+            "default_value": "True",
+            "is_mandatory": false
+          },
+          {
+            "name": "performance_test",
+            "type": "boolean",
+            "doc": "Whether this is a performance test (runs with different timeout/resources).",
+            "default_value": "False",
+            "is_mandatory": false
+          }
+        ],
+        "return_type": "None"
+      },
+      "doc": "Creates a company-specific test with standardized coverage and performance configurations."
+    }
+  ]
+}

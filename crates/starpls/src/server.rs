@@ -38,6 +38,7 @@ use crate::document::PathInterner;
 use crate::event_loop::FetchExternalReposProgress;
 use crate::event_loop::RefreshAllWorkspaceTargetsProgress;
 use crate::event_loop::Task;
+use crate::plugin;
 use crate::task_pool::TaskPool;
 use crate::task_pool::TaskPoolHandle;
 
@@ -157,6 +158,41 @@ impl Server {
             );
             analysis.apply_change(change);
             analysis.set_bazel_prelude_file(file_id);
+        }
+
+        // Load JSON plugins if specified
+        if !config.args.dialect_files.is_empty() || !config.args.symbol_files.is_empty() {
+            info!("Loading JSON plugins...");
+
+            // Create a dialect registry for the new system
+            let mut registry = starpls_common::DialectRegistry::new();
+
+            // Register built-in dialects
+            registry.register(starpls_common::create_standard_dialect());
+            registry.register(starpls_bazel::create_bazel_dialect());
+
+            // Load dialect plugins
+            if let Err(e) = plugin::load_dialect_plugins(&mut registry, &config.args.dialect_files) {
+                error!("Failed to load some dialect plugins: {}", e);
+            }
+
+            // Load symbol extensions
+            match plugin::load_symbol_extensions(&config.args.symbol_files) {
+                Ok(extensions) => {
+                    for extension in extensions {
+                        info!("Loaded symbol extension for dialect: {}", extension.dialect_id);
+                        // TODO: Apply symbol extensions to existing dialects
+                        // For now, we just log that they were loaded
+                    }
+                },
+                Err(e) => {
+                    error!("Failed to load symbol extensions: {}", e);
+                }
+            }
+
+            // TODO: Integrate the dialect registry with the analysis
+            // For now, we continue to use the old system but plugins are loaded and validated
+            info!("Plugin loading completed");
         }
 
         let analysis_debounce_interval = config.args.analysis_debounce_interval;

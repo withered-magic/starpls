@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::Args;
 use log::info;
 use lsp_server::Connection;
@@ -41,6 +43,14 @@ pub(crate) struct ServerCommand {
     /// the server will wait for additional events before running analysis
     #[clap(long = "analysis_debounce_interval", default_value_t = 250)]
     pub(crate) analysis_debounce_interval: u64,
+
+    /// Load additional symbol definitions from JSON files
+    #[clap(long = "load-symbols", value_name = "FILE")]
+    pub(crate) symbol_files: Vec<PathBuf>,
+
+    /// Load dialect definitions from JSON files
+    #[clap(long = "load-dialect", value_name = "FILE")]
+    pub(crate) dialect_files: Vec<PathBuf>,
 
     #[command(flatten)]
     pub(crate) inference_options: InferenceOptions,

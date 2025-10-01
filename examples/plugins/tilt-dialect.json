@@ -1,0 +1,205 @@
+{
+  "dialect": {
+    "id": "tilt",
+    "name": "Tilt",
+    "description": "A multi-service development environment for teams that deploy to Kubernetes",
+    "file_patterns": ["Tiltfile", "*.tiltfile", "Tiltfile.*"],
+    "priority": 150
+  },
+  "symbols": [
+    {
+      "name": "docker_build",
+      "kind": "function",
+      "callable": {
+        "params": [
+          {
+            "name": "ref",
+            "type": "string",
+            "doc": "The name for the image to be built. Must be a valid docker image reference.",
+            "is_mandatory": true
+          },
+          {
+            "name": "context",
+            "type": "string",
+            "doc": "The build context for the Docker image. Defaults to the current directory.",
+            "default_value": ".",
+            "is_mandatory": false
+          },
+          {
+            "name": "dockerfile",
+            "type": "string",
+            "doc": "Path to the Dockerfile relative to the build context.",
+            "default_value": "Dockerfile",
+            "is_mandatory": false
+          },
+          {
+            "name": "build_args",
+            "type": "dict",
+            "doc": "Build-time variables that are accessible to the dockerfile during build.",
+            "default_value": "{}",
+            "is_mandatory": false
+          },
+          {
+            "name": "target",
+            "type": "string",
+            "doc": "Name of the target build stage to build.",
+            "is_mandatory": false
+          },
+          {
+            "name": "ssh",
+            "type": "string or list",
+            "doc": "SSH agent socket or keys to expose to the build.",
+            "is_mandatory": false
+          }
+        ],
+        "return_type": "None"
+      },
+      "doc": "Builds a Docker image from a Dockerfile. This is one of the most common ways to build container images in Tilt."
+    },
+    {
+      "name": "k8s_yaml",
+      "kind": "function",
+      "callable": {
+        "params": [
+          {
+            "name": "yaml",
+            "type": "string or list of strings",
+            "doc": "Path(s) to Kubernetes YAML files to apply.",
+            "is_mandatory": true
+          },
+          {
+            "name": "allow_duplicates",
+            "type": "boolean",
+            "doc": "Allow duplicate Kubernetes objects across different calls to k8s_yaml.",
+            "default_value": "False",
+            "is_mandatory": false
+          }
+        ],
+        "return_type": "None"
+      },
+      "doc": "Deploys Kubernetes YAML to the cluster. The YAML files will be applied in the order specified."
+    },
+    {
+      "name": "k8s_resource",
+      "kind": "function",
+      "callable": {
+        "params": [
+          {
+            "name": "workload",
+            "type": "string",
+            "doc": "The name of a Kubernetes workload (Deployment, Job, etc.)",
+            "is_mandatory": true
+          },
+          {
+            "name": "image",
+            "type": "string",
+            "doc": "The name of an image built with docker_build.",
+            "is_mandatory": false
+          },
+          {
+            "name": "port_forwards",
+            "type": "string or list or int",
+            "doc": "Local ports to connect to the Kubernetes resource.",
+            "is_mandatory": false
+          },
+          {
+            "name": "resource_deps",
+            "type": "list of strings",
+            "doc": "A list of resources that this resource depends on.",
+            "default_value": "[]",
+            "is_mandatory": false
+          }
+        ],
+        "return_type": "None"
+      },
+      "doc": "Configures how Tilt manages a Kubernetes resource. Links images to workloads and sets up port forwarding."
+    },
+    {
+      "name": "local_resource",
+      "kind": "function",
+      "callable": {
+        "params": [
+          {
+            "name": "name",
+            "type": "string",
+            "doc": "The name of the local resource.",
+            "is_mandatory": true
+          },
+          {
+            "name": "cmd",
+            "type": "string or list of strings",
+            "doc": "The command to run locally.",
+            "is_mandatory": true
+          },
+          {
+            "name": "deps",
+            "type": "list of strings",
+            "doc": "Files or directories that this resource depends on.",
+            "default_value": "[]",
+            "is_mandatory": false
+          },
+          {
+            "name": "ignore",
+            "type": "list of strings",
+            "doc": "Files or directories to ignore when watching for changes.",
+            "default_value": "[]",
+            "is_mandatory": false
+          },
+          {
+            "name": "resource_deps",
+            "type": "list of strings",
+            "doc": "A list of resources that this resource depends on.",
+            "default_value": "[]",
+            "is_mandatory": false
+          },
+          {
+            "name": "serve_cmd",
+            "type": "string or list of strings",
+            "doc": "A command that starts a long-running process.",
+            "is_mandatory": false
+          }
+        ],
+        "return_type": "None"
+      },
+      "doc": "Runs a local command. Use this for build scripts, database migrations, or any other local development tasks."
+    },
+    {
+      "name": "load",
+      "kind": "function",
+      "callable": {
+        "params": [
+          {
+            "name": "file",
+            "type": "string",
+            "doc": "Path to the Tiltfile extension to load.",
+            "is_mandatory": true
+          }
+        ],
+        "return_type": "None"
+      },
+      "doc": "Loads and executes another Tiltfile or Tiltfile extension. Similar to Python's import statement."
+    },
+    {
+      "name": "include",
+      "kind": "function",
+      "callable": {
+        "params": [
+          {
+            "name": "file",
+            "type": "string",
+            "doc": "Path to another Tiltfile to include.",
+            "is_mandatory": true
+          }
+        ],
+        "return_type": "None"
+      },
+      "doc": "Includes another Tiltfile in the current one. The included file runs in the same scope."
+    },
+    {
+      "name": "config",
+      "kind": "variable",
+      "value_type": "config",
+      "doc": "The Tilt configuration object. Used to parse command-line arguments and configuration files."
+    }
+  ]
+}

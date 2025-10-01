@@ -1,9 +1,14 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use starpls_bazel::{APIContext, Builtins};
+use starpls_bazel::APIContext;
+use starpls_bazel::Builtins;
 
-use crate::{BuiltinProvider, DialectDetector, DialectId, DialectInfo, ExtensibleDialect};
+use crate::BuiltinProvider;
+use crate::DialectDetector;
+use crate::DialectId;
+use crate::DialectInfo;
+use crate::ExtensibleDialect;
 
 /// Detector for Tiltfiles and Tilt-related Starlark files.
 pub struct TiltDialectDetector;
@@ -67,7 +72,9 @@ impl BuiltinProvider for TiltBuiltinProvider {
 
 /// Create example Tilt builtin functions for demonstration.
 fn create_example_tilt_builtins() -> Vec<starpls_bazel::builtin::Value> {
-    use starpls_bazel::builtin::{Callable, Param, Value};
+    use starpls_bazel::builtin::Callable;
+    use starpls_bazel::builtin::Param;
+    use starpls_bazel::builtin::Value;
 
     vec![
         // docker_build function
@@ -109,29 +116,25 @@ fn create_example_tilt_builtins() -> Vec<starpls_bazel::builtin::Value> {
             doc: "Builds a Docker image.".to_string(),
             api_context: Default::default(), // Not used by Tilt
         },
-
         // k8s_yaml function
         Value {
             name: "k8s_yaml".to_string(),
             r#type: "function".to_string(),
             callable: Some(Callable {
-                param: vec![
-                    Param {
-                        name: "yaml".to_string(),
-                        r#type: "string or list of strings".to_string(),
-                        doc: "Path(s) to Kubernetes YAML files.".to_string(),
-                        default_value: "".to_string(),
-                        is_mandatory: true,
-                        is_star_arg: false,
-                        is_star_star_arg: false,
-                    },
-                ],
+                param: vec![Param {
+                    name: "yaml".to_string(),
+                    r#type: "string or list of strings".to_string(),
+                    doc: "Path(s) to Kubernetes YAML files.".to_string(),
+                    default_value: "".to_string(),
+                    is_mandatory: true,
+                    is_star_arg: false,
+                    is_star_star_arg: false,
+                }],
                 return_type: "None".to_string(),
             }),
             doc: "Applies Kubernetes YAML to the cluster.".to_string(),
             api_context: Default::default(),
         },
-
         // local_resource function
         Value {
             name: "local_resource".to_string(),
@@ -187,8 +190,9 @@ pub fn create_tilt_dialect() -> ExtensibleDialect {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::PathBuf;
+
+    use super::*;
 
     #[test]
     fn test_tilt_detector() {
@@ -241,11 +245,15 @@ mod tests {
         let builtins = provider.load_builtins(None).unwrap();
 
         // Find docker_build function and verify its signature
-        let docker_build = builtins.global.iter()
+        let docker_build = builtins
+            .global
+            .iter()
             .find(|f| f.name == "docker_build")
             .expect("docker_build function should exist");
 
-        let callable = docker_build.callable.as_ref()
+        let callable = docker_build
+            .callable
+            .as_ref()
             .expect("docker_build should be callable");
 
         assert_eq!(callable.param.len(), 3);

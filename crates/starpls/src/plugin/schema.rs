@@ -5,7 +5,8 @@ This module defines the structures that represent JSON plugin files.
 All structures use serde for serialization/deserialization.
 */
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// A complete dialect plugin that defines a new Starlark dialect.
 ///
@@ -193,28 +194,24 @@ mod tests {
                 file_patterns: vec!["Testfile".to_string(), "*.test".to_string()],
                 priority: 100,
             },
-            symbols: vec![
-                SymbolDefinition {
-                    name: "test_function".to_string(),
-                    kind: SymbolKind::Function,
-                    callable: Some(CallableDefinition {
-                        params: vec![
-                            ParamDefinition {
-                                name: "name".to_string(),
-                                param_type: "string".to_string(),
-                                doc: "The name parameter".to_string(),
-                                default_value: None,
-                                is_mandatory: true,
-                                is_star_arg: false,
-                                is_star_star_arg: false,
-                            }
-                        ],
-                        return_type: "None".to_string(),
-                    }),
-                    value_type: None,
-                    doc: "A test function".to_string(),
-                }
-            ],
+            symbols: vec![SymbolDefinition {
+                name: "test_function".to_string(),
+                kind: SymbolKind::Function,
+                callable: Some(CallableDefinition {
+                    params: vec![ParamDefinition {
+                        name: "name".to_string(),
+                        param_type: "string".to_string(),
+                        doc: "The name parameter".to_string(),
+                        default_value: None,
+                        is_mandatory: true,
+                        is_star_arg: false,
+                        is_star_star_arg: false,
+                    }],
+                    return_type: "None".to_string(),
+                }),
+                value_type: None,
+                doc: "A test function".to_string(),
+            }],
         };
 
         // Test serialization
@@ -233,18 +230,16 @@ mod tests {
         let extension = SymbolExtension {
             dialect_id: "bazel".to_string(),
             context: Some("build".to_string()),
-            symbols: vec![
-                SymbolDefinition {
-                    name: "my_rule".to_string(),
-                    kind: SymbolKind::Function,
-                    callable: Some(CallableDefinition {
-                        params: vec![],
-                        return_type: "None".to_string(),
-                    }),
-                    value_type: None,
-                    doc: "My custom rule".to_string(),
-                }
-            ],
+            symbols: vec![SymbolDefinition {
+                name: "my_rule".to_string(),
+                kind: SymbolKind::Function,
+                callable: Some(CallableDefinition {
+                    params: vec![],
+                    return_type: "None".to_string(),
+                }),
+                value_type: None,
+                doc: "My custom rule".to_string(),
+            }],
         };
 
         // Test serialization

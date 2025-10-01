@@ -46,14 +46,17 @@ starpls server --load-dialect tilt.json --load-symbols bazel-extensions.json
 
 use std::path::Path;
 
-use anyhow::{Context, Result};
-use starpls_common::{DialectRegistry, ExtensibleDialect};
+use anyhow::Result;
+use starpls_common::DialectRegistry;
+use starpls_common::ExtensibleDialect;
 
 pub mod loader;
 pub mod schema;
 
-use crate::plugin::loader::{load_dialect_plugin, load_symbol_extension};
-use crate::plugin::schema::{DialectPlugin, SymbolExtension};
+use crate::plugin::loader::load_dialect_plugin;
+use crate::plugin::loader::load_symbol_extension;
+use crate::plugin::schema::DialectPlugin;
+use crate::plugin::schema::SymbolExtension;
 
 /// Load dialect plugins from the specified files and register them with the registry.
 pub fn load_dialect_plugins(
@@ -84,9 +87,7 @@ pub fn load_dialect_plugins(
 
 /// Load symbol extensions from the specified files.
 /// Returns a Vec of symbol extensions that can be applied to existing dialects.
-pub fn load_symbol_extensions(
-    symbol_files: &[impl AsRef<Path>],
-) -> Result<Vec<SymbolExtension>> {
+pub fn load_symbol_extensions(symbol_files: &[impl AsRef<Path>]) -> Result<Vec<SymbolExtension>> {
     let mut extensions = Vec::new();
 
     for file_path in symbol_files {
@@ -151,7 +152,11 @@ struct JsonDialectDetector {
 }
 
 impl starpls_common::DialectDetector for JsonDialectDetector {
-    fn detect(&self, _workspace_path: &Path, file_path: &Path) -> Option<starpls_common::DialectInfo> {
+    fn detect(
+        &self,
+        _workspace_path: &Path,
+        file_path: &Path,
+    ) -> Option<starpls_common::DialectInfo> {
         let file_name = file_path.file_name()?.to_str()?;
 
         for pattern in &self.patterns {
@@ -177,7 +182,10 @@ struct JsonBuiltinProvider {
 }
 
 impl starpls_common::BuiltinProvider for JsonBuiltinProvider {
-    fn load_builtins(&self, _api_context: Option<starpls_bazel::APIContext>) -> anyhow::Result<starpls_bazel::Builtins> {
+    fn load_builtins(
+        &self,
+        _api_context: Option<starpls_bazel::APIContext>,
+    ) -> anyhow::Result<starpls_bazel::Builtins> {
         // Convert JSON symbols to Bazel builtin format
         let mut builtins = starpls_bazel::Builtins::default();
 
@@ -190,7 +198,10 @@ impl starpls_common::BuiltinProvider for JsonBuiltinProvider {
         Ok(builtins)
     }
 
-    fn load_rules(&self, _api_context: Option<starpls_bazel::APIContext>) -> anyhow::Result<starpls_bazel::Builtins> {
+    fn load_rules(
+        &self,
+        _api_context: Option<starpls_bazel::APIContext>,
+    ) -> anyhow::Result<starpls_bazel::Builtins> {
         // JSON plugins don't provide rules yet
         Ok(starpls_bazel::Builtins::default())
     }
@@ -208,8 +219,7 @@ fn pattern_matches(pattern: &str, file_name: &str) -> bool {
         return true; // Exact match
     }
 
-    if pattern.starts_with("*.") {
-        let extension = &pattern[2..];
+    if let Some(extension) = pattern.strip_prefix("*.") {
         return file_name.ends_with(&format!(".{}", extension));
     }
 
@@ -221,29 +231,35 @@ fn pattern_matches(pattern: &str, file_name: &str) -> bool {
 fn convert_symbol_to_builtin_value(
     symbol: &crate::plugin::schema::SymbolDefinition,
 ) -> Result<starpls_bazel::builtin::Value> {
-    use starpls_bazel::builtin::{Callable, Param, Value};
+    use starpls_bazel::builtin::Callable;
+    use starpls_bazel::builtin::Param;
+    use starpls_bazel::builtin::Value;
 
-    let callable = if let Some(ref callable_def) = symbol.callable {
-        Some(Callable {
-            param: callable_def.params.iter().map(|p| Param {
+    let callable = symbol.callable.as_ref().map(|callable_def| Callable {
+        param: callable_def
+            .params
+            .iter()
+            .map(|p| Param {
                 name: p.name.clone(),
                 r#type: p.param_type.clone(),
                 doc: p.doc.clone(),
                 default_value: p.default_value.clone().unwrap_or_default(),
                 is_mandatory: p.is_mandatory,
-                is_star_arg: false, // JSON plugins don't support this yet
+                is_star_arg: false,      // JSON plugins don't support this yet
                 is_star_star_arg: false, // JSON plugins don't support this yet
-            }).collect(),
-            return_type: callable_def.return_type.clone(),
-        })
-    } else {
-        None
-    };
+            })
+            .collect(),
+        return_type: callable_def.return_type.clone(),
+    });
 
     Ok(Value {
         name: symbol.name.clone(),
         r#type: symbol.value_type.clone().unwrap_or_else(|| {
-            if callable.is_some() { "function".to_string() } else { "unknown".to_string() }
+            if callable.is_some() {
+                "function".to_string()
+            } else {
+                "unknown".to_string()
+            }
         }),
         callable,
         doc: symbol.doc.clone(),

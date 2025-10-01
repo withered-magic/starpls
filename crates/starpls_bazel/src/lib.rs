@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use prost::Message;
 
 pub use crate::builtin::Builtins;
-pub use crate::dialect::create_bazel_dialect;
+// pub use crate::dialect::create_bazel_dialect; // Temporarily commented out due to circular dependency
 pub use crate::dialect::BazelBuiltinProvider;
 pub use crate::dialect::BazelDialectDetector;
 pub use crate::label::Label;

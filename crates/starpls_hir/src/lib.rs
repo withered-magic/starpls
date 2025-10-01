@@ -118,7 +118,11 @@ pub trait Db: salsa::DbWithJar<Jar> + starpls_common::Db {
     fn get_dialect_registry(&self) -> &starpls_common::DialectRegistry;
     fn get_dialect_registry_mut(&mut self) -> &mut starpls_common::DialectRegistry;
     fn register_dialect(&mut self, dialect: starpls_common::ExtensibleDialect);
-    fn get_builtin_defs_by_id(&self, dialect_id: &starpls_common::DialectId, api_context: Option<starpls_bazel::APIContext>) -> BuiltinDefs;
+    fn get_builtin_defs_by_id(
+        &self,
+        dialect_id: &starpls_common::DialectId,
+        api_context: Option<starpls_bazel::APIContext>,
+    ) -> BuiltinDefs;
 
     fn set_bazel_prelude_file(&mut self, file_id: FileId);
     fn get_bazel_prelude_file(&self) -> Option<FileId>;

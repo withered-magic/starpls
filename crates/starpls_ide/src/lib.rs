@@ -101,6 +101,7 @@ impl salsa::ParallelDatabase for Database {
             storage: self.storage.snapshot(),
             prelude_file: self.prelude_file,
             all_workspace_targets: self.all_workspace_targets.clone(),
+            dialect_registry: self.dialect_registry.clone(),
         })
     }
 }
@@ -256,9 +257,15 @@ impl starpls_hir::Db for Database {
         self.dialect_registry.register(dialect);
     }
 
-    fn get_builtin_defs_by_id(&self, dialect_id: &starpls_common::DialectId, api_context: Option<starpls_bazel::APIContext>) -> BuiltinDefs {
+    fn get_builtin_defs_by_id(
+        &self,
+        dialect_id: &starpls_common::DialectId,
+        api_context: Option<starpls_bazel::APIContext>,
+    ) -> BuiltinDefs {
         if let Some(provider) = self.dialect_registry.builtin_provider(dialect_id) {
-            let builtins = provider.load_builtins(api_context).unwrap_or_default();
+            let builtins = provider
+                .load_builtins(api_context.clone())
+                .unwrap_or_default();
             let rules = provider.load_rules(api_context).unwrap_or_default();
             BuiltinDefs::new(self, builtins, rules)
         } else {
@@ -326,6 +333,7 @@ impl Analysis {
                 loader,
                 prelude_file: None,
                 all_workspace_targets: Arc::default(),
+                dialect_registry: starpls_common::DialectRegistry::new(),
             },
         }
     }

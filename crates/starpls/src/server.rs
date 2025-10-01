@@ -169,10 +169,12 @@ impl Server {
 
             // Register built-in dialects
             registry.register(starpls_common::create_standard_dialect());
-            registry.register(starpls_bazel::create_bazel_dialect());
+            // TODO: Re-enable when circular dependency is resolved
+            // registry.register(starpls_bazel::create_bazel_dialect());
 
             // Load dialect plugins
-            if let Err(e) = plugin::load_dialect_plugins(&mut registry, &config.args.dialect_files) {
+            if let Err(e) = plugin::load_dialect_plugins(&mut registry, &config.args.dialect_files)
+            {
                 error!("Failed to load some dialect plugins: {}", e);
             }
 
@@ -180,11 +182,14 @@ impl Server {
             match plugin::load_symbol_extensions(&config.args.symbol_files) {
                 Ok(extensions) => {
                     for extension in extensions {
-                        info!("Loaded symbol extension for dialect: {}", extension.dialect_id);
+                        info!(
+                            "Loaded symbol extension for dialect: {}",
+                            extension.dialect_id
+                        );
                         // TODO: Apply symbol extensions to existing dialects
                         // For now, we just log that they were loaded
                     }
-                },
+                }
                 Err(e) => {
                     error!("Failed to load symbol extensions: {}", e);
                 }

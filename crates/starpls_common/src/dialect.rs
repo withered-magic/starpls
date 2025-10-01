@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use starpls_bazel::{Builtins, APIContext};
+use starpls_bazel::APIContext;
+use starpls_bazel::Builtins;
 
 /// A unique identifier for a Starlark dialect.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -91,6 +92,7 @@ impl Dialect {
 }
 
 /// Registry for managing multiple dialects.
+#[derive(Clone)]
 pub struct DialectRegistry {
     dialects: HashMap<DialectId, Dialect>,
     detectors: Vec<Arc<dyn DialectDetector>>,
@@ -108,7 +110,8 @@ impl DialectRegistry {
     pub fn register(&mut self, dialect: Dialect) {
         self.detectors.push(dialect.detector.clone());
         // Sort detectors by priority (highest first)
-        self.detectors.sort_by_key(|d| std::cmp::Reverse(d.priority()));
+        self.detectors
+            .sort_by_key(|d| std::cmp::Reverse(d.priority()));
         self.dialects.insert(dialect.id.clone(), dialect);
     }
 
@@ -149,8 +152,9 @@ impl Default for DialectRegistry {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::PathBuf;
+
+    use super::*;
 
     struct TestDetector {
         extension: String,

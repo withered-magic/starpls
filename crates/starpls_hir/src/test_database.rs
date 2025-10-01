@@ -153,9 +153,15 @@ impl crate::Db for TestDatabase {
         self.dialect_registry.register(dialect);
     }
 
-    fn get_builtin_defs_by_id(&self, dialect_id: &starpls_common::DialectId, api_context: Option<starpls_bazel::APIContext>) -> BuiltinDefs {
+    fn get_builtin_defs_by_id(
+        &self,
+        dialect_id: &starpls_common::DialectId,
+        api_context: Option<starpls_bazel::APIContext>,
+    ) -> BuiltinDefs {
         if let Some(provider) = self.dialect_registry.builtin_provider(dialect_id) {
-            let builtins = provider.load_builtins(api_context).unwrap_or_default();
+            let builtins = provider
+                .load_builtins(api_context.clone())
+                .unwrap_or_default();
             let rules = provider.load_rules(api_context).unwrap_or_default();
             BuiltinDefs::new(self, builtins, rules)
         } else {

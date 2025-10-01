@@ -8,9 +8,11 @@ It provides functions to load both dialect plugins and symbol extensions.
 use std::fs;
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 
-use crate::plugin::schema::{DialectPlugin, SymbolExtension};
+use crate::plugin::schema::DialectPlugin;
+use crate::plugin::schema::SymbolExtension;
 
 /// Load a dialect plugin from a JSON file.
 ///
@@ -84,7 +86,10 @@ fn validate_dialect_plugin(plugin: &DialectPlugin) -> Result<()> {
     }
 
     if !is_valid_identifier(&dialect.id) {
-        anyhow::bail!("Dialect ID '{}' contains invalid characters. Use only letters, numbers, and hyphens.", dialect.id);
+        anyhow::bail!(
+            "Dialect ID '{}' contains invalid characters. Use only letters, numbers, and hyphens.",
+            dialect.id
+        );
     }
 
     // Check that name is not empty
@@ -120,7 +125,10 @@ fn validate_symbol_extension(extension: &SymbolExtension) -> Result<()> {
     }
 
     if !is_valid_identifier(&extension.dialect_id) {
-        anyhow::bail!("Dialect ID '{}' contains invalid characters", extension.dialect_id);
+        anyhow::bail!(
+            "Dialect ID '{}' contains invalid characters",
+            extension.dialect_id
+        );
     }
 
     // Check that we have at least one symbol
@@ -144,7 +152,10 @@ fn validate_symbol_definition(symbol: &crate::plugin::schema::SymbolDefinition) 
     }
 
     if !is_valid_starlark_identifier(&symbol.name) {
-        anyhow::bail!("Symbol name '{}' is not a valid Starlark identifier", symbol.name);
+        anyhow::bail!(
+            "Symbol name '{}' is not a valid Starlark identifier",
+            symbol.name
+        );
     }
 
     // If it's a function, validate the callable definition
@@ -152,15 +163,25 @@ fn validate_symbol_definition(symbol: &crate::plugin::schema::SymbolDefinition) 
         // Validate parameters
         for param in &callable.params {
             if param.name.is_empty() {
-                anyhow::bail!("Parameter name cannot be empty for symbol '{}'", symbol.name);
+                anyhow::bail!(
+                    "Parameter name cannot be empty for symbol '{}'",
+                    symbol.name
+                );
             }
 
             if !is_valid_starlark_identifier(&param.name) {
-                anyhow::bail!("Parameter name '{}' is not a valid Starlark identifier", param.name);
+                anyhow::bail!(
+                    "Parameter name '{}' is not a valid Starlark identifier",
+                    param.name
+                );
             }
 
             if param.param_type.trim().is_empty() {
-                anyhow::bail!("Parameter type cannot be empty for parameter '{}' of symbol '{}'", param.name, symbol.name);
+                anyhow::bail!(
+                    "Parameter type cannot be empty for parameter '{}' of symbol '{}'",
+                    param.name,
+                    symbol.name
+                );
             }
         }
 
@@ -168,7 +189,11 @@ fn validate_symbol_definition(symbol: &crate::plugin::schema::SymbolDefinition) 
         let mut param_names = std::collections::HashSet::new();
         for param in &callable.params {
             if !param_names.insert(&param.name) {
-                anyhow::bail!("Duplicate parameter name '{}' in symbol '{}'", param.name, symbol.name);
+                anyhow::bail!(
+                    "Duplicate parameter name '{}' in symbol '{}'",
+                    param.name,
+                    symbol.name
+                );
             }
         }
     }
@@ -179,21 +204,24 @@ fn validate_symbol_definition(symbol: &crate::plugin::schema::SymbolDefinition) 
 /// Check if a string is a valid identifier (for dialect IDs).
 /// Allows letters, numbers, hyphens, and underscores.
 fn is_valid_identifier(s: &str) -> bool {
-    !s.is_empty() && s.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    !s.is_empty()
+        && s.chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
 
 /// Check if a string is a valid Starlark identifier.
 /// More restrictive than general identifiers - follows Python identifier rules.
 fn is_valid_starlark_identifier(s: &str) -> bool {
     !s.is_empty()
-        && (s.chars().next().unwrap().is_alphabetic() || s.chars().next().unwrap() == '_')
+        && (s.chars().next().unwrap().is_alphabetic() || s.starts_with('_'))
         && s.chars().all(|c| c.is_alphanumeric() || c == '_')
         && !is_starlark_keyword(s)
 }
 
 /// Check if a string is a reserved Starlark keyword.
 fn is_starlark_keyword(s: &str) -> bool {
-    matches!(s,
+    matches!(
+        s,
         "and" | "as" | "assert" | "break" | "class" | "continue" | "def" | "del" |
         "elif" | "else" | "except" | "finally" | "for" | "from" | "global" | "if" |
         "import" | "in" | "is" | "lambda" | "not" | "or" | "pass" | "raise" |
@@ -205,10 +233,12 @@ fn is_starlark_keyword(s: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
     use std::io::Write;
+
     use tempfile::NamedTempFile;
+
+    use super::*;
 
     #[test]
     fn test_load_valid_dialect_plugin() {
@@ -295,7 +325,10 @@ mod tests {
 
         let result = load_dialect_plugin(temp_file.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("ID cannot be empty"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("ID cannot be empty"));
     }
 
     #[test]
@@ -317,7 +350,10 @@ mod tests {
 
         let result = load_symbol_extension(temp_file.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not a valid Starlark identifier"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("not a valid Starlark identifier"));
     }
 
     #[test]

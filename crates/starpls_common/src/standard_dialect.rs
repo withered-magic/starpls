@@ -1,9 +1,13 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use starpls_bazel::{APIContext, Builtins};
+use starpls_bazel::APIContext;
+use starpls_bazel::Builtins;
 
-use crate::{BuiltinProvider, DialectDetector, DialectId, DialectInfo, ExtensibleDialect};
+use crate::BuiltinProvider;
+use crate::DialectDetector;
+use crate::DialectInfo;
+use crate::ExtensibleDialect;
 
 /// Detector for standard Starlark files (non-Bazel).
 pub struct StandardDialectDetector;
@@ -60,8 +64,9 @@ pub fn create_standard_dialect() -> ExtensibleDialect {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::PathBuf;
+
+    use super::*;
 
     #[test]
     fn test_standard_detector() {
@@ -71,13 +76,19 @@ mod tests {
         // Test .star file
         let star_file = PathBuf::from("/workspace/config.star");
         let info = detector.detect(&workspace, &star_file).unwrap();
-        assert_eq!(info.dialect_id, crate::dialect::builtin_dialects::standard());
+        assert_eq!(
+            info.dialect_id,
+            crate::dialect::builtin_dialects::standard()
+        );
         assert_eq!(info.api_context, None);
 
         // Test .starlark file
         let starlark_file = PathBuf::from("/workspace/config.starlark");
         let info = detector.detect(&workspace, &starlark_file).unwrap();
-        assert_eq!(info.dialect_id, crate::dialect::builtin_dialects::standard());
+        assert_eq!(
+            info.dialect_id,
+            crate::dialect::builtin_dialects::standard()
+        );
 
         // Test non-standard file
         let other_file = PathBuf::from("/workspace/BUILD");

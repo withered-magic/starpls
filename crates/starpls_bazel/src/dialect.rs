@@ -1,8 +1,43 @@
 use std::path::Path;
 
-use starpls_common::{BuiltinProvider, DialectDetector, DialectId, DialectInfo};
+use anyhow;
 
-use crate::{env, APIContext, Builtins};
+// Temporary local trait definitions to avoid circular dependency
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct DialectId(pub String);
+
+impl DialectId {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DialectInfo {
+    pub dialect_id: DialectId,
+    pub api_context: Option<crate::APIContext>,
+}
+
+pub trait DialectDetector: Send + Sync {
+    fn detect(&self, workspace_path: &Path, file_path: &Path) -> Option<DialectInfo>;
+    fn priority(&self) -> u32 {
+        0
+    }
+}
+
+pub trait BuiltinProvider: Send + Sync {
+    fn load_builtins(
+        &self,
+        api_context: Option<crate::APIContext>,
+    ) -> anyhow::Result<crate::Builtins>;
+    fn load_rules(&self, api_context: Option<crate::APIContext>)
+        -> anyhow::Result<crate::Builtins>;
+    fn supported_contexts(&self) -> Vec<crate::APIContext>;
+}
+
+use crate::env;
+use crate::APIContext;
+use crate::Builtins;
 
 /// Detector for Bazel Starlark files.
 pub struct BazelDialectDetector;
@@ -37,7 +72,7 @@ impl DialectDetector for BazelDialectDetector {
         };
 
         Some(DialectInfo {
-            dialect_id: starpls_common::dialect::builtin_dialects::bazel(),
+            dialect_id: DialectId::new("bazel"),
             api_context,
         })
     }
@@ -88,22 +123,24 @@ impl BuiltinProvider for BazelBuiltinProvider {
 }
 
 /// Create a complete Bazel dialect definition.
-pub fn create_bazel_dialect() -> starpls_common::ExtensibleDialect {
-    use std::sync::Arc;
-
-    starpls_common::ExtensibleDialect::new(
-        starpls_common::dialect::builtin_dialects::bazel(),
-        "Bazel".to_string(),
-        "Google's build and test tool using Starlark configuration language".to_string(),
-        Arc::new(BazelDialectDetector),
-        Arc::new(BazelBuiltinProvider),
-    )
-}
+/// Temporarily commented out to avoid circular dependency
+// pub fn create_bazel_dialect() -> starpls_common::ExtensibleDialect {
+//     use std::sync::Arc;
+//
+//     starpls_common::ExtensibleDialect::new(
+//         starpls_common::dialect::builtin_dialects::bazel(),
+//         "Bazel".to_string(),
+//         "Google's build and test tool using Starlark configuration language".to_string(),
+//         Arc::new(BazelDialectDetector),
+//         Arc::new(BazelBuiltinProvider),
+//     )
+// }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::PathBuf;
+
+    use super::*;
 
     #[test]
     fn test_bazel_detector() {
@@ -113,7 +150,7 @@ mod tests {
         // Test BUILD file
         let build_file = PathBuf::from("/workspace/BUILD");
         let info = detector.detect(&workspace, &build_file).unwrap();
-        assert_eq!(info.dialect_id, starpls_common::dialect::builtin_dialects::bazel());
+        assert_eq!(info.dialect_id, DialectId::new("bazel"));
         assert_eq!(info.api_context, Some(APIContext::Build));
 
         // Test .bzl file

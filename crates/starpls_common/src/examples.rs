@@ -136,9 +136,12 @@ let builtin_defs = db.get_builtin_defs_by_id(&dialect_id, None);
 
 #[cfg(test)]
 mod integration_tests {
-    use super::*;
-    use crate::{DialectRegistry, create_standard_dialect, create_tilt_dialect};
     use std::path::PathBuf;
+
+    use super::*;
+    use crate::create_standard_dialect;
+    use crate::create_tilt_dialect;
+    use crate::DialectRegistry;
 
     #[test]
     fn test_full_integration() {
@@ -170,7 +173,9 @@ mod integration_tests {
         assert_eq!(info.api_context, None);
 
         // Test builtin providers
-        let tilt_provider = registry.builtin_provider(&crate::DialectId::new("tilt")).unwrap();
+        let tilt_provider = registry
+            .builtin_provider(&crate::DialectId::new("tilt"))
+            .unwrap();
         let builtins = tilt_provider.load_builtins(None).unwrap();
         assert!(!builtins.global.is_empty());
     }
@@ -194,7 +199,8 @@ mod integration_tests {
 
     #[test]
     fn test_backward_compatibility() {
-        use crate::{Dialect, DialectId};
+        use crate::Dialect;
+        use crate::DialectId;
 
         // Test conversion from old to new
         let old_dialect = Dialect::Bazel;

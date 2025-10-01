@@ -1,0 +1,190 @@
+name: Feature Branch Build - Extensible Dialect Support
+
+on:
+  push:
+    branches: ["feature/extensible-dialect-support"]
+  pull_request:
+    branches: ["feature/extensible-dialect-support"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-feature-binaries:
+    name: Build Feature Branch Binaries
+    runs-on: ${{ matrix.target.runs-on }}
+    strategy:
+      matrix:
+        target:
+          - name: linux-amd64
+            runs-on: ubuntu-latest
+            platform: ""
+          - name: darwin-arm64
+            runs-on: macos-14
+            platform: ""
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Prepare for build
+        run: |
+          bazel/setup-ci.sh
+          mkdir -p editors/code/dist
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+
+      - name: Build optimized binary
+        run: |
+          if [[ "${{ matrix.target.name }}" == "linux-amd64" ]]; then
+            bazel build -c opt //crates/starpls
+          else
+            bazel build -c opt //crates/starpls
+          fi
+
+      - name: Prepare binary for upload
+        run: |
+          mkdir -p dist
+          if [[ "${{ matrix.target.name }}" == "linux-amd64" ]]; then
+            cp bazel-bin/crates/starpls/starpls dist/starpls-${{ matrix.target.name }}
+          else
+            cp bazel-bin/crates/starpls/starpls dist/starpls-${{ matrix.target.name }}
+          fi
+          chmod +x dist/starpls-${{ matrix.target.name }}
+
+      - name: Test binary
+        run: |
+          dist/starpls-${{ matrix.target.name }} --help
+          dist/starpls-${{ matrix.target.name }} version
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: starpls-${{ matrix.target.name }}-feature-extensible-dialect-support
+          path: dist/starpls-${{ matrix.target.name }}
+          retention-days: 30
+
+      - name: Create compressed archive
+        run: |
+          cd dist
+          if [[ "${{ matrix.target.name }}" == "linux-amd64" ]]; then
+            tar -czf starpls-${{ matrix.target.name }}-feature.tar.gz starpls-${{ matrix.target.name }}
+          else
+            tar -czf starpls-${{ matrix.target.name }}-feature.tar.gz starpls-${{ matrix.target.name }}
+          fi
+
+      - name: Upload compressed archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: starpls-${{ matrix.target.name }}-feature-extensible-dialect-support-archive
+          path: dist/starpls-${{ matrix.target.name }}-feature.tar.gz
+          retention-days: 30
+
+  build-summary:
+    name: Build Summary
+    needs: build-feature-binaries
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: feature-artifacts
+          pattern: starpls-*-feature-extensible-dialect-support
+
+      - name: Display build results
+        run: |
+          echo "## 🚀 Feature Branch Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** \`feature/extensible-dialect-support\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Built Binaries" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -d "feature-artifacts" ]; then
+            for dir in feature-artifacts/*/; do
+              if [ -d "$dir" ]; then
+                echo "- **$(basename "$dir")**" >> $GITHUB_STEP_SUMMARY
+                if [ -f "$dir"/*.tar.gz ]; then
+                  size=$(du -h "$dir"/*.tar.gz | cut -f1)
+                  echo "  - Archive size: $size" >> $GITHUB_STEP_SUMMARY
+                fi
+                if [ -f "$dir"/starpls-* ]; then
+                  size=$(du -h "$dir"/starpls-* | cut -f1)
+                  echo "  - Binary size: $size" >> $GITHUB_STEP_SUMMARY
+                fi
+              fi
+            done
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔧 Feature: Extensible Dialect Support" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This build includes the new extensible dialect system allowing:" >> $GITHUB_STEP_SUMMARY
+          echo "- Plugin-based dialect definitions via JSON" >> $GITHUB_STEP_SUMMARY
+          echo "- Priority-based file detection" >> $GITHUB_STEP_SUMMARY
+          echo "- Extensible builtin provider system" >> $GITHUB_STEP_SUMMARY
+          echo "- Backward compatibility with existing dialects" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Test Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.build-feature-binaries.result }}" == "success" ]]; then
+            echo "✅ All binaries built successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some builds failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: List all artifacts
+        run: |
+          echo "Built artifacts:"
+          find feature-artifacts -type f -exec ls -lh {} \;
+
+  run-tests:
+    name: Run Tests with Feature
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Prepare for build
+        run: |
+          bazel/setup-ci.sh
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+
+      - name: Run all tests
+        run: |
+          echo "## 🧪 Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if bazel test --build_tests_only //...; then
+            echo "✅ All tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some tests failed" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+      - name: Run specific dialect feature tests
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔌 Dialect Feature Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Test specific components related to extensible dialects
+          if bazel test //crates/starpls_common/...; then
+            echo "✅ Common dialect tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Common dialect tests failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if bazel test //crates/starpls/...; then
+            echo "✅ Main starpls tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Main starpls tests failed" >> $GITHUB_STEP_SUMMARY
+          fi

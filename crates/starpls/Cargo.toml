@@ -28,6 +28,7 @@ log = "0.4.22"
 annotate-snippets = "0.11.5"
 anstream = "0.6.18"
 walkdir = "2.5.0"
+regex = "1.10.2"
 
 [dev-dependencies]
 tempfile = "3.0"

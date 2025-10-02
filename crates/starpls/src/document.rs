@@ -201,6 +201,9 @@ pub(crate) struct DefaultFileLoader {
     cached_load_results: DashMap<String, PathBuf>,
     fetch_repo_sender: Sender<Task>,
     bzlmod_enabled: bool,
+    #[allow(dead_code)]
+    dialect_registry: Option<Arc<starpls_common::DialectRegistry>>,
+    load_prefix: Option<String>,
 }
 
 impl DefaultFileLoader {
@@ -222,7 +225,23 @@ impl DefaultFileLoader {
             cached_load_results: Default::default(),
             fetch_repo_sender,
             bzlmod_enabled,
+            dialect_registry: None,
+            load_prefix: None,
         }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn with_dialect_registry(
+        mut self,
+        registry: Arc<starpls_common::DialectRegistry>,
+    ) -> Self {
+        self.dialect_registry = Some(registry);
+        self
+    }
+
+    pub(crate) fn with_load_prefix(mut self, prefix: String) -> Self {
+        self.load_prefix = Some(prefix);
+        self
     }
 
     fn make_cache_key(&self, repo_kind: &RepoKind, path: &str, from: FileId) -> String {
@@ -448,8 +467,21 @@ impl FileLoader for DefaultFileLoader {
                 let mut from_path = self.interner.lookup_by_file_id(from);
                 assert!(from_path.pop());
 
+                // Apply load_prefix if configured
+                let resolved_path = if let Some(ref prefix) = self.load_prefix {
+                    // Prepend the prefix to the load path
+                    let prefixed_path = if path.is_empty() {
+                        format!("{}/", prefix.trim_end_matches('/'))
+                    } else {
+                        format!("{}/{}", prefix.trim_end_matches('/'), path)
+                    };
+                    from_path.join(prefixed_path)
+                } else {
+                    from_path.join(path)
+                };
+
                 // Resolve the given path relative to the importing file's directory.
-                (from_path.join(path).canonicalize()?, None, None)
+                (resolved_path.canonicalize()?, None, None)
             }
             Dialect::Bazel => {
                 // Parse the load path as a Bazel label.

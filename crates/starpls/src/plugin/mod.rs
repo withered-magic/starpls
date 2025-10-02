@@ -59,18 +59,20 @@ use crate::plugin::schema::DialectPlugin;
 use crate::plugin::schema::SymbolExtension;
 
 /// Load dialect plugins from the specified files and register them with the registry.
+/// Returns the first load_prefix found in the plugins (if any).
 pub fn load_dialect_plugins(
     registry: &mut DialectRegistry,
     dialect_files: &[impl AsRef<Path>],
-) -> Result<()> {
+) -> Result<Option<String>> {
     if dialect_files.is_empty() {
         log::debug!("No dialect plugins specified");
-        return Ok(());
+        return Ok(None);
     }
 
     log::info!("Loading {} dialect plugin(s)...", dialect_files.len());
     let mut loaded_count = 0;
     let mut failed_count = 0;
+    let mut first_load_prefix: Option<String> = None;
 
     for file_path in dialect_files {
         let file_path = file_path.as_ref();
@@ -81,6 +83,16 @@ pub fn load_dialect_plugins(
                 let dialect_name = plugin.dialect.name.clone();
                 let dialect_id = plugin.dialect.id.clone();
                 let symbol_count = plugin.symbols.len();
+
+                // Capture the first load_prefix we encounter
+                if first_load_prefix.is_none() && plugin.dialect.load_prefix.is_some() {
+                    first_load_prefix = plugin.dialect.load_prefix.clone();
+                    log::info!(
+                        "Using load_prefix '{}' from dialect '{}'",
+                        first_load_prefix.as_ref().unwrap(),
+                        dialect_name
+                    );
+                }
 
                 match create_dialect_from_plugin(plugin) {
                     Ok(dialect) => {
@@ -130,7 +142,7 @@ pub fn load_dialect_plugins(
         }
     }
 
-    Ok(())
+    Ok(first_load_prefix)
 }
 
 /// Load symbol extensions from the specified files.
@@ -215,6 +227,7 @@ fn create_dialect_from_plugin(plugin: DialectPlugin) -> Result<ExtensibleDialect
         id: dialect_id.clone(),
         patterns: plugin.dialect.file_patterns.clone(),
         priority: plugin.dialect.priority,
+        load_prefix: plugin.dialect.load_prefix.clone(),
     });
 
     // Create a builtin provider that serves the symbols from the plugin
@@ -236,6 +249,8 @@ struct JsonDialectDetector {
     id: starpls_common::DialectId,
     patterns: Vec<String>,
     priority: u32,
+    #[allow(dead_code)]
+    load_prefix: Option<String>,
 }
 
 impl starpls_common::DialectDetector for JsonDialectDetector {

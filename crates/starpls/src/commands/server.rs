@@ -45,11 +45,11 @@ pub(crate) struct ServerCommand {
     pub(crate) analysis_debounce_interval: u64,
 
     /// Load additional symbol definitions from JSON files
-    #[clap(long = "load-symbols", value_name = "FILE")]
+    #[clap(long = "experimental_load_symbols", value_name = "FILE")]
     pub(crate) symbol_files: Vec<PathBuf>,
 
     /// Load dialect definitions from JSON files
-    #[clap(long = "load-dialect", value_name = "FILE")]
+    #[clap(long = "experimental_load_dialects", value_name = "FILE")]
     pub(crate) dialect_files: Vec<PathBuf>,
 
     #[command(flatten)]

@@ -65,6 +65,10 @@ pub struct DialectDefinition {
     /// Detection priority (higher = checked first)
     #[serde(default = "default_priority")]
     pub priority: u32,
+    /// Optional prefix to prepend to all load statements in this dialect
+    /// Example: "mylibfolder" makes load("file.star") resolve to "mylibfolder/file.star"
+    #[serde(default)]
+    pub load_prefix: Option<String>,
 }
 
 /// Symbol extension that adds symbols to an existing dialect.

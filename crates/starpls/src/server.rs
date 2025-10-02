@@ -119,8 +119,51 @@ impl Server {
             Default::default()
         };
 
+        // Load JSON plugins first to get load_prefix configuration
+        let load_prefix =
+            if !config.args.dialect_files.is_empty() || !config.args.symbol_files.is_empty() {
+                info!("Loading JSON plugins...");
+
+                // Create a dialect registry for the new system
+                let mut registry = starpls_common::DialectRegistry::new();
+
+                // Register built-in dialects
+                registry.register(starpls_common::create_standard_dialect());
+                // TODO: Re-enable when circular dependency is resolved
+                // registry.register(starpls_bazel::create_bazel_dialect());
+
+                // Load dialect plugins to get load_prefix
+                match plugin::load_dialect_plugins(&mut registry, &config.args.dialect_files) {
+                    Ok(prefix) => {
+                        // Load symbol extensions (but don't use the result yet)
+                        match plugin::load_symbol_extensions(&config.args.symbol_files) {
+                            Ok(extensions) => {
+                                for extension in extensions {
+                                    info!(
+                                        "Loaded symbol extension for dialect: {}",
+                                        extension.dialect_id
+                                    );
+                                    // TODO: Apply symbol extensions to existing dialects
+                                    // For now, we just log that they were loaded
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to load symbol extensions: {}", e);
+                            }
+                        }
+                        prefix
+                    }
+                    Err(e) => {
+                        error!("Failed to load some dialect plugins: {}", e);
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
         let path_interner = Arc::new(PathInterner::default());
-        let loader = DefaultFileLoader::new(
+        let mut loader = DefaultFileLoader::new(
             bazel_client.clone(),
             path_interner.clone(),
             bazel_cx.info.workspace.clone(),
@@ -129,6 +172,11 @@ impl Server {
             task_pool_sender.clone(),
             bazel_cx.bzlmod_enabled,
         );
+
+        // Apply load_prefix if one was found
+        if let Some(prefix) = load_prefix {
+            loader = loader.with_load_prefix(prefix);
+        }
         let mut analysis = Analysis::new(
             Arc::new(loader),
             InferenceOptions {
@@ -160,45 +208,8 @@ impl Server {
             analysis.set_bazel_prelude_file(file_id);
         }
 
-        // Load JSON plugins if specified
-        if !config.args.dialect_files.is_empty() || !config.args.symbol_files.is_empty() {
-            info!("Loading JSON plugins...");
-
-            // Create a dialect registry for the new system
-            let mut registry = starpls_common::DialectRegistry::new();
-
-            // Register built-in dialects
-            registry.register(starpls_common::create_standard_dialect());
-            // TODO: Re-enable when circular dependency is resolved
-            // registry.register(starpls_bazel::create_bazel_dialect());
-
-            // Load dialect plugins
-            if let Err(e) = plugin::load_dialect_plugins(&mut registry, &config.args.dialect_files)
-            {
-                error!("Failed to load some dialect plugins: {}", e);
-            }
-
-            // Load symbol extensions
-            match plugin::load_symbol_extensions(&config.args.symbol_files) {
-                Ok(extensions) => {
-                    for extension in extensions {
-                        info!(
-                            "Loaded symbol extension for dialect: {}",
-                            extension.dialect_id
-                        );
-                        // TODO: Apply symbol extensions to existing dialects
-                        // For now, we just log that they were loaded
-                    }
-                }
-                Err(e) => {
-                    error!("Failed to load symbol extensions: {}", e);
-                }
-            }
-
-            // TODO: Integrate the dialect registry with the analysis
-            // For now, we continue to use the old system but plugins are loaded and validated
-            info!("Plugin loading completed");
-        }
+        // TODO: Integrate the dialect registry with the analysis
+        // For now, we continue to use the old system but plugins are loaded and validated
 
         let analysis_debounce_interval = config.args.analysis_debounce_interval;
         let server = Server {

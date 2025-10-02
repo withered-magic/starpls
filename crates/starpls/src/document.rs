@@ -403,7 +403,7 @@ fn create_virtual_file_content(symbols: &[starpls_common::Symbol]) -> String {
                 content.push_str(&format!("# {}\n", symbol.doc));
             }
             content.push_str(&format!("{} = struct(\n", symbol.name));
-            for (prop_name, _prop_symbol) in &symbol.properties {
+            for prop_name in symbol.properties.keys() {
                 content.push_str(&format!("    {} = lambda *a, **k: None,\n", prop_name));
             }
             content.push_str(")\n\n");

@@ -58,6 +58,9 @@ pub(crate) struct ServerCommand {
 
 impl ServerCommand {
     pub(crate) fn run(self) -> anyhow::Result<()> {
+        // Validate plugin files exist before starting server
+        self.validate_plugin_files()?;
+
         info!("starpls, v{}", get_version());
 
         // Create the transport over stdio.
@@ -93,6 +96,31 @@ impl ServerCommand {
         // Graceful shutdown.
         info!("connection closed, exiting");
         io_threads.join()?;
+
+        Ok(())
+    }
+
+    /// Validate that all specified plugin files exist.
+    fn validate_plugin_files(&self) -> anyhow::Result<()> {
+        // Validate dialect files
+        for file_path in &self.dialect_files {
+            if !file_path.exists() {
+                anyhow::bail!(
+                    "Dialect plugin file does not exist: {}\n\nMake sure the file path is correct and the file is accessible.",
+                    file_path.display()
+                );
+            }
+        }
+
+        // Validate symbol files
+        for file_path in &self.symbol_files {
+            if !file_path.exists() {
+                anyhow::bail!(
+                    "Symbol extension file does not exist: {}\n\nMake sure the file path is correct and the file is accessible.",
+                    file_path.display()
+                );
+            }
+        }
 
         Ok(())
     }

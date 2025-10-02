@@ -63,25 +63,73 @@ pub fn load_dialect_plugins(
     registry: &mut DialectRegistry,
     dialect_files: &[impl AsRef<Path>],
 ) -> Result<()> {
+    if dialect_files.is_empty() {
+        log::debug!("No dialect plugins specified");
+        return Ok(());
+    }
+
+    log::info!("Loading {} dialect plugin(s)...", dialect_files.len());
+    let mut loaded_count = 0;
+    let mut failed_count = 0;
+
     for file_path in dialect_files {
         let file_path = file_path.as_ref();
+        log::debug!("Processing dialect plugin: {}", file_path.display());
+
         match load_dialect_plugin(file_path) {
             Ok(plugin) => {
-                let dialect = create_dialect_from_plugin(plugin)?;
-                registry.register(dialect);
-                log::info!("Loaded dialect plugin: {}", file_path.display());
+                let dialect_name = plugin.dialect.name.clone();
+                let dialect_id = plugin.dialect.id.clone();
+                let symbol_count = plugin.symbols.len();
+
+                match create_dialect_from_plugin(plugin) {
+                    Ok(dialect) => {
+                        registry.register(dialect);
+                        loaded_count += 1;
+                        log::info!(
+                            "✓ Loaded dialect '{}' (id: {}) with {} symbol(s) from {}",
+                            dialect_name,
+                            dialect_id,
+                            symbol_count,
+                            file_path.display()
+                        );
+                    }
+                    Err(e) => {
+                        failed_count += 1;
+                        log::error!(
+                            "✗ Failed to register dialect from plugin {}: {}",
+                            file_path.display(),
+                            e
+                        );
+                    }
+                }
             }
             Err(e) => {
+                failed_count += 1;
                 log::error!(
-                    "Failed to load dialect plugin {}: {}",
+                    "✗ Failed to load dialect plugin {}: {}",
                     file_path.display(),
                     e
                 );
-                // Don't fail the entire startup for a single bad plugin
-                continue;
             }
         }
     }
+
+    // Log summary
+    if loaded_count > 0 || failed_count > 0 {
+        if failed_count == 0 {
+            log::info!(
+                "Plugin loading complete: {} dialect(s) loaded successfully",
+                loaded_count
+            );
+        } else {
+            log::warn!(
+                "Plugin loading complete: {} succeeded, {} failed. Use RUST_LOG=debug for detailed error information.",
+                loaded_count, failed_count
+            );
+        }
+    }
+
     Ok(())
 }
 
@@ -90,22 +138,61 @@ pub fn load_dialect_plugins(
 pub fn load_symbol_extensions(symbol_files: &[impl AsRef<Path>]) -> Result<Vec<SymbolExtension>> {
     let mut extensions = Vec::new();
 
+    if symbol_files.is_empty() {
+        log::debug!("No symbol extensions specified");
+        return Ok(extensions);
+    }
+
+    log::info!("Loading {} symbol extension(s)...", symbol_files.len());
+    let mut loaded_count = 0;
+    let mut failed_count = 0;
+
     for file_path in symbol_files {
         let file_path = file_path.as_ref();
+        log::debug!("Processing symbol extension: {}", file_path.display());
+
         match load_symbol_extension(file_path) {
             Ok(extension) => {
+                let dialect_id = extension.dialect_id.clone();
+                let symbol_count = extension.symbols.len();
+                let context = extension
+                    .context
+                    .clone()
+                    .unwrap_or_else(|| "default".to_string());
+
                 extensions.push(extension);
-                log::info!("Loaded symbol extension: {}", file_path.display());
+                loaded_count += 1;
+                log::info!(
+                    "✓ Loaded {} symbol(s) for dialect '{}' (context: {}) from {}",
+                    symbol_count,
+                    dialect_id,
+                    context,
+                    file_path.display()
+                );
             }
             Err(e) => {
+                failed_count += 1;
                 log::error!(
-                    "Failed to load symbol extension {}: {}",
+                    "✗ Failed to load symbol extension {}: {}",
                     file_path.display(),
                     e
                 );
-                // Don't fail the entire startup for a single bad plugin
-                continue;
             }
+        }
+    }
+
+    // Log summary
+    if loaded_count > 0 || failed_count > 0 {
+        if failed_count == 0 {
+            log::info!(
+                "Symbol extension loading complete: {} extension(s) loaded successfully",
+                loaded_count
+            );
+        } else {
+            log::warn!(
+                "Symbol extension loading complete: {} succeeded, {} failed. Use RUST_LOG=debug for detailed error information.",
+                loaded_count, failed_count
+            );
         }
     }
 

@@ -1455,6 +1455,7 @@ dependencies = [
  "starpls_common",
  "starpls_ide",
  "starpls_syntax",
+ "tempfile",
  "walkdir",
 ]
 

@@ -596,7 +596,10 @@ mod tests {
         assert_eq!(sh_method.r#type, "function");
         assert!(sh_method.callable.is_some());
         assert_eq!(sh_method.callable.as_ref().unwrap().params.len(), 1);
-        assert_eq!(sh_method.callable.as_ref().unwrap().params[0].name, "command");
+        assert_eq!(
+            sh_method.callable.as_ref().unwrap().params[0].name,
+            "command"
+        );
 
         // Test that virtual module lookup works
         let from_path = Path::new("/workspace/test.star");
@@ -616,8 +619,9 @@ mod tests {
             r#type: "object".to_string(),
             callable: None,
             doc: "Command execution".to_string(),
-            properties: HashMap::from([
-                ("sh".to_string(), Box::new(Symbol {
+            properties: HashMap::from([(
+                "sh".to_string(),
+                Box::new(Symbol {
                     name: "sh".to_string(),
                     r#type: "function".to_string(),
                     callable: Some(Callable {
@@ -634,8 +638,8 @@ mod tests {
                     }),
                     doc: "Execute shell command".to_string(),
                     properties: HashMap::new(),
-                })),
-            ]),
+                }),
+            )]),
         };
 
         // Should validate successfully
@@ -647,15 +651,16 @@ mod tests {
             r#type: "object".to_string(),
             callable: None,
             doc: String::new(),
-            properties: HashMap::from([
-                ("123invalid".to_string(), Box::new(Symbol {
+            properties: HashMap::from([(
+                "123invalid".to_string(),
+                Box::new(Symbol {
                     name: "invalid".to_string(),
                     r#type: "function".to_string(),
                     callable: None,
                     doc: String::new(),
                     properties: HashMap::new(),
-                })),
-            ]),
+                }),
+            )]),
         };
 
         // Should fail validation due to invalid property name

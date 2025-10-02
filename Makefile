@@ -25,6 +25,11 @@ test:
 fmt:
 	bazel run @rules_rust//:rustfmt
 
+# Sync and repin crate dependencies after adding new dependencies
+# See: https://bazelbuild.github.io/rules_rust/crate_universe_bzlmod.html
+sync-deps:
+	CARGO_BAZEL_REPIN=1 bazel sync --only=crates --enable_workspace
+
 # Run hermetic cargo
 cargo:
 	bazel run //:cargo
@@ -56,6 +61,7 @@ help:
 	@echo "  check         - Check with clippy and rustfmt"
 	@echo "  test          - Run all tests"
 	@echo "  fmt           - Format code with rustfmt"
+	@echo "  sync-deps     - Sync and repin crate dependencies"
 	@echo "  cargo         - Run hermetic cargo"
 	@echo "  cargo-check   - Run hermetic cargo check"
 	@echo "  clean         - Clean build artifacts"

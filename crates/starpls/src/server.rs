@@ -119,18 +119,10 @@ impl Server {
         };
 
         // Load extensions from JSON files
-        let extensions = if !config.args.extension_files.is_empty()
-            || !config.args.dialect_files.is_empty()
-            || !config.args.symbol_files.is_empty()
-        {
+        let extensions = if !config.args.extension_files.is_empty() {
             info!("Loading extensions...");
 
-            // Collect all extension files (including legacy ones for backward compatibility)
-            let mut all_files = config.args.extension_files.clone();
-            all_files.extend(config.args.dialect_files.iter().cloned());
-            all_files.extend(config.args.symbol_files.iter().cloned());
-
-            match starpls_common::load_extensions(&all_files) {
+            match starpls_common::load_extensions(&config.args.extension_files) {
                 Ok(extensions) => {
                     info!("✓ Loaded extension(s) successfully");
                     Arc::new(extensions)

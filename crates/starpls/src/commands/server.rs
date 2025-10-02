@@ -45,16 +45,8 @@ pub(crate) struct ServerCommand {
     pub(crate) analysis_debounce_interval: u64,
 
     /// Load extension files with symbols, virtual modules, and configuration
-    #[clap(long = "load-extensions", value_name = "FILE")]
+    #[clap(long = "experimental_load_extensions", value_name = "FILE")]
     pub(crate) extension_files: Vec<PathBuf>,
-
-    /// Load additional symbol definitions from JSON files (deprecated, use --load-extensions)
-    #[clap(long = "experimental_load_symbols", value_name = "FILE")]
-    pub(crate) symbol_files: Vec<PathBuf>,
-
-    /// Load dialect definitions from JSON files (deprecated, use --load-extensions)
-    #[clap(long = "experimental_load_dialects", value_name = "FILE")]
-    pub(crate) dialect_files: Vec<PathBuf>,
 
     #[command(flatten)]
     pub(crate) inference_options: InferenceOptions,
@@ -62,8 +54,8 @@ pub(crate) struct ServerCommand {
 
 impl ServerCommand {
     pub(crate) fn run(self) -> anyhow::Result<()> {
-        // Validate plugin files exist before starting server
-        self.validate_plugin_files()?;
+        // Validate extension files exist before starting server
+        self.validate_extension_files()?;
 
         info!("starpls, v{}", get_version());
 
@@ -105,32 +97,12 @@ impl ServerCommand {
     }
 
     /// Validate that all specified extension files exist.
-    fn validate_plugin_files(&self) -> anyhow::Result<()> {
+    fn validate_extension_files(&self) -> anyhow::Result<()> {
         // Validate extension files
         for file_path in &self.extension_files {
             if !file_path.exists() {
                 anyhow::bail!(
                     "Extension file does not exist: {}\n\nMake sure the file path is correct and the file is accessible.",
-                    file_path.display()
-                );
-            }
-        }
-
-        // Validate dialect files (backward compatibility)
-        for file_path in &self.dialect_files {
-            if !file_path.exists() {
-                anyhow::bail!(
-                    "Dialect plugin file does not exist: {}\n\nMake sure the file path is correct and the file is accessible.",
-                    file_path.display()
-                );
-            }
-        }
-
-        // Validate symbol files (backward compatibility)
-        for file_path in &self.symbol_files {
-            if !file_path.exists() {
-                anyhow::bail!(
-                    "Symbol extension file does not exist: {}\n\nMake sure the file path is correct and the file is accessible.",
                     file_path.display()
                 );
             }

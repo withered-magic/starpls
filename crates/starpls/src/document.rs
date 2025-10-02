@@ -403,8 +403,29 @@ fn create_virtual_file_content(symbols: &[starpls_common::Symbol]) -> String {
                 content.push_str(&format!("# {}\n", symbol.doc));
             }
             content.push_str(&format!("{} = struct(\n", symbol.name));
-            for prop_name in symbol.properties.keys() {
-                content.push_str(&format!("    {} = lambda *a, **k: None,\n", prop_name));
+            for (prop_name, prop_symbol) in &symbol.properties {
+                if prop_symbol.r#type == "function" && prop_symbol.callable.is_some() {
+                    // Generate proper function with signature
+                    let callable = prop_symbol.callable.as_ref().unwrap();
+                    let params: Vec<String> = callable
+                        .params
+                        .iter()
+                        .map(|p| {
+                            if p.default_value.is_empty() {
+                                p.name.clone()
+                            } else {
+                                format!("{} = {}", p.name, p.default_value)
+                            }
+                        })
+                        .collect();
+                    content.push_str(&format!(
+                        "    {} = lambda {}: None,\n",
+                        prop_name,
+                        params.join(", ")
+                    ));
+                } else {
+                    content.push_str(&format!("    {} = lambda *a, **k: None,\n", prop_name));
+                }
             }
             content.push_str(")\n\n");
         } else {

@@ -18,9 +18,11 @@ pub use crate::extensions::generate_schema;
 pub use crate::extensions::load_extensions;
 pub use crate::extensions::Extensions;
 pub use crate::extensions::Symbol;
+pub use crate::type_expr::TypeExpr;
 
 mod diagnostics;
 mod extensions;
+mod type_expr;
 mod util;
 
 #[salsa::jar(db = Db)]

@@ -161,6 +161,7 @@ impl Server {
         // Load base builtins and inject extension global symbols
         let mut builtins = load_bazel_builtins();
         inject_extension_globals(&mut builtins, &extensions);
+        process_extension_types_and_globals(&mut builtins, &extensions);
         analysis.set_builtin_defs(builtins, bazel_cx.rules);
 
         // Check for a prelude file. We skip verifying that `//tools/build_tools` is actually a package (i.e.
@@ -449,5 +450,148 @@ fn inject_extension_globals(builtins: &mut Builtins, extensions: &starpls_common
         };
 
         builtins.global.push(value);
+    }
+}
+
+
+/// Process an extension symbol that defines a type, converting it to proper type system objects.
+/// Returns (type_name, protobuf_type_definition) for registration in the builtin system.
+fn process_extension_symbol_as_type(
+    symbol: &starpls_common::Symbol,
+) -> Option<(String, starpls_bazel::builtin::Type)> {
+    use starpls_bazel::builtin::{Type, Value, Callable, Param};
+
+    if !symbol.is_type_definition() {
+        return None;
+    }
+
+    // Convert properties to protobuf Value objects
+    let mut fields = Vec::new();
+
+    for (prop_name, prop_symbol) in &symbol.properties {
+        let value = if let Some(callable) = &prop_symbol.callable {
+            // It's a method
+            let builtin_params = callable
+                .params
+                .iter()
+                .map(|p| Param {
+                    name: p.name.clone(),
+                    r#type: p.r#type.clone(),
+                    doc: p.doc.clone(),
+                    default_value: p.default_value.clone(),
+                    is_mandatory: p.is_mandatory,
+                    is_star_arg: p.is_star_arg,
+                    is_star_star_arg: p.is_star_star_arg,
+                })
+                .collect();
+
+            Value {
+                name: prop_name.clone(),
+                r#type: prop_symbol.r#type.clone(),
+                doc: prop_symbol.doc.clone(),
+                callable: Some(Callable {
+                    param: builtin_params,
+                    return_type: callable.return_type.clone(),
+                }),
+                ..Default::default()
+            }
+        } else {
+            // It's a field
+            Value {
+                name: prop_name.clone(),
+                r#type: prop_symbol.r#type.clone(),
+                doc: prop_symbol.doc.clone(),
+                callable: None,
+                ..Default::default()
+            }
+        };
+
+        fields.push(value);
+    }
+
+    // Create the Type definition
+    let type_def = Type {
+        name: symbol.name.clone(),
+        field: fields,
+        doc: symbol.doc.clone(),
+    };
+
+    Some((symbol.name.clone(), type_def))
+}
+
+/// Process extension symbols that should be registered as both types and globals (self-referential pattern).
+///
+/// This function implements the critical self-referential pattern that makes extension objects
+/// work like Bazel built-ins such as `apple_common`, `native`, etc.
+///
+/// ## The Self-Referential Pattern Explained
+///
+/// Objects like `apple_common` work in Bazel because they use a dual registration:
+///
+/// 1. **Type Registration**: Creates a `BuiltinType` with all the object's fields and methods
+/// 2. **Global Registration**: Creates a global variable with the same name pointing to that type
+///
+/// This allows the type system to understand both:
+/// - That `apple_common` exists as a global symbol
+/// - What fields/methods are available on `apple_common` (like `.apple_toolchain`, `.platform`)
+///
+/// ## Why This Matters for Extensions
+///
+/// Without this pattern, extensions create `struct()` calls in virtual files, which results in:
+/// - Generic `TyKind::Struct` types that the type system can't analyze
+/// - No field information preserved (everything becomes "Unknown")
+/// - Broken LSP features (no completion, no hover docs, no type checking)
+///
+/// With this pattern, extensions create proper `BuiltinType` instances, enabling:
+/// - Full type information and documentation
+/// - Working completion for object members
+/// - Proper hover information showing parameter types and docs
+/// - Type checking that validates method calls and parameters
+///
+/// ## Implementation Details
+///
+/// For each extension symbol with `as_type: true`:
+/// 1. Convert the symbol's properties to a protobuf `Type` definition
+/// 2. Register it in `builtins.type` (makes it a known type)
+/// 3. Register a global `Value` with `name: "symbol"` and `type: "symbol"` (self-referential)
+/// 4. The type system now knows both the global and its structure
+fn process_extension_types_and_globals(
+    builtins: &mut Builtins,
+    extensions: &starpls_common::Extensions,
+) {
+    use starpls_bazel::builtin::Value;
+
+    // First, collect all type definitions from modules
+    let mut type_definitions = std::collections::HashMap::new();
+
+    for (_, symbol) in extensions.all_module_symbols() {
+        if let Some((type_name, type_def)) = process_extension_symbol_as_type(symbol) {
+            type_definitions.insert(type_name, type_def);
+        }
+    }
+
+    // Process global symbols that should be registered as types
+    for symbol in extensions.global_symbols() {
+        if symbol.should_register_as_type() {
+            // Add type definition if we have it
+            if let Some((_, type_def)) = process_extension_symbol_as_type(symbol) {
+                builtins.r#type.push(type_def);
+            }
+
+            // Add self-referential global
+            let global_value = Value {
+                name: symbol.name.clone(),
+                r#type: symbol.name.clone(), // Self-referential!
+                doc: symbol.doc.clone(),
+                callable: None,
+                ..Default::default()
+            };
+            builtins.global.push(global_value);
+        }
+    }
+
+    // Add any remaining type definitions that aren't self-referential globals
+    for (_, type_def) in type_definitions {
+        builtins.r#type.push(type_def);
     }
 }

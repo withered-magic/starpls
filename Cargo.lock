@@ -1495,6 +1495,7 @@ dependencies = [
  "serde_json",
  "starpls_bazel",
  "starpls_common",
+ "starpls_hir",
  "starpls_ide",
  "starpls_syntax",
  "tempfile",

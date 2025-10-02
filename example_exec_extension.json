@@ -1,10 +1,18 @@
 {
+  "globals": [
+    {
+      "name": "exec",
+      "type": "Exec",
+      "as_type": true,
+      "doc": "Global execution context utilities"
+    }
+  ],
   "modules": {
     "command/execution.star": [
       {
-        "name": "exec",
-        "type": "object",
-        "doc": "Command execution utilities",
+        "name": "Exec",
+        "type": "type",
+        "doc": "Command execution utilities type",
         "properties": {
           "sh": {
             "name": "sh",

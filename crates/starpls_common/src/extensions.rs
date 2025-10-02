@@ -76,6 +76,16 @@ impl Extensions {
             .filter(|ext| ext.when.is_none()) // Only global extensions
             .flat_map(|ext| &ext.globals)
     }
+
+    /// Get all module symbols from all extensions (for type processing).
+    pub fn all_module_symbols(&self) -> impl Iterator<Item = (&str, &Symbol)> {
+        self.items
+            .iter()
+            .flat_map(|ext| &ext.modules)
+            .flat_map(|(module_name, symbols)| {
+                symbols.iter().map(move |symbol| (module_name.as_str(), symbol))
+            })
+    }
 }
 
 /// A single extension that can modify dialect behavior.
@@ -146,7 +156,7 @@ pub struct Symbol {
     /// Name of the symbol.
     pub name: String,
 
-    /// Type of the symbol (e.g., "function", "string", "dict", "object").
+    /// Type of the symbol (e.g., "function", "string", "dict", "object", "type").
     #[serde(default = "default_symbol_type")]
     pub r#type: String,
 
@@ -161,6 +171,57 @@ pub struct Symbol {
     /// Properties for object-type symbols (recursive structure).
     #[serde(default)]
     pub properties: HashMap<String, Box<Symbol>>,
+
+    /// Whether this symbol should be registered as both a type AND a global variable.
+    ///
+    /// When true, creates the self-referential pattern used by Bazel built-ins like `apple_common`.
+    /// This is the key to making object-like extensions work properly in starpls.
+    ///
+    /// ## How the Self-Referential Pattern Works
+    ///
+    /// In Bazel's protobuf system, objects like `apple_common` are defined using TWO entries:
+    ///
+    /// 1. **Type Definition**: Defines what fields/methods the object has
+    ///    ```protobuf
+    ///    Type {
+    ///      name: "apple_common"
+    ///      field: [
+    ///        Value { name: "apple_toolchain", type: "unknown", ... },
+    ///        Value { name: "platform", type: "string", ... },
+    ///        // ... other fields and methods
+    ///      ]
+    ///    }
+    ///    ```
+    ///
+    /// 2. **Global Variable**: Makes it accessible as a global, pointing to itself
+    ///    ```protobuf
+    ///    Value {
+    ///      name: "apple_common"
+    ///      type: "apple_common"  // ← SELF-REFERENTIAL! Points to the type above
+    ///    }
+    ///    ```
+    ///
+    /// ## Why This Pattern is Essential
+    ///
+    /// This dual registration enables:
+    /// - **Global Access**: You can write `apple_common.apple_toolchain` in any .bzl file
+    /// - **Type Safety**: The LSP knows what fields/methods are available
+    /// - **Proper Completion**: IDE shows `apple_toolchain`, `platform` etc. when typing `apple_common.`
+    /// - **Hover Documentation**: Shows docs for both the object and its members
+    /// - **Type Inference**: Knows that `apple_common.platform` returns a string
+    ///
+    /// ## Extension Example
+    ///
+    /// For an extension with `"name": "exec", "as_type": true`, this creates:
+    /// 1. An `Exec` type with methods like `sh()`, `echo()`, etc.
+    /// 2. A global variable `exec` of type `Exec`
+    /// 3. Now `exec.sh("ls")` works with full LSP support
+    ///
+    /// Without this pattern, extensions generate `struct()` calls which create generic
+    /// runtime objects that the type system can't understand, resulting in "Unknown" types
+    /// and broken completions.
+    #[serde(default)]
+    pub as_type: bool,
 }
 
 /// Function signature definition.
@@ -364,6 +425,18 @@ fn pattern_matches(pattern: &str, file_name: &str) -> bool {
     false
 }
 
+impl Symbol {
+    /// Check if this symbol defines a type (either explicitly or implicitly).
+    pub fn is_type_definition(&self) -> bool {
+        self.r#type == "type" || (!self.properties.is_empty() && self.r#type == "object")
+    }
+
+    /// Check if this symbol should be registered as both type and global.
+    pub fn should_register_as_type(&self) -> bool {
+        self.as_type && self.is_type_definition()
+    }
+}
+
 fn default_symbol_type() -> String {
     "unknown".to_string()
 }
@@ -487,6 +560,7 @@ mod tests {
                 callable: None,
                 doc: "Build Docker image".to_string(),
                 properties: HashMap::new(),
+                as_type: false,
             }],
         );
 
@@ -638,8 +712,10 @@ mod tests {
                     }),
                     doc: "Execute shell command".to_string(),
                     properties: HashMap::new(),
+                    as_type: false,
                 }),
             )]),
+            as_type: false,
         };
 
         // Should validate successfully
@@ -659,8 +735,10 @@ mod tests {
                     callable: None,
                     doc: String::new(),
                     properties: HashMap::new(),
+                    as_type: false,
                 }),
             )]),
+            as_type: false,
         };
 
         // Should fail validation due to invalid property name

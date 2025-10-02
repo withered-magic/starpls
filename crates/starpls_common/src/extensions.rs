@@ -1,0 +1,500 @@
+/*!
+Minimal extension system for adding symbols and virtual modules to Starlark dialects.
+
+This module provides a simple way to extend existing dialects with:
+1. Global symbols - Available without load() statements
+2. Virtual modules - Can be loaded but don't exist on disk
+3. Load prefix - Context-aware path resolution
+
+Extensions are additive and applied based on file patterns.
+*/
+
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+
+use anyhow::Context;
+use anyhow::Result;
+use serde::Deserialize;
+use serde::Serialize;
+
+/// Collection of extensions that can be applied to files.
+#[derive(Debug, Clone, Default)]
+pub struct Extensions {
+    items: Vec<Extension>,
+}
+
+impl Extensions {
+    /// Create a new empty Extensions collection.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add an extension to the collection.
+    pub fn add(&mut self, extension: Extension) {
+        self.items.push(extension);
+    }
+
+    /// Get all extensions that match the given file path.
+    pub fn matching(&self, file_path: &Path) -> Vec<&Extension> {
+        self.items
+            .iter()
+            .filter(|ext| ext.matches(file_path))
+            .collect()
+    }
+
+    /// Get all global symbols that apply to the given file path.
+    pub fn globals_for_file(&self, file_path: &Path) -> Vec<&Symbol> {
+        self.matching(file_path)
+            .into_iter()
+            .flat_map(|ext| &ext.globals)
+            .collect()
+    }
+
+    /// Get virtual module symbols if they exist for the given module path and file context.
+    pub fn virtual_module(&self, module_path: &str, file_path: &Path) -> Option<&[Symbol]> {
+        for ext in self.matching(file_path) {
+            if let Some(symbols) = ext.modules.get(module_path) {
+                return Some(symbols);
+            }
+        }
+        None
+    }
+
+    /// Get the load prefix for the given file path (first match wins).
+    pub fn load_prefix_for_file(&self, file_path: &Path) -> Option<&str> {
+        self.matching(file_path)
+            .into_iter()
+            .find_map(|ext| ext.configuration.load_prefix.as_deref())
+    }
+
+    /// Get all global symbols from extensions that apply to all files (no 'when' clause).
+    pub fn global_symbols(&self) -> impl Iterator<Item = &Symbol> {
+        self.items
+            .iter()
+            .filter(|ext| ext.when.is_none()) // Only global extensions
+            .flat_map(|ext| &ext.globals)
+    }
+}
+
+/// A single extension that can modify dialect behavior.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Extension {
+    /// When this extension applies (optional, if None applies to all files).
+    #[serde(default)]
+    pub when: Option<FilePatterns>,
+
+    /// Global symbols available without load().
+    #[serde(default)]
+    pub globals: Vec<Symbol>,
+
+    /// Virtual modules that can be loaded.
+    #[serde(default)]
+    pub modules: HashMap<String, Vec<Symbol>>,
+
+    /// Configuration for this extension.
+    #[serde(default)]
+    pub configuration: ExtensionConfig,
+
+    // For backward compatibility with old schema
+    #[serde(alias = "config")]
+    #[serde(skip)]
+    _config: Option<ExtensionConfig>,
+}
+
+impl Extension {
+    /// Check if this extension applies to the given file path.
+    pub fn matches(&self, file_path: &Path) -> bool {
+        match &self.when {
+            Some(patterns) => patterns.matches(file_path),
+            None => true, // Apply to all files if no patterns specified
+        }
+    }
+}
+
+/// Configuration for an extension.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ExtensionConfig {
+    /// Optional prefix to prepend to load paths.
+    pub load_prefix: Option<String>,
+}
+
+/// File patterns for determining when an extension applies.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FilePatterns {
+    pub file_patterns: Vec<String>,
+}
+
+impl FilePatterns {
+    /// Check if any pattern matches the given file path.
+    pub fn matches(&self, file_path: &Path) -> bool {
+        let file_name = match file_path.file_name().and_then(|n| n.to_str()) {
+            Some(name) => name,
+            None => return false,
+        };
+
+        self.file_patterns
+            .iter()
+            .any(|pattern| pattern_matches(pattern, file_name))
+    }
+}
+
+/// A symbol definition (function, variable, etc.).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Symbol {
+    /// Name of the symbol.
+    pub name: String,
+
+    /// Type of the symbol (e.g., "function", "string", "dict").
+    #[serde(default = "default_symbol_type")]
+    pub r#type: String,
+
+    /// If this is a function, its signature.
+    #[serde(default)]
+    pub callable: Option<Callable>,
+
+    /// Documentation string.
+    #[serde(default)]
+    pub doc: String,
+}
+
+/// Function signature definition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Callable {
+    /// Function parameters.
+    #[serde(default)]
+    pub params: Vec<Param>,
+
+    /// Return type.
+    #[serde(default = "default_return_type")]
+    pub return_type: String,
+}
+
+/// Function parameter definition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Param {
+    /// Parameter name.
+    pub name: String,
+
+    /// Parameter type.
+    #[serde(alias = "param_type")]
+    pub r#type: String,
+
+    /// Documentation string.
+    #[serde(default)]
+    pub doc: String,
+
+    /// Default value (as string).
+    #[serde(default)]
+    pub default_value: String,
+
+    /// Whether this parameter is mandatory.
+    #[serde(default)]
+    pub is_mandatory: bool,
+
+    /// Whether this is a *args parameter.
+    #[serde(default)]
+    pub is_star_arg: bool,
+
+    /// Whether this is a **kwargs parameter.
+    #[serde(default)]
+    pub is_star_star_arg: bool,
+}
+
+/// Load extensions from JSON files.
+pub fn load_extensions(paths: &[impl AsRef<Path>]) -> Result<Extensions> {
+    let mut extensions = Extensions::new();
+
+    for path in paths {
+        let path = path.as_ref();
+        let content = fs::read_to_string(path)
+            .with_context(|| format!("Failed to read extension file: {}", path.display()))?;
+
+        let extension: Extension = serde_json::from_str(&content)
+            .with_context(|| format!("Failed to parse extension JSON: {}", path.display()))?;
+
+        // Basic validation
+        validate_extension(&extension)
+            .with_context(|| format!("Invalid extension: {}", path.display()))?;
+
+        extensions.add(extension);
+    }
+
+    Ok(extensions)
+}
+
+/// Validate an extension for basic consistency.
+fn validate_extension(extension: &Extension) -> Result<()> {
+    // Validate global symbols
+    for symbol in &extension.globals {
+        validate_symbol(symbol)?;
+    }
+
+    // Validate module symbols
+    for (module_name, symbols) in &extension.modules {
+        if module_name.trim().is_empty() {
+            anyhow::bail!("Module name cannot be empty");
+        }
+
+        for symbol in symbols {
+            validate_symbol(symbol)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate a symbol definition.
+fn validate_symbol(symbol: &Symbol) -> Result<()> {
+    if symbol.name.trim().is_empty() {
+        anyhow::bail!("Symbol name cannot be empty");
+    }
+
+    if !is_valid_identifier(&symbol.name) {
+        anyhow::bail!("Symbol name '{}' is not a valid identifier", symbol.name);
+    }
+
+    if let Some(callable) = &symbol.callable {
+        for param in &callable.params {
+            if param.name.trim().is_empty() {
+                anyhow::bail!(
+                    "Parameter name cannot be empty for symbol '{}'",
+                    symbol.name
+                );
+            }
+
+            if !is_valid_identifier(&param.name) {
+                anyhow::bail!("Parameter name '{}' is not a valid identifier", param.name);
+            }
+        }
+
+        // Check for duplicate parameter names
+        let mut param_names = std::collections::HashSet::new();
+        for param in &callable.params {
+            if !param_names.insert(&param.name) {
+                anyhow::bail!(
+                    "Duplicate parameter name '{}' in symbol '{}'",
+                    param.name,
+                    symbol.name
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Check if a string is a valid Starlark identifier.
+fn is_valid_identifier(s: &str) -> bool {
+    !s.is_empty()
+        && (s.chars().next().unwrap().is_alphabetic() || s.starts_with('_'))
+        && s.chars().all(|c| c.is_alphanumeric() || c == '_')
+        && !is_starlark_keyword(s)
+}
+
+/// Check if a string is a reserved Starlark keyword.
+fn is_starlark_keyword(s: &str) -> bool {
+    matches!(
+        s,
+        "and"
+            | "as"
+            | "assert"
+            | "break"
+            | "class"
+            | "continue"
+            | "def"
+            | "del"
+            | "elif"
+            | "else"
+            | "except"
+            | "finally"
+            | "for"
+            | "from"
+            | "global"
+            | "if"
+            | "import"
+            | "in"
+            | "is"
+            | "lambda"
+            | "not"
+            | "or"
+            | "pass"
+            | "raise"
+            | "return"
+            | "try"
+            | "while"
+            | "with"
+            | "yield"
+            | "load"
+            | "True"
+            | "False"
+            | "None"
+    )
+}
+
+/// Simple pattern matching for file patterns.
+fn pattern_matches(pattern: &str, file_name: &str) -> bool {
+    if pattern == file_name {
+        return true; // Exact match
+    }
+
+    if let Some(extension) = pattern.strip_prefix("*.") {
+        return file_name.ends_with(&format!(".{}", extension));
+    }
+
+    // Could add more sophisticated pattern matching here (glob, regex, etc.)
+    false
+}
+
+fn default_symbol_type() -> String {
+    "unknown".to_string()
+}
+
+fn default_return_type() -> String {
+    "None".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use tempfile::NamedTempFile;
+
+    use super::*;
+
+    #[test]
+    fn test_pattern_matching() {
+        assert!(pattern_matches("Tiltfile", "Tiltfile"));
+        assert!(pattern_matches("*.star", "test.star"));
+        assert!(pattern_matches("*.bzl", "defs.bzl"));
+        assert!(!pattern_matches("*.py", "test.star"));
+        assert!(!pattern_matches("BUILD", "Tiltfile"));
+    }
+
+    #[test]
+    fn test_file_patterns_matching() {
+        let patterns = FilePatterns {
+            file_patterns: vec!["Tiltfile".to_string(), "*.tilt".to_string()],
+        };
+
+        assert!(patterns.matches(Path::new("/workspace/Tiltfile")));
+        assert!(patterns.matches(Path::new("/workspace/test.tilt")));
+        assert!(!patterns.matches(Path::new("/workspace/BUILD")));
+    }
+
+    #[test]
+    fn test_extension_matching() {
+        let extension = Extension {
+            when: Some(FilePatterns {
+                file_patterns: vec!["Tiltfile".to_string()],
+            }),
+            globals: vec![],
+            modules: HashMap::new(),
+            configuration: ExtensionConfig::default(),
+            _config: None,
+        };
+
+        assert!(extension.matches(Path::new("/workspace/Tiltfile")));
+        assert!(!extension.matches(Path::new("/workspace/BUILD")));
+    }
+
+    #[test]
+    fn test_load_extension_from_json() {
+        let json_content = r#"
+        {
+            "when": {
+                "file_patterns": ["Tiltfile"]
+            },
+            "globals": [
+                {
+                    "name": "tilt_env",
+                    "type": "dict",
+                    "doc": "Tilt environment variables"
+                }
+            ],
+            "modules": {
+                "tilt/docker": [
+                    {
+                        "name": "docker_build",
+                        "type": "function",
+                        "callable": {
+                            "params": [
+                                {
+                                    "name": "ref",
+                                    "type": "string",
+                                    "is_mandatory": true
+                                }
+                            ],
+                            "return_type": "None"
+                        },
+                        "doc": "Build a Docker image"
+                    }
+                ]
+            },
+            "configuration": {
+                "load_prefix": "tilt_libs"
+            }
+        }
+        "#;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(json_content.as_bytes()).unwrap();
+
+        let extensions = load_extensions(&[temp_file.path()]).unwrap();
+        assert_eq!(extensions.items.len(), 1);
+
+        let ext = &extensions.items[0];
+        assert_eq!(ext.globals.len(), 1);
+        assert_eq!(ext.globals[0].name, "tilt_env");
+        assert_eq!(ext.modules.len(), 1);
+        assert!(ext.modules.contains_key("tilt/docker"));
+        assert_eq!(ext.configuration.load_prefix, Some("tilt_libs".to_string()));
+    }
+
+    #[test]
+    fn test_virtual_module_lookup() {
+        let mut extensions = Extensions::new();
+        let mut modules = HashMap::new();
+        modules.insert(
+            "tilt/docker".to_string(),
+            vec![Symbol {
+                name: "docker_build".to_string(),
+                r#type: "function".to_string(),
+                callable: None,
+                doc: "Build Docker image".to_string(),
+            }],
+        );
+
+        extensions.add(Extension {
+            when: Some(FilePatterns {
+                file_patterns: vec!["Tiltfile".to_string()],
+            }),
+            globals: vec![],
+            modules,
+            configuration: ExtensionConfig::default(),
+            _config: None,
+        });
+
+        // Should find module for Tiltfile
+        let tiltfile = Path::new("/workspace/Tiltfile");
+        let symbols = extensions.virtual_module("tilt/docker", tiltfile);
+        assert!(symbols.is_some());
+        assert_eq!(symbols.unwrap().len(), 1);
+
+        // Should not find module for BUILD file
+        let build_file = Path::new("/workspace/BUILD");
+        let symbols = extensions.virtual_module("tilt/docker", build_file);
+        assert!(symbols.is_none());
+    }
+
+    #[test]
+    fn test_identifier_validation() {
+        assert!(is_valid_identifier("my_func"));
+        assert!(is_valid_identifier("_private"));
+        assert!(is_valid_identifier("test123"));
+        assert!(!is_valid_identifier("123test")); // can't start with number
+        assert!(!is_valid_identifier("def")); // keyword
+        assert!(!is_valid_identifier("load")); // Starlark keyword
+        assert!(!is_valid_identifier("")); // empty
+    }
+}

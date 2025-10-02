@@ -122,20 +122,6 @@ impl BuiltinProvider for BazelBuiltinProvider {
     }
 }
 
-/// Create a complete Bazel dialect definition.
-/// Temporarily commented out to avoid circular dependency
-// pub fn create_bazel_dialect() -> starpls_common::ExtensibleDialect {
-//     use std::sync::Arc;
-//
-//     starpls_common::ExtensibleDialect::new(
-//         starpls_common::dialect::builtin_dialects::bazel(),
-//         "Bazel".to_string(),
-//         "Google's build and test tool using Starlark configuration language".to_string(),
-//         Arc::new(BazelDialectDetector),
-//         Arc::new(BazelBuiltinProvider),
-//     )
-// }
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;

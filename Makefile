@@ -1,6 +1,6 @@
 # Starpls Development Makefile
 
-.PHONY: build test fmt clean run dev-build
+.PHONY: build test fmt clean run dev-build check
 
 # Default target
 all: build
@@ -13,6 +13,10 @@ build:
 build-starpls:
 	bazel build //crates/starpls:starpls
 
+# Check compilation with clippy and rustfmt (fast feedback)
+check:
+	bazel build //...
+
 # Run tests
 test:
 	bazel test //...
@@ -20,6 +24,14 @@ test:
 # Format code using hermetic rustfmt
 fmt:
 	bazel run @rules_rust//:rustfmt
+
+# Run hermetic cargo
+cargo:
+	bazel run //:cargo
+
+# Run hermetic cargo check (fast compilation check)
+cargo-check:
+	bazel run //:cargo -- check
 
 # Clean build artifacts
 clean:
@@ -41,8 +53,11 @@ help:
 	@echo "Available targets:"
 	@echo "  build         - Build all targets"
 	@echo "  build-starpls - Build starpls binary only"
+	@echo "  check         - Check with clippy and rustfmt"
 	@echo "  test          - Run all tests"
 	@echo "  fmt           - Format code with rustfmt"
+	@echo "  cargo         - Run hermetic cargo"
+	@echo "  cargo-check   - Run hermetic cargo check"
 	@echo "  clean         - Clean build artifacts"
 	@echo "  dev-build     - Optimized build"
 	@echo "  dev           - Format and build (development cycle)"

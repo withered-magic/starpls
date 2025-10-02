@@ -44,11 +44,15 @@ pub(crate) struct ServerCommand {
     #[clap(long = "analysis_debounce_interval", default_value_t = 250)]
     pub(crate) analysis_debounce_interval: u64,
 
-    /// Load additional symbol definitions from JSON files
+    /// Load extension files with symbols, virtual modules, and configuration
+    #[clap(long = "load-extensions", value_name = "FILE")]
+    pub(crate) extension_files: Vec<PathBuf>,
+
+    /// Load additional symbol definitions from JSON files (deprecated, use --load-extensions)
     #[clap(long = "experimental_load_symbols", value_name = "FILE")]
     pub(crate) symbol_files: Vec<PathBuf>,
 
-    /// Load dialect definitions from JSON files
+    /// Load dialect definitions from JSON files (deprecated, use --load-extensions)
     #[clap(long = "experimental_load_dialects", value_name = "FILE")]
     pub(crate) dialect_files: Vec<PathBuf>,
 
@@ -100,9 +104,19 @@ impl ServerCommand {
         Ok(())
     }
 
-    /// Validate that all specified plugin files exist.
+    /// Validate that all specified extension files exist.
     fn validate_plugin_files(&self) -> anyhow::Result<()> {
-        // Validate dialect files
+        // Validate extension files
+        for file_path in &self.extension_files {
+            if !file_path.exists() {
+                anyhow::bail!(
+                    "Extension file does not exist: {}\n\nMake sure the file path is correct and the file is accessible.",
+                    file_path.display()
+                );
+            }
+        }
+
+        // Validate dialect files (backward compatibility)
         for file_path in &self.dialect_files {
             if !file_path.exists() {
                 anyhow::bail!(
@@ -112,7 +126,7 @@ impl ServerCommand {
             }
         }
 
-        // Validate symbol files
+        // Validate symbol files (backward compatibility)
         for file_path in &self.symbol_files {
             if !file_path.exists() {
                 anyhow::bail!(

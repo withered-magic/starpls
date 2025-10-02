@@ -14,24 +14,12 @@ pub use crate::diagnostics::DiagnosticTag;
 pub use crate::diagnostics::Diagnostics;
 pub use crate::diagnostics::FileRange;
 pub use crate::diagnostics::Severity;
-pub use crate::dialect::BuiltinProvider;
-pub use crate::dialect::Dialect as ExtensibleDialect;
-pub use crate::dialect::DialectDetector;
-pub use crate::dialect::DialectId;
-pub use crate::dialect::DialectInfo;
-pub use crate::dialect::DialectRegistry;
-pub use crate::standard_dialect::create_standard_dialect;
-pub use crate::standard_dialect::StandardBuiltinProvider;
-pub use crate::standard_dialect::StandardDialectDetector;
-pub use crate::tilt_dialect::create_tilt_dialect;
-pub use crate::tilt_dialect::TiltBuiltinProvider;
-pub use crate::tilt_dialect::TiltDialectDetector;
+pub use crate::extensions::load_extensions;
+pub use crate::extensions::Extensions;
+pub use crate::extensions::Symbol;
 
 mod diagnostics;
-mod dialect;
-mod examples;
-mod standard_dialect;
-mod tilt_dialect;
+mod extensions;
 mod util;
 
 #[salsa::jar(db = Db)]
@@ -48,26 +36,6 @@ pub struct Jar(
 pub enum Dialect {
     Standard,
     Bazel,
-}
-
-/// Compatibility conversion utilities between old and new dialect systems
-impl Dialect {
-    /// Convert to new DialectId
-    pub fn to_dialect_id(&self) -> DialectId {
-        match self {
-            Dialect::Standard => dialect::builtin_dialects::standard(),
-            Dialect::Bazel => dialect::builtin_dialects::bazel(),
-        }
-    }
-
-    /// Convert from DialectId (if it's a known builtin dialect)
-    pub fn from_dialect_id(id: &DialectId) -> Option<Self> {
-        match id.as_str() {
-            "standard" => Some(Dialect::Standard),
-            "bazel" => Some(Dialect::Bazel),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

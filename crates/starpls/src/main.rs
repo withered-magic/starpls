@@ -14,7 +14,6 @@ mod document;
 mod event_loop;
 mod extensions;
 mod handlers;
-mod plugin;
 mod server;
 mod task_pool;
 mod utils;

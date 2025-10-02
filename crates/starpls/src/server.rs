@@ -38,7 +38,6 @@ use crate::document::PathInterner;
 use crate::event_loop::FetchExternalReposProgress;
 use crate::event_loop::RefreshAllWorkspaceTargetsProgress;
 use crate::event_loop::Task;
-use crate::plugin;
 use crate::task_pool::TaskPool;
 use crate::task_pool::TaskPoolHandle;
 
@@ -119,51 +118,34 @@ impl Server {
             Default::default()
         };
 
-        // Load JSON plugins first to get load_prefix configuration
-        let load_prefix =
-            if !config.args.dialect_files.is_empty() || !config.args.symbol_files.is_empty() {
-                info!("Loading JSON plugins...");
+        // Load extensions from JSON files
+        let extensions = if !config.args.extension_files.is_empty()
+            || !config.args.dialect_files.is_empty()
+            || !config.args.symbol_files.is_empty()
+        {
+            info!("Loading extensions...");
 
-                // Create a dialect registry for the new system
-                let mut registry = starpls_common::DialectRegistry::new();
+            // Collect all extension files (including legacy ones for backward compatibility)
+            let mut all_files = config.args.extension_files.clone();
+            all_files.extend(config.args.dialect_files.iter().cloned());
+            all_files.extend(config.args.symbol_files.iter().cloned());
 
-                // Register built-in dialects
-                registry.register(starpls_common::create_standard_dialect());
-                // TODO: Re-enable when circular dependency is resolved
-                // registry.register(starpls_bazel::create_bazel_dialect());
-
-                // Load dialect plugins to get load_prefix
-                match plugin::load_dialect_plugins(&mut registry, &config.args.dialect_files) {
-                    Ok(prefix) => {
-                        // Load symbol extensions (but don't use the result yet)
-                        match plugin::load_symbol_extensions(&config.args.symbol_files) {
-                            Ok(extensions) => {
-                                for extension in extensions {
-                                    info!(
-                                        "Loaded symbol extension for dialect: {}",
-                                        extension.dialect_id
-                                    );
-                                    // TODO: Apply symbol extensions to existing dialects
-                                    // For now, we just log that they were loaded
-                                }
-                            }
-                            Err(e) => {
-                                error!("Failed to load symbol extensions: {}", e);
-                            }
-                        }
-                        prefix
-                    }
-                    Err(e) => {
-                        error!("Failed to load some dialect plugins: {}", e);
-                        None
-                    }
+            match starpls_common::load_extensions(&all_files) {
+                Ok(extensions) => {
+                    info!("✓ Loaded extension(s) successfully");
+                    Arc::new(extensions)
                 }
-            } else {
-                None
-            };
+                Err(e) => {
+                    error!("Failed to load extensions: {}", e);
+                    return Err(e);
+                }
+            }
+        } else {
+            Arc::new(starpls_common::Extensions::new())
+        };
 
         let path_interner = Arc::new(PathInterner::default());
-        let mut loader = DefaultFileLoader::new(
+        let loader = DefaultFileLoader::new(
             bazel_client.clone(),
             path_interner.clone(),
             bazel_cx.info.workspace.clone(),
@@ -171,12 +153,8 @@ impl Server {
             bazel_cx.info.output_base.join("external"),
             task_pool_sender.clone(),
             bazel_cx.bzlmod_enabled,
-        );
-
-        // Apply load_prefix if one was found
-        if let Some(prefix) = load_prefix {
-            loader = loader.with_load_prefix(prefix);
-        }
+        )
+        .with_extensions(extensions.clone());
         let mut analysis = Analysis::new(
             Arc::new(loader),
             InferenceOptions {
@@ -187,7 +165,11 @@ impl Server {
         );
 
         analysis.set_all_workspace_targets(targets);
-        analysis.set_builtin_defs(load_bazel_builtins(), bazel_cx.rules);
+
+        // Load base builtins and inject extension global symbols
+        let mut builtins = load_bazel_builtins();
+        inject_extension_globals(&mut builtins, &extensions);
+        analysis.set_builtin_defs(builtins, bazel_cx.rules);
 
         // Check for a prelude file. We skip verifying that `//tools/build_tools` is actually a package (i.e.
         // that it actually contains a `BUILD.bazel`) file for simplicity.
@@ -207,9 +189,6 @@ impl Server {
             analysis.apply_change(change);
             analysis.set_bazel_prelude_file(file_id);
         }
-
-        // TODO: Integrate the dialect registry with the analysis
-        // For now, we continue to use the old system but plugins are loaded and validated
 
         let analysis_debounce_interval = config.args.analysis_debounce_interval;
         let server = Server {
@@ -430,4 +409,53 @@ fn load_bazel_prelude(workspace: impl AsRef<Path>) -> anyhow::Result<(PathBuf, S
     let prelude = workspace.as_ref().join("tools/build_rules/prelude_bazel");
     let contents = fs::read_to_string(&prelude)?;
     Ok((prelude, contents))
+}
+
+/// Inject global symbols from extensions into the builtin definitions.
+/// This allows extension-defined symbols to be available without explicit load() statements.
+fn inject_extension_globals(builtins: &mut Builtins, extensions: &starpls_common::Extensions) {
+    use starpls_bazel::builtin::Callable;
+    use starpls_bazel::builtin::Param;
+    use starpls_bazel::builtin::Value;
+
+    for symbol in extensions.global_symbols() {
+        let value = if let Some(callable) = &symbol.callable {
+            // This is a function
+            let builtin_params = callable
+                .params
+                .iter()
+                .map(|p| Param {
+                    name: p.name.clone(),
+                    r#type: p.r#type.clone(),
+                    doc: p.doc.clone(),
+                    default_value: p.default_value.clone(),
+                    is_mandatory: p.is_mandatory,
+                    is_star_arg: p.is_star_arg,
+                    is_star_star_arg: p.is_star_star_arg,
+                })
+                .collect();
+
+            Value {
+                name: symbol.name.clone(),
+                r#type: symbol.r#type.clone(),
+                doc: symbol.doc.clone(),
+                callable: Some(Callable {
+                    param: builtin_params,
+                    return_type: callable.return_type.clone(),
+                }),
+                ..Default::default()
+            }
+        } else {
+            // This is a variable
+            Value {
+                name: symbol.name.clone(),
+                r#type: symbol.r#type.clone(),
+                doc: symbol.doc.clone(),
+                callable: None,
+                ..Default::default()
+            }
+        };
+
+        builtins.global.push(value);
+    }
 }

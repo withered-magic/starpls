@@ -1483,8 +1483,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "salsa-2022",
+ "serde",
+ "serde_json",
  "starpls_bazel",
  "starpls_syntax",
+ "tempfile",
 ]
 
 [[package]]

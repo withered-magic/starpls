@@ -201,9 +201,8 @@ pub(crate) struct DefaultFileLoader {
     cached_load_results: DashMap<String, PathBuf>,
     fetch_repo_sender: Sender<Task>,
     bzlmod_enabled: bool,
-    #[allow(dead_code)]
-    dialect_registry: Option<Arc<starpls_common::DialectRegistry>>,
     load_prefix: Option<String>,
+    extensions: Arc<starpls_common::Extensions>,
 }
 
 impl DefaultFileLoader {
@@ -225,22 +224,13 @@ impl DefaultFileLoader {
             cached_load_results: Default::default(),
             fetch_repo_sender,
             bzlmod_enabled,
-            dialect_registry: None,
             load_prefix: None,
+            extensions: Arc::new(starpls_common::Extensions::new()),
         }
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn with_dialect_registry(
-        mut self,
-        registry: Arc<starpls_common::DialectRegistry>,
-    ) -> Self {
-        self.dialect_registry = Some(registry);
-        self
-    }
-
-    pub(crate) fn with_load_prefix(mut self, prefix: String) -> Self {
-        self.load_prefix = Some(prefix);
+    pub(crate) fn with_extensions(mut self, extensions: Arc<starpls_common::Extensions>) -> Self {
+        self.extensions = extensions;
         self
     }
 
@@ -400,6 +390,64 @@ impl DefaultFileLoader {
     }
 }
 
+/// Create virtual file content from a list of symbols.
+/// This generates Starlark code that defines the functions/variables.
+fn create_virtual_file_content(symbols: &[starpls_common::Symbol]) -> String {
+    let mut content = String::new();
+    content.push_str("# Virtual module - generated from extension\n\n");
+
+    for symbol in symbols {
+        match symbol.r#type.as_str() {
+            "function" => {
+                if let Some(callable) = &symbol.callable {
+                    content.push_str(&format!("def {}(", symbol.name));
+
+                    let params: Vec<String> = callable
+                        .params
+                        .iter()
+                        .map(|p| {
+                            if p.default_value.is_empty() {
+                                p.name.clone()
+                            } else {
+                                format!("{} = {}", p.name, p.default_value)
+                            }
+                        })
+                        .collect();
+
+                    content.push_str(&params.join(", "));
+                    content.push_str("):\n");
+
+                    if !symbol.doc.is_empty() {
+                        content.push_str(&format!("    \"\"\"{}\"\"\"\n", symbol.doc));
+                    }
+
+                    content.push_str("    pass  # Virtual function\n\n");
+                } else {
+                    // Function without signature info
+                    content.push_str(&format!("def {}():\n", symbol.name));
+                    if !symbol.doc.is_empty() {
+                        content.push_str(&format!("    \"\"\"{}\"\"\"\n", symbol.doc));
+                    }
+                    content.push_str("    pass  # Virtual function\n\n");
+                }
+            }
+            _ => {
+                // Variables, constants, etc.
+                content.push_str(&format!(
+                    "{} = None  # Virtual {}\n",
+                    symbol.name, symbol.r#type
+                ));
+                if !symbol.doc.is_empty() {
+                    content.push_str(&format!("# {}\n", symbol.doc));
+                }
+                content.push('\n');
+            }
+        }
+    }
+
+    content
+}
+
 impl FileLoader for DefaultFileLoader {
     fn resolve_path(
         &self,
@@ -461,24 +509,54 @@ impl FileLoader for DefaultFileLoader {
         dialect: Dialect,
         from: FileId,
     ) -> anyhow::Result<Option<LoadFileResult>> {
+        // Check for virtual modules first (only for Standard dialect)
+        if dialect == Dialect::Standard {
+            let from_path = self.interner.lookup_by_file_id(from);
+            if let Some(symbols) = self.extensions.virtual_module(path, &from_path) {
+                // Create a virtual file with the module's symbols
+                let virtual_content = create_virtual_file_content(symbols);
+
+                // Create a virtual file ID based on the path
+                let virtual_path = PathBuf::from(format!("virtual://{}", path));
+                let file_id = self.interner.intern_path(virtual_path);
+
+                return Ok(Some(LoadFileResult {
+                    file_id,
+                    dialect,
+                    info: None,
+                    contents: Some(virtual_content),
+                }));
+            }
+        }
+
         let (path, info, canonical_repo) = match dialect {
             Dialect::Standard => {
                 // Find the importing file's directory.
                 let mut from_path = self.interner.lookup_by_file_id(from);
                 assert!(from_path.pop());
 
-                // Apply load_prefix if configured
-                let resolved_path = if let Some(ref prefix) = self.load_prefix {
-                    // Prepend the prefix to the load path
-                    let prefixed_path = if path.is_empty() {
-                        format!("{}/", prefix.trim_end_matches('/'))
+                // Apply load_prefix from extensions if configured for this file
+                let full_from_path = self.interner.lookup_by_file_id(from);
+                let resolved_path =
+                    if let Some(prefix) = self.extensions.load_prefix_for_file(&full_from_path) {
+                        // Use extension-specific prefix
+                        let prefixed_path = if path.is_empty() {
+                            format!("{}/", prefix.trim_end_matches('/'))
+                        } else {
+                            format!("{}/{}", prefix.trim_end_matches('/'), path)
+                        };
+                        from_path.join(prefixed_path)
+                    } else if let Some(ref prefix) = self.load_prefix {
+                        // Fall back to global prefix (for backward compatibility)
+                        let prefixed_path = if path.is_empty() {
+                            format!("{}/", prefix.trim_end_matches('/'))
+                        } else {
+                            format!("{}/{}", prefix.trim_end_matches('/'), path)
+                        };
+                        from_path.join(prefixed_path)
                     } else {
-                        format!("{}/{}", prefix.trim_end_matches('/'), path)
+                        from_path.join(path)
                     };
-                    from_path.join(prefixed_path)
-                } else {
-                    from_path.join(path)
-                };
 
                 // Resolve the given path relative to the importing file's directory.
                 (resolved_path.canonicalize()?, None, None)

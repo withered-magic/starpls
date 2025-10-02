@@ -3,6 +3,13 @@ load("@rules_rust//rust:defs.bzl", "rust_library_group")
 
 exports_files(["rustfmt.toml"])
 
+# Hermetic cargo wrapper
+sh_binary(
+    name = "cargo",
+    srcs = ["tools/cargo_wrapper.sh"],
+    tags = ["manual"],
+)
+
 rust_library_group(
     name = "prost_runtime",
     deps = [

@@ -1,0 +1,64 @@
+{
+  "modules": {
+    "command/execution.star": [
+      {
+        "name": "exec",
+        "type": "object",
+        "doc": "Command execution utilities",
+        "properties": {
+          "sh": {
+            "name": "sh",
+            "type": "function",
+            "callable": {
+              "params": [
+                {
+                  "name": "command",
+                  "type": "string",
+                  "is_mandatory": true,
+                  "doc": "Shell command to execute"
+                }
+              ],
+              "return_type": "string"
+            },
+            "doc": "Execute a shell command and return its output",
+            "properties": {}
+          },
+          "echo": {
+            "name": "echo",
+            "type": "function",
+            "callable": {
+              "params": [
+                {
+                  "name": "message",
+                  "type": "string",
+                  "is_mandatory": true,
+                  "doc": "Message to print"
+                }
+              ],
+              "return_type": "None"
+            },
+            "doc": "Print a message to stdout",
+            "properties": {}
+          },
+          "checkout": {
+            "name": "checkout",
+            "type": "function",
+            "callable": {
+              "params": [
+                {
+                  "name": "branch",
+                  "type": "string",
+                  "is_mandatory": true,
+                  "doc": "Git branch to checkout"
+                }
+              ],
+              "return_type": "string"
+            },
+            "doc": "Checkout a git branch and return status",
+            "properties": {}
+          }
+        }
+      }
+    ]
+  }
+}

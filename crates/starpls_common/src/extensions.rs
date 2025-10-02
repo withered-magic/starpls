@@ -15,6 +15,7 @@ use std::path::Path;
 
 use anyhow::Context;
 use anyhow::Result;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -78,7 +79,7 @@ impl Extensions {
 }
 
 /// A single extension that can modify dialect behavior.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Extension {
     /// When this extension applies (optional, if None applies to all files).
     #[serde(default)]
@@ -113,14 +114,14 @@ impl Extension {
 }
 
 /// Configuration for an extension.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct ExtensionConfig {
     /// Optional prefix to prepend to load paths.
     pub load_prefix: Option<String>,
 }
 
 /// File patterns for determining when an extension applies.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct FilePatterns {
     pub file_patterns: Vec<String>,
 }
@@ -140,12 +141,12 @@ impl FilePatterns {
 }
 
 /// A symbol definition (function, variable, etc.).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Symbol {
     /// Name of the symbol.
     pub name: String,
 
-    /// Type of the symbol (e.g., "function", "string", "dict").
+    /// Type of the symbol (e.g., "function", "string", "dict", "object").
     #[serde(default = "default_symbol_type")]
     pub r#type: String,
 
@@ -156,10 +157,14 @@ pub struct Symbol {
     /// Documentation string.
     #[serde(default)]
     pub doc: String,
+
+    /// Properties for object-type symbols (recursive structure).
+    #[serde(default)]
+    pub properties: HashMap<String, Box<Symbol>>,
 }
 
 /// Function signature definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Callable {
     /// Function parameters.
     #[serde(default)]
@@ -171,7 +176,7 @@ pub struct Callable {
 }
 
 /// Function parameter definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Param {
     /// Parameter name.
     pub name: String,
@@ -252,6 +257,19 @@ fn validate_symbol(symbol: &Symbol) -> Result<()> {
 
     if !is_valid_identifier(&symbol.name) {
         anyhow::bail!("Symbol name '{}' is not a valid identifier", symbol.name);
+    }
+
+    // Validate properties (recursive)
+    for (prop_name, prop_symbol) in &symbol.properties {
+        if !is_valid_identifier(prop_name) {
+            anyhow::bail!(
+                "Property name '{}' in symbol '{}' is not a valid identifier",
+                prop_name,
+                symbol.name
+            );
+        }
+        validate_symbol(prop_symbol)
+            .with_context(|| format!("validating property '{}.{}'", symbol.name, prop_name))?;
     }
 
     if let Some(callable) = &symbol.callable {
@@ -352,6 +370,12 @@ fn default_symbol_type() -> String {
 
 fn default_return_type() -> String {
     "None".to_string()
+}
+
+/// Generate JSON schema for extensions.
+pub fn generate_schema() -> String {
+    let schema = schemars::schema_for!(Extension);
+    serde_json::to_string_pretty(&schema).unwrap()
 }
 
 #[cfg(test)]
@@ -462,6 +486,7 @@ mod tests {
                 r#type: "function".to_string(),
                 callable: None,
                 doc: "Build Docker image".to_string(),
+                properties: HashMap::new(),
             }],
         );
 
@@ -496,5 +521,144 @@ mod tests {
         assert!(!is_valid_identifier("def")); // keyword
         assert!(!is_valid_identifier("load")); // Starlark keyword
         assert!(!is_valid_identifier("")); // empty
+    }
+
+    #[test]
+    fn test_object_with_methods() {
+        let json_content = r#"
+        {
+            "modules": {
+                "command/execution.star": [{
+                    "name": "exec",
+                    "type": "object",
+                    "doc": "Command execution utilities",
+                    "properties": {
+                        "sh": {
+                            "name": "sh",
+                            "type": "function",
+                            "callable": {
+                                "params": [
+                                    {
+                                        "name": "command",
+                                        "type": "string",
+                                        "is_mandatory": true
+                                    }
+                                ],
+                                "return_type": "string"
+                            },
+                            "doc": "Execute shell command",
+                            "properties": {}
+                        },
+                        "echo": {
+                            "name": "echo",
+                            "type": "function",
+                            "callable": {
+                                "params": [
+                                    {
+                                        "name": "message",
+                                        "type": "string",
+                                        "is_mandatory": true
+                                    }
+                                ]
+                            },
+                            "properties": {}
+                        }
+                    }
+                }]
+            }
+        }
+        "#;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(json_content.as_bytes()).unwrap();
+
+        let extensions = load_extensions(&[temp_file.path()]).unwrap();
+        assert_eq!(extensions.items.len(), 1);
+
+        let ext = &extensions.items[0];
+        assert_eq!(ext.modules.len(), 1);
+
+        let exec_symbols = ext.modules.get("command/execution.star").unwrap();
+        assert_eq!(exec_symbols.len(), 1);
+
+        let exec_symbol = &exec_symbols[0];
+        assert_eq!(exec_symbol.name, "exec");
+        assert_eq!(exec_symbol.r#type, "object");
+        assert_eq!(exec_symbol.properties.len(), 2);
+
+        // Test that both methods exist
+        assert!(exec_symbol.properties.contains_key("sh"));
+        assert!(exec_symbol.properties.contains_key("echo"));
+
+        // Test sh method details
+        let sh_method = &exec_symbol.properties["sh"];
+        assert_eq!(sh_method.name, "sh");
+        assert_eq!(sh_method.r#type, "function");
+        assert!(sh_method.callable.is_some());
+        assert_eq!(sh_method.callable.as_ref().unwrap().params.len(), 1);
+        assert_eq!(sh_method.callable.as_ref().unwrap().params[0].name, "command");
+
+        // Test that virtual module lookup works
+        let from_path = Path::new("/workspace/test.star");
+        let symbols = extensions.virtual_module("command/execution.star", from_path);
+        assert!(symbols.is_some());
+
+        let found_symbols = symbols.unwrap();
+        assert_eq!(found_symbols.len(), 1);
+        assert_eq!(found_symbols[0].name, "exec");
+        assert!(!found_symbols[0].properties.is_empty());
+    }
+
+    #[test]
+    fn test_nested_object_validation() {
+        let exec_symbol = Symbol {
+            name: "exec".to_string(),
+            r#type: "object".to_string(),
+            callable: None,
+            doc: "Command execution".to_string(),
+            properties: HashMap::from([
+                ("sh".to_string(), Box::new(Symbol {
+                    name: "sh".to_string(),
+                    r#type: "function".to_string(),
+                    callable: Some(Callable {
+                        params: vec![Param {
+                            name: "cmd".to_string(),
+                            r#type: "string".to_string(),
+                            doc: String::new(),
+                            default_value: String::new(),
+                            is_mandatory: true,
+                            is_star_arg: false,
+                            is_star_star_arg: false,
+                        }],
+                        return_type: "string".to_string(),
+                    }),
+                    doc: "Execute shell command".to_string(),
+                    properties: HashMap::new(),
+                })),
+            ]),
+        };
+
+        // Should validate successfully
+        assert!(validate_symbol(&exec_symbol).is_ok());
+
+        // Test invalid property name
+        let invalid_symbol = Symbol {
+            name: "test".to_string(),
+            r#type: "object".to_string(),
+            callable: None,
+            doc: String::new(),
+            properties: HashMap::from([
+                ("123invalid".to_string(), Box::new(Symbol {
+                    name: "invalid".to_string(),
+                    r#type: "function".to_string(),
+                    callable: None,
+                    doc: String::new(),
+                    properties: HashMap::new(),
+                })),
+            ]),
+        };
+
+        // Should fail validation due to invalid property name
+        assert!(validate_symbol(&invalid_symbol).is_err());
     }
 }

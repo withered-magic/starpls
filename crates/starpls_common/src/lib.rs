@@ -14,6 +14,7 @@ pub use crate::diagnostics::DiagnosticTag;
 pub use crate::diagnostics::Diagnostics;
 pub use crate::diagnostics::FileRange;
 pub use crate::diagnostics::Severity;
+pub use crate::extensions::generate_schema;
 pub use crate::extensions::load_extensions;
 pub use crate::extensions::Extensions;
 pub use crate::extensions::Symbol;

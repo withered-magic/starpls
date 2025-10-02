@@ -397,50 +397,62 @@ fn create_virtual_file_content(symbols: &[starpls_common::Symbol]) -> String {
     content.push_str("# Virtual module - generated from extension\n\n");
 
     for symbol in symbols {
-        match symbol.r#type.as_str() {
-            "function" => {
-                if let Some(callable) = &symbol.callable {
-                    content.push_str(&format!("def {}(", symbol.name));
-
-                    let params: Vec<String> = callable
-                        .params
-                        .iter()
-                        .map(|p| {
-                            if p.default_value.is_empty() {
-                                p.name.clone()
-                            } else {
-                                format!("{} = {}", p.name, p.default_value)
-                            }
-                        })
-                        .collect();
-
-                    content.push_str(&params.join(", "));
-                    content.push_str("):\n");
-
-                    if !symbol.doc.is_empty() {
-                        content.push_str(&format!("    \"\"\"{}\"\"\"\n", symbol.doc));
-                    }
-
-                    content.push_str("    pass  # Virtual function\n\n");
-                } else {
-                    // Function without signature info
-                    content.push_str(&format!("def {}():\n", symbol.name));
-                    if !symbol.doc.is_empty() {
-                        content.push_str(&format!("    \"\"\"{}\"\"\"\n", symbol.doc));
-                    }
-                    content.push_str("    pass  # Virtual function\n\n");
-                }
+        if !symbol.properties.is_empty() {
+            // Object with properties: generate struct
+            if !symbol.doc.is_empty() {
+                content.push_str(&format!("# {}\n", symbol.doc));
             }
-            _ => {
-                // Variables, constants, etc.
-                content.push_str(&format!(
-                    "{} = None  # Virtual {}\n",
-                    symbol.name, symbol.r#type
-                ));
-                if !symbol.doc.is_empty() {
-                    content.push_str(&format!("# {}\n", symbol.doc));
+            content.push_str(&format!("{} = struct(\n", symbol.name));
+            for (prop_name, _prop_symbol) in &symbol.properties {
+                content.push_str(&format!("    {} = lambda *a, **k: None,\n", prop_name));
+            }
+            content.push_str(")\n\n");
+        } else {
+            match symbol.r#type.as_str() {
+                "function" => {
+                    if let Some(callable) = &symbol.callable {
+                        content.push_str(&format!("def {}(", symbol.name));
+
+                        let params: Vec<String> = callable
+                            .params
+                            .iter()
+                            .map(|p| {
+                                if p.default_value.is_empty() {
+                                    p.name.clone()
+                                } else {
+                                    format!("{} = {}", p.name, p.default_value)
+                                }
+                            })
+                            .collect();
+
+                        content.push_str(&params.join(", "));
+                        content.push_str("):\n");
+
+                        if !symbol.doc.is_empty() {
+                            content.push_str(&format!("    \"\"\"{}\"\"\"\n", symbol.doc));
+                        }
+
+                        content.push_str("    pass  # Virtual function\n\n");
+                    } else {
+                        // Function without signature info
+                        content.push_str(&format!("def {}():\n", symbol.name));
+                        if !symbol.doc.is_empty() {
+                            content.push_str(&format!("    \"\"\"{}\"\"\"\n", symbol.doc));
+                        }
+                        content.push_str("    pass  # Virtual function\n\n");
+                    }
                 }
-                content.push('\n');
+                _ => {
+                    // Variables, constants, etc.
+                    content.push_str(&format!(
+                        "{} = None  # Virtual {}\n",
+                        symbol.name, symbol.r#type
+                    ));
+                    if !symbol.doc.is_empty() {
+                        content.push_str(&format!("# {}\n", symbol.doc));
+                    }
+                    content.push('\n');
+                }
             }
         }
     }

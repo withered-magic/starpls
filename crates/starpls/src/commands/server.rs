@@ -42,6 +42,10 @@ pub(crate) struct ServerCommand {
     #[clap(long = "analysis_debounce_interval", default_value_t = 250)]
     pub(crate) analysis_debounce_interval: u64,
 
+    /// Whether to use buildozer to query for targets.
+    #[clap(long = "use_buildozer", default_value_t = false)]
+    pub(crate) use_buildozer: bool,
+
     #[command(flatten)]
     pub(crate) inference_options: InferenceOptions,
 }

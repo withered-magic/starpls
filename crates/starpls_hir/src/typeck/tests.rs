@@ -15,6 +15,9 @@ use starpls_test_util::FixtureType;
 
 use crate::source_map;
 use crate::test_database::TestDatabaseBuilder;
+use crate::typeck::assign_tys;
+use crate::typeck::Ty;
+use crate::typeck::TyKind;
 use crate::Db as _;
 use crate::DisplayWithDb;
 use crate::InferenceOptions;
@@ -2347,4 +2350,12 @@ def f():
             158..163 "\"abc\"": Literal["abc"]
         "#]],
     );
+}
+
+#[test]
+fn test_assign_int_literal_to_bool() {
+    let db = TestDatabaseBuilder::default().build();
+
+    assert!(assign_tys(&db, &TyKind::Int(Some(1)).intern(), &Ty::bool()));
+    assert!(assign_tys(&db, &TyKind::Int(Some(0)).intern(), &Ty::bool()));
 }

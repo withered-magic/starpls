@@ -2043,6 +2043,9 @@ pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
         {
             true
         }
+        // Bazel accepts integers in boolean positions (e.g. `testonly = 1`).
+        // Treat literal 0/1 as assignable to `bool` to match Starlark behavior.
+        (TyKind::Int(Some(value)), TyKind::Bool(_)) if *value == 0 || *value == 1 => true,
         (TyKind::Union(source_tys), TyKind::Union(target_tys)) => {
             source_tys.iter().all(|source_ty| {
                 target_tys

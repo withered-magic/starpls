@@ -1,10 +1,13 @@
 use clap::Args;
 use log::info;
 use lsp_server::Connection;
+use lsp_types::notification::Notification;
+use lsp_types::notification::Progress;
 use lsp_types::CompletionOptions;
 use lsp_types::DeclarationCapability;
 use lsp_types::HoverProviderCapability;
 use lsp_types::OneOf;
+use lsp_types::ProgressParams;
 use lsp_types::ServerCapabilities;
 use lsp_types::SignatureHelpOptions;
 use lsp_types::TextDocumentSyncCapability;
@@ -17,6 +20,8 @@ use crate::make_trigger_characters;
 
 const COMPLETION_TRIGGER_CHARACTERS: &[char] = &['.', '"', '\'', '/', ':', '@'];
 const SIGNATURE_HELP_TRIGGER_CHARACTERS: &[char] = &['(', ',', ')'];
+
+pub(crate) const INITIALIZATION_TOKEN: &str = "Initializing";
 
 #[derive(Args, Default)]
 pub(crate) struct ServerCommand {
@@ -52,6 +57,19 @@ impl ServerCommand {
 
         // Create the transport over stdio.
         let (connection, io_threads) = Connection::stdio();
+        let not = lsp_server::Notification::new(
+            Progress::METHOD.to_string(),
+            ProgressParams {
+                token: lsp_types::NumberOrString::String(INITIALIZATION_TOKEN.to_string()),
+                value: lsp_types::ProgressParamsValue::WorkDone(
+                    lsp_types::WorkDoneProgress::Begin(lsp_types::WorkDoneProgressBegin {
+                        title: "Initializing".to_string(),
+                        ..Default::default()
+                    }),
+                ),
+            },
+        );
+        connection.sender.send(not.into()).unwrap();
 
         // Initialize the connection with server capabilities. For now, this consists
         // only of `TextDocumentSyncKind.Full`.

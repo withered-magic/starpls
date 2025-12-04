@@ -11,6 +11,9 @@ use log::error;
 use log::info;
 use lsp_server::Connection;
 use lsp_server::ReqQueue;
+use lsp_types::notification::Notification;
+use lsp_types::notification::Progress;
+use lsp_types::ProgressParams;
 use parking_lot::RwLock;
 use rustc_hash::FxHashSet;
 use starpls_bazel::build_language::decode_rules;
@@ -28,6 +31,7 @@ use starpls_ide::Change;
 use starpls_ide::InferenceOptions;
 
 use crate::bazel::BazelContext;
+use crate::commands::server::INITIALIZATION_TOKEN;
 use crate::config::ServerConfig;
 use crate::debouncer::AnalysisDebouncer;
 use crate::diagnostics::DiagnosticsManager;
@@ -189,6 +193,23 @@ impl Server {
         if has_bazel_init_err {
             server.send_error_message(BAZEL_INIT_ERR_MESSAGE);
         }
+        let initialization_msg = if has_bazel_init_err {
+            BAZEL_INIT_ERR_MESSAGE
+        } else {
+            "Initialization complete"
+        };
+        let not = lsp_server::Notification::new(
+            Progress::METHOD.to_string(),
+            ProgressParams {
+                token: lsp_types::NumberOrString::String(INITIALIZATION_TOKEN.to_string()),
+                value: lsp_types::ProgressParamsValue::WorkDone(lsp_types::WorkDoneProgress::End(
+                    lsp_types::WorkDoneProgressEnd {
+                        message: Some(initialization_msg.to_string()),
+                    },
+                )),
+            },
+        );
+        server.connection.sender.send(not.into()).unwrap();
 
         Ok(server)
     }

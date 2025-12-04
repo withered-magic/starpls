@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use anyhow::Ok;
 use starpls_ide::CompletionItemKind;
 use starpls_ide::CompletionMode::InsertText;
@@ -285,6 +287,76 @@ pub(crate) fn document_symbols(
                 .collect::<Vec<_>>()
                 .into()
         }))
+}
+
+pub(crate) fn formatting(
+    snapshot: &ServerSnapshot,
+    params: lsp_types::DocumentFormattingParams,
+) -> anyhow::Result<Option<Vec<lsp_types::TextEdit>>> {
+    let path = path_buf_from_url(&params.text_document.uri)?;
+    let file_id = try_opt!(snapshot.document_manager.read().lookup_by_path_buf(&path));
+    let line_index = try_opt!(snapshot.analysis_snapshot.line_index(file_id)?);
+    let default_buildifier_config;
+    let buildifier = match &snapshot.config.buildifier {
+        Some(config) => config,
+        None => {
+            default_buildifier_config = Default::default();
+            &default_buildifier_config
+        }
+    };
+
+    // Read the file's contents.
+    let contents = try_opt!(snapshot.analysis_snapshot.file_contents(file_id)?);
+
+    // Spawn buildifier.
+    let mut command =
+        std::process::Command::new(buildifier.path.as_deref().unwrap_or("buildifier"));
+    command.args(&buildifier.args);
+
+    // Set the `--type` argument based on the file extension.
+    let file_name = path.file_name().and_then(|name| name.to_str());
+    let file_type = match file_name {
+        Some("BUILD") | Some("BUILD.bazel") => "build",
+        Some("WORKSPACE") | Some("WORKSPACE.bazel") => "workspace",
+        Some("MODULE.bazel") => "module",
+        _ => match path.extension().and_then(|ext| ext.to_str()) {
+            Some("bzl") => "bzl",
+            _ => "default",
+        },
+    };
+    command.args(["--type", file_type]);
+
+    command.arg("-");
+    let mut child = command
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()?;
+
+    // Write the file's contents to stdin.
+    let mut stdin = child.stdin.take().unwrap();
+    stdin.write_all(contents.as_bytes())?;
+    drop(stdin);
+
+    // Read the formatted output from stdout.
+    let output = child.wait_with_output()?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    let new_text = String::from_utf8(output.stdout)?;
+
+    // Replace the entire document with the formatted text.
+    let range = lsp_types::Range {
+        start: lsp_types::Position {
+            line: 0,
+            character: 0,
+        },
+        end: lsp_types::Position {
+            line: line_index.len().into(),
+            character: 0,
+        },
+    };
+
+    Ok(Some(vec![lsp_types::TextEdit { range, new_text }]))
 }
 
 fn to_markup_doc(doc: String) -> lsp_types::Documentation {

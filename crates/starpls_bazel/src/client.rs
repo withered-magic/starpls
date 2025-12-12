@@ -39,14 +39,21 @@ pub trait BazelClient: Send + Sync + 'static {
 pub struct BazelCLI {
     executable: PathBuf,
     repo_mappings: RwLock<HashMap<String, HashMap<String, String>>>,
+    use_buildozer: bool,
 }
 
 impl BazelCLI {
     pub fn new(executable: impl AsRef<Path>) -> Self {
         Self {
             executable: executable.as_ref().to_path_buf(),
-            ..Default::default()
+            repo_mappings: Default::default(),
+            use_buildozer: false,
         }
+    }
+
+    pub fn with_buildozer(mut self, use_buildozer: bool) -> Self {
+        self.use_buildozer = use_buildozer;
+        self
     }
 
     fn run_command<I, S>(&self, args: I) -> anyhow::Result<Vec<u8>>
@@ -58,6 +65,22 @@ impl BazelCLI {
         if !output.status.success() {
             bail!(
                 "failed to run Bazel command with exit status {}, stderr={:?}",
+                output.status,
+                str::from_utf8(&output.stderr)?,
+            );
+        }
+        Ok(output.stdout)
+    }
+
+    fn run_buildozer_command<I, S>(&self, args: I) -> anyhow::Result<Vec<u8>>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
+    {
+        let output = Command::new("buildozer").args(args).output()?;
+        if !output.status.success() {
+            bail!(
+                "failed to run buildozer command with exit status {}, stderr={:?}",
                 output.status,
                 str::from_utf8(&output.stderr)?,
             );
@@ -174,12 +197,24 @@ impl BazelClient for BazelCLI {
     }
 
     fn query_all_workspace_targets(&self) -> anyhow::Result<Vec<String>> {
-        let output = self.run_command(["query", "kind('.* rule', ...)"])?;
-        let targets = str::from_utf8(&output)?
-            .lines()
-            .map(|line| line.to_string())
-            .collect();
-        Ok(targets)
+        if self.use_buildozer {
+            // Use buildozer to query targets
+            let output = self.run_buildozer_command(["print label", "//...:*"])?;
+            let targets = str::from_utf8(&output)?
+                .lines()
+                .filter(|line| !line.is_empty())
+                .map(|line| line.to_string())
+                .collect();
+            Ok(targets)
+        } else {
+            // Use bazel query
+            let output = self.run_command(["query", "kind('.* rule', ...)"])?;
+            let targets = str::from_utf8(&output)?
+                .lines()
+                .map(|line| line.to_string())
+                .collect();
+            Ok(targets)
+        }
     }
 
     fn fetch_repo(&self, repo: &str) -> anyhow::Result<()> {
@@ -202,6 +237,7 @@ impl Default for BazelCLI {
         Self {
             executable: "bazel".into(),
             repo_mappings: Default::default(),
+            use_buildozer: false,
         }
     }
 }

@@ -90,7 +90,8 @@ impl Server {
 
         // Determine Bazel configuration.
         let mut has_bazel_init_err = false;
-        let bazel_client = Arc::new(BazelCLI::new(&bazel_path));
+        let bazel_client =
+            Arc::new(BazelCLI::new(&bazel_path).with_buildozer(config.args.use_buildozer));
         let bazel_cx = match BazelContext::new(&*bazel_client) {
             Ok(cx) => cx,
             Err(err) => {

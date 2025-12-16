@@ -427,7 +427,7 @@ impl Literal {
 pub struct Name(SmolStr);
 
 impl Name {
-    pub(crate) fn from_str(name: &str) -> Self {
+    pub fn from_str(name: &str) -> Self {
         Self::new(SmolStr::new(name))
     }
 

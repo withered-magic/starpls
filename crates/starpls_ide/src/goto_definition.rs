@@ -139,6 +139,10 @@ impl<'a> GotoDefinitionHandler<'a> {
     }
 
     fn handle_dot_expr(&self, dot_expr: ast::DotExpr) -> Option<Vec<LocationLink>> {
+        if let Some(location_links) = self.handle_module_extension_proxy_dot_expr(dot_expr.clone()) {
+            return Some(location_links);
+        }
+
         let ty = self.sema.type_of_expr(self.file, &dot_expr.expr()?)?;
 
         if let Some(strukt) = ty.try_as_inline_struct() {
@@ -170,6 +174,167 @@ impl<'a> GotoDefinitionHandler<'a> {
             return self.find_name_in_dict_expr(provider_fields);
         } else {
             None
+        }
+    }
+
+    fn handle_module_extension_proxy_dot_expr(
+        &self,
+        dot_expr: ast::DotExpr,
+    ) -> Option<Vec<LocationLink>> {
+        let tag_name = dot_expr.field()?.name()?.text().to_string();
+        let use_extension_call_expr = self.resolve_use_extension_call_expr(dot_expr.expr()?)?;
+        let (path, extension_name) = self.use_extension_args(&use_extension_call_expr)?;
+
+        let loaded_file = self
+            .sema
+            .db
+            .load_file(
+                &path,
+                self.file.dialect(self.sema.db),
+                self.file.id(self.sema.db),
+            )
+            .ok()??;
+
+        let export_name = Name::from_str(&extension_name);
+        let module_scope = self.sema.scope_for_module(loaded_file);
+        let def = module_scope.resolve_name(&export_name).into_iter().next()?;
+        let module_extension_call = self.resolve_module_extension_call_expr(def, 0)?;
+
+        let tag_classes_dict = module_extension_call
+            .value
+            .arguments()?
+            .arguments()
+            .find_map(|arg| match arg {
+                ast::Argument::Keyword(kwarg) => {
+                    let name = kwarg.name()?.name()?;
+                    (name.text() == "tag_classes").then(|| kwarg.expr())
+                }
+                _ => None,
+            })?
+            .and_then(|expr| match expr {
+                ast::Expression::Dict(dict_expr) => Some(dict_expr),
+                _ => None,
+            })?;
+
+        let key_lit = tag_classes_dict.entries().find_map(|entry| {
+            entry.key().and_then(|key| match key {
+                ast::Expression::Literal(lit) => match lit.kind() {
+                    ast::LiteralKind::String(s)
+                        if s.value().as_deref() == Some(tag_name.as_str()) =>
+                    {
+                        Some(lit)
+                    }
+                    _ => None,
+                },
+                _ => None,
+            })
+        })?;
+
+        let range = key_lit.syntax().text_range();
+        Some(vec![LocationLink::Local {
+            origin_selection_range: Some(self.token.text_range()),
+            target_range: range,
+            target_selection_range: range,
+            target_file_id: module_extension_call.file.id(self.sema.db),
+        }])
+    }
+
+    fn resolve_use_extension_call_expr(&self, expr: ast::Expression) -> Option<ast::CallExpr> {
+        match expr {
+            ast::Expression::Call(call_expr) => self.is_name_call_expr(&call_expr, "use_extension"),
+            ast::Expression::Name(name_ref) => {
+                let name = Name::from_ast_name_ref(name_ref.clone());
+                let scope = self.sema.scope_for_expr(self.file, &ast::Expression::Name(name_ref))?;
+                scope
+                    .resolve_name(&name)
+                    .into_iter()
+                    .find_map(|def| self.use_extension_call_expr_from_def(def))
+            }
+            _ => None,
+        }
+    }
+
+    fn use_extension_call_expr_from_def(&self, def: ScopeDef) -> Option<ast::CallExpr> {
+        let InFile { file, value: ptr } = def.syntax_node_ptr(self.sema.db)?;
+        let syntax = ptr.try_to_node(&self.sema.parse(file).syntax(self.sema.db))?;
+        let assign_stmt = ast::AssignStmt::cast(syntax.parent()?)?;
+        let rhs = assign_stmt.rhs()?;
+        let call_expr = match rhs {
+            ast::Expression::Call(call_expr) => call_expr,
+            _ => return None,
+        };
+        self.is_name_call_expr(&call_expr, "use_extension")
+    }
+
+    fn is_name_call_expr(&self, call_expr: &ast::CallExpr, name: &str) -> Option<ast::CallExpr> {
+        match call_expr.callee()? {
+            ast::Expression::Name(name_ref) if name_ref.name()?.text() == name => {
+                Some(call_expr.clone())
+            }
+            _ => None,
+        }
+    }
+
+    fn use_extension_args(&self, call_expr: &ast::CallExpr) -> Option<(String, String)> {
+        let mut positional = call_expr
+            .arguments()?
+            .arguments()
+            .filter_map(|arg| match arg {
+                ast::Argument::Simple(arg) => Some(arg),
+                _ => None,
+            });
+
+        let path = positional
+            .next()
+            .and_then(|arg| Self::string_literal_value(arg.expr()?))?;
+        let name = positional
+            .next()
+            .and_then(|arg| Self::string_literal_value(arg.expr()?))?;
+        Some((path, name))
+    }
+
+    fn string_literal_value(expr: ast::Expression) -> Option<String> {
+        match expr {
+            ast::Expression::Literal(lit) => match lit.kind() {
+                ast::LiteralKind::String(s) => s.value().as_deref().map(ToString::to_string),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn resolve_module_extension_call_expr(
+        &self,
+        def: ScopeDef,
+        depth: u8,
+    ) -> Option<InFile<ast::CallExpr>> {
+        if depth > 12 {
+            return None;
+        }
+
+        let def = match def {
+            ScopeDef::LoadItem(load_item) => self.sema.def_for_load_item(&load_item)?,
+            other => other,
+        };
+
+        let InFile { file, value: ptr } = def.syntax_node_ptr(self.sema.db)?;
+        let syntax = ptr.try_to_node(&self.sema.parse(file).syntax(self.sema.db))?;
+
+        let rhs = ast::AssignStmt::cast(syntax.parent()?)
+            .and_then(|assign_stmt| assign_stmt.rhs())
+            .or_else(|| ast::Expression::cast(syntax));
+
+        match rhs? {
+            ast::Expression::Call(call_expr) => self
+                .is_name_call_expr(&call_expr, "module_extension")
+                .map(|call_expr| InFile { file, value: call_expr }),
+            ast::Expression::Name(name_ref) => {
+                let name = Name::from_ast_name_ref(name_ref);
+                let module_scope = self.sema.scope_for_module(file);
+                let def = module_scope.resolve_name(&name).into_iter().next()?;
+                self.resolve_module_extension_call_expr(def, depth + 1)
+            }
+            _ => None,
         }
     }
 
@@ -540,6 +705,48 @@ info = GoInfo(foo = 123)
 info.fo$0o
 "#,
         )
+    }
+
+    #[test]
+    fn test_bzlmod_extension_tag_class() {
+        let (mut analysis, loader) = Analysis::new_for_test();
+        let mut fixture = Fixture::new(&mut analysis.db);
+
+        fixture.add_file_with_options(
+            &mut analysis.db,
+            "MODULE.bazel",
+            r#"
+go_deps = use_extension("@bazel_gazelle//:extensions.bzl", "go_deps")
+go_deps.con$0fig(check_direct_dependencies = "error")
+"#,
+            Dialect::Bazel,
+            Some(Bazel {
+                api_context: APIContext::Module,
+                is_external: false,
+            }),
+        );
+
+        fixture.add_file_with_options(
+            &mut analysis.db,
+            "@bazel_gazelle//:extensions.bzl",
+            r#"
+go_deps = module_extension(
+    _go_deps_impl,
+    tag_classes = {
+        "config": _config_tag,
+        #^^^^^^^
+    },
+)
+"#,
+            Dialect::Bazel,
+            Some(Bazel {
+                api_context: APIContext::Bzl,
+                is_external: true,
+            }),
+        );
+
+        loader.add_files_from_fixture(&analysis.db, &fixture);
+        check_goto_definition_from_fixture(analysis, fixture, false);
     }
 
     #[test]

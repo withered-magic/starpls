@@ -62,7 +62,13 @@ This builds the executable and copies it to `<repository_root>/editors/code/bin/
 
 Install the [zed-starlark](https://github.com/zaucy/zed-starlark) extension.
 
-### Neovim via nvim-lspconfig
+### Neovim
+
+#### via mason.nvim and mason-lspconfig
+
+Just run `MasonInstall starpls` in Neovim to install starpls server instead of installing it with `brew` as mentioned above. Configuration for server is already done with a recent [mason-lspconfig](https://github.com/williamboman/mason-lspconfig.nvim), so you can just enter a Bazel file inside Neovim and `starpls` just be attached to it.
+
+#### via nvim-lspconfig
 Make sure you've installed and configured [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig) in a way that works for you.
 
 Install using homebrew as described above, then do the following in your init.lua:

@@ -317,6 +317,10 @@ impl DefaultFileLoader {
         }
         .join(label.target());
 
+        // Follow symlinks, so that ctrl+click works correctly with vendored rules.
+        // Without this, ctrl+click opens an editor with path in ~/.cache/bazel, which path contains a symlink to the vendored rule.
+        let resolved_path = resolved_path.canonicalize().unwrap_or(resolved_path);
+
         Ok(Some(ResolvedLabel {
             resolved_path,
             canonical_repo: canonical_repo_res,

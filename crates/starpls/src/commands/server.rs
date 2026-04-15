@@ -24,6 +24,10 @@ pub(crate) struct ServerCommand {
     #[clap(long = "bazel_path")]
     pub(crate) bazel_path: Option<String>,
 
+    /// Enable document formatting support via buildifier.
+    #[clap(long = "enable_formatting", default_value_t = false)]
+    pub(crate) enable_formatting: bool,
+
     /// Enable completions for labels for targets in the current workspace.
     #[clap(
         long = "experimental_enable_label_completions",
@@ -62,6 +66,7 @@ impl ServerCommand {
             }),
             declaration_provider: Some(DeclarationCapability::Simple(true)),
             definition_provider: Some(OneOf::Left(true)),
+            document_formatting_provider: self.enable_formatting.then_some(OneOf::Left(true)),
             document_symbol_provider: Some(OneOf::Left(true)),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
             references_provider: Some(OneOf::Left(true)),

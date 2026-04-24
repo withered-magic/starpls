@@ -127,6 +127,33 @@
       }
     },
     {
+      "name": "flag_alias",
+      "doc": "Maps a command-line flag --foo to a Starlark flag --@repo//defs:foo. Bazel translates all instances of `bazel build //target --foo` to `bazel build //target --@repo//defs:foo`.",
+      "callable": {
+        "params": [
+          {
+            "name": "name",
+            "type": "string",
+            "doc": "The name of the flag.",
+            "default_value": "",
+            "is_mandatory": true,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          },
+          {
+            "name": "starlark_flag",
+            "type": "string",
+            "doc": "The label of the Starlark flag to alias to.",
+            "default_value": "",
+            "is_mandatory": true,
+            "is_star_arg": false,
+            "is_star_star_arg": false
+          }
+        ],
+        "return_type": "None"
+      }
+    },
+    {
       "name": "git_override",
       "doc": "Specifies that a dependency should come from a certain commit of a Git repository. This directive only takes effect in the root module; in other words, if a module is used as a dependency by others, its own overrides are ignored.",
       "callable": {

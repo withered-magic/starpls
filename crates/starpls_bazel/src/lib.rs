@@ -134,6 +134,13 @@ pub enum APIContext {
     Vendor,
 }
 
+pub fn is_build_file_name(file_name: &str) -> bool {
+    file_name == "BUILD"
+        || file_name.starts_with("BUILD.")
+        || file_name.ends_with(".BUILD")
+        || file_name.ends_with(".BUILD.bazel")
+}
+
 pub fn load_builtins(path: impl AsRef<Path>) -> anyhow::Result<Builtins> {
     let data = fs::read(path)?;
     decode_builtins(&data)
@@ -164,7 +171,7 @@ pub fn resolve_workspace(from: impl AsRef<Path>) -> io::Result<Option<(PathBuf, 
                         package.unwrap_or_else(|| ancestor.to_path_buf()),
                     )));
                 }
-                Some("BUILD" | "BUILD.bazel") => {
+                Some(file_name) if is_build_file_name(file_name) => {
                     package.get_or_insert(ancestor.to_path_buf());
                 }
                 _ => {}
@@ -173,4 +180,46 @@ pub fn resolve_workspace(from: impl AsRef<Path>) -> io::Result<Option<(PathBuf, 
     }
 
     Ok(None)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::io;
+
+    use super::is_build_file_name;
+    use super::resolve_workspace;
+
+    #[test]
+    fn build_file_names() {
+        assert!(is_build_file_name("BUILD"));
+        assert!(is_build_file_name("BUILD.bazel"));
+        assert!(is_build_file_name("BUILD.foo"));
+        assert!(is_build_file_name("foo.BUILD"));
+        assert!(is_build_file_name("foo.BUILD.bazel"));
+
+        assert!(!is_build_file_name("fooBUILD"));
+        assert!(!is_build_file_name("BUILDING"));
+        assert!(!is_build_file_name("WORKSPACE"));
+    }
+
+    #[test]
+    fn resolve_workspace_uses_build_file_name_variants() -> io::Result<()> {
+        let temp_dir =
+            std::env::temp_dir().join(format!("starpls-resolve-workspace-{}", std::process::id()));
+        let workspace = temp_dir.join("workspace");
+        let package = workspace.join("pkg");
+        let source = package.join("source.bzl");
+
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&package)?;
+        fs::write(workspace.join("MODULE.bazel"), "")?;
+        fs::write(package.join("BUILD.foo"), "")?;
+        fs::write(&source, "")?;
+
+        assert_eq!(resolve_workspace(&source)?, Some((workspace, package)));
+
+        fs::remove_dir_all(&temp_dir)?;
+        Ok(())
+    }
 }

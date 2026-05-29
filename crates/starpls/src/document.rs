@@ -413,13 +413,7 @@ impl FileLoader for DefaultFileLoader {
             }
 
             let parent = try_opt!(resolved_label.resolved_path.parent());
-            let build_file = try_opt!(fs::read_dir(parent)
-                .into_iter()
-                .flat_map(|entries| entries.into_iter())
-                .find_map(|entry| match entry.ok()?.file_name().to_str()? {
-                    file_name @ ("BUILD" | "BUILD.bazel") => Some(file_name.to_string()),
-                    _ => None,
-                }));
+            let build_file = try_opt!(find_build_file(parent));
             let path = parent.join(build_file);
 
             // If we've already interned this file, then simply return the file id.
@@ -656,10 +650,7 @@ impl FileLoader for DefaultFileLoader {
     fn resolve_build_file(&self, file_id: FileId) -> Option<String> {
         let path = self.interner.lookup_by_file_id(file_id);
         let path = path.strip_prefix(&self.workspace).ok()?;
-        if matches!(
-            &*path.file_name()?.to_string_lossy(),
-            "BUILD" | "BUILD.bazel"
-        ) {
+        if starpls_bazel::is_build_file_name(&path.file_name()?.to_string_lossy()) {
             Some(path.parent()?.to_string_lossy().to_string())
         } else {
             None
@@ -733,6 +724,28 @@ fn read_dir_targets(path: impl AsRef<Path>) -> anyhow::Result<Vec<LoadItemCandid
         .collect())
 }
 
+fn find_build_file(path: impl AsRef<Path>) -> Option<String> {
+    fs::read_dir(path)
+        .ok()?
+        .flatten()
+        .filter_map(|entry| {
+            let file_name = entry.file_name();
+            let file_name = file_name.to_str()?;
+            Some((build_file_name_priority(file_name)?, file_name.to_string()))
+        })
+        .min_by_key(|(priority, _)| *priority)
+        .map(|(_, file_name)| file_name)
+}
+
+fn build_file_name_priority(file_name: &str) -> Option<u8> {
+    match file_name {
+        "BUILD.bazel" => Some(0),
+        "BUILD" => Some(1),
+        file_name if starpls_bazel::is_build_file_name(file_name) => Some(2),
+        _ => None,
+    }
+}
+
 fn strip_slashes_or_pop_dir(input: &str) -> Option<(PathBuf, bool)> {
     Some(if input.ends_with('/') {
         (PathBuf::from(input.trim_end_matches('/')), true)
@@ -752,7 +765,6 @@ pub(crate) fn dialect_and_api_context_for_workspace_path(
     let path = path.as_ref();
     let basename = path.file_name().and_then(|name| name.to_str())?;
     Some(match basename {
-        "BUILD" | "BUILD.bazel" => (Dialect::Bazel, Some(APIContext::Build)),
         "REPO.bazel" => (Dialect::Bazel, Some(APIContext::Repo)),
         "VENDOR.bazel" => (Dialect::Bazel, Some(APIContext::Vendor)),
         "MODULE.bazel" => (Dialect::Bazel, Some(APIContext::Module)),
@@ -760,7 +772,7 @@ pub(crate) fn dialect_and_api_context_for_workspace_path(
         "WORKSPACE" | "WORKSPACE.bazel" | "WORKSPACE.bzlmod" => {
             (Dialect::Bazel, Some(APIContext::Workspace))
         }
-        path if path.ends_with(".BUILD.bazel") || path.ends_with(".BUILD") => {
+        path if starpls_bazel::is_build_file_name(path) => {
             (Dialect::Bazel, Some(APIContext::Build))
         }
         path if path.ends_with(".cquery") || path.ends_with(".query.bzl") => {
@@ -777,4 +789,59 @@ pub(crate) fn dialect_and_api_context_for_workspace_path(
             }
         },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_file_name_priorities() {
+        assert_eq!(build_file_name_priority("BUILD.bazel"), Some(0));
+        assert_eq!(build_file_name_priority("BUILD"), Some(1));
+        assert_eq!(build_file_name_priority("BUILD.foo"), Some(2));
+        assert_eq!(build_file_name_priority("foo.BUILD"), Some(2));
+        assert_eq!(build_file_name_priority("foo.BUILD.bazel"), Some(2));
+        assert_eq!(build_file_name_priority("fooBUILD"), None);
+    }
+
+    #[test]
+    fn build_variants_are_bazel_build_files() {
+        let workspace = Path::new("/workspace");
+
+        for path in [
+            "/workspace/pkg/BUILD",
+            "/workspace/pkg/BUILD.bazel",
+            "/workspace/pkg/BUILD.foo",
+            "/workspace/pkg/foo.BUILD",
+            "/workspace/pkg/foo.BUILD.bazel",
+        ] {
+            assert_eq!(
+                dialect_and_api_context_for_workspace_path(workspace, path),
+                Some((Dialect::Bazel, Some(APIContext::Build))),
+                "{path}",
+            );
+        }
+    }
+
+    #[test]
+    fn non_build_names_keep_existing_classification() {
+        let workspace = Path::new("/workspace");
+
+        assert_eq!(
+            dialect_and_api_context_for_workspace_path(workspace, "/workspace/pkg/BUILDING"),
+            Some((Dialect::Standard, None))
+        );
+        assert_eq!(
+            dialect_and_api_context_for_workspace_path(workspace, "/workspace/pkg/foo.bzl"),
+            Some((Dialect::Bazel, Some(APIContext::Bzl)))
+        );
+        assert_eq!(
+            dialect_and_api_context_for_workspace_path(
+                workspace,
+                "/workspace/pkg/foo.MODULE.bazel"
+            ),
+            Some((Dialect::Bazel, Some(APIContext::Module)))
+        );
+    }
 }

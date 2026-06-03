@@ -106,7 +106,7 @@
           },
           {
             "name": "repo_name",
-            "type": "string",
+            "type": "string; or None",
             "doc": "The name of the external repo representing this dependency. This is by default the name of the module.",
             "default_value": "''",
             "is_mandatory": false,

@@ -203,6 +203,23 @@ fn check_infer_with_options(input: &str, expect: Expect, options: InferenceOptio
 }
 
 #[test]
+fn test_module_bazel_flag_alias_builtin() {
+    let mut db = TestDatabaseBuilder::default().build();
+    let file = db.create_file(
+        FileId(0),
+        Dialect::Bazel,
+        Some(FileInfo::Bazel {
+            api_context: APIContext::Module,
+            is_external: false,
+        }),
+        r#"flag_alias(name = "foo", starlark_flag = "//defs:foo")"#.to_string(),
+    );
+
+    let diagnostics = db.gcx.with_tcx(&db, |tcx| tcx.diagnostics_for_file(file));
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+}
+
+#[test]
 fn test_infer_basic_exprs() {
     check_infer(
         r#"None

@@ -13,13 +13,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@4f1f4aec02e41874fa0262ea8ff5172d7978ad1e
       - name: Prepare for build
         run: |
           bazel/setup-ci.sh
           mkdir -p editors/code/dist
-        env:
-          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+        # env:
+        #   BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: Build
         run: bazel build //...
       - name: Run tests
@@ -28,17 +28,17 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@4f1f4aec02e41874fa0262ea8ff5172d7978ad1e
       - name: Prepare for build
         run: |
           echo 'import %workspace%/bazel/remote-cache.bazelrc' >>.bazelrc
-          echo "build --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >>.bazelrc
+          # echo "build --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >>.bazelrc
           echo "startup --output_user_root=C:/b" >>.bazelrc
           echo "startup --windows_enable_symlinks" >>.bazelrc
           mkdir -p editors/code/dist
         shell: bash
-        env:
-          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+        # env:
+        #   BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: Build
         run: bazel build //crates/...
       - name: Run tests

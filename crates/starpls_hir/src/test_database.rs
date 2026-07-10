@@ -2,8 +2,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
+use dashmap::mapref::entry::Entry;
 use rustc_hash::FxHashMap;
 use starpls_bazel::APIContext;
 use starpls_bazel::Builtins;
@@ -14,9 +14,9 @@ use starpls_common::LoadItemCandidate;
 use starpls_common::ResolvedPath;
 use starpls_syntax::TextRange;
 use starpls_syntax::TextSize;
-use starpls_test_util::make_test_builtins;
 use starpls_test_util::FixtureFile;
 use starpls_test_util::FixtureType;
+use starpls_test_util::make_test_builtins;
 
 use crate::BuiltinDefs;
 use crate::Db;

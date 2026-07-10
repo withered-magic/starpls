@@ -6,10 +6,10 @@ pub use starpls_parser::SyntaxKind;
 pub use starpls_parser::T;
 
 pub use crate::ast::Module;
-pub use crate::parser::line_index;
-pub use crate::parser::parse_module;
 pub use crate::parser::ParseTree;
 pub use crate::parser::SyntaxError;
+pub use crate::parser::line_index;
+pub use crate::parser::parse_module;
 
 pub mod ast;
 mod parser;

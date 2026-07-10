@@ -4,16 +4,16 @@ use starpls_common::Db as _;
 use starpls_hir::DisplayWithDb;
 use starpls_hir::Semantics;
 use starpls_hir::Type;
+use starpls_syntax::SyntaxKind::*;
+use starpls_syntax::T;
+use starpls_syntax::TextRange;
 use starpls_syntax::ast::AstNode;
 use starpls_syntax::ast::{self};
-use starpls_syntax::SyntaxKind::*;
-use starpls_syntax::TextRange;
-use starpls_syntax::T;
 
-use crate::util::pick_best_token;
-use crate::util::unindent_doc;
 use crate::Database;
 use crate::FilePosition;
+use crate::util::pick_best_token;
+use crate::util::unindent_doc;
 
 mod docs;
 
@@ -152,11 +152,11 @@ pub(crate) fn hover(db: &Database, FilePosition { file_id, pos }: FilePosition) 
                 ty.display(db),
             );
 
-            if let Some(doc) = param.doc(db) {
-                if !doc.is_empty() {
-                    text.push_str(&unindent_doc(&doc));
-                    text.push('\n');
-                }
+            if let Some(doc) = param.doc(db)
+                && !doc.is_empty()
+            {
+                text.push_str(&unindent_doc(&doc));
+                text.push('\n');
             }
             return Some(text.into());
         }
@@ -213,8 +213,8 @@ fn format_for_name(db: &Database, name: &str, ty: &Type) -> String {
 
 #[cfg(test)]
 mod tests {
-    use expect_test::expect;
     use expect_test::Expect;
+    use expect_test::expect;
 
     use crate::Analysis;
     use crate::FilePosition;

@@ -3,9 +3,9 @@ use std::fmt::Write;
 use std::marker::PhantomData;
 use std::str::Chars;
 
+pub use rowan::Direction;
 pub use rowan::ast::AstNode;
 pub use rowan::ast::AstPtr;
-pub use rowan::Direction;
 
 use crate::StarlarkLanguage;
 use crate::SyntaxKind::*;
@@ -13,8 +13,8 @@ use crate::SyntaxKind::{self};
 use crate::SyntaxNode;
 use crate::SyntaxNodeChildren;
 use crate::SyntaxToken;
-use crate::TextSize;
 use crate::T;
+use crate::TextSize;
 
 #[macro_export]
 macro_rules! match_ast {

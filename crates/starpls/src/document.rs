@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::hash::BuildHasherDefault;
 use std::mem;
+use std::path::MAIN_SEPARATOR;
 use std::path::Path;
 use std::path::PathBuf;
-use std::path::MAIN_SEPARATOR;
 use std::sync::Arc;
 
 use anyhow::anyhow;
@@ -14,12 +14,12 @@ use dashmap::DashMap;
 use indexmap::IndexSet;
 use parking_lot::RwLock;
 use rustc_hash::FxHasher;
-use starpls_bazel::client::BazelClient;
-use starpls_bazel::label::PartialParse;
-use starpls_bazel::label::RepoKind;
 use starpls_bazel::APIContext;
 use starpls_bazel::Label;
 use starpls_bazel::ParseError;
+use starpls_bazel::client::BazelClient;
+use starpls_bazel::label::PartialParse;
+use starpls_bazel::label::RepoKind;
 use starpls_bazel::{self};
 use starpls_common::Dialect;
 use starpls_common::FileId;
@@ -336,21 +336,20 @@ impl DefaultFileLoader {
                 let contents = match fs::read_to_string(&path) {
                     Ok(contents) => contents,
                     Err(err) => {
-                        if let Some(canonical_repo) = fetch_repo_on_err {
-                            if !self
+                        if let Some(canonical_repo) = fetch_repo_on_err
+                            && !self
                                 .external_output_base
                                 .join(&canonical_repo)
                                 .try_exists()
                                 .ok()
                                 .unwrap_or_default()
-                            {
-                                let _ = self.fetch_repo_sender.send(
-                                    Task::FetchExternalRepoRequest(FetchExternalRepoRequest {
-                                        file_id: from,
-                                        repo: canonical_repo,
-                                    }),
-                                );
-                            }
+                        {
+                            let _ = self.fetch_repo_sender.send(Task::FetchExternalRepoRequest(
+                                FetchExternalRepoRequest {
+                                    file_id: from,
+                                    repo: canonical_repo,
+                                },
+                            ));
                         }
                         return Err(err.into());
                     }
@@ -363,7 +362,7 @@ impl DefaultFileLoader {
         Ok((file_id, contents))
     }
 
-    fn repo_for_path<'a>(&'a self, path: &'a Path) -> Option<&str> {
+    fn repo_for_path<'a>(&'a self, path: &'a Path) -> Option<&'a str> {
         match path.strip_prefix(&self.external_output_base) {
             Ok(stripped) => stripped
                 .components()
@@ -413,13 +412,15 @@ impl FileLoader for DefaultFileLoader {
             }
 
             let parent = try_opt!(resolved_label.resolved_path.parent());
-            let build_file = try_opt!(fs::read_dir(parent)
-                .into_iter()
-                .flat_map(|entries| entries.into_iter())
-                .find_map(|entry| match entry.ok()?.file_name().to_str()? {
-                    file_name @ ("BUILD" | "BUILD.bazel") => Some(file_name.to_string()),
-                    _ => None,
-                }));
+            let build_file = try_opt!(
+                fs::read_dir(parent)
+                    .into_iter()
+                    .flat_map(|entries| entries.into_iter())
+                    .find_map(|entry| match entry.ok()?.file_name().to_str()? {
+                        file_name @ ("BUILD" | "BUILD.bazel") => Some(file_name.to_string()),
+                        _ => None,
+                    })
+            );
             let path = parent.join(build_file);
 
             // If we've already interned this file, then simply return the file id.
@@ -519,16 +520,15 @@ impl FileLoader for DefaultFileLoader {
                 for entry in readdir {
                     let entry = entry?;
                     let file_type = entry.file_type()?;
-                    if file_type.is_file() {
-                        if let Some(name) = entry.file_name().to_str() {
-                            if name.ends_with(".star") || name.ends_with(".sky") {
-                                candidates.push(LoadItemCandidate {
-                                    kind: LoadItemCandidateKind::File,
-                                    path: name.to_string(),
-                                    replace_trailing_slash: false,
-                                })
-                            }
-                        }
+                    if file_type.is_file()
+                        && let Some(name) = entry.file_name().to_str()
+                        && (name.ends_with(".star") || name.ends_with(".sky"))
+                    {
+                        candidates.push(LoadItemCandidate {
+                            kind: LoadItemCandidateKind::File,
+                            path: name.to_string(),
+                            replace_trailing_slash: false,
+                        })
                     }
                 }
 
@@ -585,9 +585,10 @@ impl FileLoader for DefaultFileLoader {
                     RepoKind::Apparent | RepoKind::Canonical => {
                         root = if self.bzlmod_enabled {
                             let from_repo = try_opt!(self.repo_for_path(&from_path));
-                            let canonical_repo = try_opt!(self
-                                .bazel_client
-                                .resolve_repo_from_mapping(label.repo(), from_repo)?);
+                            let canonical_repo = try_opt!(
+                                self.bazel_client
+                                    .resolve_repo_from_mapping(label.repo(), from_repo)?
+                            );
                             if canonical_repo.is_empty() {
                                 self.workspace.clone()
                             } else {

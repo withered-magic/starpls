@@ -5,19 +5,19 @@ use starpls_hir::LoadItem;
 use starpls_hir::Name;
 use starpls_hir::ScopeDef;
 use starpls_hir::Semantics;
+use starpls_syntax::SyntaxToken;
+use starpls_syntax::T;
+use starpls_syntax::TextRange;
 use starpls_syntax::ast::AstNode;
 use starpls_syntax::ast::{self};
 use starpls_syntax::match_ast;
-use starpls_syntax::SyntaxToken;
-use starpls_syntax::TextRange;
-use starpls_syntax::T;
 
-use crate::util::pick_best_token;
 use crate::Database;
 use crate::FilePosition;
 use crate::LocationLink;
 use crate::ResolvedPath;
 use crate::TextSize;
+use crate::util::pick_best_token;
 
 struct GotoDefinitionHandler<'a> {
     sema: Semantics<'a>,
@@ -167,7 +167,7 @@ impl<'a> GotoDefinitionHandler<'a> {
         } else if let Some(provider_fields) = ty.provider_fields_source(self.sema.db) {
             // Check for provider field definition. This only handles the case where the provider
             // fields are specified in a dictionary literal.
-            return self.find_name_in_dict_expr(provider_fields);
+            self.find_name_in_dict_expr(provider_fields)
         } else {
             None
         }

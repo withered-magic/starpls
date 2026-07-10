@@ -2,21 +2,21 @@ use std::fmt::Display;
 use std::fmt::Write;
 use std::fmt::{self};
 
+use crate::Db;
+use crate::Name;
+use crate::Ty;
+use crate::Type;
 use crate::def::Param as HirDefParam;
 use crate::module;
-use crate::typeck::builtins::BuiltinFunctionParam;
-use crate::typeck::intrinsics::IntrinsicFunctionParam;
-use crate::typeck::resolve_type_ref;
-use crate::typeck::with_tcx;
 use crate::typeck::Protocol;
 use crate::typeck::RuleKind;
 use crate::typeck::Tuple;
 use crate::typeck::TyKind;
 use crate::typeck::TypeRef;
-use crate::Db;
-use crate::Name;
-use crate::Ty;
-use crate::Type;
+use crate::typeck::builtins::BuiltinFunctionParam;
+use crate::typeck::intrinsics::IntrinsicFunctionParam;
+use crate::typeck::resolve_type_ref;
+use crate::typeck::with_tcx;
 
 pub trait DisplayWithDb {
     fn fmt(&self, db: &dyn Db, f: &mut fmt::Formatter<'_>) -> fmt::Result;
@@ -54,7 +54,7 @@ pub struct DisplayWithDbWrapper<'a, T: DisplayWithDb + ?Sized> {
     alt: bool,
 }
 
-impl<'a, T: DisplayWithDb> DisplayWithDbWrapper<'a, T> {
+impl<T: DisplayWithDb> DisplayWithDbWrapper<'_, T> {
     pub fn alt(self) -> Self {
         Self {
             db: self.db,
@@ -64,7 +64,7 @@ impl<'a, T: DisplayWithDb> DisplayWithDbWrapper<'a, T> {
     }
 }
 
-impl<'a, T: DisplayWithDb> fmt::Display for DisplayWithDbWrapper<'a, T> {
+impl<T: DisplayWithDb> fmt::Display for DisplayWithDbWrapper<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.alt {
             self.item.fmt_alt(self.db, f)

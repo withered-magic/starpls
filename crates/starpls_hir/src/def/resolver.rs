@@ -7,7 +7,10 @@ use starpls_common::File;
 use starpls_syntax::TextRange;
 use starpls_syntax::TextSize;
 
-use crate::def::scope::module_scopes;
+use crate::Db;
+use crate::Name;
+use crate::def::ExprId;
+use crate::def::ModuleSourceMap;
 use crate::def::scope::ExecutionScopeId;
 use crate::def::scope::FunctionDef;
 use crate::def::scope::Scope;
@@ -16,14 +19,11 @@ use crate::def::scope::ScopeHirId;
 use crate::def::scope::ScopeId;
 use crate::def::scope::Scopes;
 use crate::def::scope::VariableDef;
-use crate::def::ExprId;
-use crate::def::ModuleSourceMap;
+use crate::def::scope::module_scopes;
 use crate::source_map;
-use crate::typeck::builtins::builtin_globals;
 use crate::typeck::builtins::APIGlobals;
+use crate::typeck::builtins::builtin_globals;
 use crate::typeck::intrinsics::intrinsic_functions;
-use crate::Db;
-use crate::Name;
 
 /// Resolves things like variables, function definition, etc. For now this is implemented as a simple list
 /// of "module" scopes that hold variable declarations, but will need to be updated later to support other
@@ -97,7 +97,7 @@ impl<'a> Resolver<'a> {
     pub(crate) fn resolve_name(
         &'a self,
         name: &'a Name,
-    ) -> Option<(ExecutionScopeId, impl Iterator<Item = SymbolDef<'a>> + '_)> {
+    ) -> Option<(ExecutionScopeId, impl Iterator<Item = SymbolDef<'a>> + 'a)> {
         let mut defs = self
             .scopes_with_id()
             .filter_map(move |(scope_id, scope)| {
@@ -193,27 +193,25 @@ impl<'a> Resolver<'a> {
         };
 
         // If this is a BUILD file, add names from the prelude.
-        if api_context == APIContext::Build && self.file.is_external(self.db) == Some(false) {
-            if let Some(prelude_file) = self
+        if api_context == APIContext::Build
+            && self.file.is_external(self.db) == Some(false)
+            && let Some(prelude_file) = self
                 .db
                 .get_bazel_prelude_file()
                 .and_then(|prelude_file_id| self.db.get_file(prelude_file_id))
-            {
-                let prelude_resolver = Resolver::new_for_module(self.db, prelude_file);
-                names.extend(
-                    prelude_resolver
-                        .module_defs(false)
-                        .into_iter()
-                        .filter(|(_, def)| {
-                            matches!(
-                                def,
-                                ScopeDef::Variable(_)
-                                    | ScopeDef::Function(_)
-                                    | ScopeDef::LoadItem(_)
-                            )
-                        }),
-                );
-            }
+        {
+            let prelude_resolver = Resolver::new_for_module(self.db, prelude_file);
+            names.extend(
+                prelude_resolver
+                    .module_defs(false)
+                    .into_iter()
+                    .filter(|(_, def)| {
+                        matches!(
+                            def,
+                            ScopeDef::Variable(_) | ScopeDef::Function(_) | ScopeDef::LoadItem(_)
+                        )
+                    }),
+            );
         }
 
         // Add names from builtins, taking the current Bazel API context into account.
@@ -258,10 +256,10 @@ impl<'a> Resolver<'a> {
                 if (filter_unexported && name.as_str().starts_with('_')) || name.is_missing() {
                     continue;
                 }
-                if let Entry::Vacant(entry) = names.entry(name.clone()) {
-                    if let Some(def) = def.first().cloned() {
-                        entry.insert(def);
-                    }
+                if let Entry::Vacant(entry) = names.entry(name.clone())
+                    && let Some(def) = def.first().cloned()
+                {
+                    entry.insert(def);
                 }
             }
         }

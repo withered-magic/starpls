@@ -4,19 +4,19 @@ use id_arena::Id;
 use rustc_hash::FxHashMap;
 use starpls_common::File;
 
-use crate::def::scope::module_scopes;
-use crate::def::scope::ExecutionScopeId;
-use crate::def::scope::ScopeHirId;
-use crate::def::scope::Scopes;
-use crate::def::CompClause;
-use crate::def::Expr;
-use crate::def::Stmt;
-use crate::def::StmtId;
-use crate::lower;
 use crate::Db;
 use crate::ExprId;
 use crate::Module;
 use crate::Name;
+use crate::def::CompClause;
+use crate::def::Expr;
+use crate::def::Stmt;
+use crate::def::StmtId;
+use crate::def::scope::ExecutionScopeId;
+use crate::def::scope::ScopeHirId;
+use crate::def::scope::Scopes;
+use crate::def::scope::module_scopes;
+use crate::lower;
 
 #[allow(unused)]
 pub(crate) mod pretty;
@@ -247,7 +247,7 @@ impl<'a> CodeFlowLoweringContext<'a> {
 
     fn lower_assignment_target(&mut self, expr: ExprId, source: ExprId) {
         match &self.module[expr] {
-            Expr::Name { ref name } => {
+            Expr::Name { name } => {
                 self.curr_node = self.new_flow_node(FlowNode::Assign {
                     expr,
                     name: name.clone(),
@@ -356,8 +356,8 @@ pub(crate) fn code_flow_graph(db: &dyn Db, file: File) -> CodeFlowGraphResult {
 
 #[cfg(test)]
 mod tests {
-    use expect_test::expect;
     use expect_test::Expect;
+    use expect_test::expect;
     use starpls_common::Dialect;
     use starpls_common::FileId;
 

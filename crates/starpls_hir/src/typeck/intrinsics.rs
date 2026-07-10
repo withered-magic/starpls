@@ -3,6 +3,8 @@ use std::sync::Arc;
 use rustc_hash::FxHashMap;
 use smallvec::smallvec;
 
+use crate::Db;
+use crate::Name;
 use crate::def::Argument;
 use crate::def::InternedString;
 use crate::typeck::Binders;
@@ -12,8 +14,6 @@ use crate::typeck::Tuple as TupleVariants;
 use crate::typeck::Ty;
 use crate::typeck::TyKind;
 use crate::typeck::{self};
-use crate::Db;
-use crate::Name;
 
 #[salsa::tracked]
 pub(crate) struct Intrinsics {
@@ -238,10 +238,30 @@ pub(crate) fn intrinsic_functions(db: &dyn Db) -> IntrinsicFunctions {
     };
 
     // TODO(withered-magic): SupportsAbs[T] -> T
-    add_function("abs", "`abs(x)` takes either an integer or a float, and returns the absolute value of that number (a non-negative number with the same magnitude).", vec![positional(Any)], Any);
-    add_function("any", "`any(x)` returns `True` if any element of the iterable sequence x is true. If the iterable is empty, it returns `False`.", vec![positional(Any)], non_literal_bool());
-    add_function("all", "`all(x)` returns `False` if any element of the iterable sequence x is false. If the iterable is empty, it returns `True`.", vec![positional(Any)], non_literal_bool());
-    add_function("bool", "`bool(x)` interprets `x` as a Boolean value---`True` or `False`. With no argument, `bool()` returns `False`.", vec![positional_opt(Any)], non_literal_bool());
+    add_function(
+        "abs",
+        "`abs(x)` takes either an integer or a float, and returns the absolute value of that number (a non-negative number with the same magnitude).",
+        vec![positional(Any)],
+        Any,
+    );
+    add_function(
+        "any",
+        "`any(x)` returns `True` if any element of the iterable sequence x is true. If the iterable is empty, it returns `False`.",
+        vec![positional(Any)],
+        non_literal_bool(),
+    );
+    add_function(
+        "all",
+        "`all(x)` returns `False` if any element of the iterable sequence x is false. If the iterable is empty, it returns `True`.",
+        vec![positional(Any)],
+        non_literal_bool(),
+    );
+    add_function(
+        "bool",
+        "`bool(x)` interprets `x` as a Boolean value---`True` or `False`. With no argument, `bool()` returns `False`.",
+        vec![positional_opt(Any)],
+        non_literal_bool(),
+    );
     // TODO(withered-magic): SupportsBytes[T] -> T
     add_function(
         "bytes",

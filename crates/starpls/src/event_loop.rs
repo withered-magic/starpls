@@ -88,10 +88,10 @@ pub fn process_connection(
 impl Server {
     fn run(mut self) -> anyhow::Result<()> {
         while let Some(event) = self.next_event() {
-            if let Event::Message(lsp_server::Message::Request(ref req)) = event {
-                if self.connection.handle_shutdown(req)? {
-                    return Ok(());
-                }
+            if let Event::Message(lsp_server::Message::Request(ref req)) = event
+                && self.connection.handle_shutdown(req)?
+            {
+                return Ok(());
             }
 
             self.handle_event(event)?;

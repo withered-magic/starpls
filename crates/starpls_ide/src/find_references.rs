@@ -4,16 +4,16 @@ use starpls_common::File;
 use starpls_hir::Name;
 use starpls_hir::ScopeDef;
 use starpls_hir::Semantics;
+use starpls_syntax::T;
+use starpls_syntax::TextSize;
 use starpls_syntax::ast::AstNode;
 use starpls_syntax::ast::{self};
 use starpls_syntax::match_ast;
-use starpls_syntax::TextSize;
-use starpls_syntax::T;
 
-use crate::util::pick_best_token;
 use crate::Database;
 use crate::FilePosition;
 use crate::Location;
+use crate::util::pick_best_token;
 
 struct FindReferencesHandler<'a> {
     sema: &'a Semantics<'a>,
@@ -23,7 +23,7 @@ struct FindReferencesHandler<'a> {
     locations: Vec<Location>,
 }
 
-impl<'a> FindReferencesHandler<'a> {
+impl FindReferencesHandler<'_> {
     fn handle(mut self) -> Vec<Location> {
         let name = self.name.clone();
         let finder = Finder::new(name.as_str());
@@ -118,7 +118,7 @@ pub(crate) fn find_references(
             .into_iter()
             .flat_map(|def| match &def {
                 ScopeDef::Variable(_) => Some(def),
-                ScopeDef::Callable(ref callable) if callable.is_user_defined() => Some(def),
+                ScopeDef::Callable(callable) if callable.is_user_defined() => Some(def),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -173,7 +173,7 @@ mod tests {
             .into_iter()
             .map(|location| (location.file_id, location.range))
             .collect::<Vec<_>>();
-        actual_locations.sort_by_key(|(_, range)| (range.start()));
+        actual_locations.sort_by_key(|(_, range)| range.start());
         actual_locations.sort_by_key(|(file_id, _)| *file_id);
 
         assert_eq!(fixture.selected_ranges, actual_locations);

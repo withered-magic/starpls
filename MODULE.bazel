@@ -4,27 +4,28 @@ bazel_dep(name = "aspect_bazel_lib", version = "2.9.4")
 bazel_dep(name = "aspect_rules_js", version = "2.1.1")
 bazel_dep(name = "aspect_rules_swc", version = "2.0.1")
 bazel_dep(name = "aspect_rules_ts", version = "3.3.1")
-bazel_dep(name = "bazel_skylib", version = "1.7.1")
+bazel_dep(name = "bazel_skylib", version = "1.8.2")
 bazel_dep(name = "hermetic_cc_toolchain", version = "3.1.1")
-bazel_dep(name = "protobuf", version = "29.0")
-bazel_dep(name = "rules_proto", version = "7.0.2")
-bazel_dep(name = "rules_rust", version = "0.53.0")
+bazel_dep(name = "protobuf", version = "33.4")
+bazel_dep(name = "rules_proto", version = "7.1.0")
+bazel_dep(name = "rules_rust", version = "0.71.3")
+bazel_dep(name = "rules_rust_prost", version = "0.71.3")
 
 zig_toolchains = use_extension("@hermetic_cc_toolchain//toolchain:ext.bzl", "toolchains")
 use_repo(zig_toolchains, "zig_sdk")
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
-    edition = "2021",
+    edition = "2024",
     extra_target_triples = ["aarch64-unknown-linux-gnu"],
-    versions = ["nightly/2023-12-06"],
+    versions = ["1.96.1"],
 )
 use_repo(rust, "rust_toolchains")
 
 register_toolchains("@rust_toolchains//:all")
 
 crate = use_extension(
-    "@rules_rust//crate_universe:extension.bzl",
+    "@rules_rust//crate_universe:extensions.bzl",
     "crate",
 )
 crate.from_cargo(
@@ -47,6 +48,7 @@ crate.from_cargo(
     ],
 )
 use_repo(crate, "crates")
+
 crate.annotation(
     crate = "protoc-gen-prost",
     gen_binaries = ["protoc-gen-prost"],

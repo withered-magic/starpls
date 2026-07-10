@@ -3,8 +3,8 @@ use std::panic;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
+use dashmap::mapref::entry::Entry;
 use salsa::ParallelDatabase;
 use starpls_bazel::APIContext;
 use starpls_bazel::Builtins;
@@ -177,19 +177,18 @@ impl starpls_common::Db for Database {
             ref mut contents,
             ..
         } = resolved_path
+            && let Entry::Vacant(entry) = self.files.entry(build_file)
         {
-            if let Entry::Vacant(entry) = self.files.entry(build_file) {
-                entry.insert(File::new(
-                    self,
-                    build_file,
-                    Dialect::Bazel,
-                    Some(FileInfo::Bazel {
-                        api_context: APIContext::Build,
-                        is_external: false,
-                    }),
-                    contents.take().unwrap_or_default(),
-                ));
-            }
+            entry.insert(File::new(
+                self,
+                build_file,
+                Dialect::Bazel,
+                Some(FileInfo::Bazel {
+                    api_context: APIContext::Build,
+                    is_external: false,
+                }),
+                contents.take().unwrap_or_default(),
+            ));
         }
 
         Ok(Some(resolved_path))
@@ -475,10 +474,11 @@ pub trait FileLoader: Send + Sync + 'static {
 /// Simple implementation of [`FileLoader`] backed by a HashMap.
 /// Mainly used for tests.
 #[derive(Default)]
+#[cfg(test)]
 pub(crate) struct SimpleFileLoader(DashMap<String, LoadFileResult>);
 
+#[cfg(test)]
 impl SimpleFileLoader {
-    #[cfg(test)]
     pub(crate) fn add_files_from_fixture(&self, db: &dyn Db, fixture: &Fixture) {
         for (path, file_id) in &fixture.path_to_file_id {
             let file = db.get_file(*file_id).unwrap();
@@ -495,6 +495,7 @@ impl SimpleFileLoader {
     }
 }
 
+#[cfg(test)]
 impl FileLoader for SimpleFileLoader {
     fn resolve_path(
         &self,

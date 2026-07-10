@@ -1,8 +1,8 @@
 use std::fmt::Write;
 use std::str;
 
-use expect_test::expect;
 use expect_test::Expect;
+use expect_test::expect;
 
 use super::*;
 

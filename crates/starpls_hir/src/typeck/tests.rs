@@ -1,26 +1,26 @@
 use std::cmp::Ordering;
 use std::fmt::Write;
 
-use expect_test::expect;
 use expect_test::Expect;
+use expect_test::expect;
 use itertools::Itertools;
 use starpls_bazel::APIContext;
-use starpls_common::parse;
 use starpls_common::Db as _;
 use starpls_common::Dialect;
 use starpls_common::FileId;
 use starpls_common::FileInfo;
+use starpls_common::parse;
 use starpls_syntax::ast::AstNode;
 use starpls_test_util::FixtureType;
 
-use crate::source_map;
-use crate::test_database::TestDatabaseBuilder;
-use crate::typeck::assign_tys;
-use crate::typeck::Ty;
-use crate::typeck::TyKind;
 use crate::Db as _;
 use crate::DisplayWithDb;
 use crate::InferenceOptions;
+use crate::source_map;
+use crate::test_database::TestDatabaseBuilder;
+use crate::typeck::Ty;
+use crate::typeck::TyKind;
+use crate::typeck::assign_tys;
 
 fn check_infer(input: &str, expect: Expect) {
     check_infer_with_options(

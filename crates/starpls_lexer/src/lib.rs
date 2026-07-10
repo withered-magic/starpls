@@ -1,7 +1,7 @@
-use crate::cursor::Cursor;
-use crate::cursor::CursorState;
 use crate::LiteralKind::*;
 use crate::TokenKind::*;
+use crate::cursor::Cursor;
+use crate::cursor::CursorState;
 
 mod cursor;
 
@@ -265,11 +265,7 @@ pub fn tokenize(input: &str) -> impl Iterator<Item = Token> + '_ {
     let mut cursor = Cursor::new(input);
     std::iter::from_fn(move || {
         let token = cursor.advance_token();
-        if token.kind != Eof {
-            Some(token)
-        } else {
-            None
-        }
+        if token.kind != Eof { Some(token) } else { None }
     })
 }
 
@@ -277,11 +273,7 @@ pub fn tokenize_type_comment(input: &str) -> impl Iterator<Item = Token> + '_ {
     let mut cursor = Cursor::new_for_type_comment(input);
     std::iter::from_fn(move || {
         let token = cursor.advance_token();
-        if token.kind != Eof {
-            Some(token)
-        } else {
-            None
-        }
+        if token.kind != Eof { Some(token) } else { None }
     })
 }
 
@@ -718,7 +710,7 @@ impl Cursor<'_> {
                     return Int {
                         base,
                         empty_int: false,
-                    }
+                    };
                 }
             }
         }

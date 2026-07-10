@@ -1,14 +1,14 @@
 use starpls_bazel::APIContext;
-use starpls_common::parse;
 use starpls_common::Db;
 use starpls_common::File;
 use starpls_common::FileId;
 use starpls_common::InFile;
+use starpls_common::parse;
 use starpls_hir::ScopeDef;
 use starpls_hir::Semantics;
+use starpls_syntax::TextRange;
 use starpls_syntax::ast::AstNode;
 use starpls_syntax::ast::{self};
-use starpls_syntax::TextRange;
 
 use crate::Database;
 
@@ -93,7 +93,7 @@ pub(crate) fn document_symbols(db: &Database, file_id: FileId) -> Option<Vec<Doc
         add_target_symbols(db, file, &mut symbols);
     }
 
-    symbols.sort_by(|s1, s2| s1.range.start().cmp(&s2.range.start()));
+    symbols.sort_by_key(|s1| s1.range.start());
     Some(symbols)
 }
 
@@ -137,8 +137,8 @@ fn add_target_symbols(db: &Database, file: File, acc: &mut Vec<DocumentSymbol>) 
 
 #[cfg(test)]
 mod tests {
-    use expect_test::expect;
     use expect_test::Expect;
+    use expect_test::expect;
     use starpls_bazel::APIContext;
     use starpls_common::Dialect;
     use starpls_common::FileInfo;

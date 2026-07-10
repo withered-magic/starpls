@@ -1,12 +1,12 @@
+use crate::Parser;
+use crate::SyntaxKind::*;
+use crate::T;
 use crate::grammar::arguments::*;
 use crate::grammar::expressions::*;
 use crate::grammar::parameters::*;
 use crate::grammar::statements::*;
 use crate::grammar::type_comments::*;
 use crate::syntax_kind::SyntaxKindSet;
-use crate::Parser;
-use crate::SyntaxKind::*;
-use crate::T;
 
 mod arguments;
 mod expressions;

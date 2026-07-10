@@ -1,5 +1,5 @@
-use std::collections::hash_map::Entry;
 use std::collections::VecDeque;
+use std::collections::hash_map::Entry;
 
 use either::Either;
 use id_arena::Arena;
@@ -12,6 +12,11 @@ use starpls_common::FileRange;
 use starpls_common::InFile;
 use starpls_common::Severity;
 
+use crate::Db;
+use crate::Module;
+use crate::ModuleInfo;
+use crate::ModuleSourceMap;
+use crate::Name;
 use crate::def::CompClause;
 use crate::def::Expr;
 use crate::def::ExprId;
@@ -23,14 +28,9 @@ use crate::def::ParamId;
 use crate::def::Stmt;
 use crate::def::StmtId;
 use crate::lower;
+use crate::typeck::TypeRef;
 use crate::typeck::builtins::BuiltinFunction;
 use crate::typeck::intrinsics::IntrinsicFunction;
-use crate::typeck::TypeRef;
-use crate::Db;
-use crate::Module;
-use crate::ModuleInfo;
-use crate::ModuleSourceMap;
-use crate::Name;
 
 pub(crate) type ScopeId = Id<Scope>;
 

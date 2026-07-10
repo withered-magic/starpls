@@ -3,20 +3,20 @@
 //! but with a couple of modifications for handling "*args" and "**kwargs" arguments.
 use std::iter;
 
-use smallvec::smallvec;
 use smallvec::SmallVec;
+use smallvec::smallvec;
 
+use crate::Db;
+use crate::ExprId;
+use crate::Name;
 use crate::def::Argument;
 use crate::def::Param;
-use crate::typeck::builtins::BuiltinFunctionParam;
-use crate::typeck::intrinsics::IntrinsicFunctionParam;
 use crate::typeck::Macro;
 use crate::typeck::Provider;
 use crate::typeck::Rule;
 use crate::typeck::TagClass;
-use crate::Db;
-use crate::ExprId;
-use crate::Name;
+use crate::typeck::builtins::BuiltinFunctionParam;
+use crate::typeck::intrinsics::IntrinsicFunctionParam;
 
 pub(crate) struct ArgError {
     pub(crate) expr: ExprId,
@@ -114,7 +114,7 @@ impl Slots {
         'outer: for (arg_index, arg) in args.iter().enumerate() {
             match arg {
                 Argument::Keyword {
-                    name: ref arg_name,
+                    name: arg_name,
                     expr,
                 } => {
                     // Look for either a keyword parameter matching this argument's

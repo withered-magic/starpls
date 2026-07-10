@@ -2,12 +2,12 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 
 use starpls_bazel::APIContext;
-use starpls_syntax::line_index as syntax_line_index;
-use starpls_syntax::parse_module;
 use starpls_syntax::LineIndex;
 use starpls_syntax::Module;
 use starpls_syntax::ParseTree;
 use starpls_syntax::SyntaxNode;
+use starpls_syntax::line_index as syntax_line_index;
+use starpls_syntax::parse_module;
 
 pub use crate::diagnostics::Diagnostic;
 pub use crate::diagnostics::DiagnosticTag;
@@ -80,7 +80,7 @@ pub trait Db: salsa::DbWithJar<Jar> {
 
     /// Loads a file from the filesystem.
     fn load_file(&self, path: &str, dialect: Dialect, from: FileId)
-        -> anyhow::Result<Option<File>>;
+    -> anyhow::Result<Option<File>>;
 
     /// Returns the `File` identified by the given `FileId`.
     fn get_file(&self, file_id: FileId) -> Option<File>;

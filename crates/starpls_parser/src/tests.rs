@@ -4,13 +4,13 @@ use std::fmt::Write;
 use std::fs;
 use std::path::PathBuf;
 
-use expect_test::expect_file;
 use expect_test::ExpectFile;
+use expect_test::expect_file;
 use runfiles::find_runfiles_dir;
 
-use crate::parse;
 use crate::StrStep;
 use crate::StrWithTokens;
+use crate::parse;
 
 fn check(input: &str, expected: ExpectFile) {
     let str_with_tokens = StrWithTokens::new(input);
@@ -102,10 +102,10 @@ fn collect_test_cases(dir: &'static str) -> Result<Vec<TestCase>, Box<dyn error:
                 continue;
             }
         };
-        if let Some(ref filter) = filter {
-            if !test_name.contains(filter) {
-                continue;
-            }
+        if let Some(ref filter) = filter
+            && !test_name.contains(filter)
+        {
+            continue;
         }
 
         // For a Starlark source file `source.star`, the corresponding expect file is `source.rast`.

@@ -36,7 +36,7 @@ struct CodeFlowGraphPrettyCtx<'a> {
     indent: String,
 }
 
-impl<'a> CodeFlowGraphPrettyCtx<'a> {
+impl CodeFlowGraphPrettyCtx<'_> {
     fn pretty_print(mut self) -> String {
         wln!(&mut self.result, "def main():");
         self.push_indent_level();

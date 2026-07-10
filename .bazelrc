@@ -9,8 +9,6 @@ query --@aspect_rules_ts//ts:skipLibCheck=honor_tsconfig
 
 build --experimental_convenience_symlinks=ignore
 
-build --@rules_rust//rust/toolchain/channel=nightly
-
 build --@rules_rust//:rustfmt.toml=//:rustfmt.toml
 build --aspects=@rules_rust//rust:defs.bzl%rustfmt_aspect
 build --output_groups=+rustfmt_checks

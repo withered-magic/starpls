@@ -298,7 +298,7 @@ fn scan_unicode_escape(chars: &mut Chars<'_>) -> Result<char, EscapeError> {
                     EscapeError::TooShort32BitUnicodeEscape
                 } else {
                     EscapeError::TooLong32BitUnicodeEscape
-                })
+                });
             }
         }
     }

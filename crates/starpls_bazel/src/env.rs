@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::Builtins;
 use crate::builtin::Callable;
 use crate::builtin::Param;
 use crate::builtin::Value;
-use crate::Builtins;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct BuiltinsJson {

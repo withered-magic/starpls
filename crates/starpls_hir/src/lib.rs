@@ -1,16 +1,15 @@
 use std::sync::Arc;
 
-use def::resolver::Resolver;
-use def::scope;
-use def::scope::module_scopes;
-use def::scope::FunctionDef;
-use def::scope::ParameterDef;
 use def::Function;
 use def::LoadItemId;
 use def::Stmt;
+use def::resolver::Resolver;
+use def::scope;
+use def::scope::FunctionDef;
+use def::scope::ParameterDef;
+use def::scope::module_scopes;
 use smallvec::SmallVec;
 use starpls_bazel::Builtins;
-use starpls_common::parse;
 use starpls_common::Diagnostic;
 use starpls_common::Diagnostics;
 use starpls_common::Dialect;
@@ -18,16 +17,13 @@ use starpls_common::File;
 use starpls_common::FileId;
 use starpls_common::InFile;
 use starpls_common::Parse;
+use starpls_common::parse;
+use starpls_syntax::T;
+use starpls_syntax::TextSize;
 use starpls_syntax::ast;
 use starpls_syntax::ast::AstNode;
 use starpls_syntax::ast::AstPtr;
 use starpls_syntax::ast::SyntaxNodePtr;
-use starpls_syntax::TextSize;
-use starpls_syntax::T;
-use typeck::builtins::BuiltinFunction;
-use typeck::intrinsics::IntrinsicFunction;
-use typeck::resolve_type_ref;
-use typeck::with_tcx;
 use typeck::Field;
 use typeck::FieldInner;
 use typeck::Macro;
@@ -38,6 +34,10 @@ use typeck::Substitution;
 use typeck::TagClass;
 use typeck::TagParam;
 use typeck::Tuple;
+use typeck::builtins::BuiltinFunction;
+use typeck::intrinsics::IntrinsicFunction;
+use typeck::resolve_type_ref;
+use typeck::with_tcx;
 
 use crate::def::ExprId;
 use crate::def::Module;
@@ -46,7 +46,6 @@ pub use crate::def::Name;
 pub use crate::display::DisplayWithDb;
 pub use crate::display::DisplayWithDbWrapper;
 pub use crate::test_database::Fixture;
-pub use crate::typeck::builtins::BuiltinDefs;
 pub use crate::typeck::Cancelled;
 pub use crate::typeck::GlobalContext;
 pub use crate::typeck::InferenceOptions;
@@ -54,6 +53,7 @@ pub use crate::typeck::Ty;
 pub use crate::typeck::TyContext;
 use crate::typeck::TyKind;
 use crate::typeck::TypeRef;
+pub use crate::typeck::builtins::BuiltinDefs;
 
 mod def;
 mod display;
@@ -276,19 +276,19 @@ impl<'a> Semantics<'a> {
         })
     }
 
-    pub fn scope_for_module(&self, file: File) -> SemanticsScope {
+    pub fn scope_for_module(&self, file: File) -> SemanticsScope<'_> {
         let resolver = Resolver::new_for_module(self.db, file);
         SemanticsScope { resolver }
     }
 
-    pub fn scope_for_expr(&self, file: File, expr: &ast::Expression) -> Option<SemanticsScope> {
+    pub fn scope_for_expr(&self, file: File, expr: &ast::Expression) -> Option<SemanticsScope<'_>> {
         let ptr = AstPtr::new(expr);
         let expr = source_map(self.db, file).expr_map.get(&ptr)?;
         let resolver = Resolver::new_for_expr(self.db, file, *expr);
         Some(SemanticsScope { resolver })
     }
 
-    pub fn scope_for_offset(&self, file: File, offset: TextSize) -> SemanticsScope {
+    pub fn scope_for_offset(&self, file: File, offset: TextSize) -> SemanticsScope<'_> {
         let resolver = Resolver::new_for_offset(self.db, file, offset);
         SemanticsScope { resolver }
     }
@@ -340,10 +340,10 @@ impl SemanticsScope<'_> {
             Some((_, defs)) => defs.map(|def| def.def.clone().into()).collect(),
             None => Vec::new(),
         };
-        if defs.is_empty() {
-            if let Some(def) = self.resolver.resolve_name_in_prelude_or_builtins(name) {
-                defs.push(def.into());
-            }
+        if defs.is_empty()
+            && let Some(def) = self.resolver.resolve_name_in_prelude_or_builtins(name)
+        {
+            defs.push(def.into());
         }
         defs
     }

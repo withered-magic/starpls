@@ -9,16 +9,16 @@ use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 use starpls_common::File;
 use starpls_common::InFile;
+use starpls_syntax::TextRange;
 use starpls_syntax::ast::AssignOp;
 use starpls_syntax::ast::AstPtr;
 use starpls_syntax::ast::BinaryOp;
 use starpls_syntax::ast::SyntaxNodePtr;
 use starpls_syntax::ast::UnaryOp;
 use starpls_syntax::ast::{self};
-use starpls_syntax::TextRange;
 
-use crate::typeck::TypeRef;
 use crate::Db;
+use crate::typeck::TypeRef;
 
 pub(crate) mod codeflow;
 mod lower;

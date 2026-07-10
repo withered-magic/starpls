@@ -1,6 +1,6 @@
-use starpls_common::parse;
 use starpls_common::Db as _;
 use starpls_common::FileId;
+use starpls_common::parse;
 
 use crate::Database;
 

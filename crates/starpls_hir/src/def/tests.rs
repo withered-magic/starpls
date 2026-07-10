@@ -1,18 +1,18 @@
 use std::collections::HashSet;
 
+use starpls_bazel::APIContext;
 use starpls_bazel::env::make_build_builtins;
 use starpls_bazel::env::make_bzl_builtins;
-use starpls_bazel::APIContext;
 use starpls_common::Db as _;
 use starpls_common::Dialect;
 use starpls_common::FileId;
 use starpls_common::FileInfo;
 use starpls_test_util::FixtureFile;
 
+use crate::Db as _;
 use crate::def::resolver::Resolver;
 use crate::test_database::TestDatabase;
 use crate::typeck::intrinsics::intrinsic_functions;
-use crate::Db as _;
 
 fn check_scope(fixture: &str, expected: &[&str]) {
     check_scope_full(fixture, expected, None)

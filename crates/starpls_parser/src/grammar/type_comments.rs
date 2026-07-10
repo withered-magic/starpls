@@ -1,7 +1,7 @@
+use crate::SyntaxKind;
 use crate::grammar::*;
 use crate::marker::CompletedMarker;
 use crate::syntax_kind::SyntaxKindSet;
-use crate::SyntaxKind;
 
 const TYPE_START: SyntaxKindSet = SyntaxKindSet::new(&[T![ident], ELLIPSIS]);
 

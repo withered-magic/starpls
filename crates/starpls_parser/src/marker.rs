@@ -1,8 +1,8 @@
 use drop_bomb::DropBomb;
 
-use crate::step::StepEvent;
 use crate::Parser;
 use crate::SyntaxKind;
+use crate::step::StepEvent;
 
 pub(crate) struct Marker {
     pos: u32,

@@ -1,6 +1,6 @@
+use crate::SyntaxKind;
 use crate::grammar::*;
 use crate::syntax_kind::SyntaxKindSet;
-use crate::SyntaxKind;
 
 pub(crate) const SMALL_STMT_START: SyntaxKindSet = EXPR_START.union(SyntaxKindSet::new(&[
     T![return],

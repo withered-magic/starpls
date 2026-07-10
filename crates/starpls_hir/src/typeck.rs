@@ -9,20 +9,21 @@ use either::Either;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
-use smallvec::smallvec;
 use smallvec::SmallVec;
-use starpls_common::parse;
+use smallvec::smallvec;
 use starpls_common::Diagnostic;
 use starpls_common::Dialect;
 use starpls_common::File;
 use starpls_common::InFile;
-use starpls_intern::impl_internable;
+use starpls_common::parse;
 use starpls_intern::Interned;
+use starpls_intern::impl_internable;
 use starpls_syntax::ast::SyntaxNodePtr;
 
-use crate::def::codeflow::FlowNodeId;
-use crate::def::scope::ExecutionScopeId;
-use crate::def::scope::FunctionDef;
+use crate::Db;
+use crate::Name;
+use crate::Param;
+use crate::ParamInner;
 use crate::def::ExprId;
 use crate::def::InternedString;
 use crate::def::LoadItemId;
@@ -30,24 +31,23 @@ use crate::def::LoadStmt;
 use crate::def::Param as HirDefParam;
 use crate::def::ParamId;
 use crate::def::StmtId;
+use crate::def::codeflow::FlowNodeId;
+use crate::def::scope::ExecutionScopeId;
+use crate::def::scope::FunctionDef;
 use crate::module;
 use crate::source_map;
-use crate::typeck::builtins::builtin_types;
-use crate::typeck::builtins::common_attributes_query;
 use crate::typeck::builtins::BuiltinFunction;
 use crate::typeck::builtins::BuiltinFunctionParam;
 use crate::typeck::builtins::BuiltinProvider;
 use crate::typeck::builtins::BuiltinType;
-use crate::typeck::intrinsics::intrinsic_field_types;
-use crate::typeck::intrinsics::intrinsic_types;
+use crate::typeck::builtins::builtin_types;
+use crate::typeck::builtins::common_attributes_query;
 use crate::typeck::intrinsics::IntrinsicClass;
 use crate::typeck::intrinsics::IntrinsicFunction;
 use crate::typeck::intrinsics::IntrinsicFunctionParam;
 use crate::typeck::intrinsics::Intrinsics;
-use crate::Db;
-use crate::Name;
-use crate::Param;
-use crate::ParamInner;
+use crate::typeck::intrinsics::intrinsic_field_types;
+use crate::typeck::intrinsics::intrinsic_types;
 
 mod call;
 mod infer;
@@ -867,7 +867,7 @@ impl Param {
             }
             ParamInner::IntrinsicParam { .. } => return None,
             ParamInner::RuleParam(RuleParam::Keyword { attr, .. }) => {
-                return attr.doc.map(|doc| doc.value(db).to_string())
+                return attr.doc.map(|doc| doc.value(db).to_string());
             }
             ParamInner::RuleParam(RuleParam::BuiltinKeyword(kind, index)) => {
                 return common_attributes_query(db)
@@ -875,7 +875,7 @@ impl Param {
                     .1
                     .doc
                     .as_ref()
-                    .map(|doc| doc.value(db).to_string())
+                    .map(|doc| doc.value(db).to_string());
             }
             ParamInner::ProviderParam { provider, index } => match provider {
                 Provider::Builtin(provider) => provider.params(db)[*index].doc().to_string(),
@@ -887,11 +887,11 @@ impl Param {
                         .fields[*index]
                         .doc
                         .as_ref()
-                        .map(Box::to_string)
+                        .map(Box::to_string);
                 }
             },
             ParamInner::TagParam(TagParam::Keyword { attr, .. }) => {
-                return attr.doc.map(|doc| doc.value(db).to_string())
+                return attr.doc.map(|doc| doc.value(db).to_string());
             }
             _ => return None,
         })
@@ -926,10 +926,9 @@ impl Param {
                     HirDefParam::KwargsDict { .. }
                 )
             }
-            ParamInner::IntrinsicParam { parent, index } => matches!(
-                parent.params(db)[index],
-                IntrinsicFunctionParam::KwargsDict { .. }
-            ),
+            ParamInner::IntrinsicParam { parent, index } => {
+                matches!(parent.params(db)[index], IntrinsicFunctionParam::KwargsDict)
+            }
             ParamInner::BuiltinParam { parent, index } => matches!(
                 parent.params(db)[index],
                 BuiltinFunctionParam::KwargsDict { .. }
@@ -1460,7 +1459,10 @@ pub(crate) struct Rule {
 }
 
 impl Rule {
-    pub(crate) fn attrs<'a>(&'a self, db: &'a dyn Db) -> impl Iterator<Item = (&Name, &Attribute)> {
+    pub(crate) fn attrs<'a>(
+        &'a self,
+        db: &'a dyn Db,
+    ) -> impl Iterator<Item = (&'a Name, &'a Attribute)> {
         // This chaining is done to put the `name` attribute first.
         let common = common_attributes_query(db);
         let mut common_attrs = match self.kind {
@@ -1468,7 +1470,7 @@ impl Rule {
             RuleKind::Repository => common.repository(db),
         }
         .iter()
-        .map(|(ref name, ref attr)| (name, attr));
+        .map(|(name, attr)| (name, attr));
 
         common_attrs
             .next()
@@ -1696,7 +1698,7 @@ impl GlobalContext {
         }
     }
 
-    pub fn cancel(&self) -> CancelGuard {
+    pub fn cancel(&self) -> CancelGuard<'_> {
         CancelGuard::new(self)
     }
 
@@ -1777,7 +1779,7 @@ struct TypeRefResolver<'a, 'b> {
     errors: Vec<String>,
 }
 
-impl<'a, 'b> TypeRefResolver<'a, 'b> {
+impl TypeRefResolver<'_, '_> {
     fn resolve_type_ref(mut self, type_ref: &TypeRef) -> (Ty, Vec<String>) {
         let ty = self.resolve_type_ref_inner(type_ref);
         (ty, self.errors)
@@ -1853,12 +1855,11 @@ impl<'a, 'b> TypeRefResolver<'a, 'b> {
         }
 
         // If `usage` was passed, try to resolve as a custom provider defined in the corresponding scope.
-        if let Some((tcx, usage)) = &mut self.context {
-            if let Some(ty) = tcx.infer_name(usage.file, name, usage.value) {
-                if let TyKind::Provider(provider) = ty.kind() {
-                    return TyKind::ProviderInstance(provider.clone()).intern();
-                }
-            }
+        if let Some((tcx, usage)) = &mut self.context
+            && let Some(ty) = tcx.infer_name(usage.file, name, usage.value)
+            && let TyKind::Provider(provider) = ty.kind()
+        {
+            return TyKind::ProviderInstance(provider.clone()).intern();
         }
 
         match name.as_str() {

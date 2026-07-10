@@ -14,8 +14,8 @@ use std::sync::OnceLock;
 
 use dashmap::DashMap;
 use dashmap::SharedValue;
-use hashbrown::hash_map::RawEntryMut;
 use hashbrown::HashMap;
+use hashbrown::hash_map::RawEntryMut;
 use rustc_hash::FxHasher;
 use triomphe::Arc;
 
@@ -199,6 +199,12 @@ impl<T: ?Sized> InternStorage<T> {
         Self {
             map: OnceLock::new(),
         }
+    }
+}
+
+impl<T: ?Sized> Default for InternStorage<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

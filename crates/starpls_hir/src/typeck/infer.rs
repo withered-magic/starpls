@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
 use either::Either;
-use starpls_common::line_index;
-use starpls_common::parse;
 use starpls_common::Diagnostic;
 use starpls_common::DiagnosticTag;
 use starpls_common::File;
 use starpls_common::FileRange;
 use starpls_common::InFile;
 use starpls_common::Severity;
+use starpls_common::line_index;
+use starpls_common::parse;
+use starpls_syntax::TextRange;
 use starpls_syntax::ast::ArithOp;
 use starpls_syntax::ast::AstNode;
 use starpls_syntax::ast::AstPtr;
@@ -17,22 +18,8 @@ use starpls_syntax::ast::BitwiseOp;
 use starpls_syntax::ast::LogicOp;
 use starpls_syntax::ast::UnaryOp;
 use starpls_syntax::ast::{self};
-use starpls_syntax::TextRange;
 
-use crate::def::codeflow::code_flow_graph;
-use crate::def::codeflow::CodeFlowGraph;
-use crate::def::codeflow::FlowNode;
-use crate::def::codeflow::FlowNodeId;
-use crate::def::resolver::Export;
-use crate::def::resolver::Resolver;
-use crate::def::scope::module_scopes;
-use crate::def::scope::ExecutionScopeId;
-use crate::def::scope::FunctionDef;
-use crate::def::scope::LoadItemDef;
-use crate::def::scope::ParameterDef;
-use crate::def::scope::ScopeDef;
-use crate::def::scope::ScopeHirId;
-use crate::def::scope::VariableDef;
+use crate::Name;
 use crate::def::Argument;
 use crate::def::Expr;
 use crate::def::ExprId;
@@ -45,19 +32,23 @@ use crate::def::Param;
 use crate::def::ParamId;
 use crate::def::Stmt;
 use crate::def::StmtId;
+use crate::def::codeflow::CodeFlowGraph;
+use crate::def::codeflow::FlowNode;
+use crate::def::codeflow::FlowNodeId;
+use crate::def::codeflow::code_flow_graph;
+use crate::def::resolver::Export;
+use crate::def::resolver::Resolver;
+use crate::def::scope::ExecutionScopeId;
+use crate::def::scope::FunctionDef;
+use crate::def::scope::LoadItemDef;
+use crate::def::scope::ParameterDef;
+use crate::def::scope::ScopeDef;
+use crate::def::scope::ScopeHirId;
+use crate::def::scope::VariableDef;
+use crate::def::scope::module_scopes;
 use crate::display::DisplayWithDb;
 use crate::module;
 use crate::source_map;
-use crate::typeck::assign_tys;
-use crate::typeck::builtins::builtin_types;
-use crate::typeck::call::Slot;
-use crate::typeck::call::SlotProvider;
-use crate::typeck::call::Slots;
-use crate::typeck::intrinsics::IntrinsicFunctionParam;
-use crate::typeck::intrinsics::IntrinsicTypes;
-use crate::typeck::resolve_builtin_type_ref;
-use crate::typeck::resolve_type_ref;
-use crate::typeck::resolve_type_ref_opt;
 use crate::typeck::CodeFlowCacheKey;
 use crate::typeck::DictLiteral;
 use crate::typeck::FileExprId;
@@ -76,7 +67,16 @@ use crate::typeck::TyData;
 use crate::typeck::TyKind;
 use crate::typeck::TypeRef;
 use crate::typeck::TypecheckCancelled;
-use crate::Name;
+use crate::typeck::assign_tys;
+use crate::typeck::builtins::builtin_types;
+use crate::typeck::call::Slot;
+use crate::typeck::call::SlotProvider;
+use crate::typeck::call::Slots;
+use crate::typeck::intrinsics::IntrinsicFunctionParam;
+use crate::typeck::intrinsics::IntrinsicTypes;
+use crate::typeck::resolve_builtin_type_ref;
+use crate::typeck::resolve_type_ref;
+use crate::typeck::resolve_type_ref_opt;
 
 impl TyContext<'_> {
     fn infer_all_exprs(&mut self, file: File) {
@@ -499,7 +499,7 @@ impl TyContext<'_> {
                             .unwrap_or_else(|| {
                                 match receiver_ty.kind() {
                                     TyKind::Struct(Some(Struct::FieldSignature { ty })) => {
-                                        return ty.clone()
+                                        return ty.clone();
                                     }
                                     TyKind::Struct(Some(Struct::RuleAttributes {
                                         rule_kind,
@@ -519,7 +519,7 @@ impl TyContext<'_> {
                                             .unwrap_or_else(|| self.unknown_ty());
                                     }
                                     TyKind::Struct(_) | TyKind::ProviderInstance(_) => {
-                                        return self.unknown_ty()
+                                        return self.unknown_ty();
                                     }
                                     _ => {}
                                 }
@@ -803,36 +803,33 @@ impl TyContext<'_> {
                                         self.add_expr_diagnostic_error(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), param_ty.display(self.db).alt()));
                                     }
                                     if let IntrinsicFunctionParam::Keyword {
-                                        name,
-                                        deprecated,
-                                        ..
+                                        name, deprecated, ..
                                     } = param
+                                        && *deprecated
                                     {
-                                        if *deprecated {
-                                            let source_map = source_map(self.db, file);
-                                            let arg_name_node = source_map
-                                                .expr_map_back
-                                                .get(&expr)
-                                                .and_then(|arg_value_ptr| {
-                                                    arg_value_ptr.syntax_node_ptr().try_to_node(
-                                                        &parse(self.db, file).syntax(self.db),
-                                                    )
-                                                })
-                                                .and_then(|arg_value_node| arg_value_node.parent())
-                                                .and_then(ast::KeywordArgument::cast)
-                                                .and_then(|keyword_arg| keyword_arg.name());
-                                            if let Some(arg_name_node) = arg_name_node {
-                                                self.add_diagnostic_for_range(
-                                                    file,
-                                                    Severity::Info,
-                                                    arg_name_node.syntax().text_range(),
-                                                    Some(vec![DiagnosticTag::Deprecated]),
-                                                    format!(
-                                                        "Argument \"{}\" is deprecated",
-                                                        name.as_str()
-                                                    ),
-                                                );
-                                            }
+                                        let source_map = source_map(self.db, file);
+                                        let arg_name_node = source_map
+                                            .expr_map_back
+                                            .get(&expr)
+                                            .and_then(|arg_value_ptr| {
+                                                arg_value_ptr.syntax_node_ptr().try_to_node(
+                                                    &parse(self.db, file).syntax(self.db),
+                                                )
+                                            })
+                                            .and_then(|arg_value_node| arg_value_node.parent())
+                                            .and_then(ast::KeywordArgument::cast)
+                                            .and_then(|keyword_arg| keyword_arg.name());
+                                        if let Some(arg_name_node) = arg_name_node {
+                                            self.add_diagnostic_for_range(
+                                                file,
+                                                Severity::Info,
+                                                arg_name_node.syntax().text_range(),
+                                                Some(vec![DiagnosticTag::Deprecated]),
+                                                format!(
+                                                    "Argument \"{}\" is deprecated",
+                                                    name.as_str()
+                                                ),
+                                            );
                                         }
                                     }
                                 }
@@ -932,10 +929,8 @@ impl TyContext<'_> {
                                             self.add_expr_diagnostic_error(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), expected_ty.display(self.db).alt()));
                                         }
                                     }
-                                    SlotProvider::Missing => {
-                                        if attr.mandatory {
-                                            missing_attrs.push(name);
-                                        }
+                                    SlotProvider::Missing if attr.mandatory => {
+                                        missing_attrs.push(name);
                                     }
                                     _ => {}
                                 }
@@ -985,10 +980,8 @@ impl TyContext<'_> {
                                             self.add_expr_diagnostic_error(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), expected_ty.display(self.db).alt()));
                                         }
                                     }
-                                    SlotProvider::Missing => {
-                                        if data.attr.mandatory {
-                                            missing_attrs.push(&data.name);
-                                        }
+                                    SlotProvider::Missing if data.attr.mandatory => {
+                                        missing_attrs.push(&data.name);
                                     }
                                     _ => {}
                                 }
@@ -1045,10 +1038,8 @@ impl TyContext<'_> {
                                             self.add_expr_diagnostic_error(file, expr, format!("Argument of type \"{}\" cannot be assigned to parameter of type \"{}\"", ty.display(self.db).alt(), expected_ty.display(self.db).alt()));
                                         }
                                     }
-                                    SlotProvider::Missing => {
-                                        if attr.mandatory {
-                                            missing_attrs.push(name);
-                                        }
+                                    SlotProvider::Missing if attr.mandatory => {
+                                        missing_attrs.push(name);
                                     }
                                     _ => {}
                                 }
@@ -1214,7 +1205,7 @@ impl TyContext<'_> {
 
         match (lhs_kind, rhs_kind) {
             (TyKind::Any | TyKind::Unknown, _) | (_, TyKind::Any | TyKind::Unknown) => {
-                return self.unknown_ty()
+                return self.unknown_ty();
             }
             _ => {}
         }
@@ -1505,17 +1496,16 @@ impl TyContext<'_> {
                 for def in defs.skip_while(|def| def.scope > expr_scope) {
                     let ty = match def.def {
                         ScopeDef::Variable(VariableDef { file, expr, source }) => {
-                            if def_execution_scope != ExecutionScopeId::Module
-                                || name.as_str().starts_with('_')
+                            if (def_execution_scope != ExecutionScopeId::Module
+                                || name.as_str().starts_with('_'))
+                                && let ScopeHirId::Expr(usage_expr) = hir_id
                             {
-                                if let ScopeHirId::Expr(usage_expr) = hir_id {
-                                    let key = InFile {
-                                        file: *file,
-                                        value: Either::Left(*expr),
-                                    };
-                                    if usage_expr != *expr {
-                                        self.cx.definition_is_used.insert(key, true);
-                                    }
+                                let key = InFile {
+                                    file: *file,
+                                    value: Either::Left(*expr),
+                                };
+                                if usage_expr != *expr {
+                                    self.cx.definition_is_used.insert(key, true);
                                 }
                             }
 
@@ -1695,7 +1685,7 @@ impl TyContext<'_> {
                         continue;
                     }
                 }
-                FlowNode::Unreachable { .. } => Ty::never(),
+                FlowNode::Unreachable => Ty::never(),
             };
 
             break Some(curr_node_ty);

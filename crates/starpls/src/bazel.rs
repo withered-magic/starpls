@@ -1,9 +1,9 @@
 use anyhow::anyhow;
 use log::debug;
 use log::info;
+use starpls_bazel::Builtins;
 use starpls_bazel::client::BazelClient;
 use starpls_bazel::client::BazelInfo;
-use starpls_bazel::Builtins;
 
 use crate::server::load_bazel_build_language;
 

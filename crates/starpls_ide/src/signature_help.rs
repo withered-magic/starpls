@@ -3,15 +3,15 @@ use std::fmt::Write;
 use starpls_common::Db as _;
 use starpls_hir::DisplayWithDb;
 use starpls_hir::Semantics;
+use starpls_syntax::T;
 use starpls_syntax::ast::AstNode;
 use starpls_syntax::ast::Direction;
 use starpls_syntax::ast::{self};
-use starpls_syntax::T;
 
-use crate::util::pick_best_token;
-use crate::util::unindent_doc;
 use crate::Database;
 use crate::FilePosition;
+use crate::util::pick_best_token;
+use crate::util::unindent_doc;
 
 const DEFAULT_ACTIVE_PARAMETER_INDEX: usize = 100;
 

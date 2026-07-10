@@ -1,19 +1,21 @@
 use either::Either;
-use starpls_common::line_index;
 use starpls_common::Diagnostic;
 use starpls_common::Diagnostics;
 use starpls_common::File;
 use starpls_common::FileRange;
 use starpls_common::Severity;
+use starpls_common::line_index;
+use starpls_syntax::SyntaxNode;
+use starpls_syntax::SyntaxToken;
+use starpls_syntax::TextRange;
 use starpls_syntax::ast::AstNode;
 use starpls_syntax::ast::AstPtr;
 use starpls_syntax::ast::AstToken;
 use starpls_syntax::ast::SyntaxNodePtr;
 use starpls_syntax::ast::{self};
-use starpls_syntax::SyntaxNode;
-use starpls_syntax::SyntaxToken;
-use starpls_syntax::TextRange;
 
+use crate::Db;
+use crate::TypeRef;
 use crate::def::Argument;
 use crate::def::CompClause;
 use crate::def::DictEntry;
@@ -36,8 +38,6 @@ use crate::def::Stmt;
 use crate::def::StmtId;
 use crate::def::StmtPtr;
 use crate::typeck::FunctionTypeRef;
-use crate::Db;
-use crate::TypeRef;
 
 pub(super) fn lower_module(
     db: &dyn Db,
@@ -71,7 +71,7 @@ struct LoweringContext<'a> {
     source_map: ModuleSourceMap,
 }
 
-impl<'a> LoweringContext<'a> {
+impl LoweringContext<'_> {
     fn lower(mut self, syntax: ast::Module) -> (Module, ModuleSourceMap) {
         let line_index = line_index(self.db, self.file);
         self.module.type_ignore_comment_lines = syntax

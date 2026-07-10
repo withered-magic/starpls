@@ -1,16 +1,16 @@
 use std::marker::PhantomData;
 
-use rowan::ast::AstNode;
 use rowan::GreenNode;
 use rowan::GreenNodeBuilder;
 use rowan::Language;
 use rowan::TextRange;
 use rowan::TextSize;
-use starpls_parser::parse;
-use starpls_parser::parse_type_list;
+use rowan::ast::AstNode;
 use starpls_parser::StrStep;
 use starpls_parser::StrWithTokens;
 use starpls_parser::SyntaxKind::*;
+use starpls_parser::parse;
+use starpls_parser::parse_type_list;
 
 use crate::LineIndex;
 use crate::Module;

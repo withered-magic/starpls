@@ -21,6 +21,8 @@ pub enum AttributeKind {
     LabelKeyedStringDict,
     #[serde(rename = "List of Labels")]
     LabelList,
+    #[serde(rename = "Dictionary mapping strings to lists of labels")]
+    LabelListDict,
     // TODO(withered-magic): Add a `rename`.
     Output,
     #[serde(rename = "List of Outputs")]

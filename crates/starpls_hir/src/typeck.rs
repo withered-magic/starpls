@@ -1358,6 +1358,7 @@ pub enum AttributeKind {
     Label,
     LabelKeyedStringDict,
     LabelList,
+    LabelListDict,
     Output,
     OutputList,
     String,
@@ -1402,6 +1403,7 @@ impl Attribute {
             AttributeKind::StringList | AttributeKind::LabelList | AttributeKind::OutputList => {
                 Ty::list(Ty::string())
             }
+            AttributeKind::LabelListDict => Ty::dict(Ty::string(), Ty::list(Ty::string()), None),
             AttributeKind::StringListDict => Ty::dict(Ty::string(), Ty::list(Ty::string()), None),
         }
     }
@@ -1430,6 +1432,9 @@ impl Attribute {
             }
             AttributeKind::StringList => Ty::list(Ty::string()),
             AttributeKind::LabelList => Ty::list(resolved_label_ty()),
+            AttributeKind::LabelListDict => {
+                Ty::dict(Ty::string(), Ty::list(resolved_label_ty()), None)
+            }
             AttributeKind::OutputList => Ty::list(Ty::unknown()),
             AttributeKind::StringListDict => Ty::dict(Ty::string(), Ty::list(Ty::string()), None),
         }

@@ -314,8 +314,7 @@ impl DefaultFileLoader {
             package
         } else {
             root.join(label.package())
-        }
-        .join(label.target());
+        };
 
         Ok(Some(ResolvedLabel {
             resolved_path,
@@ -399,28 +398,28 @@ impl FileLoader for DefaultFileLoader {
         };
 
         let resolved_label = try_opt!(self.resolve_label(&label, from)?);
-        let res = if fs::metadata(&resolved_label.resolved_path)
+        let maybe_file_path = resolved_label.resolved_path.join(label.target());
+        let res = if fs::metadata(&maybe_file_path)
             .ok()
             .map(|metadata| metadata.is_file())
             .unwrap_or_default()
         {
             ResolvedPath::Source {
-                path: resolved_label.resolved_path,
+                path: maybe_file_path,
             }
         } else {
             if label.target().is_empty() {
                 return Ok(None);
             }
 
-            let parent = try_opt!(resolved_label.resolved_path.parent());
-            let build_file = try_opt!(fs::read_dir(parent)
+            let build_file = try_opt!(fs::read_dir(&resolved_label.resolved_path)
                 .into_iter()
                 .flat_map(|entries| entries.into_iter())
                 .find_map(|entry| match entry.ok()?.file_name().to_str()? {
                     file_name @ ("BUILD" | "BUILD.bazel") => Some(file_name.to_string()),
                     _ => None,
                 }));
-            let path = parent.join(build_file);
+            let path = resolved_label.resolved_path.join(build_file);
 
             // If we've already interned this file, then simply return the file id.
             let (build_file, contents) =
@@ -464,16 +463,16 @@ impl FileLoader for DefaultFileLoader {
                 }
 
                 let repo_kind = label.kind();
-                let (resolved_path, canonical_repo) = match self
-                    .read_cache_result(&repo_kind, path, from)
-                {
-                    Some(path) => (path, None),
-                    None => {
-                        let res = try_opt!(self.resolve_label(&label, from)?);
-                        self.record_cache_result(&repo_kind, path, from, res.resolved_path.clone());
-                        (res.resolved_path, res.canonical_repo)
-                    }
-                };
+                let (resolved_path, canonical_repo) =
+                    match self.read_cache_result(&repo_kind, path, from) {
+                        Some(path) => (path, None),
+                        None => {
+                            let res = try_opt!(self.resolve_label(&label, from)?);
+                            let resolved_path = res.resolved_path.join(label.target());
+                            self.record_cache_result(&repo_kind, path, from, resolved_path.clone());
+                            (resolved_path, res.canonical_repo)
+                        }
+                    };
 
                 let is_external = !resolved_path.starts_with(&self.workspace);
                 (

@@ -812,10 +812,12 @@ impl Cursor<'_> {
                 {
                     // Bump again to skip the escaped character.
                     self.bump();
+                    closing_streak = 0;
                 }
                 '\\' if self.first() == '\r' && self.second() == '\n' => {
                     self.bump();
                     self.bump();
+                    closing_streak = 0;
                 }
                 _ => {
                     closing_streak = 0;

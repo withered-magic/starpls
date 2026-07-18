@@ -485,6 +485,9 @@ x = '''a\r\nb'''
 x = """a\r\nb"""
 x = '''a\n\rb'''
 x = """a\n\rb"""
+x = """
+"\\""
+"""
 x = r'a\\\nb'
 x = r"a\\\nb"
 x = r'a\\\rb'
@@ -637,6 +640,12 @@ x = r"a\\\r\nb"
             Token { kind: Eq, len: 1 }
             Token { kind: Whitespace, len: 1 }
             Token { kind: Literal { kind: Str { terminated: true, triple_quoted: true } }, len: 12 }
+            Token { kind: Newline, len: 1 }
+            Token { kind: Ident, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Eq, len: 1 }
+            Token { kind: Whitespace, len: 1 }
+            Token { kind: Literal { kind: Str { terminated: true, triple_quoted: true } }, len: 13 }
             Token { kind: Newline, len: 1 }
             Token { kind: Ident, len: 1 }
             Token { kind: Whitespace, len: 1 }

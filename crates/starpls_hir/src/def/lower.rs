@@ -379,16 +379,27 @@ impl<'a> LoweringContext<'a> {
             }
         };
 
-        for (i, param) in syntax
-            .iter()
-            .flat_map(|params| params.parameters())
-            .enumerate()
-        {
+        // Tracks the index of the current parameter's type in the function type comment,
+        // if one is present. A bare "*" parameter has no corresponding entry in the type
+        // comment and thus doesn't advance this index.
+        let mut spec_index = 0;
+        for param in syntax.iter().flat_map(|params| params.parameters()) {
             let ptr = AstPtr::new(&param);
+            let is_bare_star =
+                matches!(&param, ast::Parameter::ArgsList(param) if param.name().is_none());
             let type_ref = self
                 .lower_type_comment_opt(param.type_comment())
                 .map(|res| res.0)
-                .or(spec_type_refs.get(i).cloned());
+                .or_else(|| {
+                    if is_bare_star {
+                        None
+                    } else {
+                        spec_type_refs.get(spec_index).cloned()
+                    }
+                });
+            if !is_bare_star {
+                spec_index += 1;
+            }
             let param = match param {
                 ast::Parameter::Simple(param) => {
                     let name = self.lower_name_opt(param.name());

@@ -429,6 +429,40 @@ bar(y)
 }
 
 #[test]
+fn test_type_comment_with_keyword_only_marker() {
+    check_infer(
+        r#"
+def bazel_env(*, name, tools = {}, toolchains = {}, **kwargs):
+    # type: (string, dict[string, string], dict[string, string], **string) -> None
+    pass
+
+bazel_env(
+    name = "bazel_env",
+    tools = {"go": "some/label"},
+)
+bazel_env(
+    name = {},
+)
+"#,
+        expect![[r#"
+            32..34 "{}": dict[Unknown, Unknown]
+            49..51 "{}": dict[Unknown, Unknown]
+            157..166 "bazel_env": def bazel_env(*, name: string, tools: dict[string, string], toolchains: dict[string, string], **kwargs: string) -> None
+            179..190 "\"bazel_env\"": Literal["bazel_env"]
+            205..209 "\"go\"": Literal["go"]
+            211..223 "\"some/label\"": Literal["some/label"]
+            204..224 "{\"go\": \"some/label\"}": dict[string, string]
+            157..227 "bazel_env(\n    name = \"bazel_env\",\n    tools = {\"go\": \"some/label\"},\n)": None
+            228..237 "bazel_env": def bazel_env(*, name: string, tools: dict[string, string], toolchains: dict[string, string], **kwargs: string) -> None
+            250..252 "{}": dict[Unknown, Unknown]
+            228..255 "bazel_env(\n    name = {},\n)": None
+
+            250..252 Argument of type "dict[Unknown, Unknown]" cannot be assigned to parameter of type "string"
+        "#]],
+    )
+}
+
+#[test]
 fn test_call_full() {
     check_infer(
         r#"

@@ -354,7 +354,13 @@ impl ScopeCollector<'_> {
                 targets,
                 stmts,
             } => {
+                // The iterable is evaluated before the loop variables are bound, so it must be
+                // collected in the enclosing scope. Allocating a fresh scope for the targets (as is
+                // done for assignments and comprehensions) prevents a name in the iterable from
+                // resolving to the loop variable itself, e.g. the inner `x` in `for x in x.foo:`,
+                // which would otherwise cause type inference to recurse indefinitely.
                 self.collect_expr(*iterable, *current, None);
+                *current = self.alloc_scope(*current);
                 targets.iter().copied().for_each(|expr| {
                     self.collect_expr(expr, *current, Some(*iterable));
                 });

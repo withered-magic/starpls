@@ -1740,6 +1740,7 @@ pub(crate) struct InferenceContext {
     pub(crate) type_of_load_item: FxHashMap<FileLoadItemId, Ty>,
     pub(crate) type_of_param: FxHashMap<FileParamId, Ty>,
     pub(crate) source_assign_done: FxHashSet<FileExprId>,
+    pub(crate) source_assign_in_progress: FxHashSet<FileExprId>,
     pub(crate) flow_node_type_cache: FxHashMap<CodeFlowCacheKey, Option<Ty>>,
     pub(crate) definition_is_used: FxHashMap<InFile<Either<ExprId, StmtId>>, bool>,
 }

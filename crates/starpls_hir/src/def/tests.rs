@@ -143,6 +143,18 @@ for x, y in 1, 2, 3:
 }
 
 #[test]
+fn test_loop_variable_not_in_scope_for_iterable() {
+    check_scope(
+        r"
+def f(items):
+    for x in items$0:
+        pass
+    ",
+        &["f", "items"],
+    )
+}
+
+#[test]
 fn test_lambda() {
     check_scope(
         r"

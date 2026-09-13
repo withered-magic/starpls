@@ -1361,7 +1361,17 @@ impl TyContext<'_> {
         if self.cx.source_assign_done.contains(&key) {
             return;
         }
+
+        // Guard against cycles, e.g. when inferring the type of a name resolves to an assignment
+        // whose source expression refers back to that same name. Re-entering here for a source
+        // expression that is still being processed would otherwise recurse until the stack
+        // overflows. Bailing out leaves the targets without a type, which callers treat as
+        // `Unknown`.
+        if !self.cx.source_assign_in_progress.insert(key) {
+            return;
+        }
         self.infer_source_expr_assign_inner(file, source, expected_ty, execution_scope);
+        self.cx.source_assign_in_progress.remove(&key);
         self.cx.source_assign_done.insert(key);
     }
 

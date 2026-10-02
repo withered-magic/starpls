@@ -403,13 +403,23 @@ impl TyContext<'_> {
             Expr::List { exprs } => {
                 // Determine the full type of the list. If all of the specified elements are of the same type T, then
                 // we assign the list the type `list[T]`. Otherwise, we assign it the type `list[Unknown]`.
-                TyKind::List(self.get_common_type(file, exprs.iter().cloned(), self.unknown_ty()))
-                    .intern()
+                // In the special case where the list is empty, we emit `list[EmptyUnspecified]`, since it may
+                // be resolved by more clues later.
+                TyKind::List(self.get_common_type(
+                    file,
+                    exprs.iter().cloned(),
+                    if exprs.is_empty() {
+                        self.empty_unspecified_ty()
+                    } else {
+                        self.unknown_ty()
+                    },
+                ))
+                .intern()
             }
             Expr::ListComp { expr, .. } => TyKind::List(self.infer_expr(file, *expr)).intern(),
             Expr::Dict { entries } => {
                 let key_ty = match entries.len() {
-                    0 => Ty::unknown(),
+                    0 => Ty::empty_unspecified(),
                     len if len > 32 => {
                         return self.set_expr_type(
                             file,
@@ -422,7 +432,11 @@ impl TyContext<'_> {
                 let value_ty = self.get_common_type(
                     file,
                     entries.iter().map(|entry| entry.value),
-                    self.unknown_ty(),
+                    if entries.is_empty() {
+                        self.empty_unspecified_ty()
+                    } else {
+                        self.unknown_ty()
+                    },
                 );
 
                 // Determine the list of known string keys from the entries.
@@ -2346,6 +2360,10 @@ impl TyContext<'_> {
 
     fn unknown_ty(&self) -> Ty {
         self.types().unknown.clone()
+    }
+
+    fn empty_unspecified_ty(&self) -> Ty {
+        self.types().empty_unspecified.clone()
     }
 
     fn none_ty(&self) -> Ty {

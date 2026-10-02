@@ -99,6 +99,7 @@ impl DisplayWithDb for TyKind {
         let text = match self {
             TyKind::Unbound => "Unbound",
             TyKind::Unknown => "Unknown",
+            TyKind::EmptyUnspecified => "EmptyUnspecified",
             TyKind::Any => "Any",
             TyKind::Never => "Never",
             TyKind::None => "None",

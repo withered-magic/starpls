@@ -294,14 +294,14 @@ fn test_common_type() {
 {"a": 1, 1: "a"}
 "#,
         expect![[r#"
-            1..3 "[]": list[Unknown]
+            1..3 "[]": list[EmptyUnspecified]
             5..6 "1": Literal[1]
             8..9 "2": Literal[2]
             4..10 "[1, 2]": list[int]
             12..13 "1": Literal[1]
             15..18 "\"a\"": Literal["a"]
             11..19 "[1, \"a\"]": list[Unknown]
-            20..22 "{}": dict[Unknown, Unknown]
+            20..22 "{}": dict[EmptyUnspecified, EmptyUnspecified]
             24..27 "\"a\"": Literal["a"]
             29..30 "1": Literal[1]
             23..31 "{\"a\": 1}": dict[string, int]
@@ -559,25 +559,25 @@ foo(y=1, *args)
 foo(**kwargs, *args)
 "#,
         expect![[r#"
-            26..30 "args": list[Unknown]
-            33..35 "[]": list[Unknown]
-            36..42 "kwargs": dict[Unknown, Unknown]
-            45..47 "{}": dict[Unknown, Unknown]
+            26..30 "args": list[EmptyUnspecified]
+            33..35 "[]": list[EmptyUnspecified]
+            36..42 "kwargs": dict[EmptyUnspecified, EmptyUnspecified]
+            45..47 "{}": dict[EmptyUnspecified, EmptyUnspecified]
             48..51 "foo": def foo(x, y) -> Unknown
             54..55 "1": Literal[1]
             57..58 "2": Literal[2]
             48..59 "foo(y=1, 2)": Unknown
             60..63 "foo": def foo(x, y) -> Unknown
-            66..72 "kwargs": dict[Unknown, Unknown]
+            66..72 "kwargs": dict[EmptyUnspecified, EmptyUnspecified]
             74..75 "2": Literal[2]
             60..76 "foo(**kwargs, 2)": Unknown
             77..80 "foo": def foo(x, y) -> Unknown
             83..84 "1": Literal[1]
-            87..91 "args": list[Unknown]
+            87..91 "args": list[EmptyUnspecified]
             77..92 "foo(y=1, *args)": Unknown
             93..96 "foo": def foo(x, y) -> Unknown
-            99..105 "kwargs": dict[Unknown, Unknown]
-            108..112 "args": list[Unknown]
+            99..105 "kwargs": dict[EmptyUnspecified, EmptyUnspecified]
+            108..112 "args": list[EmptyUnspecified]
             93..113 "foo(**kwargs, *args)": Unknown
 
             57..58 Positional argument cannot follow keyword arguments
@@ -1105,14 +1105,14 @@ foo([], [])
 "#,
         expect![[r#"
             88..89 "a": Sequence[Unknown]
-            92..94 "[]": list[Unknown]
+            92..94 "[]": list[EmptyUnspecified]
             121..124 "foo": def foo(foo: list[Unknown], bar: Iterable[Unknown]) -> Unknown
             125..126 "a": Sequence[Unknown]
             128..129 "a": Sequence[Unknown]
             121..130 "foo(a, a)": Unknown
             131..134 "foo": def foo(foo: list[Unknown], bar: Iterable[Unknown]) -> Unknown
-            135..137 "[]": list[Unknown]
-            139..141 "[]": list[Unknown]
+            135..137 "[]": list[EmptyUnspecified]
+            139..141 "[]": list[EmptyUnspecified]
             131..142 "foo([], [])": Unknown
         "#]],
     );
@@ -1206,12 +1206,12 @@ def foo(*nums):
             76..77 "b": bytes
             80..86 "b\"abc\"": bytes
             80..89 "b\"abc\"[:]": bytes
-            90..91 "c": string | int | list[Unknown]
+            90..91 "c": string | int | list[EmptyUnspecified]
             95..98 "\"a\"": Literal["a"]
             100..101 "1": Literal[1]
-            103..105 "[]": list[Unknown]
-            94..106 "(\"a\", 1, [])": tuple[Literal["a"], Literal[1], list[Unknown]]
-            94..109 "(\"a\", 1, [])[:]": string | int | list[Unknown]
+            103..105 "[]": list[EmptyUnspecified]
+            94..106 "(\"a\", 1, [])": tuple[Literal["a"], Literal[1], list[EmptyUnspecified]]
+            94..109 "(\"a\", 1, [])[:]": string | int | list[EmptyUnspecified]
             110..111 "d": list[int]
             114..119 "range": def range(x0: int, x1: int = None, x2: int = None) -> range
             120..122 "10": Literal[10]
@@ -1226,14 +1226,14 @@ def foo(*nums):
             167..168 "e": Sequence[int]
             167..171 "e[:]": list[int]
             172..173 "g": Unknown
-            176..178 "{}": dict[Unknown, Unknown]
+            176..178 "{}": dict[EmptyUnspecified, EmptyUnspecified]
             176..181 "{}[:]": Unknown
             230..234 "nums": tuple[Unknown, ...]
             230..237 "nums[:]": list[Unknown]
 
             50..53 `start`, `stop`, and `step` operands must be integers or `None`
             59..60 `start`, `stop`, and `step` operands must be integers or `None`
-            176..181 Cannot slice expression of type "dict[Unknown, Unknown]"
+            176..181 Cannot slice expression of type "dict[EmptyUnspecified, EmptyUnspecified]"
         "#]],
     )
 }
@@ -1871,17 +1871,17 @@ x and greeting
             62..67 "False": Literal[False]
             54..67 "True or False": Literal[True]
             68..73 "False": Literal[False]
-            77..79 "[]": list[Unknown]
-            68..79 "False or []": list[Unknown]
+            77..79 "[]": list[EmptyUnspecified]
+            68..79 "False or []": list[EmptyUnspecified]
             80..81 "0": Literal[0]
-            85..87 "[]": list[Unknown]
-            80..87 "0 or []": list[Unknown]
+            85..87 "[]": list[EmptyUnspecified]
+            80..87 "0 or []": list[EmptyUnspecified]
             88..92 "None": None
-            96..98 "[]": list[Unknown]
-            88..98 "None or []": list[Unknown]
+            96..98 "[]": list[EmptyUnspecified]
+            88..98 "None or []": list[EmptyUnspecified]
             99..101 "()": tuple[]
-            105..107 "[]": list[Unknown]
-            99..107 "() or []": list[Unknown]
+            105..107 "[]": list[EmptyUnspecified]
+            99..107 "() or []": list[EmptyUnspecified]
             108..112 "True": Literal[True]
             116..124 "greeting": string
             108..124 "True or greeting": bool | string
@@ -1892,16 +1892,16 @@ x and greeting
             149..154 "False": Literal[False]
             140..154 "True and False": Literal[False]
             155..160 "False": Literal[False]
-            165..167 "[]": list[Unknown]
+            165..167 "[]": list[EmptyUnspecified]
             155..167 "False and []": Literal[False]
             168..169 "0": Literal[0]
-            174..176 "[]": list[Unknown]
+            174..176 "[]": list[EmptyUnspecified]
             168..176 "0 and []": Literal[0]
             177..181 "None": None
-            186..188 "[]": list[Unknown]
+            186..188 "[]": list[EmptyUnspecified]
             177..188 "None and []": None
             189..191 "()": tuple[]
-            196..198 "[]": list[Unknown]
+            196..198 "[]": list[EmptyUnspecified]
             189..198 "() and []": tuple[]
             199..203 "True": Literal[True]
             208..216 "greeting": string
@@ -1947,7 +1947,7 @@ d["foo"] = 1
             19..35 "\"foo\".capitalize": def capitalize() -> string
             38..41 "123": Literal[123]
             42..43 "d": dict[string, string]
-            46..48 "{}": dict[Unknown, Unknown]
+            46..48 "{}": dict[EmptyUnspecified, EmptyUnspecified]
             78..79 "d": dict[string, string]
             80..85 "\"foo\"": Literal["foo"]
             78..86 "d[\"foo\"]": string
@@ -2209,8 +2209,8 @@ def baz():
             5..6 "1": Literal[1]
             7..8 "x": Literal[2]
             11..12 "2": Literal[2]
-            13..15 "_y": list[Unknown]
-            18..20 "[]": list[Unknown]
+            13..15 "_y": list[EmptyUnspecified]
+            18..20 "[]": list[EmptyUnspecified]
             37..38 "x": Literal[123]
             41..44 "123": Literal[123]
             49..50 "y": Literal["foo"]
@@ -2358,4 +2358,164 @@ fn test_assign_int_literal_to_bool() {
 
     assert!(assign_tys(&db, &TyKind::Int(Some(1)).intern(), &Ty::bool()));
     assert!(assign_tys(&db, &TyKind::Int(Some(0)).intern(), &Ty::bool()));
+}
+
+#[test]
+fn test_resolve_empty_unspecified() {
+    check_infer(
+        r#"
+a = []
+b = [] if True else [""]
+c = [""] if True else []
+d = [""] + [1] + []
+e = [""] + [] + [1]
+f = [] + [""] + [1]
+g = b + [""]
+h = b + [1]
+i = b + []
+j = {"": []} | {"1": [1]}
+k = j | {"1": [1]}
+l = (1, [])
+m = (2, [1])
+n = l if True else m
+o = {(1, 2): 1}
+p = ([], [1], "") if True else ([1], [], 1)
+q = ([], [1], 1) if True else ([1], [], 1)
+r = {} | {1: 2}
+s = {} if True else {"": 1} | {1: ""}
+"#,
+        expect![[r#"
+            1..2 "a": list[EmptyUnspecified]
+            5..7 "[]": list[EmptyUnspecified]
+            8..9 "b": list[string]
+            12..14 "[]": list[EmptyUnspecified]
+            18..22 "True": Literal[True]
+            29..31 "\"\"": Literal[""]
+            28..32 "[\"\"]": list[string]
+            12..32 "[] if True else [\"\"]": list[string]
+            33..34 "c": list[string]
+            38..40 "\"\"": Literal[""]
+            37..41 "[\"\"]": list[string]
+            45..49 "True": Literal[True]
+            55..57 "[]": list[EmptyUnspecified]
+            37..57 "[\"\"] if True else []": list[string]
+            58..59 "d": list[string | int]
+            63..65 "\"\"": Literal[""]
+            62..66 "[\"\"]": list[string]
+            70..71 "1": Literal[1]
+            69..72 "[1]": list[int]
+            62..72 "[\"\"] + [1]": list[string | int]
+            75..77 "[]": list[EmptyUnspecified]
+            62..77 "[\"\"] + [1] + []": list[string | int]
+            78..79 "e": list[string | int]
+            83..85 "\"\"": Literal[""]
+            82..86 "[\"\"]": list[string]
+            89..91 "[]": list[EmptyUnspecified]
+            82..91 "[\"\"] + []": list[string]
+            95..96 "1": Literal[1]
+            94..97 "[1]": list[int]
+            82..97 "[\"\"] + [] + [1]": list[string | int]
+            98..99 "f": list[string | int]
+            102..104 "[]": list[EmptyUnspecified]
+            108..110 "\"\"": Literal[""]
+            107..111 "[\"\"]": list[string]
+            102..111 "[] + [\"\"]": list[string]
+            115..116 "1": Literal[1]
+            114..117 "[1]": list[int]
+            102..117 "[] + [\"\"] + [1]": list[string | int]
+            118..119 "g": list[string]
+            122..123 "b": list[string]
+            127..129 "\"\"": Literal[""]
+            126..130 "[\"\"]": list[string]
+            122..130 "b + [\"\"]": list[string]
+            131..132 "h": list[string | int]
+            135..136 "b": list[string]
+            140..141 "1": Literal[1]
+            139..142 "[1]": list[int]
+            135..142 "b + [1]": list[string | int]
+            143..144 "i": list[string]
+            147..148 "b": list[string]
+            151..153 "[]": list[EmptyUnspecified]
+            147..153 "b + []": list[string]
+            154..155 "j": dict[string, list[int]]
+            159..161 "\"\"": Literal[""]
+            163..165 "[]": list[EmptyUnspecified]
+            158..166 "{\"\": []}": dict[string, list[EmptyUnspecified]]
+            170..173 "\"1\"": Literal["1"]
+            176..177 "1": Literal[1]
+            175..178 "[1]": list[int]
+            169..179 "{\"1\": [1]}": dict[string, list[int]]
+            158..179 "{\"\": []} | {\"1\": [1]}": dict[string, list[int]]
+            180..181 "k": dict[string, list[int]]
+            184..185 "j": dict[string, list[int]]
+            189..192 "\"1\"": Literal["1"]
+            195..196 "1": Literal[1]
+            194..197 "[1]": list[int]
+            188..198 "{\"1\": [1]}": dict[string, list[int]]
+            184..198 "j | {\"1\": [1]}": dict[string, list[int]]
+            199..200 "l": tuple[Literal[1], list[EmptyUnspecified]]
+            204..205 "1": Literal[1]
+            207..209 "[]": list[EmptyUnspecified]
+            203..210 "(1, [])": tuple[Literal[1], list[EmptyUnspecified]]
+            211..212 "m": tuple[Literal[2], list[int]]
+            216..217 "2": Literal[2]
+            220..221 "1": Literal[1]
+            219..222 "[1]": list[int]
+            215..223 "(2, [1])": tuple[Literal[2], list[int]]
+            224..225 "n": tuple[int, list[int]]
+            228..229 "l": tuple[Literal[1], list[EmptyUnspecified]]
+            233..237 "True": Literal[True]
+            243..244 "m": tuple[Literal[2], list[int]]
+            228..244 "l if True else m": tuple[int, list[int]]
+            245..246 "o": dict[tuple[Literal[1], Literal[2]], int]
+            251..252 "1": Literal[1]
+            254..255 "2": Literal[2]
+            250..256 "(1, 2)": tuple[Literal[1], Literal[2]]
+            258..259 "1": Literal[1]
+            249..260 "{(1, 2): 1}": dict[tuple[Literal[1], Literal[2]], int]
+            261..262 "p": tuple[list[EmptyUnspecified], list[int], Literal[""]] | tuple[list[int], list[EmptyUnspecified], Literal[1]]
+            266..268 "[]": list[EmptyUnspecified]
+            271..272 "1": Literal[1]
+            270..273 "[1]": list[int]
+            275..277 "\"\"": Literal[""]
+            265..278 "([], [1], \"\")": tuple[list[EmptyUnspecified], list[int], Literal[""]]
+            282..286 "True": Literal[True]
+            294..295 "1": Literal[1]
+            293..296 "[1]": list[int]
+            298..300 "[]": list[EmptyUnspecified]
+            302..303 "1": Literal[1]
+            292..304 "([1], [], 1)": tuple[list[int], list[EmptyUnspecified], Literal[1]]
+            265..304 "([], [1], \"\") if True else ([1], [], 1)": tuple[list[EmptyUnspecified], list[int], Literal[""]] | tuple[list[int], list[EmptyUnspecified], Literal[1]]
+            305..306 "q": tuple[list[int], list[int], int]
+            310..312 "[]": list[EmptyUnspecified]
+            315..316 "1": Literal[1]
+            314..317 "[1]": list[int]
+            319..320 "1": Literal[1]
+            309..321 "([], [1], 1)": tuple[list[EmptyUnspecified], list[int], Literal[1]]
+            325..329 "True": Literal[True]
+            337..338 "1": Literal[1]
+            336..339 "[1]": list[int]
+            341..343 "[]": list[EmptyUnspecified]
+            345..346 "1": Literal[1]
+            335..347 "([1], [], 1)": tuple[list[int], list[EmptyUnspecified], Literal[1]]
+            309..347 "([], [1], 1) if True else ([1], [], 1)": tuple[list[int], list[int], int]
+            348..349 "r": dict[int, int]
+            352..354 "{}": dict[EmptyUnspecified, EmptyUnspecified]
+            358..359 "1": Literal[1]
+            361..362 "2": Literal[2]
+            357..363 "{1: 2}": dict[int, int]
+            352..363 "{} | {1: 2}": dict[int, int]
+            364..365 "s": dict[string | int, int | string]
+            368..370 "{}": dict[EmptyUnspecified, EmptyUnspecified]
+            374..378 "True": Literal[True]
+            385..387 "\"\"": Literal[""]
+            389..390 "1": Literal[1]
+            384..391 "{\"\": 1}": dict[string, int]
+            395..396 "1": Literal[1]
+            398..400 "\"\"": Literal[""]
+            394..401 "{1: \"\"}": dict[int, string]
+            384..401 "{\"\": 1} | {1: \"\"}": dict[string | int, int | string]
+            368..401 "{} if True else {\"\": 1} | {1: \"\"}": dict[string | int, int | string]
+        "#]],
+    );
 }

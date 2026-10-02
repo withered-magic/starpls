@@ -626,6 +626,10 @@ impl Ty {
         TyKind::Unknown.intern()
     }
 
+    pub(crate) fn empty_unspecified() -> Ty {
+        TyKind::EmptyUnspecified.intern()
+    }
+
     pub(crate) fn any() -> Ty {
         TyKind::Any.intern()
     }
@@ -654,8 +658,57 @@ impl Ty {
         TyKind::Dict(key_ty, value_ty, known_keys).intern()
     }
 
+    /// Handles unions of containers such as `list[EmptyUnspecified] | list[int]` == `list[int]`.
+    /// If the types were merged or are equal, returns a single combined type, otherwise nothing.
+    /// The return type may not be one of the original types. For example, one edge case is
+    /// ([], [""]) or ([1], []) , which would resolve to `tuple[list[int], list[str]]`.
+    fn resolve_empty_unspecified_type_union(ty1: &Ty, ty2: &Ty) -> Option<Ty> {
+        let ty1 = ty1.clone().normalize();
+        let ty2 = ty2.clone().normalize();
+        match (ty1.kind(), ty2.kind()) {
+            (TyKind::EmptyUnspecified, _) => Some(ty2.clone()),
+            (_, TyKind::EmptyUnspecified) => Some(ty1.clone()),
+            (TyKind::List(v1), TyKind::List(v2)) => {
+                Ty::resolve_empty_unspecified_type_union(v1, v2).map(Ty::list)
+            }
+            (TyKind::Dict(k1, v1, _), TyKind::Dict(k2, v2, _)) => {
+                // Note: the only key type that can even be container-like is a tuple. Dicts and lists
+                // are not allowed in dict keys.
+                // The only case the key covers if if you have something like `{} | {1: 2}`, since both
+                // key and value will be EmptyUnspecified.
+                let key = Ty::resolve_empty_unspecified_type_union(k1, k2);
+                let value = Ty::resolve_empty_unspecified_type_union(v1, v2);
+                match (key, value) {
+                    // TODO: known keys?
+                    (Some(k), Some(v)) => Some(Ty::dict(k, v, None)),
+                    _ => None,
+                }
+            }
+            // Variadics are always explicit annotations, so they should never have EmptyUnspecified types.
+            (TyKind::Tuple(Tuple::Simple(tys1)), TyKind::Tuple(Tuple::Simple(tys2))) => {
+                if tys1.len() != tys2.len() {
+                    None
+                } else {
+                    let mut newtys: SmallVec<[Ty; 2]> = smallvec![];
+                    for (t1, t2) in tys1.iter().zip(tys2) {
+                        newtys.push(Ty::resolve_empty_unspecified_type_union(t1, t2)?);
+                    }
+                    Some(TyKind::Tuple(Tuple::Simple(newtys)).intern())
+                }
+            }
+            _ => {
+                if Ty::eq(&ty1, &ty2) {
+                    Some(ty1.clone())
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
     pub(crate) fn union(tys: impl Iterator<Item = Ty>) -> Ty {
-        let mut unique_tys = smallvec![];
+        // Type spelled out to help the rust LSP
+        let mut unique_tys: SmallVec<[Ty; 2]> = smallvec![];
 
         // Deduplicate types. Dicts and structs are handled separately because the metadata
         // that they store // (for their declarations, etc.) is not relevant to determining
@@ -663,11 +716,14 @@ impl Ty {
         for ty in tys {
             let mut check_unique = |ty: Ty| {
                 let ty = ty.normalize();
-                if unique_tys
-                    .iter()
-                    .any(|unique_ty: &Ty| Ty::eq(&ty, &unique_ty.clone().normalize()))
-                {
-                    return;
+                for unique_ty in unique_tys.iter_mut() {
+                    if let Some(new_ty) = Ty::resolve_empty_unspecified_type_union(
+                        &ty,
+                        &unique_ty.clone().normalize(),
+                    ) {
+                        *unique_ty = new_ty;
+                        return;
+                    }
                 }
                 unique_tys.push(ty);
             };
@@ -1233,6 +1289,9 @@ pub(crate) enum TyKind {
     /// result of failed type inference, e.g. calling an unbound
     /// function.
     Unknown,
+
+    /// Used when a collection is empty, so its element type is not specified.
+    EmptyUnspecified,
 
     /// Similar to `Unknown`, but not necessarily the result of failed
     /// type inference.
@@ -2002,10 +2061,11 @@ pub(crate) fn resolve_builtin_type_ref_opt(db: &dyn Db, type_ref: Option<TypeRef
 pub(crate) fn assign_tys(db: &dyn Db, source: &Ty, target: &Ty) -> bool {
     use Protocol::*;
 
-    // Assignments involving "Any", "Unknown", or "Unbound" at the top-level
+    // Assignments involving "Any", "EmptyUnspecified", "Unknown", or "Unbound" at the top-level
     // are always valid to avoid confusion.
     match (source.kind(), target.kind()) {
-        (TyKind::Any | TyKind::Unknown, _) | (_, TyKind::Any | TyKind::Unknown) => true,
+        (TyKind::Any | TyKind::EmptyUnspecified | TyKind::Unknown, _)
+        | (_, TyKind::Any | TyKind::EmptyUnspecified | TyKind::Unknown) => true,
         (
             TyKind::List(source),
             TyKind::List(target) | TyKind::Protocol(Iterable(target) | Sequence(target)),

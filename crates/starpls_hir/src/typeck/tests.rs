@@ -389,6 +389,10 @@ def bar(x):
     # type: (int | string | None) -> None
     pass
 
+def baz():
+    # type: () -> string | int | None
+    pass
+
 x = 1 # type: int | None
 foo(x)
 bar(x)
@@ -399,31 +403,36 @@ bar(y)
 
 y = "goodbye" # type: int | string | float | None
 bar(y)
+
+z = baz()
 "#,
         expect![[r#"
-            113..114 "x": int | None
-            117..118 "1": Literal[1]
-            138..141 "foo": def foo(x: int) -> None
-            142..143 "x": int | None
-            138..144 "foo(x)": None
-            145..148 "bar": def bar(x: int | string | None) -> None
-            149..150 "x": int | None
-            145..151 "bar(x)": None
-            152..155 "bar": def bar(x: int | string | None) -> None
-            156..157 "2": Literal[2]
-            152..158 "bar(2)": None
-            160..161 "y": int | string
-            164..171 "\"hello\"": Literal["hello"]
-            193..196 "bar": def bar(x: int | string | None) -> None
-            197..198 "y": int | string
-            193..199 "bar(y)": None
-            201..202 "y": int | string | float | None
-            205..214 "\"goodbye\"": Literal["goodbye"]
-            251..254 "bar": def bar(x: int | string | None) -> None
-            255..256 "y": int | string | float | None
-            251..257 "bar(y)": None
+            172..173 "x": int | None
+            176..177 "1": Literal[1]
+            197..200 "foo": def foo(x: int) -> None
+            201..202 "x": int | None
+            197..203 "foo(x)": None
+            204..207 "bar": def bar(x: int | string | None) -> None
+            208..209 "x": int | None
+            204..210 "bar(x)": None
+            211..214 "bar": def bar(x: int | string | None) -> None
+            215..216 "2": Literal[2]
+            211..217 "bar(2)": None
+            219..220 "y": int | string
+            223..230 "\"hello\"": Literal["hello"]
+            252..255 "bar": def bar(x: int | string | None) -> None
+            256..257 "y": int | string
+            252..258 "bar(y)": None
+            260..261 "y": int | string | float | None
+            264..273 "\"goodbye\"": Literal["goodbye"]
+            310..313 "bar": def bar(x: int | string | None) -> None
+            314..315 "y": int | string | float | None
+            310..316 "bar(y)": None
+            318..319 "z": string | int | None
+            322..325 "baz": def baz() -> string | int | None
+            322..327 "baz()": string | int | None
 
-            255..256 Argument of type "int | string | float | None" cannot be assigned to parameter of type "int | string | None"
+            314..315 Argument of type "int | string | float | None" cannot be assigned to parameter of type "int | string | None"
         "#]],
     )
 }

@@ -136,7 +136,7 @@ pub(crate) fn function_type(p: &mut Parser) -> CompletedMarker {
         p.error_recover_until("Expected \"->\"", EMPTY);
         return m.complete(p, FUNCTION_TYPE);
     }
-    type_(p);
+    union_type(p);
     m.complete(p, FUNCTION_TYPE)
 }
 
